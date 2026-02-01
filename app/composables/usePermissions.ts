@@ -40,42 +40,32 @@ export function usePermissions() {
    * Verifica si el usuario tiene un permiso específico
    */
   function hasPermission(permission: string): boolean {
-    if (!user.value?.permissions) {
-      if (import.meta.dev) {
-        console.warn('[usePermissions] No user permissions available:', { user: user.value })
-      }
+    // Durante SSR, no hay usuario, así que retornar false silenciosamente
+    if (import.meta.server) {
       return false
     }
-    const has = user.value.permissions.includes(permission)
-    if (import.meta.dev) {
-      console.log(`[usePermissions] hasPermission('${permission}'):`, has, {
-        userPermissions: user.value.permissions
-      })
+    
+    if (!user.value?.permissions) {
+      return false
     }
-    return has
+    
+    return user.value.permissions.includes(permission)
   }
 
   /**
    * Verifica si el usuario tiene alguno de los permisos especificados
    */
   function hasAnyPermission(permissions: string[]): boolean {
-    if (!user.value?.permissions || permissions.length === 0) {
-      if (import.meta.dev) {
-        console.warn('[usePermissions] No user permissions or empty array:', {
-          userPermissions: user.value?.permissions,
-          required: permissions
-        })
-      }
+    // Durante SSR, no hay usuario, así que retornar false silenciosamente
+    if (import.meta.server) {
       return false
     }
-    const has = permissions.some(permission => user.value?.permissions?.includes(permission))
-    if (import.meta.dev) {
-      console.log(`[usePermissions] hasAnyPermission([${permissions.join(', ')}]):`, has, {
-        userPermissions: user.value.permissions,
-        required: permissions
-      })
+    
+    if (!user.value?.permissions || permissions.length === 0) {
+      return false
     }
-    return has
+    
+    return permissions.some(permission => user.value?.permissions?.includes(permission))
   }
 
   /**

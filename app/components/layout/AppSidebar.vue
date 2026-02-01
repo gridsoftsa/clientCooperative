@@ -44,8 +44,8 @@ const user = computed(() => ({
 
 // Filtrar elementos del menú basados en permisos
 function canAccessItem(item: NavLink | NavGroup): boolean {
-  // Si no hay usuario autenticado, no mostrar elementos con permisos
-  if (!authUser.value) {
+  // Durante SSR o si no hay usuario autenticado, solo mostrar elementos públicos
+  if (import.meta.server || !authUser.value) {
     return !item.permission && !item.role && !item.adminOnly
   }
 
@@ -98,50 +98,32 @@ function canAccessItem(item: NavLink | NavGroup): boolean {
 
 // Filtrar menú basado en permisos
 const filteredNavMenu = computed(() => {
-  // Debug: mostrar información del usuario y permisos
-  if (import.meta.dev) {
-    console.log('🔍 Menu Debug:', {
-      user: authUser.value,
-      isAdmin: isAdmin.value,
-      roles: authUser.value?.roles,
-      permissions: authUser.value?.permissions
-    })
+  // Durante SSR o sin usuario, solo mostrar items públicos
+  if (import.meta.server || !authUser.value) {
+    return navMenu.map(section => ({
+      ...section,
+      items: section.items.filter(item => !item.permission && !item.role && !item.adminOnly)
+    })).filter(section => section.items.length > 0)
   }
 
   return navMenu.map(section => {
     const filteredItems = section.items.filter(item => {
       const canAccess = canAccessItem(item)
-      
-      // Debug para items de administración
-      if (import.meta.dev && section.heading === 'Administración') {
-        console.log(`  ✓ ${item.title}:`, {
-          canAccess,
-          permission: item.permission,
-          hasPermission: item.permission ? hasPermission(item.permission) : 'N/A'
-        })
-      }
 
       // Si es un grupo, filtrar también los hijos
       if ('children' in item) {
         const filteredChildren = item.children.filter(child => canAccessItem(child))
-        // Si no hay hijos visibles, ocultar el grupo
         if (filteredChildren.length === 0) {
           return false
         }
-        // Crear una copia del item con hijos filtrados
         const itemCopy = { ...item, children: filteredChildren }
-        // Verificar si el grupo mismo tiene restricciones
         return canAccessItem(itemCopy)
       }
-      // Si es un link simple, verificar permisos
       return canAccess
     })
     
-    return {
-      ...section,
-      items: filteredItems
-    }
-  }).filter(section => section.items.length > 0) // Solo mostrar secciones con items visibles
+    return { ...section, items: filteredItems }
+  }).filter(section => section.items.length > 0)
 })
 </script>
 
