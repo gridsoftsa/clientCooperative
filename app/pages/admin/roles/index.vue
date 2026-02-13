@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { Role, PaginatedRoles } from '~/types/role'
+
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
@@ -8,7 +10,7 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const { hasPermission } = usePermissions()
 
-const roles = ref<any[]>([])
+const roles = ref<Role[]>([])
 const loading = ref(false)
 const searchQuery = ref('')
 const pagination = ref({
@@ -33,7 +35,7 @@ async function fetchRoles() {
       params.search = searchQuery.value
     }
     
-    const res = await $api('/roles', { query: params })
+    const res = await $api<PaginatedRoles>('/roles', { query: params })
     roles.value = res.data
     pagination.value = res.meta
   } catch (error) {
@@ -93,7 +95,7 @@ watch(searchQuery, () => {
         Gestión de Roles y Permisos
       </h2>
       <PermissionGate permission="roles.create">
-        <Button>
+        <Button @click="$router.push('/admin/roles/create')">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Nuevo Rol
         </Button>
@@ -153,7 +155,7 @@ watch(searchQuery, () => {
                   <TableCell>
                     <div class="flex gap-1 flex-wrap max-w-md">
                       <Badge 
-                        v-for="permission in role.permissions.slice(0, 3)" 
+                        v-for="permission in (role.permissions || []).slice(0, 3)" 
                         :key="permission" 
                         variant="outline"
                         class="text-xs"
@@ -161,13 +163,13 @@ watch(searchQuery, () => {
                         {{ permission }}
                       </Badge>
                       <Badge 
-                        v-if="role.permissions.length > 3" 
+                        v-if="(role.permissions || []).length > 3" 
                         variant="secondary"
                         class="text-xs"
                       >
-                        +{{ role.permissions.length - 3 }} más
+                        +{{ (role.permissions || []).length - 3 }} más
                       </Badge>
-                      <span v-if="role.permissions.length === 0" class="text-muted-foreground text-sm">Sin permisos</span>
+                      <span v-if="(role.permissions || []).length === 0" class="text-muted-foreground text-sm">Sin permisos</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -176,7 +178,11 @@ watch(searchQuery, () => {
                   <TableCell class="text-right">
                     <div class="flex justify-end gap-2">
                       <PermissionGate permission="roles.edit">
-                        <Button variant="outline" size="sm" @click="() => {}">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          @click="$router.push(`/admin/roles/${role.id}/edit`)"
+                        >
                           <Icon name="i-lucide-edit" class="h-4 w-4" />
                         </Button>
                       </PermissionGate>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
+import type { User, PaginatedUsers } from '~/types/user'
+
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
@@ -6,10 +9,11 @@ definePageMeta({
 })
 
 const { $api } = useNuxtApp()
+const router = useRouter()
 const { hasPermission } = usePermissions()
 const { user: authUser } = useAuth()
 
-const users = ref<any[]>([])
+const users = ref<User[]>([])
 const loading = ref(false)
 const searchQuery = ref('')
 const pagination = ref({
@@ -34,7 +38,7 @@ async function fetchUsers() {
       params.search = searchQuery.value
     }
     
-    const res = await $api('/users', { query: params })
+    const res = await $api<PaginatedUsers>('/users', { query: params })
     users.value = res.data
     pagination.value = res.meta
   } catch (error) {
@@ -61,10 +65,12 @@ async function handleDelete(id: number) {
   
   try {
     await $api(`/users/${id}`, { method: 'DELETE' })
+    toast.success('Usuario eliminado correctamente')
     await fetchUsers()
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error al eliminar usuario:', error)
-    alert('Error al eliminar el usuario')
+    const message = error?.data?.message || 'Error al eliminar el usuario'
+    toast.error(message)
   }
 }
 
@@ -88,7 +94,7 @@ watch(searchQuery, () => {
         Gestión de Usuarios
       </h2>
       <PermissionGate permission="users.create">
-        <Button>
+        <Button @click="router.push('/admin/users/create')">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Nuevo Usuario
         </Button>
@@ -144,10 +150,10 @@ watch(searchQuery, () => {
                   <TableCell>{{ user.email }}</TableCell>
                   <TableCell>
                     <div class="flex gap-1 flex-wrap">
-                      <Badge v-for="role in user.roles" :key="role" variant="secondary">
+                      <Badge v-for="role in (user.roles || [])" :key="role" variant="secondary">
                         {{ role }}
                       </Badge>
-                      <span v-if="user.roles.length === 0" class="text-muted-foreground text-sm">Sin roles</span>
+                      <span v-if="(user.roles || []).length === 0" class="text-muted-foreground text-sm">Sin roles</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -156,7 +162,11 @@ watch(searchQuery, () => {
                   <TableCell class="text-right">
                     <div class="flex justify-end gap-2">
                       <PermissionGate permission="users.edit">
-                        <Button variant="outline" size="sm" @click="() => {}">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          @click="router.push(`/admin/users/${user.id}/edit`)"
+                        >
                           <Icon name="i-lucide-edit" class="h-4 w-4" />
                         </Button>
                       </PermissionGate>

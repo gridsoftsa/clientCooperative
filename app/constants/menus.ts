@@ -9,7 +9,7 @@ export const navMenu: NavMenu[] = [
         icon: 'i-lucide-home',
         link: '/',
       },
-      {
+      /* {
         title: 'Email',
         icon: 'i-lucide-mail',
         link: '/email',
@@ -18,7 +18,7 @@ export const navMenu: NavMenu[] = [
         title: 'Tasks',
         icon: 'i-lucide-calendar-check-2',
         link: '/tasks',
-      },
+      }, */
     ],
   },
   {
@@ -44,7 +44,7 @@ export const navMenu: NavMenu[] = [
       },
     ],
   },
-  {
+  /* {
     heading: 'Apps',
     items: [
       {
@@ -54,11 +54,11 @@ export const navMenu: NavMenu[] = [
         new: true,
       },
     ],
-  },
+  }, */
   {
     heading: 'Pages',
     items: [
-      {
+      /* {
         title: 'Authentication',
         icon: 'i-lucide-lock-keyhole-open',
         children: [
@@ -129,7 +129,7 @@ export const navMenu: NavMenu[] = [
             link: '/503',
           },
         ],
-      },
+      }, */
       {
         title: 'Settings',
         icon: 'i-lucide-settings',
@@ -164,7 +164,7 @@ export const navMenu: NavMenu[] = [
       },
     ],
   },
-  {
+  /* {
     heading: 'Components',
     items: [
       {
@@ -436,11 +436,11 @@ export const navMenu: NavMenu[] = [
         ],
       },
     ],
-  },
+  }, */
 ]
 
 export const navMenuBottom: NavMenuItems = [
-  {
+  /* {
     title: 'Help & Support',
     icon: 'i-lucide-circle-help',
     link: 'https://github.com/dianprata/nuxt-shadcn-dashboard',
@@ -449,5 +449,5 @@ export const navMenuBottom: NavMenuItems = [
     title: 'Feedback',
     icon: 'i-lucide-send',
     link: 'https://github.com/dianprata/nuxt-shadcn-dashboard',
-  },
+  }, */
 ]
