@@ -50,6 +50,7 @@
     "release": "release-it"
   },
   "dependencies": {
+    "@vueform/multiselect": "^2.6.11",
     "@iconify-json/lucide": "^1.2.68",
     "@iconify-json/radix-icons": "^1.2.5",
     "@internationalized/date": "^3.10.0",

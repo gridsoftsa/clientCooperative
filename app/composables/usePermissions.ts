@@ -79,9 +79,14 @@ export function usePermissions() {
   }
 
   /**
-   * Verifica si el usuario es administrador
+   * Verifica si el usuario es super administrador (ve todas las sucursales sin restricción)
    */
-  const isAdmin = computed(() => hasRole('admin'))
+  const isSuperAdmin = computed(() => hasRole('super_admin'))
+
+  /**
+   * Verifica si el usuario es administrador (admin o super_admin; visibilidad según sucursales permitidas)
+   */
+  const isAdmin = computed(() => hasRole('admin') || hasRole('super_admin'))
 
   /**
    * Obtiene todos los roles del usuario
@@ -100,6 +105,7 @@ export function usePermissions() {
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
+    isSuperAdmin,
     isAdmin,
     roles,
     permissions,

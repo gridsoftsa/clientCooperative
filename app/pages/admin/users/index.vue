@@ -138,6 +138,7 @@ watch(searchQuery, () => {
                   <TableHead>ID</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Sucursal</TableHead>
                   <TableHead>Roles</TableHead>
                   <TableHead>Fecha de Creación</TableHead>
                   <TableHead class="text-right">Acciones</TableHead>
@@ -148,6 +149,9 @@ watch(searchQuery, () => {
                   <TableCell class="font-medium">{{ user.id }}</TableCell>
                   <TableCell>{{ user.name }}</TableCell>
                   <TableCell>{{ user.email }}</TableCell>
+                  <TableCell>
+                    <span class="text-muted-foreground text-sm">{{ user.sucursal?.name ?? '—' }}</span>
+                  </TableCell>
                   <TableCell>
                     <div class="flex gap-1 flex-wrap">
                       <Badge v-for="role in (user.roles || [])" :key="role" variant="secondary">

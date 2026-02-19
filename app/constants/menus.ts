@@ -22,13 +22,40 @@ export const navMenu: NavMenu[] = [
     ],
   },
   {
+    heading: 'Crédito',
+    items: [
+      {
+        title: 'Radicación',
+        icon: 'i-lucide-file-text',
+        link: '/radicacion',
+      },
+      {
+        title: 'Actividad económica',
+        icon: 'i-lucide-calculator',
+        link: '/credits/create/financial-activity',
+      },
+    ],
+  },
+  {
     heading: 'Administración',
     items: [
+      {
+        title: 'Empresa principal',
+        icon: 'i-lucide-building',
+        link: '/admin/company',
+        permission: 'company.view',
+      },
       {
         title: 'Usuarios',
         icon: 'i-lucide-users',
         link: '/admin/users',
         permission: 'users.view',
+      },
+      {
+        title: 'Sucursales',
+        icon: 'i-lucide-building-2',
+        link: '/admin/sucursales',
+        permission: 'sucursales.view',
       },
       {
         title: 'Roles y Permisos',

@@ -16,12 +16,26 @@ const form = ref({
   email: '',
   password: '',
   password_confirmation: '',
+  sucursal_id: null as number | null,
+  allowed_sucursal_ids: [] as number[],
   roles: [] as string[],
 })
 
 const roles = ref<Role[]>([])
+const sucursales = ref<Array<{ id: number; name: string; code: string | null; is_main?: boolean }>>([])
 const loading = ref(false)
 const saving = ref(false)
+
+const showAllowedSucursales = computed(() => form.value.roles.includes('admin') && !form.value.roles.includes('super_admin'))
+
+const fetchSucursales = async () => {
+  try {
+    const res = await $api<{ data: typeof sucursales.value }>('/catalogs/sucursales')
+    sucursales.value = res.data
+  } catch {
+    sucursales.value = []
+  }
+}
 
 const fetchRoles = async () => {
   loading.value = true
@@ -74,6 +88,8 @@ const handleSubmit = async () => {
         email: form.value.email,
         password: form.value.password,
         password_confirmation: form.value.password_confirmation,
+        sucursal_id: form.value.sucursal_id || undefined,
+        allowed_sucursal_ids: form.value.allowed_sucursal_ids,
         roles: form.value.roles,
       },
     })
@@ -90,7 +106,7 @@ const handleSubmit = async () => {
 }
 
 onMounted(() => {
-  fetchRoles()
+  Promise.all([fetchRoles(), fetchSucursales()])
 })
 </script>
 
@@ -142,6 +158,20 @@ onMounted(() => {
               />
             </div>
 
+            <div>
+              <Label for="sucursal">Sucursal (pertenencia)</Label>
+              <Select v-model="form.sucursal_id">
+                <SelectTrigger id="sucursal">
+                  <SelectValue placeholder="Seleccionar sucursal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="s in sucursales" :key="s.id" :value="s.id">
+                    {{ s.name }}{{ s.is_main ? ' (Principal)' : '' }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <Label for="password">Contraseña *</Label>
@@ -161,6 +191,36 @@ onMounted(() => {
                   required
                   placeholder="Repite la contraseña"
                 />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card v-if="showAllowedSucursales">
+          <CardHeader>
+            <CardTitle>Sucursales permitidas (admin)</CardTitle>
+            <CardDescription>
+              Sucursales que este admin puede ver y gestionar
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div class="space-y-2">
+              <div
+                v-for="s in sucursales"
+                :key="s.id"
+                class="flex items-center space-x-2"
+              >
+                <Checkbox
+                  :id="`suc-${s.id}`"
+                  :checked="form.allowed_sucursal_ids.includes(s.id)"
+                  @update:checked="(checked: boolean) => {
+                    if (checked) form.allowed_sucursal_ids.push(s.id)
+                    else form.allowed_sucursal_ids = form.allowed_sucursal_ids.filter(id => id !== s.id)
+                  }"
+                />
+                <Label :for="`suc-${s.id}`" class="font-normal cursor-pointer">
+                  {{ s.name }}{{ s.is_main ? ' (Principal)' : '' }}
+                </Label>
               </div>
             </div>
           </CardContent>

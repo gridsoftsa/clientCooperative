@@ -91,7 +91,7 @@ async function onSubmit(event: Event) {
           Forgot your password?
         </NuxtLink>
       </div>
-      <PasswordInput id="password" v-model="password" :disabled="isLoading" required />
+      <PasswordInput id="password" v-model="password" autocomplete="current-password" :disabled="isLoading" required />
     </div>
     <Button type="submit" class="w-full" :disabled="isLoading || !email || !password">
       <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />

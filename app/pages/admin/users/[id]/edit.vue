@@ -21,14 +21,19 @@ const form = ref({
   email: '',
   password: '',
   password_confirmation: '',
+  sucursal_id: null as number | null,
+  allowed_sucursal_ids: [] as number[],
   roles: [] as string[],
 })
 
 const user = ref<User | null>(null)
 const roles = ref<Role[]>([])
+const sucursales = ref<Array<{ id: number; name: string; code: string | null; is_main?: boolean }>>([])
 const loading = ref(false)
 const saving = ref(false)
 const changePassword = ref(false)
+
+const showAllowedSucursales = computed(() => form.value.roles.includes('admin') && !form.value.roles.includes('super_admin'))
 
 const isOwnUser = computed(() => authUser.value?.id === parseInt(userId))
 
@@ -42,6 +47,8 @@ const fetchUser = async () => {
       email: response.data.email,
       password: '',
       password_confirmation: '',
+      sucursal_id: response.data.sucursal_id ?? null,
+      allowed_sucursal_ids: response.data.allowed_sucursal_ids ?? [],
       roles: response.data.roles || [],
     }
   } catch (error) {
@@ -50,6 +57,15 @@ const fetchUser = async () => {
     router.push('/admin/users')
   } finally {
     loading.value = false
+  }
+}
+
+const fetchSucursales = async () => {
+  try {
+    const res = await $api<{ data: typeof sucursales.value }>('/catalogs/sucursales')
+    sucursales.value = res.data
+  } catch {
+    sucursales.value = []
   }
 }
 
@@ -104,6 +120,8 @@ const handleSubmit = async () => {
     const body: any = {
       name: form.value.name,
       email: form.value.email,
+      sucursal_id: form.value.sucursal_id || undefined,
+      allowed_sucursal_ids: form.value.allowed_sucursal_ids,
       roles: form.value.roles,
     }
 
@@ -129,7 +147,7 @@ const handleSubmit = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([fetchUser(), fetchRoles()])
+  await Promise.all([fetchUser(), fetchRoles(), fetchSucursales()])
 })
 </script>
 
@@ -189,6 +207,20 @@ onMounted(async () => {
               />
             </div>
 
+            <div>
+              <Label for="sucursal">Sucursal (pertenencia)</Label>
+              <Select v-model="form.sucursal_id">
+                <SelectTrigger id="sucursal">
+                  <SelectValue placeholder="Seleccionar sucursal" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="s in sucursales" :key="s.id" :value="s.id">
+                    {{ s.name }}{{ s.is_main ? ' (Principal)' : '' }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div class="space-y-4">
               <div class="flex items-center space-x-2">
                 <Switch
@@ -220,6 +252,32 @@ onMounted(async () => {
                     placeholder="Repite la contraseña"
                   />
                 </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card v-if="showAllowedSucursales">
+          <CardHeader>
+            <CardTitle>Sucursales permitidas (admin)</CardTitle>
+            <CardDescription>
+              Sucursales que este admin puede ver y gestionar
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div class="space-y-2">
+              <div v-for="s in sucursales" :key="s.id" class="flex items-center space-x-2">
+                <Checkbox
+                  :id="`suc-${s.id}`"
+                  :checked="form.allowed_sucursal_ids.includes(s.id)"
+                  @update:checked="(checked: boolean) => {
+                    if (checked) form.allowed_sucursal_ids.push(s.id)
+                    else form.allowed_sucursal_ids = form.allowed_sucursal_ids.filter(id => id !== s.id)
+                  }"
+                />
+                <Label :for="`suc-${s.id}`" class="font-normal cursor-pointer">
+                  {{ s.name }}{{ s.is_main ? ' (Principal)' : '' }}
+                </Label>
               </div>
             </div>
           </CardContent>
