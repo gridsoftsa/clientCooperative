@@ -23,13 +23,18 @@ export default defineNuxtPlugin(() => {
     }
   })
 
+  // Lee XSRF-TOKEN directo de document.cookie (más fiable en cross-subdomain que useCookie)
+  function readXsrfCookie(): string | null {
+    if (import.meta.server) return null
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/)
+    return match ? decodeURIComponent(match[1]) : null
+  }
+
   // CSRF token helper
-  async function getCsrfToken(baseURL: string) {
-    // Get CSRF cookie from Laravel
-    const csrfCookie = useCookie('XSRF-TOKEN')
-    
-    if (!csrfCookie.value) {
-      // Fetch CSRF cookie from Laravel's /sanctum/csrf-cookie endpoint
+  async function getCsrfToken(baseURL: string): Promise<string | null> {
+    if (import.meta.server) return null
+
+    if (!readXsrfCookie()) {
       try {
         await $fetch('/sanctum/csrf-cookie', {
           baseURL,
@@ -39,17 +44,8 @@ export default defineNuxtPlugin(() => {
         console.warn('Failed to fetch CSRF cookie:', error)
       }
     }
-    
-    // Read the cookie value (Laravel sets it as XSRF-TOKEN)
-    const token = useCookie('XSRF-TOKEN').value
-    
-    if (token) {
-      // Laravel expects the token in X-XSRF-TOKEN header
-      // The cookie value is URL encoded, decode it
-      return decodeURIComponent(token)
-    }
-    
-    return null
+
+    return readXsrfCookie()
   }
 
   async function $csrf() {

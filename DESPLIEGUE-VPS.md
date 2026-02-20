@@ -95,12 +95,17 @@ DB_PASSWORD=tu_password_seguro
 
 SANCTUM_STATEFUL_DOMAINS=cooperative.tecnologicaslf.com
 CORS_ALLOWED_ORIGINS=https://cooperative.tecnologicaslf.com
+
+# Para que el front (cooperative) pueda leer la cookie CSRF que setea la API (apicooperative)
+SESSION_DOMAIN=.tecnologicaslf.com
 ```
 
 > **Si ya desplegaste y ves error CORS** (p. ej. "Access-Control-Allow-Origin' that is not equal to the supplied origin"): edita `apiCooperative/.env` en el VPS y pon `FRONTEND_URL` y `CORS_ALLOWED_ORIGINS` con la URL del front en producción (`https://cooperative.tecnologicaslf.com`). Luego reinicia el contenedor API:  
 > `docker compose -f clientCooperative/docker-compose.yml restart api`
 
 > **Si ves "Session store not set on request"** al hacer login: `SANCTUM_STATEFUL_DOMAINS` en `apiCooperative/.env` debe incluir el dominio del frontend (solo host, sin `https://`). Ejemplo: `SANCTUM_STATEFUL_DOMAINS=cooperative.tecnologicaslf.com`. Reinicia el contenedor API tras cambiar `.env`.
+
+> **Si ves "CSRF token mismatch" (419)** al hacer login: la cookie XSRF-TOKEN la setea la API (apicooperative) y el front (cooperative) no puede leerla si cada uno tiene su subdominio. En `apiCooperative/.env` pon `SESSION_DOMAIN=.tecnologicaslf.com` (con el punto delante) para que la cookie se comparta entre subdominios. Reinicia el contenedor API.
 
 Genera `APP_KEY` si no lo tienes (o ejecútalo dentro del contenedor después de levantar):
 
