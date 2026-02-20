@@ -100,7 +100,7 @@ CORS_ALLOWED_ORIGINS=https://cooperative.tecnologicaslf.com
 > **Si ya desplegaste y ves error CORS** (p. ej. "Access-Control-Allow-Origin' that is not equal to the supplied origin"): edita `apiCooperative/.env` en el VPS y pon `FRONTEND_URL` y `CORS_ALLOWED_ORIGINS` con la URL del front en producción (`https://cooperative.tecnologicaslf.com`). Luego reinicia el contenedor API:  
 > `docker compose -f clientCooperative/docker-compose.yml restart api`
 
-> **Si ves "Session store not set on request"** al hacer login: el dominio del frontend debe ser stateful para Sanctum. Asegura `FRONTEND_URL=https://cooperative.tecnologicaslf.com` en `apiCooperative/.env` (la API ya incluye ese host automáticamente). Si usas otro dominio, define `SANCTUM_STATEFUL_DOMAINS=tu-dominio-frontend.com`. Reinicia el contenedor API tras cambiar `.env`.
+> **Si ves "Session store not set on request"** al hacer login: `SANCTUM_STATEFUL_DOMAINS` en `apiCooperative/.env` debe incluir el dominio del frontend (solo host, sin `https://`). Ejemplo: `SANCTUM_STATEFUL_DOMAINS=cooperative.tecnologicaslf.com`. Reinicia el contenedor API tras cambiar `.env`.
 
 Genera `APP_KEY` si no lo tienes (o ejecútalo dentro del contenedor después de levantar):
 

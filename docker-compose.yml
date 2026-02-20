@@ -33,11 +33,9 @@ services:
     env_file:
       - ../apiCooperative/.env
     environment:
-      # Overrides para red Docker (obligatorios dentro del contenedor)
+      # Solo overrides de red Docker (lo demás viene de env_file)
       - DB_HOST=postgres
       - DB_PORT=5432
-      - SANCTUM_STATEFUL_DOMAINS=${SANCTUM_STATEFUL_DOMAINS:-localhost:3535,127.0.0.1:3535}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3535}
     depends_on:
       postgres:
         condition: service_healthy
