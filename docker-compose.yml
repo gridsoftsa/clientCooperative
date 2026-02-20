@@ -21,7 +21,7 @@ services:
 
   api:
     build:
-      context: ./apiCooperative
+      context: ../apiCooperative
       dockerfile: Dockerfile
     container_name: cooperative_api
     restart: unless-stopped
@@ -31,7 +31,7 @@ services:
       - api_storage:/var/www/html/storage
       - api_cache:/var/www/html/bootstrap/cache
       # Usar el .env de apiCooperative (credenciales y variables Laravel)
-      - ./apiCooperative/.env:/var/www/html/.env
+      - ../apiCooperative/.env:/var/www/html/.env
     environment:
       # Overrides solo para red Docker (conexión a postgres)
       - DB_HOST=postgres
@@ -47,7 +47,7 @@ services:
 
   client:
     build:
-      context: ./clientCooperative
+      context: .
       dockerfile: Dockerfile
       args:
         NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-http://localhost:8585}
