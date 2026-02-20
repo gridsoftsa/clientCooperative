@@ -1,6 +1,7 @@
 # Despliegue en VPS (apicooperative + cooperative)
 
 Dominios:
+
 - **API:** apicooperative.tecnologicaslf.com → Laravel
 - **Frontend:** cooperative.tecnologicaslf.com → Nuxt
 
@@ -96,6 +97,9 @@ SANCTUM_STATEFUL_DOMAINS=cooperative.tecnologicaslf.com
 CORS_ALLOWED_ORIGINS=https://cooperative.tecnologicaslf.com
 ```
 
+> **Si ya desplegaste y ves error CORS** (p. ej. "Access-Control-Allow-Origin' that is not equal to the supplied origin"): edita `apiCooperative/.env` en el VPS y pon `FRONTEND_URL` y `CORS_ALLOWED_ORIGINS` con la URL del front en producción (`https://cooperative.tecnologicaslf.com`). Luego reinicia el contenedor API:  
+> `docker compose -f clientCooperative/docker-compose.yml restart api`
+
 Genera `APP_KEY` si no lo tienes (o ejecútalo dentro del contenedor después de levantar):
 
 ```bash
@@ -170,8 +174,8 @@ sudo apt install -y nginx
 Copiar las configuraciones del repo a Nginx:
 
 ```bash
-sudo cp /opt/cooperative/clientCooperative/vps-nginx/apicooperative.tecnologicaslf.com.conf /etc/nginx/sites-available/
-sudo cp /opt/cooperative/clientCooperative/vps-nginx/cooperative.tecnologicaslf.com.conf /etc/nginx/sites-available/
+sudo cp clientCooperative/vps-nginx/apicooperative.tecnologicaslf.com.conf /etc/nginx/sites-available/
+sudo cp clientCooperative/vps-nginx/cooperative.tecnologicaslf.com.conf /etc/nginx/sites-available/
 
 sudo ln -s /etc/nginx/sites-available/apicooperative.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
 sudo ln -s /etc/nginx/sites-available/cooperative.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
@@ -228,10 +232,10 @@ docker compose -f clientCooperative/docker-compose.yml restart api
 ## 9. Resumen de puertos
 
 | Servicio   | Puerto en el host | Dominio                            |
-|-----------|--------------------|------------------------------------|
-| API       | 8585               | apicooperative.tecnologicaslf.com  |
-| Frontend  | 3535               | cooperative.tecnologicaslf.com     |
-| PostgreSQL| 5435               | solo local (no exponer a internet)  |
+| ---------- | ----------------- | ---------------------------------- |
+| API        | 8585              | apicooperative.tecnologicaslf.com  |
+| Frontend   | 3535              | cooperative.tecnologicaslf.com     |
+| PostgreSQL | 5435              | solo local (no exponer a internet) |
 
 Nginx escucha 80/443 y hace proxy a 8585 y 3535.
 

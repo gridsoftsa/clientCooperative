@@ -2,6 +2,9 @@
 
 Stack: Laravel 12 (API) + Nuxt 4 (Cliente) + PostgreSQL 16
 
+> **Este `docker-compose.yml` es para producción / despliegue** (imágenes optimizadas, sin montar código).  
+> Para **desarrollo local** con recarga en vivo, usa la guía [DESARROLLO-LOCAL.md](./DESARROLLO-LOCAL.md).
+
 ## Requisitos
 
 - Docker y Docker Compose
