@@ -30,13 +30,12 @@ services:
     volumes:
       - api_storage:/var/www/html/storage
       - api_cache:/var/www/html/bootstrap/cache
-      # Usar el .env de apiCooperative (credenciales y variables Laravel)
-      - ../apiCooperative/.env:/var/www/html/.env
+    env_file:
+      - ../apiCooperative/.env
     environment:
-      # Overrides solo para red Docker (conexión a postgres)
+      # Overrides para red Docker (obligatorios dentro del contenedor)
       - DB_HOST=postgres
       - DB_PORT=5432
-      # El resto (APP_*, DB_DATABASE, DB_USERNAME, DB_PASSWORD) viene del .env montado
       - SANCTUM_STATEFUL_DOMAINS=${SANCTUM_STATEFUL_DOMAINS:-localhost:3535,127.0.0.1:3535}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3535}
     depends_on:
