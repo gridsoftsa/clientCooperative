@@ -15,6 +15,9 @@ COPY . .
 ARG NUXT_PUBLIC_API_BASE
 ENV NUXT_PUBLIC_API_BASE=${NUXT_PUBLIC_API_BASE:-http://localhost:8000}
 
+# Aumentar heap de Node para evitar "JavaScript heap out of memory" en VPS con poca RAM
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
 RUN pnpm run build 2>/dev/null || npm run build
 
 # Client Nuxt 4 - Producción
