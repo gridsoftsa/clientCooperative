@@ -59,10 +59,11 @@ services:
     networks:
       - cooperative
 
+# Volúmenes nombrados: persisten entre builds y restarts. NO borrar con -v.
 volumes:
-  postgres_data:
-  api_storage:
-  api_cache:
+  postgres_data:   # BD PostgreSQL
+  api_storage:    # storage Laravel (imágenes, uploads)
+  api_cache:      # bootstrap/cache Laravel
 
 networks:
   cooperative:
