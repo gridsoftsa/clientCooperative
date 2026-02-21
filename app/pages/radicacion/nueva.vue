@@ -26,6 +26,7 @@ const form = ref<CreditApplicationForm>({
   amount_requested: 0,
   term_months: 12,
   destination: '',
+  destination_description: '',
   agency_id: 0,
   status: 'Draft',
   co_debtors: [],
@@ -92,6 +93,15 @@ function addCoDebtor() {
 
 function removeCoDebtor(index: number) {
   form.value.co_debtors.splice(index, 1)
+}
+
+const { formatPesos, parsePesosInput, onKeydownPesosOnly } = usePesosFormat()
+
+/** Evita teclas no numéricas en inputs type="number". allowDecimal: permitir punto. */
+function onKeydownNumeric(e: KeyboardEvent, allowDecimal = false) {
+  if (['e', 'E', '+', '-'].includes(e.key) || (!allowDecimal && e.key === '.')) {
+    e.preventDefault()
+  }
 }
 
 function canProceedStep1(): boolean {
@@ -193,7 +203,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="w-full max-w-4xl mx-auto flex flex-col gap-6">
+  <div class="w-full max-w-6xl mx-auto flex flex-col gap-6 px-4 sm:px-6">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-2xl font-bold tracking-tight">
@@ -264,18 +274,19 @@ onMounted(() => {
 
         <!-- Paso 2: Solicitud -->
         <div v-else-if="currentStep === 2" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div>
-            <Label for="amount">Monto solicitado *</Label>
+          <div class="space-y-1.5">
+            <Label for="amount">Monto solicitado * (COP)</Label>
             <Input
               id="amount"
-              v-model.number="form.amount_requested"
-              type="number"
-              min="1"
-              step="0.01"
-              placeholder="Ej: 5000000"
+              :model-value="formatPesos(form.amount_requested)"
+              type="text"
+              inputmode="decimal"
+              placeholder="Ej: 5.000.000"
+              @keydown="onKeydownPesosOnly"
+              @update:model-value="(v) => (form.amount_requested = parsePesosInput(String(v)) ?? 0)"
             />
           </div>
-          <div>
+          <div class="space-y-1.5">
             <Label for="term">Plazo (meses) *</Label>
             <Input
               id="term"
@@ -283,10 +294,12 @@ onMounted(() => {
               type="number"
               min="1"
               placeholder="Ej: 12"
+              inputmode="numeric"
+              @keydown="onKeydownNumeric($event, false)"
             />
           </div>
-          <div>
-            <Label for="agency">Agencia *</Label>
+          <div class="space-y-1.5">
+            <Label for="agency">Sucursal *</Label>
             <Select v-model="form.agency_id">
               <SelectTrigger id="agency">
                 <SelectValue placeholder="Seleccionar agencia" />
@@ -302,12 +315,22 @@ onMounted(() => {
               </SelectContent>
             </Select>
           </div>
-          <div class="sm:col-span-2 lg:col-span-3">
+          <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
             <Label for="destination">Destino del crédito</Label>
             <Input
               id="destination"
               v-model="form.destination"
               placeholder="Ej: Capital de trabajo, vivienda..."
+            />
+          </div>
+          <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+            <Label for="destination_description">Descripción específica del destino del crédito</Label>
+            <textarea
+              id="destination_description"
+              v-model="form.destination_description"
+              class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="Describa en detalle el uso que se le dará al crédito (inversión, gastos a cubrir, etc.)"
+              rows="4"
             />
           </div>
         </div>
@@ -345,7 +368,10 @@ onMounted(() => {
                 <Icon name="i-lucide-trash" class="h-4 w-4" />
               </Button>
             </div>
-            <ApplicantFormFields v-model="form.co_debtors[idx]" />
+            <ApplicantFormFields
+              v-model="form.co_debtors[idx]"
+              :show-co-debtor-concept="true"
+            />
           </div>
         </div>
 

@@ -215,6 +215,68 @@ html.light {
   color-scheme: light;
 }
 
+/* @vueform/multiselect: modo oscuro (trigger y dropdown pueden estar en body) */
+html.dark .multiselect-municipality,
+.dark .multiselect-municipality {
+  --ms-bg: var(--background);
+  --ms-border-color: var(--border);
+  --ms-placeholder-color: var(--muted-foreground);
+  --ms-clear-color: var(--muted-foreground);
+  --ms-clear-color-hover: var(--foreground);
+  --ms-caret-color: var(--muted-foreground);
+  --ms-spinner-color: var(--primary);
+  --ms-dropdown-bg: var(--popover);
+  --ms-dropdown-border-color: var(--border);
+  --ms-option-bg-pointed: var(--accent);
+  --ms-option-color-pointed: var(--accent-foreground);
+  --ms-empty-color: var(--muted-foreground);
+  --ms-group-label-bg: var(--accent);
+  --ms-group-label-color: var(--accent-foreground);
+}
+
+html.dark .multiselect-municipality .multiselect-single-label-text,
+html.dark .multiselect-municipality .multiselect-placeholder,
+.dark .multiselect-municipality .multiselect-single-label-text,
+.dark .multiselect-municipality .multiselect-placeholder {
+  color: var(--foreground) !important;
+}
+
+html.dark .multiselect-municipality .multiselect-search,
+.dark .multiselect-municipality .multiselect-search {
+  background: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+html.dark .multiselect-dropdown,
+.dark .multiselect-dropdown {
+  background: var(--popover) !important;
+  border-color: var(--border) !important;
+}
+
+html.dark .multiselect-dropdown .multiselect-option,
+.dark .multiselect-dropdown .multiselect-option {
+  color: var(--popover-foreground);
+}
+
+html.dark .multiselect-dropdown .multiselect-option.is-pointed,
+.dark .multiselect-dropdown .multiselect-option.is-pointed {
+  background: var(--accent) !important;
+  color: var(--accent-foreground) !important;
+}
+
+html.dark .multiselect-dropdown .multiselect-search,
+.dark .multiselect-dropdown .multiselect-search {
+  background: var(--popover) !important;
+  color: var(--foreground) !important;
+}
+
+html.dark .multiselect-dropdown .multiselect-no-options,
+html.dark .multiselect-dropdown .multiselect-no-results,
+.dark .multiselect-dropdown .multiselect-no-options,
+.dark .multiselect-dropdown .multiselect-no-results {
+  color: var(--muted-foreground) !important;
+}
+
 button,
 [type="button"] {
   @apply cursor-pointer;
