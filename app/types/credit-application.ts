@@ -1,3 +1,32 @@
+/** Datos financieros según entrevista deudor/codeudor (ingresos, gastos, activos, solvencia) */
+export interface FinancialInfoForm {
+  activity_type?: string
+  concept?: string
+  income?: {
+    salary?: number
+    pension?: number
+    crops?: number
+    business?: number
+    total?: number
+    description?: string
+  }
+  expenses?: {
+    personal?: number
+    food?: number
+    services?: number
+    rent?: number
+    total?: number
+    description?: string
+  }
+  assets?: Array<{ description?: string; value?: number }>
+  solvency?: {
+    assets?: number
+    liabilities?: number
+    real_estate?: number
+    debt_ratio?: number
+  }
+}
+
 export interface ApplicantForm {
   document_type: string
   document_number: string
@@ -23,7 +52,7 @@ export interface ApplicantForm {
   position?: string
   contract_type?: string
   time_in_job?: string
-  financial_info?: Record<string, unknown>
+  financial_info?: FinancialInfoForm | Record<string, unknown>
   references?: Array<{ name?: string; phone?: string; relationship?: string }>
 }
 
@@ -32,6 +61,7 @@ export interface CreditApplicationForm {
   amount_requested: number
   term_months: number
   destination?: string
+  destination_description?: string
   agency_id: number
   status: 'Draft' | 'Submitted'
   co_debtors: ApplicantForm[]
