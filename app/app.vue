@@ -15,7 +15,7 @@ useHead({
     { key: 'theme-color', name: 'theme-color', content: color },
   ],
   link: [
-    { rel: 'icon', href: '/favicon.ico' },
+    { rel: 'icon', href: '/Logo-coop-1.ico' },
   ],
   htmlAttrs: {
     lang: 'en',
@@ -25,8 +25,8 @@ useHead({
   },
 })
 
-const title = 'Nuxt Shadcn-Vue TailwindCSS 4 - Dashboard Template'
-const description = 'This dashboard, built with Nuxt, Shadcn Vue, and TailwindCSS. It includes a dark mode toggle and is optimized for performance and data efficiency.'
+const title = 'Coopersvivélez'
+const description = 'Cooperativa de ahorro y crédito'
 
 useSeoMeta({
   title,

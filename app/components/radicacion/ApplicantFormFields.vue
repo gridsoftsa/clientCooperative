@@ -115,7 +115,6 @@ const expensesTotalDisplay = computed(() => {
       <div class="rounded-lg border border-border bg-muted/30 p-4">
         <div class="flex flex-wrap items-end gap-3">
           <div :class="fieldClass" class="min-w-0 flex-1 sm:max-w-[280px]">
-            <Label for="search_doc" class="block">Número de documento</Label>
             <Input
               id="search_doc"
               v-model="local.document_number"
