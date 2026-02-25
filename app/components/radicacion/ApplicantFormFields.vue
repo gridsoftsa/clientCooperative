@@ -656,7 +656,7 @@ function formatFileSize(bytes: number): string {
           class="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:flex-row sm:items-center sm:gap-3"
         >
           <div :class="fieldClass" class="flex min-w-0 flex-1 flex-col justify-center sm:max-w-[220px]">
-            <Label :for="`doc_title_${idx}`" class="block text-center">Título del documento</Label>
+            <Label :for="`doc_title_${idx}`" class="block text-center">Título del documento *</Label>
             <Input
               :id="`doc_title_${idx}`"
               :model-value="doc.title"

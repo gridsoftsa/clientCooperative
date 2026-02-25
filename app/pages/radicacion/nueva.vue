@@ -117,6 +117,21 @@ function canProceedStep2(): boolean {
     && form.value.agency_id > 0
 }
 
+/** Documentos con archivo deben tener título (deudor y codeudores). */
+function hasDocumentsWithoutTitle(): boolean {
+  const debtorDocs = form.value.debtor.documents ?? []
+  for (const d of debtorDocs) {
+    if (d.file && !d.title?.trim()) return true
+  }
+  for (const co of form.value.co_debtors ?? []) {
+    const docs = co.documents ?? []
+    for (const d of docs) {
+      if (d.file && !d.title?.trim()) return true
+    }
+  }
+  return false
+}
+
 function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
   const { debtor, co_debtors, ...rest } = form.value
   const { documents: _d, ...debtorWithoutDocs } = debtor
@@ -174,6 +189,10 @@ async function saveDraft() {
     toast.error('Completa monto, plazo y agencia')
     return
   }
+  if (hasDocumentsWithoutTitle()) {
+    toast.error('Todos los documentos adjuntos deben tener un título')
+    return
+  }
 
   saving.value = true
   try {
@@ -187,9 +206,14 @@ async function saveDraft() {
     router.push('/radicacion')
   } catch (e: any) {
     console.error('Error guardando:', e)
-    const msg = e?.data?.message || e?.data?.errors
-      ? Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
-      : 'Error al guardar'
+    let msg = 'Error al guardar'
+    if (e?.data?.errors && typeof e.data.errors === 'object') {
+      msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
+    } else if (e?.data?.message) {
+      msg = e.data.message
+    } else if (e?.message) {
+      msg = e.message
+    }
     toast.error(msg)
   } finally {
     saving.value = false
@@ -205,6 +229,10 @@ async function submitApplication() {
     toast.error('Completa monto, plazo y agencia')
     return
   }
+  if (hasDocumentsWithoutTitle()) {
+    toast.error('Todos los documentos adjuntos deben tener un título')
+    return
+  }
 
   saving.value = true
   try {
@@ -218,9 +246,14 @@ async function submitApplication() {
     router.push('/radicacion')
   } catch (e: any) {
     console.error('Error enviando:', e)
-    const msg = e?.data?.message || e?.data?.errors
-      ? Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
-      : 'Error al enviar'
+    let msg = 'Error al enviar'
+    if (e?.data?.errors && typeof e.data.errors === 'object') {
+      msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
+    } else if (e?.data?.message) {
+      msg = e.data.message
+    } else if (e?.message) {
+      msg = e.message
+    }
     toast.error(msg)
   } finally {
     saving.value = false
