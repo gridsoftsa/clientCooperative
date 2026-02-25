@@ -74,7 +74,7 @@ async function onSubmit(event: Event) {
     </div>
     <Button type="submit" class="w-full" :disabled="isLoading || !email || !password">
       <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
-      Login
+      Iniciar Sesión
     </Button>
     <!--
     <div class="relative">

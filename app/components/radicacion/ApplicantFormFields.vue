@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
-import type { ApplicantForm, FinancialInfoForm } from '~/types/credit-application'
+import type { ApplicantForm, ApplicantDocumentForm, FinancialInfoForm } from '~/types/credit-application'
 
 const props = defineProps<{
   modelValue: ApplicantForm
@@ -105,6 +106,65 @@ const expensesTotalDisplay = computed(() => {
   const exp = financial.value.expenses
   return (exp?.personal ?? 0) + (exp?.food ?? 0) + (exp?.rent ?? 0)
 })
+
+const documents = computed({
+  get: () => props.modelValue.documents ?? [],
+  set: (v: ApplicantDocumentForm[]) => emit('update:modelValue', { ...props.modelValue, documents: v }),
+})
+
+function addDocument() {
+  documents.value = [...(documents.value || []), { title: '', file: undefined }]
+}
+
+function removeDocument(index: number) {
+  documents.value = documents.value.filter((_, i) => i !== index)
+}
+
+function updateDocument(index: number, updates: Partial<ApplicantDocumentForm>) {
+  const next = [...documents.value]
+  const current = next[index] ?? { title: '', file: undefined }
+  next[index] = { title: current.title ?? '', file: current.file, ...updates }
+  documents.value = next
+}
+
+function onDocumentFileChange(index: number, e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  if (!isValidFile(file)) {
+    toast.error('Archivo no válido. Use PDF, JPG, PNG o DOC. Máx. 10 MB.')
+    return
+  }
+  updateDocument(index, { file })
+}
+
+function onDocumentDrop(index: number, e: DragEvent) {
+  e.preventDefault()
+  const file = e.dataTransfer?.files?.[0]
+  if (!file) return
+  if (!isValidFile(file)) {
+    toast.error('Archivo no válido. Use PDF, JPG, PNG o DOC. Máx. 10 MB.')
+    return
+  }
+  updateDocument(index, { file })
+}
+
+function onDocumentDragOver(e: DragEvent) {
+  e.preventDefault()
+  e.dataTransfer!.dropEffect = 'copy'
+}
+
+function isValidFile(file: File): boolean {
+  const valid = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+  return valid.includes(file.type) && file.size <= 10 * 1024 * 1024
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 </script>
 
 <template>
@@ -580,6 +640,78 @@ const expensesTotalDisplay = computed(() => {
             @update:model-value="(v) => setFinancial('assets', [{ ...(financial.assets?.[0] || {}), value: parsePesosInput(String(v)) }])"
           />
         </div>
+      </div>
+    </section>
+
+    <!-- Documentos adjuntos (deudor y codeudores) -->
+    <section v-if="showSearch || showCoDebtorConcept" class="space-y-3">
+      <h3 :class="sectionTitleClass">Documentos adjuntos</h3>
+      <p class="text-xs text-muted-foreground">
+        Adjunte documentos con título descriptivo. Formatos: PDF, JPG, PNG, DOC, DOCX. Máx. 10 MB cada uno.
+      </p>
+      <div class="space-y-3">
+        <div
+          v-for="(doc, idx) in documents"
+          :key="idx"
+          class="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:flex-row sm:items-center sm:gap-3"
+        >
+          <div :class="fieldClass" class="flex min-w-0 flex-1 flex-col justify-center sm:max-w-[220px]">
+            <Label :for="`doc_title_${idx}`" class="block text-center">Título del documento</Label>
+            <Input
+              :id="`doc_title_${idx}`"
+              :model-value="doc.title"
+              placeholder="Ej: Cédula, Certificado laboral..."
+              @update:model-value="updateDocument(idx, { title: String($event ?? '') })"
+            />
+          </div>
+          <div :class="fieldClass" class="min-w-0 flex-1 sm:basis-0">
+            <Label :for="`doc_file_${idx}`" class="block text-center">Archivo</Label>
+            <input
+              :id="`doc_file_${idx}`"
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              class="sr-only"
+              @change="onDocumentFileChange(idx, $event)"
+            >
+            <label
+              :for="`doc_file_${idx}`"
+              class="flex min-h-[72px] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/30 px-3 py-2.5 transition-colors hover:border-primary/50 hover:bg-muted/50 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+              @dragover="onDocumentDragOver"
+              @drop="onDocumentDrop(idx, $event)"
+            >
+              <template v-if="doc.file">
+                <Icon name="i-lucide-file-check" class="h-8 w-8 text-green-600 dark:text-green-500" />
+                <span class="max-w-full truncate text-center text-sm font-medium text-foreground">
+                  {{ doc.file.name }}
+                </span>
+                <span class="text-xs text-muted-foreground">
+                  {{ formatFileSize(doc.file.size) }}
+                </span>
+                <span class="text-xs text-primary">Clic para cambiar</span>
+              </template>
+              <template v-else>
+                <Icon name="i-lucide-upload" class="h-8 w-8 text-muted-foreground" />
+                <span class="text-center text-sm font-medium text-muted-foreground">
+                  Arrastra aquí o clic para seleccionar
+                </span>
+                <span class="text-xs text-muted-foreground">PDF, JPG, PNG, DOC</span>
+              </template>
+            </label>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            class="shrink-0 text-destructive hover:text-destructive"
+            @click="removeDocument(idx)"
+          >
+            <Icon name="i-lucide-trash" class="h-4 w-4" />
+          </Button>
+        </div>
+        <Button type="button" variant="outline" size="sm" @click="addDocument">
+          <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+          Agregar documento
+        </Button>
       </div>
     </section>
   </div>

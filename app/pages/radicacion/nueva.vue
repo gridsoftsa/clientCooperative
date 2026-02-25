@@ -22,6 +22,7 @@ const form = ref<CreditApplicationForm>({
     first_name: '',
     first_last_name: '',
     dependents: 0,
+    documents: [],
   },
   amount_requested: 0,
   term_months: 12,
@@ -43,7 +44,7 @@ async function fetchCatalogs() {
     const agenciesRes = await $api<{ data: typeof agencies.value }>('/catalogs/agencies')
     agencies.value = agenciesRes.data
     if (agencies.value.length && !form.value.agency_id) {
-      form.value.agency_id = agencies.value[0].id
+      form.value.agency_id = agencies.value[0]?.id ?? 0
     }
   } catch (e) {
     console.error('Error cargando catálogos:', e)
@@ -88,6 +89,7 @@ function addCoDebtor() {
     first_name: '',
     first_last_name: '',
     dependents: 0,
+    documents: [],
   })
 }
 
@@ -115,6 +117,54 @@ function canProceedStep2(): boolean {
     && form.value.agency_id > 0
 }
 
+function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
+  const { debtor, co_debtors, ...rest } = form.value
+  const { documents: _d, ...debtorWithoutDocs } = debtor
+  const coDebtorsWithoutDocs = (co_debtors ?? []).map(({ documents: _doc, ...co }) => co)
+  return {
+    ...rest,
+    debtor: debtorWithoutDocs,
+    co_debtors: coDebtorsWithoutDocs,
+    status,
+  }
+}
+
+async function uploadAllDocuments(applicationId: number, application: { application_applicants?: Array<{ applicant_id: number; role: string }> }) {
+  const pivots = application.application_applicants ?? []
+  const debtorPivot = pivots.find((p: { role: string }) => p.role === 'DEUDOR')
+  const codeudorPivots = pivots.filter((p: { role: string }) => p.role === 'CODEUDOR')
+
+  // Deudor
+  if (debtorPivot) {
+    const docs = form.value.debtor.documents ?? []
+    for (const doc of docs) {
+      if (!doc.file || !doc.title?.trim()) continue
+      const fd = new FormData()
+      fd.append('title', doc.title.trim())
+      fd.append('file', doc.file)
+      await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
+    }
+  }
+
+  // Codeudores
+  const coDebtors = form.value.co_debtors ?? []
+  for (let i = 0; i < coDebtors.length && i < codeudorPivots.length; i++) {
+    const co = coDebtors[i]
+    const pivot = codeudorPivots[i]
+    if (!co || !pivot) continue
+    const docs = co.documents ?? []
+    const applicantId = pivot.applicant_id
+    for (const doc of docs) {
+      if (!doc.file || !doc.title?.trim()) continue
+      const fd = new FormData()
+      fd.append('title', doc.title.trim())
+      fd.append('file', doc.file)
+      fd.append('applicant_id', String(applicantId))
+      await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
+    }
+  }
+}
+
 async function saveDraft() {
   if (!canProceedStep1()) {
     toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
@@ -128,13 +178,11 @@ async function saveDraft() {
   saving.value = true
   try {
     await $csrf()
-    await $api('/credit-applications', {
+    const { data: application } = await $api<{ data: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }> } }>('/credit-applications', {
       method: 'POST',
-      body: {
-        ...form.value,
-        status: 'Draft',
-      },
+      body: payloadWithoutDocuments('Draft'),
     })
+    await uploadAllDocuments(application.id, application)
     toast.success('Borrador guardado. Puedes retomarlo más tarde.')
     router.push('/radicacion')
   } catch (e: any) {
@@ -161,13 +209,11 @@ async function submitApplication() {
   saving.value = true
   try {
     await $csrf()
-    await $api('/credit-applications', {
+    const { data: application } = await $api<{ data: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }> } }>('/credit-applications', {
       method: 'POST',
-      body: {
-        ...form.value,
-        status: 'Submitted',
-      },
+      body: payloadWithoutDocuments('Submitted'),
     })
+    await uploadAllDocuments(application.id, application)
     toast.success('Solicitud enviada correctamente')
     router.push('/radicacion')
   } catch (e: any) {
@@ -203,7 +249,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="w-full max-w-6xl mx-auto flex flex-col gap-6 px-4 sm:px-6">
+  <div class="w-full max-w-6xl mx-auto flex flex-col gap-4 px-0">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-2xl font-bold tracking-tight">
@@ -252,7 +298,7 @@ onMounted(() => {
 
     <Card>
       <CardHeader>
-        <CardTitle>{{ steps[currentStep - 1].title }}</CardTitle>
+        <CardTitle>{{ steps[currentStep - 1]?.title ?? '' }}</CardTitle>
         <CardDescription>
           {{ currentStep === 1
             ? 'Busca por cédula o completa el formulario del deudor principal'
@@ -351,28 +397,42 @@ onMounted(() => {
             No hay codeudores. Haz clic en "Agregar Codeudor" si aplica.
           </div>
 
-          <div
-            v-for="(co, idx) in form.co_debtors"
-            :key="idx"
-            class="rounded-lg border p-4 space-y-4"
-          >
-            <div class="flex items-center justify-between">
-              <span class="font-medium">Codeudor {{ idx + 1 }}</span>
+          <Accordion v-else type="multiple" collapsible class="space-y-2">
+            <AccordionItem
+              v-for="(co, idx) in form.co_debtors"
+              :key="idx"
+              :value="`codeudor-${idx}`"
+              class="relative rounded-lg border border-border px-4 pr-12 data-[state=open]:border-primary/30"
+            >
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
-                class="text-destructive hover:text-destructive"
+                size="icon"
+                class="absolute right-2 top-3 h-8 w-8 text-muted-foreground hover:text-destructive"
+                title="Eliminar codeudor"
                 @click="removeCoDebtor(idx)"
               >
                 <Icon name="i-lucide-trash" class="h-4 w-4" />
               </Button>
-            </div>
-            <ApplicantFormFields
-              v-model="form.co_debtors[idx]"
-              :show-co-debtor-concept="true"
-            />
-          </div>
+              <AccordionTrigger class="py-3 pr-8 hover:no-underline">
+                <span class="font-medium">
+                  Codeudor {{ idx + 1 }}
+                  <span v-if="co.first_name || co.first_last_name" class="ml-2 text-muted-foreground font-normal">
+                    ({{ [co.first_name, co.first_last_name].filter(Boolean).join(' ') || 'Sin nombre' }})
+                  </span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div class="border-t border-border px-4 pt-4 pb-2">
+                  <ApplicantFormFields
+                    :model-value="co"
+                    :show-co-debtor-concept="true"
+                    @update:model-value="form.co_debtors[idx] = $event"
+                  />
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </div>
 
         <!-- Navegación -->

@@ -27,6 +27,12 @@ export interface FinancialInfoForm {
   }
 }
 
+/** Documento adjunto en formulario (antes de subir) */
+export interface ApplicantDocumentForm {
+  title: string
+  file?: File
+}
+
 export interface ApplicantForm {
   document_type: string
   document_number: string
@@ -54,6 +60,8 @@ export interface ApplicantForm {
   time_in_job?: string
   financial_info?: FinancialInfoForm | Record<string, unknown>
   references?: Array<{ name?: string; phone?: string; relationship?: string }>
+  /** Documentos del deudor (título + archivo para subir) */
+  documents?: ApplicantDocumentForm[]
 }
 
 export interface CreditApplicationForm {
