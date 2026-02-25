@@ -50,6 +50,17 @@ function getStatusBadgeVariant(status: string) {
   return map[status] || 'outline'
 }
 
+function getStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    Draft: 'Borrador',
+    Submitted: 'Enviada',
+    In_Analysis: 'En análisis',
+    Approved: 'Aprobada',
+    Rejected: 'Rechazada',
+  }
+  return map[status] ?? status
+}
+
 onMounted(() => {
   fetchApplications()
 })
@@ -100,7 +111,7 @@ onMounted(() => {
                 <TableCell>{{ app.term_months }} meses</TableCell>
                 <TableCell>
                   <Badge :variant="getStatusBadgeVariant(app.status) as any">
-                    {{ app.status }}
+                    {{ getStatusLabel(app.status) }}
                   </Badge>
                 </TableCell>
                 <TableCell>{{ new Date(app.created_at).toLocaleDateString('es-CO') }}</TableCell>
