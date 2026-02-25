@@ -6,19 +6,34 @@ const props = defineProps<{
 }>()
 
 const { formatPesos } = usePesosFormat()
-const config = useRuntimeConfig()
-const apiBase = config.public.apiBase || 'http://localhost:8000'
+const { downloadDocument } = useDocumentDownload()
+const downloadingId = ref<number | null>(null)
 
 function fullName(a: any): string {
   return [a.first_name, a.second_name, a.first_last_name, a.second_last_name].filter(Boolean).join(' ') || '-'
 }
 
 function cityName(a: any): string {
+  if (typeof a.residence_city_name === 'string' && a.residence_city_name.trim()) return a.residence_city_name
   return a.residence_city?.name ?? a.residenceCity?.name ?? '-'
 }
 
-function getDownloadUrl(documentId: number): string {
-  return `${apiBase}/api/credit-applications/${props.applicationId}/documents/${documentId}/download`
+async function handleDownload(doc: { id: number; title?: string; original_name?: string }) {
+  if (downloadingId.value) return
+  downloadingId.value = doc.id
+  try {
+    await downloadDocument(
+      props.applicationId,
+      doc.id,
+      doc.title || doc.original_name || 'documento',
+    )
+  } catch (e) {
+    console.error('Error descargando:', e)
+    const { toast } = await import('vue-sonner')
+    toast.error('No se pudo descargar el documento. Verifica tu sesión.')
+  } finally {
+    downloadingId.value = null
+  }
 }
 
 const financial = computed(() => props.applicant?.financial_info || {})
@@ -250,17 +265,23 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
     <section v-if="documents?.length" :class="sectionClass">
       <h3 :class="sectionTitleClass">Documentos adjuntos</h3>
       <div class="flex flex-wrap gap-2">
-        <a
+        <Button
           v-for="doc in documents"
           :key="doc.id"
-          :href="getDownloadUrl(doc.id)"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="inline-flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm transition-colors hover:bg-muted/50"
+          variant="outline"
+          size="sm"
+          class="h-auto gap-2 py-2"
+          :disabled="downloadingId === doc.id"
+          @click="handleDownload(doc)"
         >
-          <Icon name="i-lucide-file-text" class="h-4 w-4" />
+          <Icon
+            :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'"
+            class="h-4 w-4 shrink-0"
+            :class="{ 'animate-spin': downloadingId === doc.id }"
+          />
           {{ doc.title || doc.original_name || 'Documento' }}
-        </a>
+          <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        </Button>
       </div>
     </section>
   </div>

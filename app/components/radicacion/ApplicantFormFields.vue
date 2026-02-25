@@ -9,8 +9,6 @@ const props = defineProps<{
   loadingSearch?: boolean
   /** Muestra campo "Concepto" (ej. Codeudor bien raíz) para codeudores */
   showCoDebtorConcept?: boolean
-  /** @deprecated Usar catálogo local useMunicipalities(); se mantiene por compatibilidad */
-  cities?: Array<{ id: number; name: string; department?: string }>
   onSearch?: () => void
 }>()
 
@@ -32,7 +30,7 @@ function setFinancial<K extends keyof FinancialInfoForm>(key: K, value: Financia
   financial.value = { ...financial.value, [key]: value }
 }
 
-const { multiselectOptionsByCity, multiselectOptionsByLabel } = useMunicipalities()
+const { multiselectOptionsByLabel } = useMunicipalities()
 
 const documentTypes = [
   { value: 'CC', label: 'Cédula de Ciudadanía' },
@@ -354,18 +352,18 @@ function formatFileSize(bytes: number): string {
           <Input id="address" v-model="local.residence_address" placeholder="Calle 123 #45-67, barrio..." />
         </div>
         <div :class="fieldClass">
-          <Label for="residence_city">Ciudad</Label>
+          <Label for="residence_city">Ciudad / Municipio de residencia</Label>
           <Multiselect
-            :model-value="local.residence_city_id ?? null"
-            :options="multiselectOptionsByCity"
+            :model-value="local.residence_city_name ?? null"
+            :options="multiselectOptionsByLabel"
             value-prop="value"
             label="label"
             :searchable="true"
-            placeholder="Ciudad"
-            no-options-text="No hay ciudades"
+            placeholder="Municipio"
+            no-options-text="No hay municipios"
             no-results-text="No hay resultados. Escribe para filtrar."
             class="multiselect-municipality"
-            @update:model-value="local = { ...local, residence_city_id: ($event as number) ?? undefined }"
+            @update:model-value="local = { ...local, residence_city_name: ($event as string) ?? '' }"
           />
         </div>
         <div :class="fieldClass">

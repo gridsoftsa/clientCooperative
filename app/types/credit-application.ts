@@ -50,6 +50,8 @@ export interface ApplicantForm {
   landline?: string
   email?: string
   residence_address?: string
+  /** Municipio/ciudad de residencia (texto, igual que expedition_place) */
+  residence_city_name?: string
   residence_city_id?: number
   residence_type?: string
   time_in_residence?: string

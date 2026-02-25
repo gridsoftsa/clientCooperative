@@ -65,10 +65,13 @@ async function searchApplicant() {
       { query: { document_number: doc } },
     )
     if (res.found && res.data) {
+      const d = res.data as unknown as Record<string, unknown>
+      const residenceName = (d.residence_city_name as string) || (d.residence_city as { name?: string } | null)?.name || ''
       form.value.debtor = {
         ...form.value.debtor,
         ...res.data,
         document_number: res.data.document_number,
+        residence_city_name: residenceName,
       }
       toast.success('Solicitante encontrado. Revisa y completa los datos.')
     } else {

@@ -133,16 +133,26 @@ const coDebtors = computed(() => {
     }))
 })
 
+/** Documentos agrupados por applicant_id (usa claves numéricas y string para lookup) */
 const documentsByApplicant = computed(() => {
-  const docs = application.value?.documents || []
-  const byApplicant: Record<number, any[]> = {}
+  const docs = application.value?.documents ?? []
+  const byApplicant: Record<string, any[]> = {}
   for (const doc of docs) {
-    const aid = doc.applicant_id ?? 0
-    if (!byApplicant[aid]) byApplicant[aid] = []
-    byApplicant[aid].push(doc)
+    const aid = doc.applicant_id
+    if (aid == null) continue
+    const key = String(aid)
+    if (!byApplicant[key]) byApplicant[key] = []
+    byApplicant[key].push(doc)
   }
   return byApplicant
 })
+
+/** Obtiene documentos de un solicitante (deudor o codeudor) por su id */
+function getDocumentsForApplicant(applicantId: number | string | null | undefined): any[] {
+  if (applicantId == null) return []
+  const key = String(applicantId)
+  return documentsByApplicant.value[key] ?? []
+}
 
 function getStatusLabel(status: string): string {
   const map: Record<string, string> = {
@@ -278,7 +288,7 @@ onMounted(() => {
             v-if="debtor"
             :key="`debtor-${debtor.id}`"
             :applicant="debtor"
-            :documents="documentsByApplicant[debtor.id] ?? []"
+            :documents="getDocumentsForApplicant(debtor.id)"
             :application-id="application.id"
           />
           <p v-else class="text-muted-foreground py-4">
@@ -293,29 +303,22 @@ onMounted(() => {
           <CardTitle>Codeudores</CardTitle>
           <CardDescription>Personas que respaldan la solicitud</CardDescription>
         </CardHeader>
-        <CardContent>
-          <Accordion
-            type="multiple"
-            collapsible
-            class="space-y-2"
-            :default-value="coDebtors.length ? [`co-${coDebtors[0].id}`] : []"
+        <CardContent class="space-y-6">
+          <div
+            v-for="(co, idx) in coDebtors"
+            :key="co.id"
+            class="rounded-lg border border-border p-4"
           >
-            <AccordionItem
-              v-for="(co, idx) in coDebtors"
-              :key="co.id"
-              :value="`co-${co.id}`"
-              class="rounded-lg border border-border px-4"
-            >
-              <AccordionTrigger class="hover:no-underline">
-                <span class="font-medium">Codeudor {{ idx + 1 }}: {{ fullName(co) }}</span>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div class="border-t border-border pt-4 pb-2">
-                  <ApplicantViewFields :applicant="co" :documents="documentsByApplicant[co.id] ?? []" :application-id="application.id" />
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+            <h4 class="mb-4 font-semibold">
+              Codeudor {{ idx + 1 }}: {{ fullName(co) }}
+            </h4>
+            <ApplicantViewFields
+              :key="`co-${co.id}`"
+              :applicant="co"
+              :documents="getDocumentsForApplicant(co.id)"
+              :application-id="application.id"
+            />
+          </div>
         </CardContent>
       </Card>
     </template>
