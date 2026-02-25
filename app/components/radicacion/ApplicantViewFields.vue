@@ -262,9 +262,9 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
       </div>
     </section>
 
-    <section v-if="documents?.length" :class="sectionClass">
+    <section :class="sectionClass">
       <h3 :class="sectionTitleClass">Documentos adjuntos</h3>
-      <div class="flex flex-wrap gap-2">
+      <div v-if="documents?.length" class="flex flex-wrap gap-2">
         <Button
           v-for="doc in documents"
           :key="doc.id"
@@ -283,6 +283,9 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
           <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </div>
+      <p v-else class="text-sm text-muted-foreground">
+        Ningún documento adjunto
+      </p>
     </section>
   </div>
 </template>

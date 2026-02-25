@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ApplicantViewFields from '~/components/radicacion/ApplicantViewFields.vue'
+
 definePageMeta({
   layout: 'default',
 })
@@ -185,8 +187,11 @@ async function fetchApplication() {
   error.value = null
   try {
     const res = await $api<{ data: any }>(`/credit-applications/${id.value}`)
-    // API retorna { data: { id, debtor, co_debtors, ... } }
-    application.value = res?.data ?? res
+    const data = res?.data ?? res
+    application.value = {
+      ...data,
+      documents: Array.isArray(data?.documents) ? data.documents : [],
+    }
   } catch (e) {
     console.error('Error cargando solicitud:', e)
     error.value = 'No se pudo cargar la solicitud'
@@ -277,24 +282,38 @@ onMounted(() => {
 
       <!-- Deudor -->
       <Card>
-        <CardHeader>
-          <CardTitle>Datos del Deudor</CardTitle>
-          <CardDescription>
-            {{ debtor ? fullName(debtor) : 'Información del solicitante principal' }}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ApplicantViewFields
-            v-if="debtor"
-            :key="`debtor-${debtor.id}`"
-            :applicant="debtor"
-            :documents="getDocumentsForApplicant(debtor.id)"
-            :application-id="application.id"
-          />
-          <p v-else class="text-muted-foreground py-4">
-            No se encontraron datos del solicitante para esta radicación.
-          </p>
-        </CardContent>
+        <Collapsible :default-open="true" class="group/debtor">
+          <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle>Datos del Deudor</CardTitle>
+              <CardDescription>
+                {{ debtor ? fullName(debtor) : 'Información del solicitante principal' }}
+              </CardDescription>
+            </div>
+            <CollapsibleTrigger as-child>
+              <Button variant="ghost" size="icon">
+                <Icon
+                  name="i-lucide-chevron-down"
+                  class="h-5 w-5 transition-transform duration-200 group-data-[state=open]/debtor:rotate-180"
+                />
+              </Button>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent>
+              <ApplicantViewFields
+                v-if="debtor"
+                :key="`debtor-${debtor.id}`"
+                :applicant="debtor"
+                :documents="getDocumentsForApplicant(debtor.id)"
+                :application-id="application.id"
+              />
+              <p v-else class="text-muted-foreground py-4">
+                No se encontraron datos del solicitante para esta radicación.
+              </p>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       <!-- Codeudores -->
@@ -304,21 +323,36 @@ onMounted(() => {
           <CardDescription>Personas que respaldan la solicitud</CardDescription>
         </CardHeader>
         <CardContent class="space-y-6">
-          <div
+          <Collapsible
             v-for="(co, idx) in coDebtors"
             :key="co.id"
-            class="rounded-lg border border-border p-4"
+            :default-open="true"
+            class="group/co rounded-lg border border-border"
           >
-            <h4 class="mb-4 font-semibold">
-              Codeudor {{ idx + 1 }}: {{ fullName(co) }}
-            </h4>
-            <ApplicantViewFields
-              :key="`co-${co.id}`"
-              :applicant="co"
-              :documents="getDocumentsForApplicant(co.id)"
-              :application-id="application.id"
-            />
-          </div>
+            <div class="flex flex-row items-center justify-between px-4 py-3">
+              <h4 class="font-semibold">
+                Codeudor {{ idx + 1 }}: {{ fullName(co) }}
+              </h4>
+              <CollapsibleTrigger as-child>
+                <Button variant="ghost" size="icon">
+                  <Icon
+                    name="i-lucide-chevron-down"
+                    class="h-5 w-5 transition-transform duration-200 group-data-[state=open]/co:rotate-180"
+                  />
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+            <CollapsibleContent>
+              <div class="border-t border-border p-4 pt-4">
+                <ApplicantViewFields
+                  :key="`co-${co.id}`"
+                  :applicant="co"
+                  :documents="getDocumentsForApplicant(co.id)"
+                  :application-id="application.id"
+                />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
         </CardContent>
       </Card>
     </template>
