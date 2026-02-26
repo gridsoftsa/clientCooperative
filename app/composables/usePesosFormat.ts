@@ -46,8 +46,9 @@ export function parsePesosInput(input: string): number | undefined {
 /** En inputs de pesos: solo permite dígitos, punto y coma. Uso: @keydown="onKeydownPesosOnly" */
 export function onKeydownPesosOnly(e: KeyboardEvent) {
   if (e.ctrlKey || e.metaKey) return
-  if (['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
-  if (e.key.length === 1 && !/[\d.,]/.test(e.key)) e.preventDefault()
+  const key = e.key
+  if (key == null || key === '' || ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return
+  if (key.length === 1 && !/[\d.,]/.test(key)) e.preventDefault()
 }
 
 export function usePesosFormat() {

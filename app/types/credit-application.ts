@@ -18,8 +18,17 @@ export interface FinancialInfoForm {
     total?: number
     description?: string
   }
-  assets?: Array<{ description?: string; value?: number }>
+  /** Activos reportados por el deudor (nombre, valor, matrícula inmobiliaria, garantía) */
+  assets?: Array<{
+    name?: string
+    value?: number
+    matricula_inmobiliaria?: string
+    /** Si es garantía, su valor suma en Bien raíz */
+    garantia?: boolean
+  }>
   solvency?: {
+    /** Valor de solvencia (fórmula - se llena automático o manual) */
+    solvency?: number
     assets?: number
     liabilities?: number
     real_estate?: number

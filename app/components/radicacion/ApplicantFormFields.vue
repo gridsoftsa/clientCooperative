@@ -9,6 +9,10 @@ const props = defineProps<{
   loadingSearch?: boolean
   /** Muestra campo "Concepto" (ej. Codeudor bien raíz) para codeudores */
   showCoDebtorConcept?: boolean
+  /** Oculta la sección Datos financieros (ej. cuando está en paso separado) */
+  hideFinancialSection?: boolean
+  /** Muestra solo la sección Datos financieros (para paso dedicado) */
+  showOnlyFinancial?: boolean
   onSearch?: () => void
 }>()
 
@@ -89,8 +93,9 @@ const { formatPesos, parsePesosInput } = usePesosFormat()
 /** En inputs de pesos: solo permite dígitos, punto y coma. Permite teclas de control (borrar, flechas, etc.). */
 function onKeydownPesosOnly(e: KeyboardEvent) {
   if (e.ctrlKey || e.metaKey) return
-  if (['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
-  if (e.key.length === 1 && !/[\d.,]/.test(e.key)) e.preventDefault()
+  const key = e.key
+  if (key == null || key === '' || ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return
+  if (key.length === 1 && !/[\d.,]/.test(key)) e.preventDefault()
 }
 
 /** Total ingresos = salario + pensión + cultivos/negocio (para mostrar en input readonly). */
@@ -104,6 +109,45 @@ const expensesTotalDisplay = computed(() => {
   const exp = financial.value.expenses
   return (exp?.personal ?? 0) + (exp?.food ?? 0) + (exp?.rent ?? 0)
 })
+
+/** Lista de activos (permite agregar/remover). */
+const assetsList = computed({
+  get: () => financial.value.assets ?? [],
+  set: (v) => setFinancial('assets', v),
+})
+
+/** Total de activos (suma de valores). */
+const assetsTotalDisplay = computed(() => {
+  const list = assetsList.value ?? []
+  return list.reduce((sum, a) => sum + (a.value ?? 0), 0)
+})
+
+function addAsset() {
+  assetsList.value = [...(assetsList.value ?? []), { name: '', value: undefined, matricula_inmobiliaria: '', garantia: false }]
+}
+
+function removeAsset(index: number) {
+  const next = [...(assetsList.value ?? [])]
+  next.splice(index, 1)
+  assetsList.value = next
+}
+
+function updateAsset(index: number, field: 'name' | 'value' | 'matricula_inmobiliaria' | 'garantia', value: string | number | boolean | undefined) {
+  const next = [...(assetsList.value ?? [])]
+  const current = next[index] ?? {}
+  next[index] = { ...current, [field]: value }
+  assetsList.value = next
+}
+
+/** Suma de activos marcados como garantía → Bien raíz (se muestra en el input y se sincroniza a solvency). */
+const bienRaizFromGarantias = computed(() => {
+  const list = assetsList.value ?? []
+  return list.reduce((sum, a) => (a.garantia ? sum + (a.value ?? 0) : sum), 0)
+})
+
+watch(bienRaizFromGarantias, (v) => {
+  setFinancial('solvency', { ...(financial.value.solvency || {}), real_estate: v })
+}, { immediate: true })
 
 const documents = computed({
   get: () => props.modelValue.documents ?? [],
@@ -168,7 +212,7 @@ function formatFileSize(bytes: number): string {
 <template>
   <div class="flex flex-col gap-8">
     <!-- Búsqueda por cédula (solo para deudor) -->
-    <section v-if="showSearch" :class="sectionClass">
+    <section v-if="!showOnlyFinancial && showSearch" :class="sectionClass">
       <h3 :class="sectionTitleClass">Buscar por documento</h3>
       <div class="rounded-lg border border-border bg-muted/30 p-4">
         <div class="flex flex-wrap items-end gap-3">
@@ -204,7 +248,7 @@ function formatFileSize(bytes: number): string {
     </section>
 
     <!-- Documento de identidad -->
-    <section :class="sectionClass">
+    <section v-if="!showOnlyFinancial" :class="sectionClass">
       <h3 :class="sectionTitleClass">Documento de identidad</h3>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div :class="fieldClass">
@@ -258,7 +302,7 @@ function formatFileSize(bytes: number): string {
     </section>
 
     <!-- Nombres y datos personales -->
-    <section :class="sectionClass">
+    <section v-if="!showOnlyFinancial" :class="sectionClass">
       <h3 :class="sectionTitleClass">Datos personales</h3>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div :class="fieldClass">
@@ -313,7 +357,7 @@ function formatFileSize(bytes: number): string {
     </section>
 
     <!-- Contacto -->
-    <section :class="sectionClass">
+    <section v-if="!showOnlyFinancial" :class="sectionClass">
       <h3 :class="sectionTitleClass">Contacto</h3>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div :class="fieldClass">
@@ -344,7 +388,7 @@ function formatFileSize(bytes: number): string {
     </section>
 
     <!-- Dirección y residencia -->
-    <section :class="sectionClass">
+    <section v-if="!showOnlyFinancial" :class="sectionClass">
       <h3 :class="sectionTitleClass">Dirección y residencia</h3>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div class="sm:col-span-2 lg:col-span-3" :class="fieldClass">
@@ -387,7 +431,7 @@ function formatFileSize(bytes: number): string {
     </section>
 
     <!-- Actividad económica -->
-    <section :class="sectionClass">
+    <section v-if="!showOnlyFinancial" :class="sectionClass">
       <h3 :class="sectionTitleClass">Actividad económica</h3>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div :class="fieldClass">
@@ -461,7 +505,7 @@ function formatFileSize(bytes: number): string {
     </section>
 
     <!-- Datos financieros (ingresos, gastos, solvencia) -->
-    <section :class="sectionClass">
+    <section v-if="showOnlyFinancial || !hideFinancialSection" :class="sectionClass">
       <h3 :class="sectionTitleClass">Datos financieros</h3>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div :class="fieldClass">
@@ -570,15 +614,14 @@ function formatFileSize(bytes: number): string {
             @input="setFinancial('expenses', { ...(financial.expenses || {}), description: ($event.target as HTMLTextAreaElement).value })"
           />
         </div>
-        <div :class="fieldClass">
-          <Label>Activos totales (COP)</Label>
+        <div :class="fieldClass" class="sm:col-span-2 lg:col-span-4">
+          <Label>Total activos (COP)</Label>
           <Input
-            :model-value="formatPesos(financial.solvency?.assets)"
+            :model-value="formatPesos(assetsTotalDisplay)"
             type="text"
-            inputmode="decimal"
             placeholder="0"
-            @keydown="onKeydownPesosOnly"
-            @update:model-value="(v) => setFinancial('solvency', { ...(financial.solvency || {}), assets: parsePesosInput(String(v)) })"
+            readonly
+            class="bg-muted/50 cursor-default"
           />
         </div>
         <div :class="fieldClass">
@@ -593,15 +636,18 @@ function formatFileSize(bytes: number): string {
           />
         </div>
         <div :class="fieldClass">
-          <Label>Bien raíz valor (COP)</Label>
+          <Label>Bien raíz (COP)</Label>
           <Input
-            :model-value="formatPesos(financial.solvency?.real_estate)"
+            :model-value="formatPesos(bienRaizFromGarantias)"
             type="text"
-            inputmode="decimal"
             placeholder="0"
-            @keydown="onKeydownPesosOnly"
-            @update:model-value="(v) => setFinancial('solvency', { ...(financial.solvency || {}), real_estate: parsePesosInput(String(v)) })"
+            readonly
+            class="bg-muted/50 cursor-default"
+            title="Suma de valores de activos marcados como garantía para pagar el crédito"
           />
+          <p class="text-[10px] text-muted-foreground">
+            Suma de activos marcados como garantía para el crédito
+          </p>
         </div>
         <div :class="fieldClass">
           <Label>Endeudamiento (ratio 0-1)</Label>
@@ -617,32 +663,95 @@ function formatFileSize(bytes: number): string {
             @update:model-value="setFinancial('solvency', { ...(financial.solvency || {}), debt_ratio: Number($event) || undefined })"
           />
         </div>
-        <div class="sm:col-span-2 lg:col-span-4" :class="fieldClass">
-          <Label>Descripción propiedades e inversiones</Label>
-          <textarea
-            :value="financial.assets?.[0]?.description ?? ''"
-            class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            placeholder="Describa propiedades, inversiones y valores"
-            rows="2"
-            @input="setFinancial('assets', [{ ...(financial.assets?.[0] || {}), description: ($event.target as HTMLTextAreaElement).value }])"
-          />
-        </div>
-        <div :class="fieldClass">
-          <Label>Valor propiedades/inversiones (COP)</Label>
-          <Input
-            :model-value="formatPesos(financial.assets?.[0]?.value)"
-            type="text"
-            inputmode="decimal"
-            placeholder="0"
-            @keydown="onKeydownPesosOnly"
-            @update:model-value="(v) => setFinancial('assets', [{ ...(financial.assets?.[0] || {}), value: parsePesosInput(String(v)) }])"
-          />
+        <div class="sm:col-span-2 lg:col-span-4 flex flex-col gap-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <Label>Activos reportados</Label>
+              <p class="text-[10px] text-muted-foreground">
+                Marca "Garantía" en los activos que se darán en garantía para el crédito
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-muted-foreground">Bien raíz:</span>
+              <span class="font-semibold">{{ formatPesos(bienRaizFromGarantias) || '0' }}</span>
+            </div>
+            <Button type="button" variant="outline" size="sm" @click="addAsset">
+              <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+              Agregar activo
+            </Button>
+          </div>
+          <div v-if="!(assetsList?.length)" class="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+            No hay activos. Haz clic en "Agregar activo" para registrar propiedades, inversiones, etc.
+          </div>
+          <div v-else class="space-y-3">
+            <div
+              v-for="(asset, idx) in assetsList"
+              :key="idx"
+              class="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 p-4 sm:flex-row sm:flex-wrap sm:items-start sm:gap-4"
+            >
+              <div :class="fieldClass" class="min-w-0 flex-1 sm:min-w-[200px]">
+                <Label :for="`asset_name_${idx}`">Nombre del activo</Label>
+                <Input
+                  :id="`asset_name_${idx}`"
+                  :model-value="asset.name ?? (asset as { description?: string }).description ?? ''"
+                  placeholder="Ej: Casa, Lote, Vehículo..."
+                  @update:model-value="updateAsset(idx, 'name', $event ?? '')"
+                />
+              </div>
+              <div :class="fieldClass" class="min-w-0 flex-1 sm:max-w-[180px]">
+                <Label :for="`asset_value_${idx}`">Valor (COP)</Label>
+                <Input
+                  :id="`asset_value_${idx}`"
+                  :model-value="formatPesos(asset.value)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => updateAsset(idx, 'value', parsePesosInput(String(v)))"
+                />
+              </div>
+              <div :class="fieldClass" class="min-w-0 flex-1 sm:max-w-[200px]">
+                <Label :for="`asset_matricula_${idx}`">Matrícula inmobiliaria</Label>
+                <Input
+                  :id="`asset_matricula_${idx}`"
+                  :model-value="asset.matricula_inmobiliaria ?? ''"
+                  placeholder="Ej: 001-123456"
+                  @update:model-value="updateAsset(idx, 'matricula_inmobiliaria', $event ?? '')"
+                />
+              </div>
+              <div :class="fieldClass" class="flex min-w-0 flex-1 flex-col items-center sm:max-w-[140px]">
+                <Label :for="`asset_garantia_${idx}`" class="cursor-pointer text-sm font-medium">
+                  Garantía
+                </Label>
+                <div class="flex w-full justify-center pt-1">
+                  <Checkbox
+                    :id="`asset_garantia_${idx}`"
+                    :model-value="!!asset.garantia"
+                    @update:model-value="updateAsset(idx, 'garantia', !!$event)"
+                  />
+                </div>
+                <p class="text-[10px] text-muted-foreground text-center">
+                  Marcar si se dará en garantía
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                class="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                title="Eliminar activo"
+                @click="removeAsset(idx)"
+              >
+                <Icon name="i-lucide-trash" class="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
     <!-- Documentos adjuntos (deudor y codeudores) -->
-    <section v-if="showSearch || showCoDebtorConcept" class="space-y-3">
+    <section v-if="!showOnlyFinancial && (showSearch || showCoDebtorConcept)" class="space-y-3">
       <h3 :class="sectionTitleClass">Documentos adjuntos</h3>
       <p class="text-xs text-muted-foreground">
         Adjunte documentos con título descriptivo. Formatos: PDF, JPG, PNG, DOC, DOCX. Máx. 10 MB cada uno.

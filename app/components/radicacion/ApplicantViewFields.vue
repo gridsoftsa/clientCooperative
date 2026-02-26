@@ -40,6 +40,10 @@ const financial = computed(() => props.applicant?.financial_info || {})
 const income = computed(() => financial.value.income || {})
 const expenses = computed(() => financial.value.expenses || {})
 const solvency = computed(() => financial.value.solvency || {})
+const assetsList = computed(() => financial.value.assets ?? [])
+const assetsTotal = computed(() =>
+  assetsList.value.reduce((sum, a) => sum + (a.value ?? 0), 0)
+)
 const incomeTotal = computed(() =>
   (income.value.salary ?? 0) + (income.value.pension ?? 0) + (income.value.business ?? income.value.crops ?? 0)
 )
@@ -222,8 +226,8 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
           <p class="whitespace-pre-wrap">{{ expenses.description }}</p>
         </div>
         <div :class="fieldClass">
-          <p :class="labelClass">Activos totales</p>
-          <p>{{ formatPesos(solvency.assets) }}</p>
+          <p :class="labelClass">Total activos</p>
+          <p>{{ formatPesos(assetsList.length ? assetsTotal : solvency.assets) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Pasivos totales</p>
@@ -237,13 +241,26 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
           <p :class="labelClass">Endeudamiento (ratio)</p>
           <p>{{ solvency.debt_ratio != null ? solvency.debt_ratio : '-' }}</p>
         </div>
-        <div v-if="financial.assets?.[0]?.description" class="sm:col-span-2 lg:col-span-4" :class="fieldClass">
-          <p :class="labelClass">Descripción propiedades</p>
-          <p class="whitespace-pre-wrap">{{ financial.assets[0].description }}</p>
-        </div>
-        <div v-if="financial.assets?.[0]?.value != null" :class="fieldClass">
-          <p :class="labelClass">Valor propiedades</p>
-          <p>{{ formatPesos(financial.assets[0].value) }}</p>
+        <div v-if="assetsList.length" class="sm:col-span-2 lg:col-span-4" :class="fieldClass">
+          <p :class="labelClass">Activos reportados</p>
+          <div class="space-y-2">
+            <div
+              v-for="(asset, i) in assetsList"
+              :key="i"
+              class="rounded-lg border border-border p-3"
+            >
+              <p class="font-medium">{{ asset.name || (asset as any).description || 'Sin nombre' }}</p>
+              <p class="text-sm text-muted-foreground">
+                Valor: {{ formatPesos(asset.value) }}
+                <template v-if="asset.matricula_inmobiliaria">
+                  · Matrícula: {{ asset.matricula_inmobiliaria }}
+                </template>
+                <template v-if="(asset as any).garantia">
+                  · <span class="font-medium text-primary">Garantía</span>
+                </template>
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </section>

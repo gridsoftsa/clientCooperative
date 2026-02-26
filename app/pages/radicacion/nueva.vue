@@ -35,8 +35,9 @@ const form = ref<CreditApplicationForm>({
 
 const steps = [
   { num: 1, title: 'Datos del Deudor' },
-  { num: 2, title: 'Datos de la Solicitud' },
-  { num: 3, title: 'Codeudores' },
+  { num: 2, title: 'Datos financieros' },
+  { num: 3, title: 'Datos de la Solicitud' },
+  { num: 4, title: 'Codeudores' },
 ]
 
 async function fetchCatalogs() {
@@ -101,6 +102,72 @@ function removeCoDebtor(index: number) {
 }
 
 const { formatPesos, parsePesosInput, onKeydownPesosOnly } = usePesosFormat()
+
+/** Asegura que debtor.financial_info.solvency exista y devuelve referencia. */
+function ensureSolvency() {
+  const d = form.value.debtor
+  if (!d.financial_info || typeof d.financial_info !== 'object') {
+    d.financial_info = {}
+  }
+  const fi = d.financial_info as Record<string, unknown>
+  if (!fi.solvency || typeof fi.solvency !== 'object') {
+    fi.solvency = {}
+  }
+  return fi.solvency as Record<string, number | undefined>
+}
+
+function getSolvencyField(key: string): number | undefined {
+  return ensureSolvency()[key]
+}
+
+function setSolvencyField(key: string, value: number | undefined) {
+  ensureSolvency()[key] = value
+}
+
+/** Total de activos (suma de todos los valores en la lista) */
+const totalActivosFromAssets = computed(() => {
+  const assets = (form.value.debtor.financial_info as any)?.assets ?? []
+  return assets.reduce((sum: number, a: { value?: number }) => sum + (a.value ?? 0), 0)
+})
+
+/** Bien raíz (suma de activos marcados como garantía) */
+const bienRaizFromGarantias = computed(() => {
+  const assets = (form.value.debtor.financial_info as any)?.assets ?? []
+  return assets.reduce((sum: number, a: { garantia?: boolean; value?: number }) =>
+    (a.garantia ? sum + (a.value ?? 0) : sum), 0)
+})
+
+/** Sincroniza Activos y Bien raíz en el resumen desde la lista de activos */
+watch([totalActivosFromAssets, bienRaizFromGarantias], ([total, bienRaiz]) => {
+  const s = ensureSolvency()
+  s.assets = total as number
+  s.real_estate = bienRaiz as number
+}, { immediate: true })
+
+/** Solvencia % = ((Pasivos + Bien raíz) / Monto solicitado) × 100. Mayor % = mejor. */
+const solvenciaPercentage = computed(() => {
+  const pasivos = getSolvencyField('liabilities') ?? 0
+  const bienRaiz = bienRaizFromGarantias.value
+  const monto = form.value.amount_requested
+  if (!monto || monto <= 0) return null
+  const pct = ((pasivos + bienRaiz) / monto) * 100
+  return Math.round(pct * 100) / 100 // 2 decimales
+})
+
+/** Color según solvencia (mayor % = mejor): <50 rojo, 50-100 ámbar, 100-150 verde claro, >150 verde */
+function solvenciaColorClass(pct: number | null): string {
+  if (pct == null) return 'bg-muted text-muted-foreground'
+  if (pct < 50) return 'bg-destructive/20 text-destructive border-destructive/40'
+  if (pct < 100) return 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/40'
+  if (pct < 150) return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/40'
+  return 'bg-green-600/20 text-green-700 dark:text-green-400 border-green-600/40'
+}
+
+/** Sincroniza el valor de solvencia calculado para persistirlo al guardar */
+watch([solvenciaPercentage, () => form.value.amount_requested], () => {
+  const pct = solvenciaPercentage.value
+  if (pct != null) setSolvencyField('solvency', pct)
+}, { immediate: true })
 
 /** Evita teclas no numéricas en inputs type="number". allowDecimal: permitir punto. */
 function onKeydownNumeric(e: KeyboardEvent, allowDecimal = false) {
@@ -264,15 +331,7 @@ async function submitApplication() {
 }
 
 function nextStep() {
-  if (currentStep.value === 1 && !canProceedStep1()) {
-    toast.error('Completa documento, primer nombre y primer apellido del deudor')
-    return
-  }
-  if (currentStep.value === 2 && !canProceedStep2()) {
-    toast.error('Completa monto, plazo y agencia')
-    return
-  }
-  if (currentStep.value < 3) currentStep.value++
+  if (currentStep.value < 4) currentStep.value++
 }
 
 function prevStep() {
@@ -301,6 +360,71 @@ onMounted(() => {
       </Button>
     </div>
 
+    <!-- Resumen financiero (encima de los pasos) -->
+    <div class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
+      <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        Resumen financiero del deudor
+      </p>
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="space-y-1">
+          <Label for="res_solvencia" class="text-sm font-bold uppercase">Solvencia</Label>
+          <div
+            id="res_solvencia"
+            class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
+            :class="solvenciaColorClass(solvenciaPercentage)"
+          >
+            {{ solvenciaPercentage != null ? `${solvenciaPercentage.toFixed(2)} %` : '—' }}
+          </div>
+          <p class="text-[10px] text-muted-foreground">
+            (Pasivos + Bien raíz) ÷ Monto solicitado
+          </p>
+        </div>
+        <div class="space-y-1">
+          <Label for="res_activos" class="text-sm font-bold uppercase">Activos</Label>
+          <Input
+            id="res_activos"
+            :model-value="formatPesos(totalActivosFromAssets)"
+            type="text"
+            placeholder="0"
+            readonly
+            class="cursor-default bg-muted/50 font-semibold"
+            title="Suma total de todos los activos reportados"
+          />
+          <p class="text-[10px] text-muted-foreground">
+            Total de activos reportados
+          </p>
+        </div>
+        <div class="space-y-1">
+          <Label for="res_pasivos" class="text-sm font-bold uppercase">Pasivos</Label>
+          <Input
+            id="res_pasivos"
+            :model-value="formatPesos(getSolvencyField('liabilities'))"
+            type="text"
+            inputmode="decimal"
+            placeholder="0"
+            class="font-semibold"
+            @keydown="onKeydownPesosOnly"
+            @update:model-value="setSolvencyField('liabilities', parsePesosInput(String($event)))"
+          />
+        </div>
+        <div class="space-y-1">
+          <Label for="res_bien_raiz" class="text-sm font-bold uppercase">Bien raíz</Label>
+          <Input
+            id="res_bien_raiz"
+            :model-value="formatPesos(bienRaizFromGarantias)"
+            type="text"
+            placeholder="0"
+            readonly
+            class="cursor-default bg-muted/50 font-semibold"
+            title="Se calcula con la suma de activos marcados como garantía"
+          />
+          <p class="text-[10px] text-muted-foreground">
+            Suma de activos con Garantía
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- Stepper -->
     <div class="flex items-center gap-2">
       <div
@@ -325,7 +449,7 @@ onMounted(() => {
           {{ step.title }}
         </span>
         <Icon
-          v-if="step.num < 3"
+          v-if="step.num < 4"
           name="i-lucide-chevron-right"
           class="h-4 w-4 text-muted-foreground"
         />
@@ -339,8 +463,10 @@ onMounted(() => {
           {{ currentStep === 1
             ? 'Busca por cédula o completa el formulario del deudor principal'
             : currentStep === 2
-              ? 'Monto, plazo y destino del crédito'
-              : 'Agrega codeudores si aplica' }}
+              ? 'Ingresos, gastos y solvencia del deudor'
+              : currentStep === 3
+                ? 'Monto, plazo y destino del crédito'
+                : 'Agrega codeudores si aplica' }}
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-6">
@@ -350,12 +476,21 @@ onMounted(() => {
             v-model="form.debtor"
             :show-search="true"
             :loading-search="loadingSearch"
+            :hide-financial-section="true"
             @search="searchApplicant"
           />
         </div>
 
-        <!-- Paso 2: Solicitud -->
-        <div v-else-if="currentStep === 2" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <!-- Paso 2: Datos financieros -->
+        <div v-else-if="currentStep === 2" class="space-y-4">
+          <ApplicantFormFields
+            v-model="form.debtor"
+            :show-only-financial="true"
+          />
+        </div>
+
+        <!-- Paso 3: Solicitud -->
+        <div v-else-if="currentStep === 3" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div class="space-y-1.5">
             <Label for="amount">Monto solicitado * (COP)</Label>
             <Input
@@ -417,8 +552,8 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Paso 3: Codeudores -->
-        <div v-else-if="currentStep === 3" class="space-y-6">
+        <!-- Paso 4: Codeudores -->
+        <div v-else-if="currentStep === 4" class="space-y-6">
           <div class="flex items-center justify-between">
             <p class="text-sm text-muted-foreground">
               Agrega codeudores si el crédito lo requiere
@@ -483,7 +618,7 @@ onMounted(() => {
               Anterior
             </Button>
             <Button
-              v-if="currentStep < 3"
+              v-if="currentStep < 4"
               type="button"
               @click="nextStep"
             >
