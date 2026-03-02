@@ -1,13 +1,15 @@
 <script setup lang="ts">
 /**
  * Motor de renderizado de formularios dinámicos a partir de schema JSON.
- * Soporta: money, select, date, number, text.
+ * Soporta: money, select, date, number, text, computed.
  */
 import type { FormSchemaInput } from '~/types/credits'
+import { computeFormula } from '~/constants/credits-financial-templates'
 
 const props = withDefaults(
   defineProps<{
     schema: FormSchemaInput
+    templateKey?: string
     initialData?: Record<string, unknown>
   }>(),
   {
@@ -24,6 +26,7 @@ function buildInitialFormData(): Record<string, unknown> {
   const data: Record<string, unknown> = { ...props.initialData }
   for (const section of props.schema.sections) {
     for (const field of section.fields) {
+      if (field.type === 'computed') continue
       if (data[field.key] !== undefined) continue
       if (field.type === 'number' || field.type === 'money') {
         data[field.key] = null as unknown
@@ -35,6 +38,19 @@ function buildInitialFormData(): Record<string, unknown> {
     }
   }
   return data
+}
+
+function formatComputedValue(field: { formulaKey?: string; formulaFormat?: string; key: string }): string {
+  if (!field.formulaKey) return '—'
+  const v = computeFormula(field.formulaKey, formData)
+  if (v == null) return '—'
+  if (field.formulaFormat === 'percent') {
+    return `${v}%`
+  }
+  if (field.formulaFormat === 'money') {
+    return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(v)
+  }
+  return v.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
 }
 
 const formData = reactive<Record<string, unknown>>(buildInitialFormData())
@@ -96,22 +112,45 @@ const inputBaseClass =
             </template>
             <!-- select -->
             <template v-else-if="field.type === 'select'">
-              <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
-                {{ field.label }}
-              </Label>
-              <select
-                :id="`field-${field.key}`"
-                v-model="formData[field.key]"
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option
-                  v-for="opt in (field.options ?? [])"
-                  :key="String(opt.value)"
-                  :value="opt.value"
+              <div class="space-y-1.5">
+                <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
+                  {{ field.label }}
+                </Label>
+                <Select
+                  :model-value="formData[field.key]"
+                  @update:model-value="(v) => (formData[field.key] = v)"
                 >
-                  {{ opt.label }}
-                </option>
-              </select>
+                  <SelectTrigger :id="`field-${field.key}`" class="w-full">
+                    <SelectValue :placeholder="field.label ? `Seleccionar ${field.label.toLowerCase()}` : 'Seleccionar'" />
+                  </SelectTrigger>
+                  <SelectContent class="bg-popover text-popover-foreground">
+                    <SelectItem
+                      v-for="opt in (field.options ?? [])"
+                      :key="String(opt.value)"
+                      :value="opt.value"
+                    >
+                      {{ opt.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </template>
+            <!-- computed (solo lectura, no modificable) -->
+            <template v-else-if="field.type === 'computed'">
+              <div class="space-y-1.5">
+                <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
+                  {{ field.label }}
+                  <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
+                </Label>
+                <div
+                  :id="`field-${field.key}`"
+                  class="flex h-9 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-foreground select-none cursor-default"
+                  tabindex="-1"
+                  aria-readonly="true"
+                >
+                  {{ formatComputedValue(field) }}
+                </div>
+              </div>
             </template>
             <!-- date -->
             <template v-else-if="field.type === 'date'">

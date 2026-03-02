@@ -1,5 +1,17 @@
+/** Plantilla de actividad económica (agro) guardada en financial_info */
+export interface ActivityTemplateData {
+  sector: string
+  template: string
+  product?: string | null
+  data: Record<string, unknown>
+}
+
 /** Datos financieros según entrevista deudor/codeudor (ingresos, gastos, activos, solvencia) */
 export interface FinancialInfoForm {
+  /** Plantillas de actividad económica agropecuaria (puede haber varias) */
+  activity_templates?: ActivityTemplateData[]
+  /** Cantidad de plantillas (se guarda explícitamente en radicación) */
+  activity_templates_count?: number
   activity_type?: string
   concept?: string
   income?: {

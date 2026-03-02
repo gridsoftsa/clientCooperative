@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
-import type { ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
+import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 
 definePageMeta({
   layout: 'default',
@@ -35,9 +35,10 @@ const form = ref<CreditApplicationForm>({
 
 const steps = [
   { num: 1, title: 'Datos del Deudor' },
-  { num: 2, title: 'Datos financieros' },
-  { num: 3, title: 'Datos de la Solicitud' },
-  { num: 4, title: 'Codeudores' },
+  { num: 2, title: 'Actividad económica' },
+  { num: 3, title: 'Datos financieros' },
+  { num: 4, title: 'Datos de la Solicitud' },
+  { num: 5, title: 'Codeudores' },
 ]
 
 async function fetchCatalogs() {
@@ -102,6 +103,40 @@ function removeCoDebtor(index: number) {
 }
 
 const { formatPesos, parsePesosInput, onKeydownPesosOnly } = usePesosFormat()
+
+/** Sincroniza activity_templates en financial_info desde el formulario de actividad económica. */
+function setActivityTemplates(val: ActivityTemplateData[]): void {
+  ensureFinancialInfo()
+  const fi = form.value.debtor.financial_info as Record<string, unknown>
+  fi.activity_templates = val
+  fi.activity_templates_count = val.length
+}
+
+function ensureFinancialInfo() {
+  const d = form.value.debtor
+  if (!d.financial_info || typeof d.financial_info !== 'object') {
+    d.financial_info = {}
+  }
+}
+
+/** Obtiene la lista de plantillas; migra activity_template (antiguo) si existe. */
+function getActivityTemplates(): ActivityTemplateData[] {
+  const fi = form.value.debtor.financial_info as Record<string, unknown> | undefined
+  if (!fi) return []
+  const templates = fi.activity_templates
+  if (Array.isArray(templates)) {
+    return templates.filter(
+      (t): t is ActivityTemplateData =>
+        t && typeof t === 'object' && 'sector' in t && 'template' in t && 'data' in t,
+    )
+  }
+  // Migración: antiguo activity_template único
+  const legacy = fi.activity_template
+  if (legacy && typeof legacy === 'object' && 'sector' in legacy && 'template' in legacy && 'data' in legacy) {
+    return [legacy as ActivityTemplateData]
+  }
+  return []
+}
 
 /** Asegura que debtor.financial_info.solvency exista y devuelve referencia. */
 function ensureSolvency() {
@@ -331,7 +366,7 @@ async function submitApplication() {
 }
 
 function nextStep() {
-  if (currentStep.value < 4) currentStep.value++
+  if (currentStep.value < 5) currentStep.value++
 }
 
 function prevStep() {
@@ -449,7 +484,7 @@ onMounted(() => {
           {{ step.title }}
         </span>
         <Icon
-          v-if="step.num < 4"
+          v-if="step.num < 5"
           name="i-lucide-chevron-right"
           class="h-4 w-4 text-muted-foreground"
         />
@@ -463,10 +498,12 @@ onMounted(() => {
           {{ currentStep === 1
             ? 'Busca por cédula o completa el formulario del deudor principal'
             : currentStep === 2
-              ? 'Ingresos, gastos y solvencia del deudor'
+              ? 'Plantillas agropecuarias según la actividad económica del deudor'
               : currentStep === 3
-                ? 'Monto, plazo y destino del crédito'
-                : 'Agrega codeudores si aplica' }}
+                ? 'Ingresos, gastos y solvencia del deudor'
+                : currentStep === 4
+                  ? 'Monto, plazo y destino del crédito'
+                  : 'Agrega codeudores si aplica' }}
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-6">
@@ -481,16 +518,24 @@ onMounted(() => {
           />
         </div>
 
-        <!-- Paso 2: Datos financieros -->
+        <!-- Paso 2: Actividad económica -->
         <div v-else-if="currentStep === 2" class="space-y-4">
+          <CreditsFinancialActivityFormList
+            :model-value="getActivityTemplates()"
+            @update:model-value="setActivityTemplates"
+          />
+        </div>
+
+        <!-- Paso 3: Datos financieros -->
+        <div v-else-if="currentStep === 3" class="space-y-4">
           <ApplicantFormFields
             v-model="form.debtor"
             :show-only-financial="true"
           />
         </div>
 
-        <!-- Paso 3: Solicitud -->
-        <div v-else-if="currentStep === 3" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <!-- Paso 4: Solicitud -->
+        <div v-else-if="currentStep === 4" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div class="space-y-1.5">
             <Label for="amount">Monto solicitado * (COP)</Label>
             <Input
@@ -552,8 +597,8 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Paso 4: Codeudores -->
-        <div v-else-if="currentStep === 4" class="space-y-6">
+        <!-- Paso 5: Codeudores -->
+        <div v-else-if="currentStep === 5" class="space-y-6">
           <div class="flex items-center justify-between">
             <p class="text-sm text-muted-foreground">
               Agrega codeudores si el crédito lo requiere
@@ -618,7 +663,7 @@ onMounted(() => {
               Anterior
             </Button>
             <Button
-              v-if="currentStep < 4"
+              v-if="currentStep < 5"
               type="button"
               @click="nextStep"
             >

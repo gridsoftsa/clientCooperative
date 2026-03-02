@@ -2,11 +2,15 @@
 export interface FormFieldSchema {
   key: string
   label: string
-  type: 'money' | 'select' | 'date' | 'number' | 'text'
+  type: 'money' | 'select' | 'date' | 'number' | 'text' | 'computed'
   required?: boolean
   cols?: number
   meta?: string
   options?: Array<{ value: string | number; label: string }>
+  /** Para type='computed': identificador de la fórmula a aplicar */
+  formulaKey?: string
+  /** Para type='computed': formato de salida ('number' | 'percent' | 'money') */
+  formulaFormat?: 'number' | 'percent' | 'money'
 }
 
 /** Sección del schema */

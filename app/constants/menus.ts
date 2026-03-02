@@ -29,11 +29,6 @@ export const navMenu: NavMenu[] = [
         icon: 'i-lucide-file-text',
         link: '/radicacion',
       },
-      {
-        title: 'Actividad económica',
-        icon: 'i-lucide-calculator',
-        link: '/credits/create/financial-activity',
-      },
     ],
   },
   {
