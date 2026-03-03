@@ -4,6 +4,9 @@
 <template>
   <div>
     <slot />
+    <ClientOnly>
+      <ScrollToTop />
+    </ClientOnly>
   </div>
 </template>
 

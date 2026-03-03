@@ -14,6 +14,7 @@
             </div>
           </div>
         </SidebarInset>
+        <ScrollToTop />
       </SidebarProvider>
     </AuthGuard>
     <template #fallback>

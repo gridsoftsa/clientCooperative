@@ -210,6 +210,21 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
   return {
     sections: [
       {
+        key: 'resumen_utilidad',
+        title: 'Utilidad mensual crías y leche',
+        fields: [
+          {
+            key: 'utilidad_mensual_crias_leche',
+            label: 'Utilidad mensual de las crías y la leche',
+            type: 'computed',
+            meta: 'Solo lectura ((valor total crías / ciclo) + utilidad mensual leche)',
+            formulaKey: 'ganado_doble_utilidad_mensual_crias_leche',
+            formulaFormat: 'money',
+            cols: 2,
+          },
+        ],
+      },
+      {
         key: 'crias',
         title: 'Crías',
         fields: [
@@ -272,13 +287,28 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             meta: 'Int',
             cols: 1,
           },
-          { key: 'precio_lt_leche', label: 'Precio por LT leche', type: 'money', cols: 1 },
+          {
+            key: 'precio_lt_leche',
+            label: 'Precio por LT leche',
+            type: 'money',
+            meta: 'Solo modificar este precio',
+            cols: 1,
+          },
           {
             key: 'valor_total_produccion_leche',
             label: 'Valor total de producción de leche',
             type: 'computed',
             meta: 'Solo lectura (producción LT ciclo × precio por LT leche)',
             formulaKey: 'ganado_doble_valor_total_produccion_leche',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'costo_total_leche',
+            label: 'Costo total',
+            type: 'computed',
+            meta: 'Solo lectura (valor total producción × costo producción estándar %)',
+            formulaKey: 'ganado_doble_costo_total_leche',
             formulaFormat: 'money',
             cols: 1,
           },
@@ -291,6 +321,73 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             formulaFormat: 'money',
             cols: 1,
           },
+          {
+            key: 'utilidad_mensual_leche',
+            label: 'Utilidad mensual',
+            type: 'computed',
+            meta: 'Solo lectura ((valor total - costo total) / ciclo meses)',
+            formulaKey: 'ganado_doble_utilidad_mensual_leche',
+            formulaFormat: 'money',
+            cols: 2,
+          },
+        ],
+      },
+      {
+        key: 'tasa_mortalidad',
+        title: 'Tasa de mortalidad',
+        fields: [
+          {
+            key: 'pct_tasa_mortalidad',
+            label: 'Tasa de mortalidad (%)',
+            type: 'number',
+            meta: 'Ej: 10',
+            cols: 1,
+          },
+        ],
+      },
+      {
+        key: 'valores_por_vaca',
+        title: 'Valores por 1 vaca durante todo el ciclo',
+        fields: [
+          {
+            key: 'produccion_litros_vaca',
+            label: 'Producción en litros',
+            type: 'number',
+            meta: 'Decimal (ej: 2000)',
+            cols: 1,
+          },
+          {
+            key: 'pct_costo_produccion_estandar',
+            label: 'Costo de producción estándar (%)',
+            type: 'number',
+            meta: 'Ej: 79. Base para distribución de costos.',
+            cols: 1,
+          },
+        ],
+      },
+      {
+        key: 'discriminacion_costos',
+        title: 'Discriminación de costos',
+        fields: [
+          { key: 'valor_alimentacion', label: 'Alimentación – Valor', type: 'computed', formulaKey: 'ganado_doble_valor_alimentacion', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_alimentacion', label: 'Alimentación – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'valor_mano_obra', label: 'Mano de obra – Valor', type: 'computed', formulaKey: 'ganado_doble_valor_mano_obra', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_mano_obra', label: 'Mano de obra – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'valor_mantenimiento_pasturas', label: 'Mantenimiento pasturas – Valor', type: 'computed', formulaKey: 'ganado_doble_valor_mantenimiento_pasturas', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_mantenimiento_pasturas', label: 'Mantenimiento pasturas – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'valor_mantenimiento_infraestructura', label: 'Mantenimiento infraestructura – Valor', type: 'computed', formulaKey: 'ganado_doble_valor_mantenimiento_infraestructura', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_mantenimiento_infraestructura', label: 'Mantenimiento infraestructura – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'valor_insumos_veterinarios', label: 'Insumos veterinarios – Valor', type: 'computed', formulaKey: 'ganado_doble_valor_insumos_veterinarios', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_insumos_veterinarios', label: 'Insumos veterinarios – %', type: 'number', meta: 'Editable', cols: 1 },
+          {
+            key: 'total_costos_leche',
+            label: 'Total',
+            type: 'computed',
+            meta: 'Solo lectura (suma de todos los valores)',
+            formulaKey: 'ganado_doble_total_costos',
+            formulaFormat: 'money',
+            cols: 2,
+          },
         ],
       },
     ],
@@ -301,6 +398,68 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
 function schemaCerdosCria(): FormSchemaInput {
   return {
     sections: [
+      {
+        key: 'resumen_utilidad',
+        title: 'Resumen de utilidad',
+        fields: [
+          {
+            key: 'total_utilidad_cerdos_cria',
+            label: 'TOTAL UTILIDAD',
+            type: 'computed',
+            meta: 'Solo lectura (ventas - costos)',
+            formulaKey: 'cerdos_cria_total_utilidad',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'total_utilidad_mensual_cerdos_cria',
+            label: 'TOTAL UTILIDAD MENSUAL',
+            type: 'computed',
+            meta: 'Solo lectura ((total utilidad / días ciclo) × 30)',
+            formulaKey: 'cerdos_cria_total_utilidad_mensual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'ventas_cerdos_cria',
+            label: 'VENTAS',
+            type: 'computed',
+            meta: 'Solo lectura (cerdos × precio destetado)',
+            formulaKey: 'cerdos_cria_ventas',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'costos_cerdos_cria',
+            label: 'COSTOS',
+            type: 'computed',
+            meta: 'Solo lectura (ventas × % costo estándar)',
+            formulaKey: 'cerdos_cria_costos_resumen',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+        ],
+      },
+      {
+        key: 'valores_estandar_cerda',
+        title: 'Valores estándar por cerda',
+        fields: [
+          {
+            key: 'lechones_destetados',
+            label: 'Lechones destetados',
+            type: 'number',
+            meta: 'Editable (ej: 10)',
+            cols: 1,
+          },
+          {
+            key: 'peso_final_destete_kg',
+            label: 'Peso final del destete (kg)',
+            type: 'number',
+            meta: 'Editable (ej: 15)',
+            cols: 1,
+          },
+        ],
+      },
       {
         key: 'produccion',
         title: 'Cerdos para la cría',
@@ -322,17 +481,40 @@ function schemaCerdosCria(): FormSchemaInput {
             meta: 'Decimal (ej: 0.85)',
             cols: 1,
           },
+          {
+            key: 'costo_total_cerdos_cria',
+            label: 'Costo total',
+            type: 'computed',
+            meta: 'Solo lectura (valor venta × % costos estándar)',
+            formulaKey: 'cerdos_cria_costo_total',
+            formulaFormat: 'money',
+            cols: 1,
+          },
         ],
       },
       {
         key: 'costos',
         title: 'Discriminación de costos',
         fields: [
-          { key: 'sostenimiento_madre', label: 'Sostenimiento de madre', type: 'money', cols: 1 },
-          { key: 'alimentacion_lechon', label: 'Alimentación lechón', type: 'money', cols: 1 },
-          { key: 'medicamento_complementos', label: 'Medicamento y complementos', type: 'money', cols: 1 },
-          { key: 'mano_obra_cerdos', label: 'Mano de obra', type: 'money', cols: 1 },
-          { key: 'mantenimiento_infraestructura', label: 'Mantenimiento infraestructura', type: 'money', cols: 1 },
+          { key: 'valor_sostenimiento_madre', label: 'Sostenimiento de madre – Valor', type: 'computed', formulaKey: 'cerdos_cria_valor_sostenimiento_madre', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_sostenimiento_madre', label: 'Sostenimiento de madre – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'valor_alimentacion_lechon', label: 'Alimentación lechón – Valor', type: 'computed', formulaKey: 'cerdos_cria_valor_alimentacion_lechon', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_alimentacion_lechon', label: 'Alimentación lechón – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'valor_medicamento_complementos', label: 'Medicamento y complementos – Valor', type: 'computed', formulaKey: 'cerdos_cria_valor_medicamento_complementos', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_medicamento_complementos', label: 'Medicamento y complementos – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'valor_mano_obra_cerdos', label: 'Mano de obra – Valor', type: 'computed', formulaKey: 'cerdos_cria_valor_mano_obra', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_mano_obra_cerdos', label: 'Mano de obra – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'valor_mantenimiento_infraestructura', label: 'Mantenimiento infraestructura – Valor', type: 'computed', formulaKey: 'cerdos_cria_valor_mantenimiento_infraestructura', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_mantenimiento_infraestructura', label: 'Mantenimiento infraestructura – %', type: 'number', meta: 'Editable', cols: 1 },
+          {
+            key: 'total_costos_cerdos_cria',
+            label: 'Total',
+            type: 'computed',
+            meta: 'Solo lectura (suma de todos los valores)',
+            formulaKey: 'cerdos_cria_total_costos',
+            formulaFormat: 'money',
+            cols: 2,
+          },
         ],
       },
     ],
@@ -862,6 +1044,193 @@ function computeGanadoDobleValorTotalProduccionLeche(data: Record<string, unknow
   return Number.isFinite(valor) ? valor : null
 }
 
+/** Fórmula Ganado Doble Propósito: utilidad_mensual leche = (valor_total - costo_total) / ciclo_meses */
+function computeGanadoDobleUtilidadMensualLeche(data: Record<string, unknown>): number | null {
+  const valorTotal = computeGanadoDobleValorTotalProduccionLeche(data)
+  const costoTotal = computeGanadoDobleCostoTotalLeche(data)
+  const meses = Number(data.ciclo_produccion_leche ?? 0)
+  if (valorTotal == null || costoTotal == null || !meses) return null
+  const utilidad = valorTotal - costoTotal
+  const valor = utilidad / meses
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Fórmula: utilidad_mensual_crias_leche = (valor_total_crias / ciclo_terneros) + utilidad_mensual_leche */
+function computeGanadoDobleUtilidadMensualCriasLeche(data: Record<string, unknown>): number | null {
+  const valorTotalCrias = computeGanadoDobleValorTotalCrias(data)
+  const cicloTerneros = Number(data.ciclo_produccion_terneros_meses ?? 0)
+  const utilidadMensualLeche = computeGanadoDobleUtilidadMensualLeche(data)
+  if (valorTotalCrias == null || !cicloTerneros) return null
+  const parteCrias = valorTotalCrias / cicloTerneros
+  const parteLeche = utilidadMensualLeche ?? 0
+  const valor = parteCrias + parteLeche
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Fórmula: costo_total = valor_total_produccion_leche × (costo_produccion_estandar% / 100) */
+function computeGanadoDobleCostoTotalLeche(data: Record<string, unknown>): number | null {
+  const valorTotal = computeGanadoDobleValorTotalProduccionLeche(data)
+  const pctEstandar = Number(data.pct_costo_produccion_estandar ?? 0)
+  if (valorTotal == null || !pctEstandar) return null
+  const valor = valorTotal * (pctEstandar / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Base para discriminación de costos (usa misma fórmula que costo_total_leche) */
+function getGanadoDobleBaseCostos(data: Record<string, unknown>): number | null {
+  return computeGanadoDobleCostoTotalLeche(data)
+}
+
+/** Valor = base × (porcentaje / 100) */
+function computeGanadoDobleValorAlimentacion(data: Record<string, unknown>): number | null {
+  const base = getGanadoDobleBaseCostos(data)
+  const pct = Number(data.pct_alimentacion ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computeGanadoDobleValorManoObra(data: Record<string, unknown>): number | null {
+  const base = getGanadoDobleBaseCostos(data)
+  const pct = Number(data.pct_mano_obra ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computeGanadoDobleValorMantenimientoPasturas(data: Record<string, unknown>): number | null {
+  const base = getGanadoDobleBaseCostos(data)
+  const pct = Number(data.pct_mantenimiento_pasturas ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computeGanadoDobleValorMantenimientoInfraestructura(data: Record<string, unknown>): number | null {
+  const base = getGanadoDobleBaseCostos(data)
+  const pct = Number(data.pct_mantenimiento_infraestructura ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computeGanadoDobleValorInsumosVeterinarios(data: Record<string, unknown>): number | null {
+  const base = getGanadoDobleBaseCostos(data)
+  const pct = Number(data.pct_insumos_veterinarios ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cerdos Cría: costo_total = valor_venta × pct_costos_estandar (pct: 0.85 o 85) */
+function computeCerdosCriaCostoTotal(data: Record<string, unknown>): number | null {
+  const cerdosParaCria = Number(data.cerdos_para_cria ?? 0)
+  const precioDestetado = Number(data.precio_cerdo_destetado ?? 0)
+  let pct = Number(data.pct_costos_estandar ?? 0)
+  if (pct > 1) pct = pct / 100
+  const valorVenta = cerdosParaCria * precioDestetado
+  const valor = valorVenta * pct
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Base para discriminación Cerdos Cría */
+function getCerdosCriaBaseCostos(data: Record<string, unknown>): number | null {
+  return computeCerdosCriaCostoTotal(data)
+}
+
+function computeCerdosCriaValorSostenimientoMadre(data: Record<string, unknown>): number | null {
+  const base = getCerdosCriaBaseCostos(data)
+  const pct = Number(data.pct_sostenimiento_madre ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computeCerdosCriaValorAlimentacionLechon(data: Record<string, unknown>): number | null {
+  const base = getCerdosCriaBaseCostos(data)
+  const pct = Number(data.pct_alimentacion_lechon ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computeCerdosCriaValorMedicamentoComplementos(data: Record<string, unknown>): number | null {
+  const base = getCerdosCriaBaseCostos(data)
+  const pct = Number(data.pct_medicamento_complementos ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computeCerdosCriaValorManoObra(data: Record<string, unknown>): number | null {
+  const base = getCerdosCriaBaseCostos(data)
+  const pct = Number(data.pct_mano_obra_cerdos ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computeCerdosCriaValorMantenimientoInfraestructura(data: Record<string, unknown>): number | null {
+  const base = getCerdosCriaBaseCostos(data)
+  const pct = Number(data.pct_mantenimiento_infraestructura ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cerdos Cría: ventas = cerdos_para_cria × precio_cerdo_destetado */
+function computeCerdosCriaVentas(data: Record<string, unknown>): number | null {
+  const cerdos = Number(data.cerdos_para_cria ?? 0)
+  const precio = Number(data.precio_cerdo_destetado ?? 0)
+  const valor = cerdos * precio
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cerdos Cría: costos = ventas × % costo estándar */
+function computeCerdosCriaCostosResumen(data: Record<string, unknown>): number | null {
+  return computeCerdosCriaCostoTotal(data)
+}
+
+/** Cerdos Cría: total_utilidad = ventas - costos */
+function computeCerdosCriaTotalUtilidad(data: Record<string, unknown>): number | null {
+  const ventas = computeCerdosCriaVentas(data)
+  const costos = computeCerdosCriaCostosResumen(data)
+  if (ventas == null || costos == null) return null
+  const valor = ventas - costos
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cerdos Cría: utilidad_mensual = (total_utilidad / duracion_ciclo_dias) × 30 */
+function computeCerdosCriaTotalUtilidadMensual(data: Record<string, unknown>): number | null {
+  const totalUtilidad = computeCerdosCriaTotalUtilidad(data)
+  const dias = Number(data.duracion_ciclo_dias ?? 0)
+  if (totalUtilidad == null || !dias) return null
+  const valor = (totalUtilidad / dias) * 30
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cerdos Cría: total_costos = suma de todos los valores */
+function computeCerdosCriaTotalCostos(data: Record<string, unknown>): number | null {
+  const v1 = computeCerdosCriaValorSostenimientoMadre(data) ?? 0
+  const v2 = computeCerdosCriaValorAlimentacionLechon(data) ?? 0
+  const v3 = computeCerdosCriaValorMedicamentoComplementos(data) ?? 0
+  const v4 = computeCerdosCriaValorManoObra(data) ?? 0
+  const v5 = computeCerdosCriaValorMantenimientoInfraestructura(data) ?? 0
+  const valor = v1 + v2 + v3 + v4 + v5
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Fórmula Ganado Doble Propósito: total_costos = suma de todos los valores calculados */
+function computeGanadoDobleTotalCostos(data: Record<string, unknown>): number | null {
+  const v1 = computeGanadoDobleValorAlimentacion(data) ?? 0
+  const v2 = computeGanadoDobleValorManoObra(data) ?? 0
+  const v3 = computeGanadoDobleValorMantenimientoPasturas(data) ?? 0
+  const v4 = computeGanadoDobleValorMantenimientoInfraestructura(data) ?? 0
+  const v5 = computeGanadoDobleValorInsumosVeterinarios(data) ?? 0
+  const valor = v1 + v2 + v3 + v4 + v5
+  return Number.isFinite(valor) ? valor : null
+}
+
 /** Fórmula Ganado Doble Propósito: produccion_mensual_lt = valor_total / ciclo_produccion_leche (meses) */
 function computeGanadoDobleProduccionMensualLt(data: Record<string, unknown>): number | null {
   const valorTotal = computeGanadoDobleValorTotalProduccionLeche(data)
@@ -874,7 +1243,16 @@ function computeGanadoDobleProduccionMensualLt(data: Record<string, unknown>): n
 const formulaComputers: Record<string, (data: Record<string, unknown>) => number | null> = {
   ganado_doble_valor_total_crias: computeGanadoDobleValorTotalCrias,
   ganado_doble_valor_total_produccion_leche: computeGanadoDobleValorTotalProduccionLeche,
+  ganado_doble_costo_total_leche: computeGanadoDobleCostoTotalLeche,
   ganado_doble_produccion_mensual_lt: computeGanadoDobleProduccionMensualLt,
+  ganado_doble_utilidad_mensual_leche: computeGanadoDobleUtilidadMensualLeche,
+  ganado_doble_utilidad_mensual_crias_leche: computeGanadoDobleUtilidadMensualCriasLeche,
+  ganado_doble_valor_alimentacion: computeGanadoDobleValorAlimentacion,
+  ganado_doble_valor_mano_obra: computeGanadoDobleValorManoObra,
+  ganado_doble_valor_mantenimiento_pasturas: computeGanadoDobleValorMantenimientoPasturas,
+  ganado_doble_valor_mantenimiento_infraestructura: computeGanadoDobleValorMantenimientoInfraestructura,
+  ganado_doble_valor_insumos_veterinarios: computeGanadoDobleValorInsumosVeterinarios,
+  ganado_doble_total_costos: computeGanadoDobleTotalCostos,
   ganado_ceba_cantidad: computeGanadoCebaCantidad,
   ganado_ceba_peso_inicial: computeGanadoCebaPesoInicial,
   ganado_ceba_pct_aumento: computeGanadoCebaPctAumento,
@@ -882,6 +1260,17 @@ const formulaComputers: Record<string, (data: Record<string, unknown>) => number
   ganado_ceba_costos: computeGanadoCebaCostos,
   ganado_ceba_total_utilidad: computeGanadoCebaTotalUtilidad,
   ganado_ceba_utilidad_mensual: computeGanadoCebaUtilidadMensual,
+  cerdos_cria_costo_total: computeCerdosCriaCostoTotal,
+  cerdos_cria_valor_sostenimiento_madre: computeCerdosCriaValorSostenimientoMadre,
+  cerdos_cria_valor_alimentacion_lechon: computeCerdosCriaValorAlimentacionLechon,
+  cerdos_cria_valor_medicamento_complementos: computeCerdosCriaValorMedicamentoComplementos,
+  cerdos_cria_valor_mano_obra: computeCerdosCriaValorManoObra,
+  cerdos_cria_valor_mantenimiento_infraestructura: computeCerdosCriaValorMantenimientoInfraestructura,
+  cerdos_cria_total_costos: computeCerdosCriaTotalCostos,
+  cerdos_cria_ventas: computeCerdosCriaVentas,
+  cerdos_cria_costos_resumen: computeCerdosCriaCostosResumen,
+  cerdos_cria_total_utilidad: computeCerdosCriaTotalUtilidad,
+  cerdos_cria_total_utilidad_mensual: computeCerdosCriaTotalUtilidadMensual,
 }
 
 /** Evalúa una fórmula calculada dado el formulaKey y los datos del formulario */
