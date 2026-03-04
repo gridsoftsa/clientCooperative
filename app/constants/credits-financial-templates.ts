@@ -465,7 +465,15 @@ function schemaCerdosCria(): FormSchemaInput {
         title: 'Cerdos para la cría',
         fields: [
           { key: 'cerdas_cria', label: 'Cerdas de cría', type: 'number', meta: 'Int', required: true, cols: 1 },
-          { key: 'cerdos_para_cria', label: 'Cerdos para la cría', type: 'number', meta: 'Int', cols: 1 },
+          {
+            key: 'cerdos_para_cria',
+            label: 'Cerdos para la cría',
+            type: 'computed',
+            meta: 'Solo lectura (cerdas × lechones destetados)',
+            formulaKey: 'cerdos_cria_cerdos_para_cria',
+            formulaFormat: 'number',
+            cols: 1,
+          },
           { key: 'precio_cerdo_destetado', label: 'Precio cerdo destetado', type: 'money', cols: 1 },
           {
             key: 'duracion_ciclo_dias',
@@ -526,6 +534,61 @@ function schemaCerdosCeba(): FormSchemaInput {
   return {
     sections: [
       {
+        key: 'resumen_utilidad',
+        title: 'Resumen de utilidad',
+        fields: [
+          {
+            key: 'total_utilidad_cerdos_ceba',
+            label: 'TOTAL UTILIDAD',
+            type: 'computed',
+            meta: 'Solo lectura (ventas - costos)',
+            formulaKey: 'cerdos_ceba_total_utilidad',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'total_utilidad_mensual_cerdos_ceba',
+            label: 'TOTAL UTILIDAD MENSUAL',
+            type: 'computed',
+            meta: 'Solo lectura (total utilidad / meses ciclo)',
+            formulaKey: 'cerdos_ceba_total_utilidad_mensual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'ventas_cerdos_ceba',
+            label: 'VENTAS',
+            type: 'computed',
+            meta: 'Solo lectura (cerdos × peso kg × precio kg)',
+            formulaKey: 'cerdos_ceba_ventas',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'costos_cerdos_ceba',
+            label: 'COSTOS',
+            type: 'computed',
+            meta: 'Solo lectura (ventas × % costo estándar)',
+            formulaKey: 'cerdos_ceba_costos_resumen',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+        ],
+      },
+      {
+        key: 'valores_estandar_cerdo_ceba',
+        title: 'Valores estándar por cerdo',
+        fields: [
+          {
+            key: 'peso_promedio_kg_ceba',
+            label: 'Peso promedio (kg)',
+            type: 'number',
+            meta: 'Editable',
+            cols: 1,
+          },
+        ],
+      },
+      {
         key: 'produccion',
         title: 'Cerdos para la ceba',
         fields: [
@@ -545,16 +608,38 @@ function schemaCerdosCeba(): FormSchemaInput {
             meta: 'Decimal (ej: 0.7)',
             cols: 1,
           },
+          {
+            key: 'costo_total_cerdos_ceba',
+            label: 'Costo total',
+            type: 'computed',
+            meta: 'Solo lectura (ventas × % costos estándar)',
+            formulaKey: 'cerdos_ceba_costo_total',
+            formulaFormat: 'money',
+            cols: 1,
+          },
         ],
       },
       {
         key: 'costos',
         title: 'Discriminación de costos',
         fields: [
-          { key: 'lechon_destetado', label: 'Lechón destetado', type: 'money', cols: 1 },
-          { key: 'alimentacion', label: 'Alimentación', type: 'money', cols: 1 },
-          { key: 'medicamento_complementos_ceba', label: 'Medicamento y complementos', type: 'money', cols: 1 },
-          { key: 'mano_obra_ceba', label: 'Mano de obra', type: 'money', cols: 1 },
+          { key: 'valor_lechon_destetado', label: 'Lechón destetado – Valor', type: 'computed', formulaKey: 'cerdos_ceba_valor_lechon_destetado', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_lechon_destetado', label: 'Lechón destetado – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'valor_alimentacion_ceba', label: 'Alimentación – Valor', type: 'computed', formulaKey: 'cerdos_ceba_valor_alimentacion', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_alimentacion_ceba', label: 'Alimentación – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'valor_medicamento_complementos_ceba', label: 'Medicamento y complementos – Valor', type: 'computed', formulaKey: 'cerdos_ceba_valor_medicamento_complementos', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_medicamento_complementos_ceba', label: 'Medicamento y complementos – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'valor_mano_obra_ceba', label: 'Mano de obra – Valor', type: 'computed', formulaKey: 'cerdos_ceba_valor_mano_obra', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
+          { key: 'pct_mano_obra_ceba', label: 'Mano de obra – %', type: 'number', meta: 'Editable', cols: 1 },
+          {
+            key: 'total_costos_cerdos_ceba',
+            label: 'Total',
+            type: 'computed',
+            meta: 'Solo lectura (suma de todos los valores)',
+            formulaKey: 'cerdos_ceba_total_costos',
+            formulaFormat: 'money',
+            cols: 2,
+          },
         ],
       },
     ],
@@ -565,6 +650,96 @@ function schemaCerdosCeba(): FormSchemaInput {
 function schemaPollosEngorde(): FormSchemaInput {
   return {
     sections: [
+      {
+        key: 'resumen_utilidad',
+        title: 'Resumen de utilidad',
+        fields: [
+          {
+            key: 'total_utilidad_pollos',
+            label: 'TOTAL UTILIDAD',
+            type: 'computed',
+            meta: 'Solo lectura (ventas - costos)',
+            formulaKey: 'pollos_engorde_total_utilidad',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'total_utilidad_mensual_pollos',
+            label: 'TOTAL UTILIDAD MENSUAL',
+            type: 'computed',
+            meta: 'Solo lectura ((total utilidad / días ciclo) × 30)',
+            formulaKey: 'pollos_engorde_total_utilidad_mensual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'ventas_pollos',
+            label: 'VENTAS',
+            type: 'computed',
+            meta: 'Solo lectura (pollos en engorde × precio pie kg × peso kg venta)',
+            formulaKey: 'pollos_engorde_ventas',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'costos_pollos',
+            label: 'COSTOS',
+            type: 'computed',
+            meta: 'Solo lectura (pollos supervivientes × peso kg × costo kg)',
+            formulaKey: 'pollos_engorde_costos',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+        ],
+      },
+      {
+        key: 'valores_estandar_fenavi',
+        title: 'Valores estándar FENAVI',
+        fields: [
+          {
+            key: 'peso_kg_venta',
+            label: 'Peso kg venta',
+            type: 'number',
+            meta: 'Decimal (ej: 2,5)',
+            cols: 1,
+          },
+          {
+            key: 'precio_venta_pie_kg',
+            label: 'Precio de venta en pie kg',
+            type: 'money',
+            meta: 'Editable',
+            cols: 1,
+          },
+          {
+            key: 'costo_kg_venta',
+            label: 'Costo x kg venta',
+            type: 'money',
+            meta: 'Editable',
+            cols: 1,
+          },
+          {
+            key: 'tasa_mortalidad_pct',
+            label: 'Tasa mortalidad (%)',
+            type: 'number',
+            meta: 'Ej: 10',
+            cols: 1,
+          },
+          {
+            key: 'precio_libra_conversion',
+            label: 'Precio de libra conversión',
+            type: 'money',
+            meta: 'Editable',
+            cols: 1,
+          },
+          {
+            key: 'precio_kg_pie_fenavi',
+            label: 'Precio kg en pie FENAVI (referencia)',
+            type: 'money',
+            meta: 'Referencia externa',
+            cols: 1,
+          },
+        ],
+      },
       {
         key: 'produccion',
         title: 'Balance de producción',
@@ -587,8 +762,10 @@ function schemaPollosEngorde(): FormSchemaInput {
           {
             key: 'pollos_en_engorde',
             label: 'Pollos en engorde',
-            type: 'number',
-            meta: 'Int',
+            type: 'computed',
+            meta: 'Solo lectura (pollos para engorde × (1 - tasa mortalidad))',
+            formulaKey: 'pollos_engorde_cantidad',
+            formulaFormat: 'number',
             cols: 1,
           },
           {
@@ -604,10 +781,106 @@ function schemaPollosEngorde(): FormSchemaInput {
   }
 }
 
+/** Keys y valores por defecto para % participación en desglose de costos (aves ponedoras) */
+export const AVES_COST_PCT_DEFAULTS: Record<string, number> = {
+  cost_pct_pollita: 2.8,
+  cost_pct_instalacion: 0.8,
+  cost_pct_desinfeccion: 0.2,
+  cost_pct_materiales_cama: 0.4,
+  cost_pct_calefaccion: 0.2,
+  cost_pct_levante_nutricion: 9.38,
+  cost_pct_levante_sanidad: 1.7,
+  cost_pct_levante_vacunas: 0.4,
+  cost_pct_levante_medicamento: 0.02,
+  cost_pct_levante_otros: 1.0,
+  cost_pct_prod_nutricion: 70.73,
+  cost_pct_prod_sanidad: 0.3,
+  cost_pct_prod_vacunas: 0.1,
+  cost_pct_prod_medicamento: 0.07,
+  cost_pct_prod_otros: 0.2,
+  cost_pct_mano_directa: 4.7,
+  cost_pct_mano_ocasional: 0.3,
+  cost_pct_ind_asistencia: 0.3,
+  cost_pct_ind_cartones: 1.3,
+  cost_pct_ind_otros: 0.1,
+  cost_pct_ind_transporte: 2.3,
+  cost_pct_ind_imprevistos: 2.5,
+  cost_pct_ajuste_mortalidad: 1.0,
+}
+
 /** Plantilla: Aves Ponedoras (Huevos) */
 function schemaAvesPonedoras(): FormSchemaInput {
   return {
     sections: [
+      {
+        key: 'resumen_utilidad',
+        title: 'Resumen de utilidad',
+        fields: [
+          {
+            key: 'total_utilidad_aves',
+            label: 'TOTAL UTILIDAD',
+            type: 'computed',
+            meta: 'Solo lectura (ventas - costos)',
+            formulaKey: 'aves_ponedoras_total_utilidad',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'total_utilidad_mensual_aves',
+            label: 'TOTAL UTILIDAD MENSUAL',
+            type: 'computed',
+            meta: 'Solo lectura',
+            formulaKey: 'aves_ponedoras_total_utilidad_mensual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'ventas_aves',
+            label: 'VENTAS',
+            type: 'computed',
+            meta: 'Solo lectura (cubetas × precio promedio)',
+            formulaKey: 'aves_ponedoras_ventas',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'costos_aves',
+            label: 'COSTOS',
+            type: 'computed',
+            meta: 'Solo lectura (ventas × % costo)',
+            formulaKey: 'aves_ponedoras_costos',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+        ],
+      },
+      {
+        key: 'valores_estandar_fenavi',
+        title: 'Valores estándar FENAVI',
+        fields: [
+          {
+            key: 'pct_costo_huevo',
+            label: '% Costo x huevo',
+            type: 'number',
+            meta: 'Ej: 76',
+            cols: 1,
+          },
+          {
+            key: 'pct_mortalidad_postura',
+            label: '% Mortalidad y postura',
+            type: 'number',
+            meta: 'Ej: 10',
+            cols: 1,
+          },
+          {
+            key: 'produccion_huevos_ave',
+            label: 'Producción huevos x ave',
+            type: 'number',
+            meta: 'Ej: 350',
+            cols: 1,
+          },
+        ],
+      },
       {
         key: 'produccion',
         title: 'Balance de producción',
@@ -616,22 +889,28 @@ function schemaAvesPonedoras(): FormSchemaInput {
           {
             key: 'aves_en_produccion',
             label: 'Aves en producción',
-            type: 'number',
-            meta: 'Int',
+            type: 'computed',
+            meta: 'Solo lectura (cantidad × (1 - % mortalidad/100))',
+            formulaKey: 'aves_en_produccion',
+            formulaFormat: 'number',
             cols: 1,
           },
           {
             key: 'cubetas_diarias',
             label: 'N° de cubetas diarias',
-            type: 'number',
-            meta: 'Decimal',
+            type: 'computed',
+            meta: 'Solo lectura (aves en producción ÷ 30)',
+            formulaKey: 'aves_cubetas_diarias',
+            formulaFormat: 'number',
             cols: 1,
           },
           {
             key: 'cubetas_mensuales',
             label: 'N° de cubetas mensuales',
-            type: 'number',
-            meta: 'Decimal',
+            type: 'computed',
+            meta: 'Solo lectura (cubetas diarias × 30)',
+            formulaKey: 'aves_cubetas_mensuales',
+            formulaFormat: 'number',
             cols: 1,
           },
           {
@@ -644,33 +923,16 @@ function schemaAvesPonedoras(): FormSchemaInput {
         ],
       },
       {
-        key: 'clasificacion',
+        key: 'clasificacion_huevos',
         title: 'Clasificación de huevo y precios',
-        fields: [
-          {
-            key: 'precio_cubeta_b',
-            label: 'Precio cubeta clasificación B',
-            type: 'money',
-            cols: 1,
-          },
-          {
-            key: 'precio_cubeta_a',
-            label: 'Precio cubeta clasificación A',
-            type: 'money',
-            cols: 1,
-          },
-          {
-            key: 'precio_cubeta_aa',
-            label: 'Precio cubeta clasificación AA',
-            type: 'money',
-            cols: 1,
-          },
-          {
-            key: 'precio_cubeta_extra',
-            label: 'Precio cubeta clasificación Extra',
-            type: 'money',
-            cols: 1,
-          },
+        layout: 'eggsTable',
+        fields: [],
+        tableRows: [
+          { label: 'B', suffix: 'b' },
+          { label: 'A', suffix: 'a' },
+          { label: 'AA', suffix: 'aa' },
+          { label: 'EXTRA', suffix: 'extra', textClass: 'text-red-600' },
+          { label: 'CRIOLLOS', suffix: 'criollos' },
         ],
       },
     ],
@@ -681,6 +943,48 @@ function schemaAvesPonedoras(): FormSchemaInput {
 function schemaPecesTilapia(): FormSchemaInput {
   return {
     sections: [
+      {
+        key: 'resumen_utilidad',
+        title: 'Resumen de utilidad',
+        fields: [
+          {
+            key: 'total_utilidad_tilapia',
+            label: 'TOTAL UTILIDAD',
+            type: 'computed',
+            meta: 'Solo lectura (ventas - costos)',
+            formulaKey: 'peces_tilapia_total_utilidad',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'total_utilidad_mensual_tilapia',
+            label: 'TOTAL UTILIDAD MENSUAL',
+            type: 'computed',
+            meta: 'Solo lectura ((total utilidad / días ciclo) × 30)',
+            formulaKey: 'peces_tilapia_total_utilidad_mensual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'ventas_tilapia',
+            label: 'VENTAS',
+            type: 'computed',
+            meta: 'Solo lectura (alevinos × peso libras × precio/libra)',
+            formulaKey: 'peces_tilapia_ventas',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'costos_tilapia',
+            label: 'COSTOS',
+            type: 'computed',
+            meta: 'Solo lectura (ventas × % costos estándar)',
+            formulaKey: 'peces_tilapia_costos',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+        ],
+      },
       {
         key: 'produccion',
         title: 'Balance de producción',
@@ -710,25 +1014,187 @@ function schemaPecesTilapia(): FormSchemaInput {
         ],
       },
       {
-        key: 'costos',
+        key: 'valores_estandar_tilapia',
+        title: 'Valores estándar',
+        fields: [
+          {
+            key: 'peces_por_estanque',
+            label: 'Peces por estanque',
+            type: 'number',
+            meta: 'Int (ej: 600)',
+            cols: 1,
+          },
+          {
+            key: 'unidad_por_m2',
+            label: 'Unidad por m²',
+            type: 'number',
+            meta: 'Decimal (ej: 6)',
+            cols: 1,
+          },
+          {
+            key: 'peso_final_libras',
+            label: 'Peso final en libras',
+            type: 'number',
+            meta: 'Decimal (ej: 1.00)',
+            cols: 1,
+          },
+          {
+            key: 'duracion_ciclo_dias',
+            label: 'Duración del ciclo en días',
+            type: 'number',
+            meta: 'Int (ej: 210)',
+            cols: 1,
+          },
+          {
+            key: 'precio_venta_libra',
+            label: 'Precio de venta por libra',
+            type: 'money',
+            meta: 'COP',
+            cols: 1,
+          },
+        ],
+      },
+      {
+        key: 'discriminacion_costos',
         title: 'Discriminación de costos',
         fields: [
-          { key: 'mano_obra_peces', label: 'Mano de obra', type: 'money', cols: 1 },
-          { key: 'preparacion_estanque', label: 'Preparación estanque', type: 'money', cols: 1 },
-          { key: 'compra_especies', label: 'Compra de especies', type: 'money', cols: 1 },
-          { key: 'tratamientos', label: 'Tratamientos', type: 'money', cols: 1 },
-          { key: 'sacrificio', label: 'Sacrificio', type: 'money', cols: 1 },
-          { key: 'alimentacion_peces', label: 'Alimentación', type: 'money', cols: 1 },
+          {
+            key: 'valor_mano_obra_tilapia',
+            label: 'Mano de obra – Valor',
+            type: 'computed',
+            formulaKey: 'peces_tilapia_valor_mano_obra',
+            formulaFormat: 'money',
+            meta: 'Costo total × %',
+            cols: 1,
+          },
+          { key: 'pct_mano_obra_tilapia', label: 'Mano de obra – %', type: 'number', meta: 'Editable', cols: 1 },
+          {
+            key: 'valor_preparacion_estanque',
+            label: 'Preparación estanque – Valor',
+            type: 'computed',
+            formulaKey: 'peces_tilapia_valor_preparacion_estanque',
+            formulaFormat: 'money',
+            meta: 'Costo total × %',
+            cols: 1,
+          },
+          { key: 'pct_preparacion_estanque', label: 'Preparación estanque – %', type: 'number', meta: 'Editable', cols: 1 },
+          {
+            key: 'valor_compra_especies',
+            label: 'Compra de especies – Valor',
+            type: 'computed',
+            formulaKey: 'peces_tilapia_valor_compra_especies',
+            formulaFormat: 'money',
+            meta: 'Costo total × %',
+            cols: 1,
+          },
+          { key: 'pct_compra_especies', label: 'Compra de especies – %', type: 'number', meta: 'Editable', cols: 1 },
+          {
+            key: 'valor_tratamientos_tilapia',
+            label: 'Tratamientos – Valor',
+            type: 'computed',
+            formulaKey: 'peces_tilapia_valor_tratamientos',
+            formulaFormat: 'money',
+            meta: 'Costo total × %',
+            cols: 1,
+          },
+          { key: 'pct_tratamientos_tilapia', label: 'Tratamientos – %', type: 'number', meta: 'Editable', cols: 1 },
+          {
+            key: 'valor_sacrificio_tilapia',
+            label: 'Sacrificio – Valor',
+            type: 'computed',
+            formulaKey: 'peces_tilapia_valor_sacrificio',
+            formulaFormat: 'money',
+            meta: 'Costo total × %',
+            cols: 1,
+          },
+          { key: 'pct_sacrificio_tilapia', label: 'Sacrificio – %', type: 'number', meta: 'Editable', cols: 1 },
+          {
+            key: 'valor_alimentacion_tilapia',
+            label: 'Alimentación – Valor',
+            type: 'computed',
+            formulaKey: 'peces_tilapia_valor_alimentacion',
+            formulaFormat: 'money',
+            meta: 'Costo total × %',
+            cols: 1,
+          },
+          { key: 'pct_alimentacion_tilapia', label: 'Alimentación – %', type: 'number', meta: 'Editable', cols: 1 },
+          {
+            key: 'total_costos_tilapia',
+            label: 'Total',
+            type: 'computed',
+            meta: 'Solo lectura (suma de todos los valores)',
+            formulaKey: 'peces_tilapia_total_costos',
+            formulaFormat: 'money',
+            cols: 2,
+          },
         ],
       },
     ],
   }
 }
 
+/** Keys y valores por defecto para tabla FINAGRO (cultivos permanentes) */
+export const FINAGRO_DEFAULTS: Record<string, number | null> = {
+  finagro_1_pct: 100,
+  finagro_1_kg: null,
+  finagro_2_pct: 100,
+  finagro_2_kg: 400,
+  finagro_3_pct: 70,
+  finagro_3_kg: 875,
+  finagro_4_pct: 60,
+  finagro_4_kg: 1050,
+  finagro_5_17_pct: 45,
+  finagro_5_17_kg: 1200,
+  finagro_18_20_pct: 55,
+  finagro_18_20_kg: 1000,
+}
+
 /** Plantilla única: Cultivos permanentes (Cacao, Café, Bananito, Plátano, Aguacate, Bijao, Guayaba, Guanábana, Mora, Lulo) */
 function schemaCultivoPermanente(): FormSchemaInput {
   return {
     sections: [
+      {
+        key: 'resumen_utilidad',
+        title: 'Resumen de utilidad',
+        fields: [
+          {
+            key: 'total_utilidad_cultivo_permanente',
+            label: 'TOTAL UTILIDAD',
+            type: 'computed',
+            meta: 'Solo lectura (ventas anual - costos anual)',
+            formulaKey: 'cultivo_permanente_total_utilidad',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'total_utilidad_mensual_cultivo_permanente',
+            label: 'TOTAL UTILIDAD MENSUAL',
+            type: 'computed',
+            meta: 'Solo lectura (total utilidad ÷ duración meses)',
+            formulaKey: 'cultivo_permanente_total_utilidad_mensual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'ventas_anual_cultivo_permanente',
+            label: 'VENTAS ANUAL',
+            type: 'computed',
+            meta: 'Solo lectura (kg/ha × hectáreas × valor kg)',
+            formulaKey: 'cultivo_permanente_ventas_anual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'costos_anual_cultivo_permanente',
+            label: 'COSTOS ANUAL',
+            type: 'computed',
+            meta: 'Solo lectura (ventas × % costos)',
+            formulaKey: 'cultivo_permanente_costos_anual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+        ],
+      },
       {
         key: 'producto',
         title: 'Producto y superficie',
@@ -759,8 +1225,10 @@ function schemaCultivoPermanente(): FormSchemaInput {
           {
             key: 'pct_costos',
             label: '% costos por hectárea',
-            type: 'number',
-            meta: 'Decimal (ej: 0.45)',
+            type: 'computed',
+            meta: 'Solo lectura (según edad y tabla FINAGRO)',
+            formulaKey: 'cultivo_permanente_pct_costos',
+            formulaFormat: 'percent',
             cols: 1,
           },
         ],
@@ -772,8 +1240,10 @@ function schemaCultivoPermanente(): FormSchemaInput {
           {
             key: 'cant_kg_hectarea',
             label: 'Cant. kg x hectárea',
-            type: 'number',
-            meta: 'Decimal',
+            type: 'computed',
+            meta: 'Solo lectura (según edad y tabla FINAGRO)',
+            formulaKey: 'cultivo_permanente_kg_hectarea',
+            formulaFormat: 'number',
             cols: 1,
           },
           {
@@ -782,7 +1252,15 @@ function schemaCultivoPermanente(): FormSchemaInput {
             type: 'money',
             cols: 1,
           },
-          { key: 'valor_total', label: 'Valor total', type: 'money', cols: 1 },
+          {
+            key: 'valor_total',
+            label: 'Valor total',
+            type: 'computed',
+            meta: 'Solo lectura (kg/ha × valor kg × hectáreas)',
+            formulaKey: 'cultivo_permanente_valor_total',
+            formulaFormat: 'money',
+            cols: 1,
+          },
           {
             key: 'duracion_meses',
             label: 'Duración (meses)',
@@ -791,6 +1269,18 @@ function schemaCultivoPermanente(): FormSchemaInput {
             cols: 1,
           },
         ],
+      },
+      {
+        key: 'finagro_santander',
+        title: 'Referencia FINAGRO',
+        layout: 'finagroTable',
+        fields: [],
+      },
+      {
+        key: 'informacion_referencia',
+        title: 'Información de referencia',
+        layout: 'referenciaInfo',
+        fields: [],
       },
     ],
   }
@@ -1124,8 +1614,9 @@ function computeGanadoDobleValorInsumosVeterinarios(data: Record<string, unknown
 
 /** Cerdos Cría: costo_total = valor_venta × pct_costos_estandar (pct: 0.85 o 85) */
 function computeCerdosCriaCostoTotal(data: Record<string, unknown>): number | null {
-  const cerdosParaCria = Number(data.cerdos_para_cria ?? 0)
+  const cerdosParaCria = computeCerdosCriaCerdosParaCria(data)
   const precioDestetado = Number(data.precio_cerdo_destetado ?? 0)
+  if (cerdosParaCria == null) return null
   let pct = Number(data.pct_costos_estandar ?? 0)
   if (pct > 1) pct = pct / 100
   const valorVenta = cerdosParaCria * precioDestetado
@@ -1178,10 +1669,19 @@ function computeCerdosCriaValorMantenimientoInfraestructura(data: Record<string,
   return Number.isFinite(valor) ? valor : null
 }
 
+/** Cerdos Cría: cerdos_para_cria = cerdas_cria × lechones_destetados */
+function computeCerdosCriaCerdosParaCria(data: Record<string, unknown>): number | null {
+  const cerdas = Number(data.cerdas_cria ?? 0)
+  const lechones = Number(data.lechones_destetados ?? 0)
+  const valor = cerdas * lechones
+  return Number.isFinite(valor) ? valor : null
+}
+
 /** Cerdos Cría: ventas = cerdos_para_cria × precio_cerdo_destetado */
 function computeCerdosCriaVentas(data: Record<string, unknown>): number | null {
-  const cerdos = Number(data.cerdos_para_cria ?? 0)
+  const cerdos = computeCerdosCriaCerdosParaCria(data)
   const precio = Number(data.precio_cerdo_destetado ?? 0)
+  if (cerdos == null) return null
   const valor = cerdos * precio
   return Number.isFinite(valor) ? valor : null
 }
@@ -1217,6 +1717,443 @@ function computeCerdosCriaTotalCostos(data: Record<string, unknown>): number | n
   const v4 = computeCerdosCriaValorManoObra(data) ?? 0
   const v5 = computeCerdosCriaValorMantenimientoInfraestructura(data) ?? 0
   const valor = v1 + v2 + v3 + v4 + v5
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cerdos Ceba: ventas = cerdos_para_ceba × peso_promedio_kg × precio_kg_pie */
+function computeCerdosCebaVentas(data: Record<string, unknown>): number | null {
+  const cerdos = Number(data.cerdos_para_ceba ?? 0)
+  const peso = Number(data.peso_promedio_kg_ceba ?? 0)
+  const precio = Number(data.precio_kg_pie ?? 0)
+  const valor = cerdos * peso * precio
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cerdos Ceba: costo_total = ventas × pct_costos_estandar */
+function computeCerdosCebaCostoTotal(data: Record<string, unknown>): number | null {
+  const ventas = computeCerdosCebaVentas(data)
+  let pct = Number(data.pct_costos_estandar ?? 0)
+  if (ventas == null) return null
+  if (pct > 1) pct = pct / 100
+  const valor = ventas * pct
+  return Number.isFinite(valor) ? valor : null
+}
+
+function getCerdosCebaBaseCostos(data: Record<string, unknown>): number | null {
+  return computeCerdosCebaCostoTotal(data)
+}
+
+function computeCerdosCebaValorLechonDestetado(data: Record<string, unknown>): number | null {
+  const base = getCerdosCebaBaseCostos(data)
+  const pct = Number(data.pct_lechon_destetado ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computeCerdosCebaValorAlimentacion(data: Record<string, unknown>): number | null {
+  const base = getCerdosCebaBaseCostos(data)
+  const pct = Number(data.pct_alimentacion_ceba ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computeCerdosCebaValorMedicamentoComplementos(data: Record<string, unknown>): number | null {
+  const base = getCerdosCebaBaseCostos(data)
+  const pct = Number(data.pct_medicamento_complementos_ceba ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computeCerdosCebaValorManoObra(data: Record<string, unknown>): number | null {
+  const base = getCerdosCebaBaseCostos(data)
+  const pct = Number(data.pct_mano_obra_ceba ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cerdos Ceba: total_costos = suma discriminación */
+function computeCerdosCebaTotalCostos(data: Record<string, unknown>): number | null {
+  const v1 = computeCerdosCebaValorLechonDestetado(data) ?? 0
+  const v2 = computeCerdosCebaValorAlimentacion(data) ?? 0
+  const v3 = computeCerdosCebaValorMedicamentoComplementos(data) ?? 0
+  const v4 = computeCerdosCebaValorManoObra(data) ?? 0
+  const valor = v1 + v2 + v3 + v4
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cerdos Ceba: costos = ventas × % costo estándar */
+function computeCerdosCebaCostosResumen(data: Record<string, unknown>): number | null {
+  return computeCerdosCebaCostoTotal(data)
+}
+
+/** Cerdos Ceba: total_utilidad = ventas - costos */
+function computeCerdosCebaTotalUtilidad(data: Record<string, unknown>): number | null {
+  const ventas = computeCerdosCebaVentas(data)
+  const costos = computeCerdosCebaCostosResumen(data)
+  if (ventas == null || costos == null) return null
+  const valor = ventas - costos
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cerdos Ceba: utilidad_mensual = total_utilidad / duracion_ciclo_meses */
+function computeCerdosCebaTotalUtilidadMensual(data: Record<string, unknown>): number | null {
+  const totalUtilidad = computeCerdosCebaTotalUtilidad(data)
+  const meses = Number(data.duracion_ciclo_meses ?? 0)
+  if (totalUtilidad == null || !meses) return null
+  const valor = totalUtilidad / meses
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Pollos Engorde: pollos_en_engorde = cantidad × (1 - tasa_mortalidad/100) */
+function computePollosEngordePollosEnEngorde(data: Record<string, unknown>): number | null {
+  const v = getPollosEngordeSupervivientes(data)
+  return v != null ? Math.round(v) : null
+}
+
+/** Pollos Engorde: pollos_supervivientes = cantidad × (1 - tasa_mortalidad/100) */
+function getPollosEngordeSupervivientes(data: Record<string, unknown>): number | null {
+  const cantidad = Number(data.cantidad_pollos ?? 0)
+  const tasaMort = Number(data.tasa_mortalidad_pct ?? 0)
+  if (!cantidad) return null
+  const supervivientes = cantidad * (1 - tasaMort / 100)
+  return Number.isFinite(supervivientes) && supervivientes >= 0 ? supervivientes : null
+}
+
+/** Pollos Engorde: ventas = pollos_en_engorde × precio_venta_pie_kg × peso_kg_venta */
+function computePollosEngordeVentas(data: Record<string, unknown>): number | null {
+  const pollosEnEngorde = getPollosEngordeSupervivientes(data)
+  const precioPieKg = Number(data.precio_venta_pie_kg ?? 0)
+  const pesoKg = Number(data.peso_kg_venta ?? 0)
+  if (pollosEnEngorde == null || !precioPieKg || !pesoKg) return null
+  const valor = pollosEnEngorde * precioPieKg * pesoKg
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Pollos Engorde: costos = supervivientes × peso_kg_venta × costo_kg_venta */
+function computePollosEngordeCostos(data: Record<string, unknown>): number | null {
+  const supervivientes = getPollosEngordeSupervivientes(data)
+  const peso = Number(data.peso_kg_venta ?? 0)
+  const costoKg = Number(data.costo_kg_venta ?? 0)
+  if (supervivientes == null || !peso || !costoKg) return null
+  const valor = supervivientes * peso * costoKg
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Pollos Engorde: total_utilidad = ventas - costos */
+function computePollosEngordeTotalUtilidad(data: Record<string, unknown>): number | null {
+  const ventas = computePollosEngordeVentas(data)
+  const costos = computePollosEngordeCostos(data)
+  if (ventas == null || costos == null) return null
+  const valor = ventas - costos
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Pollos Engorde: utilidad_mensual = (total_utilidad / tiempo_ciclo_dias) × 30 */
+function computePollosEngordeTotalUtilidadMensual(data: Record<string, unknown>): number | null {
+  const totalUtilidad = computePollosEngordeTotalUtilidad(data)
+  const dias = Number(data.tiempo_ciclo_dias ?? 0)
+  if (totalUtilidad == null || !dias) return null
+  const valor = (totalUtilidad / dias) * 30
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Aves Ponedoras: cubetas_mensuales = cubetas_diarias × 30 */
+function computeAvesCubetasMensuales(data: Record<string, unknown>): number | null {
+  const diarias = computeAvesCubetasDiarias(data)
+  if (diarias == null) return null
+  const valor = diarias * 30
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Aves Ponedoras: cubetas_diarias = aves_en_produccion ÷ 30 */
+function computeAvesCubetasDiarias(data: Record<string, unknown>): number | null {
+  const aves = computeAvesEnProduccion(data)
+  if (aves == null) return null
+  const valor = aves / 30
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Aves Ponedoras: aves_en_produccion = cantidad_aves × (1 - pct_mortalidad_postura/100) */
+function computeAvesEnProduccion(data: Record<string, unknown>): number | null {
+  const cantidad = Number(data.cantidad_aves ?? 0)
+  const pct = Number(data.pct_mortalidad_postura ?? 0)
+  const valor = cantidad * (1 - pct / 100)
+  return Number.isFinite(valor) ? Math.round(valor) : null
+}
+
+/** Aves Ponedoras: total por clasificación = precio × cantidad_diaria */
+function computeAvesTotalClasificacionB(data: Record<string, unknown>): number | null {
+  const precio = Number(data.precio_cubeta_b ?? 0)
+  const cant = Number(data.cantidad_diaria_b ?? 0)
+  const valor = precio * cant
+  return Number.isFinite(valor) ? valor : null
+}
+function computeAvesTotalClasificacionA(data: Record<string, unknown>): number | null {
+  const precio = Number(data.precio_cubeta_a ?? 0)
+  const cant = Number(data.cantidad_diaria_a ?? 0)
+  const valor = precio * cant
+  return Number.isFinite(valor) ? valor : null
+}
+function computeAvesTotalClasificacionAa(data: Record<string, unknown>): number | null {
+  const precio = Number(data.precio_cubeta_aa ?? 0)
+  const cant = Number(data.cantidad_diaria_aa ?? 0)
+  const valor = precio * cant
+  return Number.isFinite(valor) ? valor : null
+}
+function computeAvesTotalClasificacionExtra(data: Record<string, unknown>): number | null {
+  const precio = Number(data.precio_cubeta_extra ?? 0)
+  const cant = Number(data.cantidad_diaria_extra ?? 0)
+  const valor = precio * cant
+  return Number.isFinite(valor) ? valor : null
+}
+function computeAvesTotalClasificacionCriollos(data: Record<string, unknown>): number | null {
+  const precio = Number(data.precio_cubeta_criollos ?? 0)
+  const cant = Number(data.cantidad_diaria_criollos ?? 0)
+  const valor = precio * cant
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Aves Ponedoras: total cantidad diaria = suma de cantidades */
+function computeAvesTotalCantidadDiaria(data: Record<string, unknown>): number | null {
+  const c1 = Number(data.cantidad_diaria_b ?? 0)
+  const c2 = Number(data.cantidad_diaria_a ?? 0)
+  const c3 = Number(data.cantidad_diaria_aa ?? 0)
+  const c4 = Number(data.cantidad_diaria_extra ?? 0)
+  const c5 = Number(data.cantidad_diaria_criollos ?? 0)
+  const valor = c1 + c2 + c3 + c4 + c5
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Aves Ponedoras: total valor diario = suma de totales por clasificación */
+function computeAvesTotalValorDiario(data: Record<string, unknown>): number | null {
+  const t1 = computeAvesTotalClasificacionB(data) ?? 0
+  const t2 = computeAvesTotalClasificacionA(data) ?? 0
+  const t3 = computeAvesTotalClasificacionAa(data) ?? 0
+  const t4 = computeAvesTotalClasificacionExtra(data) ?? 0
+  const t5 = computeAvesTotalClasificacionCriollos(data) ?? 0
+  const valor = t1 + t2 + t3 + t4 + t5
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Aves Ponedoras: ventas = total_valor_diario × 30 (mensual) */
+function computeAvesPonedorasVentas(data: Record<string, unknown>): number | null {
+  const totalDiario = computeAvesTotalValorDiario(data)
+  if (totalDiario == null) return null
+  const valor = totalDiario * 30
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Aves Ponedoras: costos = ventas × (pct_costo_huevo/100) */
+function computeAvesPonedorasCostos(data: Record<string, unknown>): number | null {
+  const ventas = computeAvesPonedorasVentas(data)
+  const pct = Number(data.pct_costo_huevo ?? 0)
+  if (ventas == null || !pct) return null
+  const valor = ventas * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Aves Ponedoras: total_utilidad = ventas - costos */
+function computeAvesPonedorasTotalUtilidad(data: Record<string, unknown>): number | null {
+  const ventas = computeAvesPonedorasVentas(data)
+  const costos = computeAvesPonedorasCostos(data)
+  if (ventas == null || costos == null) return null
+  const valor = ventas - costos
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Aves Ponedoras: utilidad_mensual = total_utilidad (cubetas ya son mensuales) */
+function computeAvesPonedorasTotalUtilidadMensual(data: Record<string, unknown>): number | null {
+  return computeAvesPonedorasTotalUtilidad(data)
+}
+
+/**
+ * Cultivo Permanente: cant_kg_hectarea = productividad según edad (tabla FINAGRO).
+ * edad 1 → finagro_1_kg | edad 2 → finagro_2_kg | edad 3 → finagro_3_kg
+ * edad 4 → finagro_4_kg | edad 5-18 → finagro_5_17_kg | edad 19+ → finagro_18_20_kg
+ */
+function computeCultivoPermanenteKgHectarea(data: Record<string, unknown>): number | null {
+  const edad = Number(data.edad_cultivo ?? 0)
+  if (!Number.isFinite(edad) || edad < 1) return null
+  let val: number | null = null
+  if (edad === 1) val = getFinagroNum(data.finagro_1_kg)
+  else if (edad === 2) val = getFinagroNum(data.finagro_2_kg)
+  else if (edad === 3) val = getFinagroNum(data.finagro_3_kg)
+  else if (edad === 4) val = getFinagroNum(data.finagro_4_kg)
+  else if (edad <= 18) val = getFinagroNum(data.finagro_5_17_kg)
+  else val = getFinagroNum(data.finagro_18_20_kg)
+  return val
+}
+
+function getFinagroNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Cultivo Permanente: pct_costos = % costo x HA según edad (tabla FINAGRO).
+ * edad 1 → finagro_1_pct | edad 2 → finagro_2_pct | edad 3 → finagro_3_pct
+ * edad 4 → finagro_4_pct | edad 5-17 → finagro_5_17_pct | edad 18+ → finagro_18_20_pct
+ */
+function computeCultivoPermanentePctCostos(data: Record<string, unknown>): number | null {
+  const edad = Number(data.edad_cultivo ?? 0)
+  if (!Number.isFinite(edad) || edad < 1) return null
+  let val: number | null = null
+  if (edad === 1) val = getFinagroNum(data.finagro_1_pct)
+  else if (edad === 2) val = getFinagroNum(data.finagro_2_pct)
+  else if (edad === 3) val = getFinagroNum(data.finagro_3_pct)
+  else if (edad === 4) val = getFinagroNum(data.finagro_4_pct)
+  else if (edad <= 17) val = getFinagroNum(data.finagro_5_17_pct)
+  else val = getFinagroNum(data.finagro_18_20_pct)
+  return val
+}
+
+/** Cultivo Permanente: valor_total = cant_kg_hectarea × valor_unitario_kg × cantidad_hectareas */
+function computeCultivoPermanenteValorTotal(data: Record<string, unknown>): number | null {
+  const kgHa = computeCultivoPermanenteKgHectarea(data) ?? 0
+  const valorKg = Number(data.valor_unitario_kg ?? 0)
+  const hectareas = Number(data.cantidad_hectareas ?? 0)
+  const valor = kgHa * valorKg * hectareas
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cultivo Permanente: ventas_anual = valor_total (misma fórmula) */
+function computeCultivoPermanenteVentasAnual(data: Record<string, unknown>): number | null {
+  return computeCultivoPermanenteValorTotal(data)
+}
+
+/** Cultivo Permanente: costos_anual = ventas_anual × (pct_costos/100) */
+function computeCultivoPermanenteCostosAnual(data: Record<string, unknown>): number | null {
+  const ventas = computeCultivoPermanenteVentasAnual(data)
+  const pctLookup = computeCultivoPermanentePctCostos(data)
+  let pct = pctLookup ?? Number(data.pct_costos ?? 0)
+  if (pct > 1) pct = pct / 100
+  if (ventas == null || !pct) return null
+  const valor = ventas * pct
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cultivo Permanente: total_utilidad = ventas_anual - costos_anual */
+function computeCultivoPermanenteTotalUtilidad(data: Record<string, unknown>): number | null {
+  const ventas = computeCultivoPermanenteVentasAnual(data)
+  const costos = computeCultivoPermanenteCostosAnual(data)
+  if (ventas == null || costos == null) return null
+  const valor = ventas - costos
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cultivo Permanente: utilidad_mensual = total_utilidad / duracion_meses */
+function computeCultivoPermanenteTotalUtilidadMensual(data: Record<string, unknown>): number | null {
+  const totalUtilidad = computeCultivoPermanenteTotalUtilidad(data)
+  const meses = Number(data.duracion_meses ?? 0)
+  if (totalUtilidad == null || !meses) return null
+  const valor = totalUtilidad / meses
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Peces Tilapia: ventas = cantidad_alevinos × peso_final_libras × precio_venta_libra */
+function computePecesTilapiaVentas(data: Record<string, unknown>): number | null {
+  const cantidad = Number(data.cantidad_alevinos ?? 0)
+  const peso = Number(data.peso_final_libras ?? 0)
+  const precio = Number(data.precio_venta_libra ?? 0)
+  const valor = cantidad * peso * precio
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Peces Tilapia: costos = ventas × pct_costos_estandar */
+function computePecesTilapiaCostos(data: Record<string, unknown>): number | null {
+  const ventas = computePecesTilapiaVentas(data)
+  let pct = Number(data.pct_costos_estandar ?? 0)
+  if (pct > 1) pct = pct / 100
+  if (ventas == null || !pct) return null
+  const valor = ventas * pct
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Peces Tilapia: total_utilidad = ventas - costos */
+function computePecesTilapiaTotalUtilidad(data: Record<string, unknown>): number | null {
+  const ventas = computePecesTilapiaVentas(data)
+  const costos = computePecesTilapiaCostos(data)
+  if (ventas == null || costos == null) return null
+  const valor = ventas - costos
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Peces Tilapia: utilidad_mensual = (total_utilidad / tiempo_ciclo_dias) × 30 */
+function computePecesTilapiaTotalUtilidadMensual(data: Record<string, unknown>): number | null {
+  const totalUtilidad = computePecesTilapiaTotalUtilidad(data)
+  const dias = Number(data.tiempo_ciclo_dias ?? 0)
+  if (totalUtilidad == null || !dias) return null
+  const valor = (totalUtilidad / dias) * 30
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Base para discriminación Peces Tilapia */
+function getPecesTilapiaBaseCostos(data: Record<string, unknown>): number | null {
+  return computePecesTilapiaCostos(data)
+}
+
+function computePecesTilapiaValorManoObra(data: Record<string, unknown>): number | null {
+  const base = getPecesTilapiaBaseCostos(data)
+  const pct = Number(data.pct_mano_obra_tilapia ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computePecesTilapiaValorPreparacionEstanque(data: Record<string, unknown>): number | null {
+  const base = getPecesTilapiaBaseCostos(data)
+  const pct = Number(data.pct_preparacion_estanque ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computePecesTilapiaValorCompraEspecies(data: Record<string, unknown>): number | null {
+  const base = getPecesTilapiaBaseCostos(data)
+  const pct = Number(data.pct_compra_especies ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computePecesTilapiaValorTratamientos(data: Record<string, unknown>): number | null {
+  const base = getPecesTilapiaBaseCostos(data)
+  const pct = Number(data.pct_tratamientos_tilapia ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computePecesTilapiaValorSacrificio(data: Record<string, unknown>): number | null {
+  const base = getPecesTilapiaBaseCostos(data)
+  const pct = Number(data.pct_sacrificio_tilapia ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+function computePecesTilapiaValorAlimentacion(data: Record<string, unknown>): number | null {
+  const base = getPecesTilapiaBaseCostos(data)
+  const pct = Number(data.pct_alimentacion_tilapia ?? 0)
+  if (base == null) return null
+  const valor = base * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Peces Tilapia: total_costos = suma de todos los valores */
+function computePecesTilapiaTotalCostos(data: Record<string, unknown>): number | null {
+  const v1 = computePecesTilapiaValorManoObra(data) ?? 0
+  const v2 = computePecesTilapiaValorPreparacionEstanque(data) ?? 0
+  const v3 = computePecesTilapiaValorCompraEspecies(data) ?? 0
+  const v4 = computePecesTilapiaValorTratamientos(data) ?? 0
+  const v5 = computePecesTilapiaValorSacrificio(data) ?? 0
+  const v6 = computePecesTilapiaValorAlimentacion(data) ?? 0
+  const valor = v1 + v2 + v3 + v4 + v5 + v6
   return Number.isFinite(valor) ? valor : null
 }
 
@@ -1267,10 +2204,58 @@ const formulaComputers: Record<string, (data: Record<string, unknown>) => number
   cerdos_cria_valor_mano_obra: computeCerdosCriaValorManoObra,
   cerdos_cria_valor_mantenimiento_infraestructura: computeCerdosCriaValorMantenimientoInfraestructura,
   cerdos_cria_total_costos: computeCerdosCriaTotalCostos,
+  cerdos_cria_cerdos_para_cria: computeCerdosCriaCerdosParaCria,
   cerdos_cria_ventas: computeCerdosCriaVentas,
   cerdos_cria_costos_resumen: computeCerdosCriaCostosResumen,
   cerdos_cria_total_utilidad: computeCerdosCriaTotalUtilidad,
   cerdos_cria_total_utilidad_mensual: computeCerdosCriaTotalUtilidadMensual,
+  cerdos_ceba_ventas: computeCerdosCebaVentas,
+  cerdos_ceba_costo_total: computeCerdosCebaCostoTotal,
+  cerdos_ceba_valor_lechon_destetado: computeCerdosCebaValorLechonDestetado,
+  cerdos_ceba_valor_alimentacion: computeCerdosCebaValorAlimentacion,
+  cerdos_ceba_valor_medicamento_complementos: computeCerdosCebaValorMedicamentoComplementos,
+  cerdos_ceba_valor_mano_obra: computeCerdosCebaValorManoObra,
+  cerdos_ceba_total_costos: computeCerdosCebaTotalCostos,
+  cerdos_ceba_costos_resumen: computeCerdosCebaCostosResumen,
+  cerdos_ceba_total_utilidad: computeCerdosCebaTotalUtilidad,
+  cerdos_ceba_total_utilidad_mensual: computeCerdosCebaTotalUtilidadMensual,
+  pollos_engorde_cantidad: computePollosEngordePollosEnEngorde,
+  pollos_engorde_ventas: computePollosEngordeVentas,
+  pollos_engorde_costos: computePollosEngordeCostos,
+  pollos_engorde_total_utilidad: computePollosEngordeTotalUtilidad,
+  pollos_engorde_total_utilidad_mensual: computePollosEngordeTotalUtilidadMensual,
+  aves_en_produccion: computeAvesEnProduccion,
+  aves_cubetas_diarias: computeAvesCubetasDiarias,
+  aves_cubetas_mensuales: computeAvesCubetasMensuales,
+  aves_total_clasificacion_b: computeAvesTotalClasificacionB,
+  aves_total_clasificacion_a: computeAvesTotalClasificacionA,
+  aves_total_clasificacion_aa: computeAvesTotalClasificacionAa,
+  aves_total_clasificacion_extra: computeAvesTotalClasificacionExtra,
+  aves_total_clasificacion_criollos: computeAvesTotalClasificacionCriollos,
+  aves_total_cantidad_diaria: computeAvesTotalCantidadDiaria,
+  aves_total_valor_diario: computeAvesTotalValorDiario,
+  aves_ponedoras_ventas: computeAvesPonedorasVentas,
+  aves_ponedoras_costos: computeAvesPonedorasCostos,
+  aves_ponedoras_total_utilidad: computeAvesPonedorasTotalUtilidad,
+  aves_ponedoras_total_utilidad_mensual: computeAvesPonedorasTotalUtilidadMensual,
+  peces_tilapia_ventas: computePecesTilapiaVentas,
+  peces_tilapia_costos: computePecesTilapiaCostos,
+  peces_tilapia_total_utilidad: computePecesTilapiaTotalUtilidad,
+  peces_tilapia_total_utilidad_mensual: computePecesTilapiaTotalUtilidadMensual,
+  peces_tilapia_valor_mano_obra: computePecesTilapiaValorManoObra,
+  peces_tilapia_valor_preparacion_estanque: computePecesTilapiaValorPreparacionEstanque,
+  peces_tilapia_valor_compra_especies: computePecesTilapiaValorCompraEspecies,
+  peces_tilapia_valor_tratamientos: computePecesTilapiaValorTratamientos,
+  peces_tilapia_valor_sacrificio: computePecesTilapiaValorSacrificio,
+  peces_tilapia_valor_alimentacion: computePecesTilapiaValorAlimentacion,
+  peces_tilapia_total_costos: computePecesTilapiaTotalCostos,
+  cultivo_permanente_kg_hectarea: computeCultivoPermanenteKgHectarea,
+  cultivo_permanente_pct_costos: computeCultivoPermanentePctCostos,
+  cultivo_permanente_valor_total: computeCultivoPermanenteValorTotal,
+  cultivo_permanente_ventas_anual: computeCultivoPermanenteVentasAnual,
+  cultivo_permanente_costos_anual: computeCultivoPermanenteCostosAnual,
+  cultivo_permanente_total_utilidad: computeCultivoPermanenteTotalUtilidad,
+  cultivo_permanente_total_utilidad_mensual: computeCultivoPermanenteTotalUtilidadMensual,
 }
 
 /** Evalúa una fórmula calculada dado el formulaKey y los datos del formulario */

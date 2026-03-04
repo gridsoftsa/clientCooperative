@@ -13,11 +13,21 @@ export interface FormFieldSchema {
   formulaFormat?: 'number' | 'percent' | 'money'
 }
 
+/** Fila de la tabla de clasificación de huevos */
+export interface EggsTableRowSchema {
+  label: string
+  suffix: string
+  textClass?: string
+}
+
 /** Sección del schema */
 export interface FormSectionSchema {
   key?: string
   title: string
   fields: FormFieldSchema[]
+  /** Layout alternativo: tabla de clasificación de huevos (aves ponedoras) */
+  layout?: 'eggsTable' | 'finagroTable' | 'referenciaInfo'
+  tableRows?: EggsTableRowSchema[]
 }
 
 /** Schema completo para DynamicFormRenderer */

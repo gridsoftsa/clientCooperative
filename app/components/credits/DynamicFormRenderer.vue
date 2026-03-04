@@ -2,9 +2,14 @@
 /**
  * Motor de renderizado de formularios dinámicos a partir de schema JSON.
  * Soporta: money, select, date, number, text, computed.
+ * Layout especial: eggsTable para clasificación de huevos (aves ponedoras).
  */
 import type { FormSchemaInput } from '~/types/credits'
-import { computeFormula } from '~/constants/credits-financial-templates'
+import {
+  computeFormula,
+  AVES_COST_PCT_DEFAULTS,
+  FINAGRO_DEFAULTS,
+} from '~/constants/credits-financial-templates'
 
 const props = withDefaults(
   defineProps<{
@@ -25,6 +30,36 @@ const emit = defineEmits<{
 function buildInitialFormData(): Record<string, unknown> {
   const data: Record<string, unknown> = { ...props.initialData }
   for (const section of props.schema.sections) {
+    if (section.layout === 'finagroTable') {
+      if (props.templateKey === 'cultivo-permanente') {
+        for (const [k, v] of Object.entries(FINAGRO_DEFAULTS)) {
+          if (data[k] === undefined) data[k] = v
+        }
+      }
+      continue
+    }
+    if (section.layout === 'referenciaInfo') {
+      if (props.templateKey === 'cultivo-permanente' && data.plantas_x_ha === undefined) {
+        data.plantas_x_ha = 1111
+      }
+      continue
+    }
+    if (section.layout === 'eggsTable' && section.tableRows) {
+      for (const row of section.tableRows) {
+        const pre = `precio_cubeta_${row.suffix}`
+        const can = `cantidad_diaria_${row.suffix}`
+        if (data[pre] === undefined) data[pre] = null
+        if (data[can] === undefined) data[can] = null
+      }
+      if (data.total_cantidad_diaria === undefined) data.total_cantidad_diaria = null
+      if (data.total_valor_diario === undefined) data.total_valor_diario = null
+      if (props.templateKey === 'aves-ponedoras') {
+        for (const [k, v] of Object.entries(AVES_COST_PCT_DEFAULTS)) {
+          if (data[k] === undefined) data[k] = v
+        }
+      }
+      continue
+    }
     for (const field of section.fields) {
       if (field.type === 'computed') continue
       if (data[field.key] !== undefined) continue
@@ -91,16 +126,63 @@ const inputBaseClass =
 
 <template>
   <form class="space-y-6">
-    <fieldset
-      v-for="(section, idx) in schema.sections"
-      :key="section.key ?? idx"
-      class="rounded-lg border border-border p-4"
-    >
-      <legend class="text-sm font-semibold text-foreground">
-        {{ section.title }}
-      </legend>
-      <div class="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
-        <template v-for="field in section.fields" :key="field.key">
+    <template v-for="(section, idx) in schema.sections" :key="section.key ?? idx">
+      <!-- Tabla FINAGRO (cultivos permanentes) -->
+      <fieldset
+        v-if="section.layout === 'finagroTable'"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="sr-only">{{ section.title }}</legend>
+        <div class="mt-2">
+          <CreditsCultivoPermanenteFinagroTable
+            :form-data="formData"
+            @update:field="({ key, value }) => (formData[key] = value)"
+          />
+        </div>
+      </fieldset>
+      <!-- Información de referencia (cultivos permanentes) -->
+      <fieldset
+        v-else-if="section.layout === 'referenciaInfo'"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="sr-only">{{ section.title }}</legend>
+        <div class="mt-2">
+          <CreditsCultivoPermanenteReferenciaInfo
+            :form-data="formData"
+            @update:field="({ key, value }) => (formData[key] = value)"
+          />
+        </div>
+      </fieldset>
+      <!-- Tabla de clasificación de huevos + desglose de costos (aves ponedoras) -->
+      <fieldset
+        v-else-if="section.layout === 'eggsTable' && section.tableRows"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="text-sm font-semibold text-foreground">
+          {{ section.title }}
+        </legend>
+        <div class="mt-4 space-y-4">
+          <CreditsEggClassificationTable
+            :form-data="formData"
+            :table-rows="section.tableRows"
+            @update:field="({ key, value }) => (formData[key] = value)"
+          />
+          <CreditsAvesCostBreakdown
+            :form-data="formData"
+            @update:field="({ key, value }) => (formData[key] = value)"
+          />
+        </div>
+      </fieldset>
+      <!-- Sección estándar (con fields) -->
+      <fieldset
+        v-else-if="(section.fields?.length ?? 0) > 0"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="text-sm font-semibold text-foreground">
+          {{ section.title }}
+        </legend>
+        <div class="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
+        <template v-for="field in (section.fields ?? [])" :key="field.key">
           <div :class="['grid gap-2', gridColClass(field.cols)]">
             <!-- money -->
             <template v-if="field.type === 'money'">
@@ -192,7 +274,8 @@ const inputBaseClass =
             </template>
           </div>
         </template>
-      </div>
-    </fieldset>
+        </div>
+      </fieldset>
+    </template>
   </form>
 </template>
