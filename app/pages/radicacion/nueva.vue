@@ -460,35 +460,45 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Stepper -->
-    <div class="flex items-center gap-2">
-      <div
-        v-for="step in steps"
-        :key="step.num"
-        class="flex items-center gap-2"
-      >
-        <div
-          class="flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium transition-colors"
-          :class="currentStep === step.num
-            ? 'bg-primary text-primary-foreground'
-            : currentStep > step.num
-              ? 'bg-primary/20 text-primary'
-              : 'bg-muted text-muted-foreground'"
+    <!-- Stepper (cada paso es clickeable para navegar) -->
+    <div class="flex flex-wrap items-center gap-2">
+      <template v-for="(step, idx) in steps" :key="step.num">
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          :class="[
+            currentStep === step.num
+              ? 'bg-primary text-primary-foreground cursor-default'
+              : 'cursor-pointer hover:bg-muted',
+          ]"
+          :aria-current="currentStep === step.num ? 'step' : undefined"
+          :aria-label="`Ir a paso ${step.num}: ${step.title}`"
+          @click="currentStep = step.num"
         >
-          {{ step.num }}
-        </div>
-        <span
-          class="text-sm font-medium hidden sm:inline"
-          :class="currentStep === step.num ? 'text-foreground' : 'text-muted-foreground'"
-        >
-          {{ step.title }}
-        </span>
+          <div
+            class="flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold transition-colors shrink-0 ring-1 ring-border/50"
+            :class="currentStep === step.num
+              ? 'bg-primary text-primary-foreground ring-primary'
+              : currentStep > step.num
+                ? 'bg-primary/30 text-primary ring-primary/30'
+                : 'bg-background text-foreground ring-muted-foreground/40'"
+          >
+            {{ step.num }}
+          </div>
+          <span
+            class="text-sm font-semibold hidden sm:inline"
+            :class="currentStep === step.num ? 'text-primary-foreground' : 'text-foreground'"
+          >
+            {{ step.title }}
+          </span>
+        </button>
         <Icon
-          v-if="step.num < 5"
+          v-if="idx < steps.length - 1"
           name="i-lucide-chevron-right"
-          class="h-4 w-4 text-muted-foreground"
+          class="h-4 w-4 shrink-0 text-muted-foreground"
+          aria-hidden
         />
-      </div>
+      </template>
     </div>
 
     <Card>

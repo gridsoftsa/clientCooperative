@@ -16,11 +16,20 @@ const props = withDefaults(
     schema: FormSchemaInput
     templateKey?: string
     initialData?: Record<string, unknown>
+    /** Campos que vienen de configuración y no deben ser editables en radicación */
+    readOnlyFieldKeys?: string[]
   }>(),
   {
     initialData: () => ({}),
+    readOnlyFieldKeys: () => [],
   },
 )
+
+const readOnlySet = computed(() => new Set(props.readOnlyFieldKeys))
+
+function isFieldReadOnly(fieldKey: string): boolean {
+  return readOnlySet.value.has(fieldKey)
+}
 
 const emit = defineEmits<{
   'update:formData': [data: Record<string, unknown>]
@@ -42,6 +51,9 @@ function buildInitialFormData(): Record<string, unknown> {
       if (props.templateKey === 'cultivo-permanente' && data.plantas_x_ha === undefined) {
         data.plantas_x_ha = 1111
       }
+      continue
+    }
+    if (section.layout === 'referenciaInfoCeba') {
       continue
     }
     if (section.layout === 'eggsTable' && section.tableRows) {
@@ -153,6 +165,16 @@ const inputBaseClass =
           />
         </div>
       </fieldset>
+      <!-- Información de referencia (ganado ceba) -->
+      <fieldset
+        v-else-if="section.layout === 'referenciaInfoCeba'"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="sr-only">{{ section.title }}</legend>
+        <div class="mt-2">
+          <CreditsGanadoCebaReferenciaInfo :form-data="formData" />
+        </div>
+      </fieldset>
       <!-- Tabla de clasificación de huevos + desglose de costos (aves ponedoras) -->
       <fieldset
         v-else-if="section.layout === 'eggsTable' && section.tableRows"
@@ -189,6 +211,7 @@ const inputBaseClass =
               <CreditsBaseMoneyInput
                 :model-value="(formData[field.key] as number | null) ?? null"
                 :label="field.label"
+                :disabled="isFieldReadOnly(field.key)"
                 @update:model-value="(v) => (formData[field.key] = v)"
               />
             </template>
@@ -200,6 +223,7 @@ const inputBaseClass =
                 </Label>
                 <Select
                   :model-value="formData[field.key]"
+                  :disabled="isFieldReadOnly(field.key)"
                   @update:model-value="(v) => (formData[field.key] = v)"
                 >
                   <SelectTrigger :id="`field-${field.key}`" class="w-full">
@@ -243,6 +267,7 @@ const inputBaseClass =
                 :id="`field-${field.key}`"
                 v-model="formData[field.key]"
                 type="date"
+                :disabled="isFieldReadOnly(field.key)"
                 :class="inputBaseClass"
               >
             </template>
@@ -257,6 +282,7 @@ const inputBaseClass =
                 v-model.number="formData[field.key]"
                 type="number"
                 step="any"
+                :disabled="isFieldReadOnly(field.key)"
                 :class="inputBaseClass"
               >
             </template>
@@ -269,6 +295,7 @@ const inputBaseClass =
                 :id="`field-${field.key}`"
                 v-model="formData[field.key]"
                 type="text"
+                :disabled="isFieldReadOnly(field.key)"
                 :class="inputBaseClass"
               >
             </template>

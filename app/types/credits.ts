@@ -26,7 +26,7 @@ export interface FormSectionSchema {
   title: string
   fields: FormFieldSchema[]
   /** Layout alternativo: tabla de clasificación de huevos (aves ponedoras) */
-  layout?: 'eggsTable' | 'finagroTable' | 'referenciaInfo'
+  layout?: 'eggsTable' | 'finagroTable' | 'referenciaInfo' | 'referenciaInfoCeba'
   tableRows?: EggsTableRowSchema[]
 }
 

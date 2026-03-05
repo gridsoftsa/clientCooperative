@@ -10,6 +10,10 @@ import {
   getTemplateSchema,
   templateHasProductSelect,
 } from '~/constants/credits-financial-templates'
+import { getConfigFieldKeys } from '~/constants/template-config-schemas'
+
+const { cultivoPermanenteOptions, cultivoCicloCortoOptions, fetchCategories } = useTemplateCategories()
+const { fetchFlatData } = useTemplateFlatData()
 
 const props = withDefaults(
   defineProps<{
@@ -27,6 +31,14 @@ const emit = defineEmits<{
 const sectorSelected = ref<string>(props.modelValue?.sector ?? '')
 const templateSelected = ref<string>(props.modelValue?.template ?? '')
 const formData = ref<Record<string, unknown>>({ ...(props.modelValue?.data ?? {}) })
+/** Evita cargar flat data al hidratar desde props (ej. borrador guardado) */
+const isSyncingFromProps = ref(false)
+/** Incrementa al recibir flat data para forzar reinicio del formulario con los valores correctos */
+const formDataVersion = ref(0)
+/** True mientras se cargan los datos del catálogo (evita mostrar formulario vacío) */
+const loadingFlatData = ref(false)
+/** Claves de campos que vienen de configuración y deben ser solo lectura (cuando se cargó flat data) */
+const configuredFieldKeys = ref<string[]>([])
 
 const templateOptions = computed(() => {
   if (!sectorSelected.value) return []
@@ -35,7 +47,10 @@ const templateOptions = computed(() => {
 
 const currentSchema = computed<FormSchemaInput | null>(() => {
   if (!templateSelected.value) return null
-  return getTemplateSchema(templateSelected.value)
+  return getTemplateSchema(templateSelected.value, {
+    cultivoPermanente: cultivoPermanenteOptions.value,
+    cultivoCicloCorto: cultivoCicloCortoOptions.value,
+  })
 })
 
 const hasProductSelect = computed(() =>
@@ -60,10 +75,46 @@ function emitActivityTemplate() {
   })
 }
 
-watch(templateSelected, () => {
+async function loadFlatDataForTemplate(template: string, product: string | null) {
+  loadingFlatData.value = true
+  try {
+    const flatData = await fetchFlatData(template, product)
+    formData.value = { ...flatData, ...formData.value }
+    formDataVersion.value++ // Forzar que DynamicFormRenderer reciba los datos en su mount
+    // Plantillas con esquema de config (ganado-ceba, etc.): valores estandarizados siempre son solo lectura
+    configuredFieldKeys.value = getConfigFieldKeys(template)
+    emitActivityTemplate()
+  } finally {
+    loadingFlatData.value = false
+  }
+}
+
+watch(templateSelected, async (newTemplate) => {
+  if (isSyncingFromProps.value) return // No cargar al hidratar borrador
+  if (!newTemplate) {
+    formData.value = {}
+    configuredFieldKeys.value = []
+    emitActivityTemplate()
+    return
+  }
   formData.value = {}
-  emitActivityTemplate()
+  const productKey = templateHasProductSelect(newTemplate)
+    ? ((formData.value.tipo_producto ?? props.modelValue?.product) as string | null) ?? null
+    : null
+  await loadFlatDataForTemplate(newTemplate, productKey)
 })
+
+watch(
+  () => formData.value.tipo_producto,
+  async (product) => {
+    if (templateSelected.value && templateHasProductSelect(templateSelected.value) && product) {
+      const flatData = await fetchFlatData(templateSelected.value, product)
+      formData.value = { ...formData.value, ...flatData }
+      configuredFieldKeys.value = getConfigFieldKeys(templateSelected.value)
+      emitActivityTemplate()
+    }
+  },
+)
 
 watch(sectorSelected, () => {
   templateSelected.value = ''
@@ -72,12 +123,19 @@ watch(sectorSelected, () => {
 watch(
   () => props.modelValue,
   (val) => {
+    isSyncingFromProps.value = true
     sectorSelected.value = val?.sector ?? ''
     templateSelected.value = val?.template ?? ''
     formData.value = { ...(val?.data ?? {}) }
+    configuredFieldKeys.value = val?.template ? getConfigFieldKeys(val.template) : []
+    nextTick(() => { isSyncingFromProps.value = false })
   },
   { immediate: true },
 )
+
+onMounted(() => {
+  fetchCategories()
+})
 </script>
 
 <template>
@@ -136,11 +194,17 @@ watch(
     </div>
 
     <div v-if="currentSchema" class="rounded-lg border border-border p-4">
+      <div v-if="loadingFlatData" class="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+        <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin" />
+        Cargando valores configurados...
+      </div>
       <CreditsDynamicFormRenderer
-        :key="templateSelected"
+        v-else
+        :key="`${templateSelected}-${formDataVersion}`"
         :schema="currentSchema"
         :template-key="templateSelected"
         :initial-data="formData"
+        :read-only-field-keys="configuredFieldKeys"
         @update:form-data="setFormData"
       />
     </div>

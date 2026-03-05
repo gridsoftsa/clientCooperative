@@ -182,6 +182,12 @@ export const navMenu: NavMenu[] = [
             icon: 'i-lucide-circle',
             link: '/settings/display',
           },
+          {
+            title: 'Configurar plantillas',
+            icon: 'i-lucide-circle',
+            link: '/settings/template-config',
+            permission: 'template-config.view',
+          },
         ],
       },
     ],

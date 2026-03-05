@@ -187,19 +187,25 @@ function schemaGanadoCeba(): FormSchemaInput {
         key: 'valores',
         title: 'Valores estandarizados',
         fields: [
-          { key: 'precio_compra_animal', label: 'Precio de compra x animal', type: 'money', cols: 1 },
+          { key: 'precio_compra_animal', label: 'Precio de compra por animal', type: 'money', cols: 1 },
+          { key: 'precio_kg_animal', label: 'Precio del kg x animal', type: 'money', meta: 'Para fórmula de peso inicial', cols: 1 },
           {
             key: 'peso_kg_inicial',
             label: 'Peso en kg inicial',
             type: 'computed',
-            meta: 'Solo lectura (precio compra / precio kg)',
+            meta: 'Solo lectura (precio compra ÷ precio kg)',
             formulaKey: 'ganado_ceba_peso_inicial',
             cols: 1,
           },
           { key: 'peso_kg_final', label: 'Peso en kg final para la venta', type: 'number', meta: 'Decimal', cols: 1 },
-          { key: 'precio_kg_animal', label: 'Precio del kg x animal', type: 'money', cols: 1 },
           { key: 'costo_por_kg', label: 'Costo por kg', type: 'money', cols: 1 },
         ],
+      },
+      {
+        key: 'informacion_referencia',
+        title: 'Información de referencia',
+        layout: 'referenciaInfoCeba',
+        fields: [],
       },
     ],
   }
@@ -2264,10 +2270,38 @@ export function computeFormula(formulaKey: string, formData: Record<string, unkn
   return fn ? fn(formData) : null
 }
 
+/** Opciones de categoría para plantillas con selector de producto */
+export interface CategoryOption {
+  value: string
+  label: string
+}
+
 /** Obtiene el schema de formulario para una plantilla */
-export function getTemplateSchema(templateKey: string): FormSchemaInput | null {
+export function getTemplateSchema(
+  templateKey: string,
+  productOptions?: { cultivoPermanente?: CategoryOption[]; cultivoCicloCorto?: CategoryOption[] },
+): FormSchemaInput | null {
   const builder = schemaBuilders[templateKey]
-  return builder ? builder() : null
+  const schema = builder ? builder() : null
+  if (!schema || !productOptions) return schema
+
+  const opts =
+    templateKey === 'cultivo-permanente'
+      ? productOptions.cultivoPermanente
+      : templateKey === 'cultivo-ciclo-corto'
+        ? productOptions.cultivoCicloCorto
+        : undefined
+
+  if (!opts?.length) return schema
+
+  const merged = JSON.parse(JSON.stringify(schema)) as FormSchemaInput
+  for (const section of merged.sections) {
+    const field = section.fields?.find((f) => f.key === 'tipo_producto')
+    if (field && field.type === 'select') {
+      field.options = opts.map((o) => ({ value: o.value, label: o.label }))
+    }
+  }
+  return merged
 }
 
 /** Indica si la plantilla tiene selector de producto (para mostrar en UI) */
