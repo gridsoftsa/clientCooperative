@@ -1,20 +1,11 @@
 <script setup lang="ts">
 /**
- * Información de referencia para cultivos permanentes:
- * - Nota: 3 primeros años son pérdidas
- * - Campo editable: Plantas x HA
+ * Información de referencia para cultivos permanentes.
+ * Solo lectura: los datos vienen de la configuración de la plantilla.
  */
 defineProps<{
   formData: Record<string, unknown>
 }>()
-
-const emit = defineEmits<{
-  'update:field': [payload: { key: string; value: unknown }]
-}>()
-
-function setField(key: string, value: unknown) {
-  emit('update:field', { key, value })
-}
 </script>
 
 <template>
@@ -27,14 +18,11 @@ function setField(key: string, value: unknown) {
     </p>
     <div class="flex flex-wrap items-center justify-center gap-3">
       <div class="flex items-center gap-2">
-        <input
-          type="number"
-          step="0.001"
-          min="0"
-          :value="formData.plantas_x_ha ?? 1111"
-          class="h-9 w-28 rounded-md border-2 border-emerald-500 bg-background px-3 py-1 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring"
-          @input="setField('plantas_x_ha', ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
+        <div
+          class="flex h-9 w-28 items-center justify-end rounded-md border border-input bg-muted/30 px-3 py-1 text-right text-sm tabular-nums"
         >
+          {{ formData.plantas_x_ha ?? 1111 }}
+        </div>
         <span class="text-sm font-medium">
           Plantas x HA
         </span>

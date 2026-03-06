@@ -1174,48 +1174,6 @@ function schemaCultivoPermanente(): FormSchemaInput {
   return {
     sections: [
       {
-        key: 'resumen_utilidad',
-        title: 'Resumen de utilidad',
-        fields: [
-          {
-            key: 'total_utilidad_cultivo_permanente',
-            label: 'TOTAL UTILIDAD',
-            type: 'computed',
-            meta: 'Solo lectura (ventas anual - costos anual)',
-            formulaKey: 'cultivo_permanente_total_utilidad',
-            formulaFormat: 'money',
-            cols: 1,
-          },
-          {
-            key: 'total_utilidad_mensual_cultivo_permanente',
-            label: 'TOTAL UTILIDAD MENSUAL',
-            type: 'computed',
-            meta: 'Solo lectura (total utilidad ÷ duración meses)',
-            formulaKey: 'cultivo_permanente_total_utilidad_mensual',
-            formulaFormat: 'money',
-            cols: 1,
-          },
-          {
-            key: 'ventas_anual_cultivo_permanente',
-            label: 'VENTAS ANUAL',
-            type: 'computed',
-            meta: 'Solo lectura (kg/ha × hectáreas × valor kg)',
-            formulaKey: 'cultivo_permanente_ventas_anual',
-            formulaFormat: 'money',
-            cols: 1,
-          },
-          {
-            key: 'costos_anual_cultivo_permanente',
-            label: 'COSTOS ANUAL',
-            type: 'computed',
-            meta: 'Solo lectura (ventas × % costos)',
-            formulaKey: 'cultivo_permanente_costos_anual',
-            formulaFormat: 'money',
-            cols: 1,
-          },
-        ],
-      },
-      {
         key: 'producto',
         title: 'Producto y superficie',
         fields: [
