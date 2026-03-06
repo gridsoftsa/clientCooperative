@@ -59,7 +59,7 @@ export const sectorsConfig: SectorConfig[] = [
       { value: 'cerdos-ceba', label: 'Cerdos de Ceba' },
       { value: 'pollos-engorde', label: 'Pollos de Engorde' },
       { value: 'aves-ponedoras', label: 'Aves Ponedoras (Huevos)' },
-      { value: 'peces-tilapia', label: 'Peces (Tilapia)' },
+      { value: 'peces-tilapia', label: 'Peces (Tilapia, Cachama, Otros)' },
     ],
   },
   {
@@ -945,10 +945,24 @@ function schemaAvesPonedoras(): FormSchemaInput {
   }
 }
 
-/** Plantilla: Peces Tilapia */
+/** Plantilla: Peces (Tilapia, Cachama, Otros) */
 function schemaPecesTilapia(): FormSchemaInput {
   return {
     sections: [
+      {
+        key: 'tipo_pez',
+        title: 'Tipo de pez',
+        fields: [
+          {
+            key: 'tipo_producto',
+            label: 'Tipo de pez',
+            type: 'select',
+            options: [{ value: 'tilapia', label: 'Tilapia' }, { value: 'cachama', label: 'Cachama' }, { value: 'otra', label: 'Otra' }],
+            required: true,
+            cols: 1,
+          },
+        ],
+      },
       {
         key: 'resumen_utilidad',
         title: 'Resumen de utilidad',
@@ -1976,22 +1990,26 @@ function computeAvesPonedorasTotalUtilidadMensual(data: Record<string, unknown>)
   return computeAvesPonedorasTotalUtilidad(data)
 }
 
-/**
- * Cultivo Permanente: cant_kg_hectarea = productividad según edad (tabla FINAGRO).
- * edad 1 → finagro_1_kg | edad 2 → finagro_2_kg | edad 3 → finagro_3_kg
- * edad 4 → finagro_4_kg | edad 5-18 → finagro_5_17_kg | edad 19+ → finagro_18_20_kg
- */
-function computeCultivoPermanenteKgHectarea(data: Record<string, unknown>): number | null {
+/** Lookup en finagro_ranges: encuentra el rango donde edad_min <= edad <= edad_max */
+function findFinagroRange(data: Record<string, unknown>): { pct_costos: number; kg_hectarea: number | null } | null {
   const edad = Number(data.edad_cultivo ?? 0)
   if (!Number.isFinite(edad) || edad < 1) return null
-  let val: number | null = null
-  if (edad === 1) val = getFinagroNum(data.finagro_1_kg)
-  else if (edad === 2) val = getFinagroNum(data.finagro_2_kg)
-  else if (edad === 3) val = getFinagroNum(data.finagro_3_kg)
-  else if (edad === 4) val = getFinagroNum(data.finagro_4_kg)
-  else if (edad <= 18) val = getFinagroNum(data.finagro_5_17_kg)
-  else val = getFinagroNum(data.finagro_18_20_kg)
-  return val
+  const ranges = (data.finagro_ranges as Array<{ edad_min: number; edad_max: number; pct_costos: number; kg_hectarea?: number | null }>) ?? []
+  const range = ranges.find((r: { edad_min: number; edad_max: number }) => edad >= r.edad_min && edad <= r.edad_max)
+  if (!range) return null
+  return {
+    pct_costos: Number(range.pct_costos ?? 0),
+    kg_hectarea: range.kg_hectarea != null && range.kg_hectarea !== '' ? Number(range.kg_hectarea) : null,
+  }
+}
+
+/**
+ * Cultivo Permanente: cant_kg_hectarea = productividad según edad (tabla FINAGRO por producto).
+ * Lookup en finagro_ranges por edad_cultivo.
+ */
+function computeCultivoPermanenteKgHectarea(data: Record<string, unknown>): number | null {
+  const r = findFinagroRange(data)
+  return r?.kg_hectarea ?? null
 }
 
 function getFinagroNum(v: unknown): number | null {
@@ -2001,21 +2019,12 @@ function getFinagroNum(v: unknown): number | null {
 }
 
 /**
- * Cultivo Permanente: pct_costos = % costo x HA según edad (tabla FINAGRO).
- * edad 1 → finagro_1_pct | edad 2 → finagro_2_pct | edad 3 → finagro_3_pct
- * edad 4 → finagro_4_pct | edad 5-17 → finagro_5_17_pct | edad 18+ → finagro_18_20_pct
+ * Cultivo Permanente: pct_costos = % costo x HA según edad (tabla FINAGRO por producto).
+ * Lookup en finagro_ranges por edad_cultivo.
  */
 function computeCultivoPermanentePctCostos(data: Record<string, unknown>): number | null {
-  const edad = Number(data.edad_cultivo ?? 0)
-  if (!Number.isFinite(edad) || edad < 1) return null
-  let val: number | null = null
-  if (edad === 1) val = getFinagroNum(data.finagro_1_pct)
-  else if (edad === 2) val = getFinagroNum(data.finagro_2_pct)
-  else if (edad === 3) val = getFinagroNum(data.finagro_3_pct)
-  else if (edad === 4) val = getFinagroNum(data.finagro_4_pct)
-  else if (edad <= 17) val = getFinagroNum(data.finagro_5_17_pct)
-  else val = getFinagroNum(data.finagro_18_20_pct)
-  return val
+  const r = findFinagroRange(data)
+  return r?.pct_costos ?? null
 }
 
 /** Cultivo Permanente: valor_total = cant_kg_hectarea × valor_unitario_kg × cantidad_hectareas */
@@ -2279,7 +2288,7 @@ export interface CategoryOption {
 /** Obtiene el schema de formulario para una plantilla */
 export function getTemplateSchema(
   templateKey: string,
-  productOptions?: { cultivoPermanente?: CategoryOption[]; cultivoCicloCorto?: CategoryOption[] },
+  productOptions?: { cultivoPermanente?: CategoryOption[]; cultivoCicloCorto?: CategoryOption[]; pecesTipo?: CategoryOption[] },
 ): FormSchemaInput | null {
   const builder = schemaBuilders[templateKey]
   const schema = builder ? builder() : null
@@ -2290,7 +2299,9 @@ export function getTemplateSchema(
       ? productOptions.cultivoPermanente
       : templateKey === 'cultivo-ciclo-corto'
         ? productOptions.cultivoCicloCorto
-        : undefined
+        : templateKey === 'peces-tilapia'
+          ? productOptions.pecesTipo
+          : undefined
 
   if (!opts?.length) return schema
 
@@ -2306,5 +2317,5 @@ export function getTemplateSchema(
 
 /** Indica si la plantilla tiene selector de producto (para mostrar en UI) */
 export function templateHasProductSelect(templateKey: string): boolean {
-  return ['cultivo-permanente', 'cultivo-ciclo-corto'].includes(templateKey)
+  return ['cultivo-permanente', 'cultivo-ciclo-corto', 'peces-tilapia'].includes(templateKey)
 }

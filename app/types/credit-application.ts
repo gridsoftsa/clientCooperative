@@ -96,6 +96,8 @@ export interface CreditApplicationForm {
   agency_id: number
   status: 'Draft' | 'Submitted'
   co_debtors: ApplicantForm[]
+  /** Número de radicado externo (sistema externo, ej. Finagro) - obligatorio */
+  numero_radicado_externo: string
 }
 
 export const emptyApplicant = (): ApplicantForm => ({

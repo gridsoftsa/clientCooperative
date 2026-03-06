@@ -5,6 +5,11 @@ import {
   EXCLUDED_CONFIG_KEYS,
   type TemplateConfigField,
 } from '~/constants/template-config-schemas'
+import {
+  AVES_COST_BREAKDOWN,
+  AVES_MORTALITY_KEY,
+  AVES_MORTALITY_PCT,
+} from '~/constants/aves-cost-breakdown'
 
 interface FlatDataRecord {
   id: number
@@ -70,7 +75,16 @@ const visibleConfigEntries = computed(() =>
 )
 
 function handleSave() {
-  emit('save', { ...editedData.value })
+  let data = { ...editedData.value }
+  if (props.record.template_key === 'aves-ponedoras') {
+    for (const group of AVES_COST_BREAKDOWN) {
+      for (const item of group.items) {
+        if (data[item.key] === undefined) data[item.key] = item.pct
+      }
+    }
+    if (data[AVES_MORTALITY_KEY] === undefined) data[AVES_MORTALITY_KEY] = AVES_MORTALITY_PCT
+  }
+  emit('save', data)
   editing.value = false
 }
 
@@ -128,15 +142,49 @@ function handleCancel() {
 
     <!-- Con schema (ganado-ceba, etc.): orden, tipos, fórmula -->
     <template v-if="schema">
-      <div
-        v-for="section in schema.sections"
-        :key="section.key"
-        class="space-y-3"
-      >
-        <h5 v-if="section.title" class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          {{ section.title }}
-        </h5>
-        <div class="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-end">
+      <template v-for="section in schema.sections" :key="section.key">
+        <!-- Tabla desglose de costos (aves-ponedoras) -->
+        <div v-if="section.layout === 'avesCostBreakdownTable'" class="space-y-3">
+          <h5 v-if="section.title" class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {{ section.title }}
+          </h5>
+          <SettingsAvesCostBreakdownConfig
+            :edited-data="editedData"
+            :editing="editing"
+            :can-edit="canEdit"
+            @update:field="({ key, value }) => (editedData[key] = value)"
+          />
+        </div>
+        <!-- Tabla FINAGRO (cultivo-permanente) -->
+        <div v-else-if="section.layout === 'cultivoPermanenteFinagroTable'" class="space-y-3">
+          <h5 v-if="section.title" class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {{ section.title }}
+          </h5>
+          <SettingsCultivoPermanenteFinagroConfig
+            :edited-data="editedData"
+            :editing="editing"
+            :can-edit="canEdit"
+            @update:field="({ key, value }) => (editedData[key] = value)"
+          />
+        </div>
+        <!-- Información de referencia (cultivo-permanente) -->
+        <div v-else-if="section.layout === 'cultivoPermanenteReferencia'" class="space-y-3">
+          <h5 v-if="section.title" class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {{ section.title }}
+          </h5>
+          <SettingsCultivoPermanenteReferenciaConfig
+            :edited-data="editedData"
+            :editing="editing"
+            :can-edit="canEdit"
+            @update:field="({ key, value }) => (editedData[key] = value)"
+          />
+        </div>
+        <!-- Sección estándar (grid de campos) -->
+        <div v-else class="space-y-3">
+          <h5 v-if="section.title" class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {{ section.title }}
+          </h5>
+          <div class="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-end">
           <template v-for="field in section.fields" :key="field.key">
             <!-- Campo fórmula (solo lectura) -->
             <div v-if="field.type === 'formula'" class="flex flex-col gap-1 min-w-0">
@@ -200,7 +248,8 @@ function handleCancel() {
             </div>
           </template>
         </div>
-      </div>
+        </div>
+      </template>
     </template>
 
     <!-- Sin schema: fallback genérico -->

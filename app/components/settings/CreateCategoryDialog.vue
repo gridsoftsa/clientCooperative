@@ -23,6 +23,7 @@ const form = ref({
 const templateLabel = computed(() => {
   if (props.templateKey === 'cultivo-permanente') return 'Cultivo Permanente'
   if (props.templateKey === 'cultivo-ciclo-corto') return 'Cultivo Ciclo Corto'
+  if (props.templateKey === 'peces-tilapia') return 'Peces'
   return props.templateKey ?? ''
 })
 
@@ -61,7 +62,7 @@ async function handleSubmit() {
   saving.value = true
   try {
     await $csrf()
-    await $api('/template-categories', {
+    const res = await $api<{ data: unknown; message?: string }>('/template-categories', {
       method: 'POST',
       body: {
         template_key: props.templateKey,
@@ -69,7 +70,7 @@ async function handleSubmit() {
         code: form.value.code.trim().toLowerCase().replace(/\s+/g, '-'),
       },
     })
-    toast.success('Categoría creada correctamente')
+    toast.success(res?.message ?? 'Categoría creada correctamente')
     resetForm()
     emit('update:open', false)
     emit('created')

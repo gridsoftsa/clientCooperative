@@ -23,7 +23,7 @@ function setField(key: string, value: unknown) {
       Información de referencia
     </h4>
     <p class="mb-4 text-center text-sm text-muted-foreground">
-      3 primeros años son pérdidas
+      {{ formData.descripcion ?? '3 primeros años son pérdidas' }}
     </p>
     <div class="flex flex-wrap items-center justify-center gap-3">
       <div class="flex items-center gap-2">

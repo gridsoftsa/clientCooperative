@@ -43,6 +43,28 @@ export function parsePesosInput(input: string): number | undefined {
   return Number.isNaN(num) || num < 0 ? undefined : num
 }
 
+/**
+ * Parsea decimales que aceptan coma (0,4) o punto (0.4).
+ * Uso: inputs de porcentajes y números decimales simples.
+ */
+export function parseDecimalInput(input: string): number | null {
+  const trimmed = String(input).trim().replace(',', '.')
+  if (trimmed === '') return null
+  const num = parseFloat(trimmed)
+  return Number.isFinite(num) ? num : null
+}
+
+/**
+ * Formato para display de decimales: usa coma (es-CO).
+ * Ej: 0.4 → "0,4", 70.73 → "70,73"
+ */
+export function formatDecimalDisplay(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return ''
+  const rounded = Math.round(Number(value) * 100) / 100
+  const s = rounded.toString()
+  return s.includes('.') ? s.replace('.', ',') : s
+}
+
 /** En inputs de pesos: solo permite dígitos, punto y coma. Uso: @keydown="onKeydownPesosOnly" */
 export function onKeydownPesosOnly(e: KeyboardEvent) {
   if (e.ctrlKey || e.metaKey) return
@@ -55,6 +77,8 @@ export function usePesosFormat() {
   return {
     formatPesos,
     parsePesosInput,
+    parseDecimalInput,
+    formatDecimalDisplay,
     filterPesosChars,
     onKeydownPesosOnly,
   }

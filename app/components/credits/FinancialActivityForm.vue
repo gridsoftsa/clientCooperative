@@ -12,7 +12,7 @@ import {
 } from '~/constants/credits-financial-templates'
 import { getConfigFieldKeys } from '~/constants/template-config-schemas'
 
-const { cultivoPermanenteOptions, cultivoCicloCortoOptions, fetchCategories } = useTemplateCategories()
+const { cultivoPermanenteOptions, cultivoCicloCortoOptions, pecesTipoOptions, fetchCategories } = useTemplateCategories()
 const { fetchFlatData } = useTemplateFlatData()
 
 const props = withDefaults(
@@ -50,6 +50,7 @@ const currentSchema = computed<FormSchemaInput | null>(() => {
   return getTemplateSchema(templateSelected.value, {
     cultivoPermanente: cultivoPermanenteOptions.value,
     cultivoCicloCorto: cultivoCicloCortoOptions.value,
+    pecesTipo: pecesTipoOptions.value,
   })
 })
 
@@ -189,7 +190,7 @@ onMounted(() => {
         v-if="hasProductSelect"
         class="mt-3 text-xs text-muted-foreground"
       >
-        La plantilla incluye selector de producto (ej. Café, Cacao, Bananito).
+        La plantilla incluye selector (ej. Café, Cacao, Tipo de pez).
       </p>
     </div>
 

@@ -31,6 +31,7 @@ const form = ref<CreditApplicationForm>({
   agency_id: 0,
   status: 'Draft',
   co_debtors: [],
+  numero_radicado_externo: '',
 })
 
 const steps = [
@@ -286,6 +287,10 @@ async function uploadAllDocuments(applicationId: number, application: { applicat
 }
 
 async function saveDraft() {
+  if (!form.value.numero_radicado_externo?.trim()) {
+    toast.error('El número de radicado externo es obligatorio')
+    return
+  }
   if (!canProceedStep1()) {
     toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
     return
@@ -326,6 +331,10 @@ async function saveDraft() {
 }
 
 async function submitApplication() {
+  if (!form.value.numero_radicado_externo?.trim()) {
+    toast.error('El número de radicado externo es obligatorio')
+    return
+  }
   if (!canProceedStep1()) {
     toast.error('Completa los datos obligatorios del deudor')
     return
@@ -393,6 +402,27 @@ onMounted(() => {
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>
+    </div>
+
+    <!-- Número de radicado externo (parte superior, obligatorio) -->
+    <div class="rounded-xl border bg-card p-4">
+      <div class="space-y-1.5 max-w-md">
+        <Label for="numero_radicado_externo" class="text-sm font-semibold">
+          Número de radicado externo *
+        </Label>
+        <Input
+          id="numero_radicado_externo"
+          v-model="form.numero_radicado_externo"
+          type="text"
+          maxlength="100"
+          placeholder="Ej: RAD-EXT-2025-001234"
+          required
+          class="font-mono"
+        />
+        <p class="text-xs text-muted-foreground">
+          Referencia del radicado en sistemas externos (Finagro, etc.). Obligatorio para guardar o enviar.
+        </p>
+      </div>
     </div>
 
     <!-- Resumen financiero (encima de los pasos) -->

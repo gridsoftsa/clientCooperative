@@ -5,8 +5,15 @@
  * Se muestra en un Collapsible para no ocupar espacio si no es necesario.
  */
 import { computeFormula } from '~/constants/credits-financial-templates'
+import {
+  AVES_COST_BREAKDOWN,
+  AVES_MORTALITY_KEY,
+  AVES_MORTALITY_PCT,
+  getAvesCostBreakdownFieldKeys,
+} from '~/constants/aves-cost-breakdown'
+import { formatDecimalDisplay, parseDecimalInput, onKeydownPesosOnly } from '~/composables/usePesosFormat'
 
-defineProps<{
+const { formData } = defineProps<{
   formData: Record<string, unknown>
 }>()
 
@@ -14,79 +21,29 @@ const emit = defineEmits<{
   'update:field': [payload: { key: string; value: unknown }]
 }>()
 
+const ALL_PCT_KEYS = getAvesCostBreakdownFieldKeys()
+
 function setField(key: string, value: unknown) {
-  emit('update:field', { key, value })
+  let finalValue = value
+  if (value != null && typeof value === 'number' && Number.isFinite(value)) {
+    const sumOthers = ALL_PCT_KEYS.filter(k => k !== key).reduce(
+      (acc, k) => acc + safePct(formData[k], getDefaultPct(k)),
+      0,
+    )
+    const maxAllowed = Math.max(0, 100 - sumOthers)
+    finalValue = Math.min(value, maxAllowed)
+  }
+  emit('update:field', { key, value: finalValue })
 }
 
-/** Porcentajes SIPSA pequeño productor Santander (editables) */
-interface CostItem {
-  key: string
-  label: string
-  pct: number
-  meta?: string
+function getDefaultPct(key: string): number {
+  if (key === AVES_MORTALITY_KEY) return AVES_MORTALITY_PCT
+  for (const g of AVES_COST_BREAKDOWN) {
+    const item = g.items.find(i => i.key === key)
+    if (item) return item.pct
+  }
+  return 0
 }
-interface CostGroup {
-  section: string
-  headerClass: string
-  items: CostItem[]
-}
-const COST_BREAKDOWN: CostGroup[] = [
-  {
-    section: 'Costos directos',
-    headerClass: 'bg-emerald-100 dark:bg-emerald-900/30',
-    items: [
-      { key: 'cost_pct_pollita', label: 'Pollita de 1 día', pct: 2.8 },
-      { key: 'cost_pct_instalacion', label: 'Instalación de galpones', pct: 0.8 },
-      { key: 'cost_pct_desinfeccion', label: 'Desinfección de galpones', pct: 0.2 },
-      { key: 'cost_pct_materiales_cama', label: 'Materiales Cama', meta: 'Viruta, tamos, cascarilla', pct: 0.4 },
-      { key: 'cost_pct_calefaccion', label: 'Calefacción Galpones', pct: 0.2 },
-    ],
-  },
-  {
-    section: 'Fase de Levante',
-    headerClass: 'bg-slate-200 dark:bg-slate-700',
-    items: [
-      { key: 'cost_pct_levante_nutricion', label: 'Nutrición', pct: 9.38 },
-      { key: 'cost_pct_levante_sanidad', label: 'Sanidad', pct: 1.7 },
-      { key: 'cost_pct_levante_vacunas', label: 'Vacunas', pct: 0.4 },
-      { key: 'cost_pct_levante_medicamento', label: 'Medicamento', pct: 0.02 },
-      { key: 'cost_pct_levante_otros', label: 'Otros Insumos', pct: 1.0 },
-    ],
-  },
-  {
-    section: 'Fase de Producción',
-    headerClass: 'bg-orange-100 dark:bg-orange-900/30',
-    items: [
-      { key: 'cost_pct_prod_nutricion', label: 'Nutrición', pct: 70.73 },
-      { key: 'cost_pct_prod_sanidad', label: 'Sanidad', pct: 0.3 },
-      { key: 'cost_pct_prod_vacunas', label: 'Vacunas', pct: 0.1 },
-      { key: 'cost_pct_prod_medicamento', label: 'Medicamento', pct: 0.07 },
-      { key: 'cost_pct_prod_otros', label: 'Otros Insumos', pct: 0.2 },
-    ],
-  },
-  {
-    section: 'Mano de Obra',
-    headerClass: 'bg-blue-100 dark:bg-blue-900/30',
-    items: [
-      { key: 'cost_pct_mano_directa', label: 'Directa', pct: 4.7 },
-      { key: 'cost_pct_mano_ocasional', label: 'Ocasional (Jornales)', pct: 0.3 },
-    ],
-  },
-  {
-    section: 'Costos Indirectos',
-    headerClass: 'bg-yellow-100 dark:bg-yellow-900/30',
-    items: [
-      { key: 'cost_pct_ind_asistencia', label: 'Asistencia Técnica', pct: 0.3 },
-      { key: 'cost_pct_ind_cartones', label: 'Cartones para huevo', pct: 1.3 },
-      { key: 'cost_pct_ind_otros', label: 'Otros Costos', pct: 0.1 },
-      { key: 'cost_pct_ind_transporte', label: 'Transporte', pct: 2.3 },
-      { key: 'cost_pct_ind_imprevistos', label: 'Imprevistos', pct: 2.5 },
-    ],
-  },
-]
-
-const MORTALITY_KEY = 'cost_pct_ajuste_mortalidad'
-const MORTALITY_PCT = 1.0
 
 /** Valor Total = costos_mensuales × (pct_participacion / 100) */
 function valorTotal(costosMensuales: number, pctParticipacion: number): number {
@@ -108,6 +65,30 @@ function formatMoney(value: number): string {
 function safePct(val: unknown, defaultPct: number): number {
   const n = Number(val)
   return Number.isFinite(n) ? n : defaultPct
+}
+
+function groupPctSum(group: { items: { key: string; pct: number }[] }): number {
+  return group.items.reduce((acc, item) => acc + safePct(formData[item.key], item.pct), 0)
+}
+
+function groupValorTotal(group: { items: { key: string; pct: number }[] }): number {
+  const costos = computeFormula('aves_ponedoras_costos', formData) ?? 0
+  return group.items.reduce(
+    (acc, item) => acc + valorTotal(costos, safePct(formData[item.key], item.pct)),
+    0,
+  )
+}
+
+function totalPctSum(): number {
+  return ALL_PCT_KEYS.reduce((acc, k) => acc + safePct(formData[k], getDefaultPct(k)), 0)
+}
+
+function totalValorSum(): number {
+  const costos = computeFormula('aves_ponedoras_costos', formData) ?? 0
+  return ALL_PCT_KEYS.reduce(
+    (acc, k) => acc + valorTotal(costos, safePct(formData[k], getDefaultPct(k))),
+    0,
+  )
 }
 </script>
 
@@ -148,57 +129,88 @@ function safePct(val: unknown, defaultPct: number): number {
             </tr>
           </thead>
           <tbody>
-            <template v-for="group in COST_BREAKDOWN" :key="group.section">
-              <tr :class="group.headerClass">
-                <td class="border border-border px-3 py-1.5 font-semibold">
-                  {{ group.section }}
-                </td>
-                <td colspan="2" class="border border-border" />
-              </tr>
+            <template v-for="group in AVES_COST_BREAKDOWN" :key="group.section">
+              <!-- Grupo con un solo ítem: fila única con color (ej. Pollita de 1 día) -->
               <tr
-                v-for="item in group.items"
-                :key="`${group.section}-${item.label}`"
-                class="bg-emerald-50/50 dark:bg-emerald-950/10"
+                v-if="group.items.length === 1"
+                :key="`${group.section}-single`"
+                :class="group.headerClass"
               >
-                <td class="border border-border pl-6 pr-3 py-1.5">
-                  {{ item.label }}
-                  <span
-                    v-if="item.meta"
-                    class="ml-1 text-xs text-muted-foreground"
-                  >
-                    ({{ item.meta }})
-                  </span>
+                <td class="border border-border px-3 py-2 font-semibold">
+                  {{ group.items[0]!.label }}
                 </td>
-                <td class="border border-border px-3 py-1.5 text-right tabular-nums">
-                  {{ formatMoney(valorTotal(computeFormula('aves_ponedoras_costos', formData) ?? 0, safePct(formData[item.key], item.pct))) }}
+                <td class="border border-border px-3 py-2 text-right tabular-nums">
+                  {{ formatMoney(valorTotal(computeFormula('aves_ponedoras_costos', formData) ?? 0, safePct(formData[group.items[0]!.key], group.items[0]!.pct))) }}
                 </td>
                 <td class="border border-border p-1">
                   <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    :value="formData[item.key] ?? item.pct"
+                    type="text"
+                    inputmode="decimal"
+                    :value="formatDecimalDisplay((formData[group.items[0]!.key] ?? group.items[0]!.pct) as number)"
                     class="h-8 w-full min-w-0 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
-                    @input="setField(item.key, ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
+                    @input="(e) => setField(group.items[0]!.key, parseDecimalInput((e.target as HTMLInputElement).value))"
+                    @keydown="onKeydownPesosOnly"
                   >
                 </td>
               </tr>
+              <!-- Grupo con varios ítems: encabezado + filas (ej. Instalación, Fase de Levante) -->
+              <template v-else>
+                <tr :class="group.headerClass">
+                  <td class="border border-border px-3 py-1.5 font-semibold">
+                    {{ group.section }}
+                  </td>
+                  <td class="border border-border px-3 py-1.5 text-right tabular-nums font-bold">
+                    {{ formatMoney(groupValorTotal(group)) }}
+                  </td>
+                  <td class="border border-border px-3 py-1.5 text-right tabular-nums font-bold">
+                    {{ groupPctSum(group).toFixed(2) }}%
+                  </td>
+                </tr>
+                <tr
+                  v-for="item in group.items"
+                  :key="`${group.section}-${item.key}`"
+                  class="bg-emerald-50/50 dark:bg-emerald-950/10"
+                >
+                  <td class="border border-border pl-6 pr-3 py-1.5">
+                    {{ item.label }}
+                    <span
+                      v-if="item.meta"
+                      class="ml-1 text-xs text-muted-foreground"
+                    >
+                      ({{ item.meta }})
+                    </span>
+                  </td>
+                  <td class="border border-border px-3 py-1.5 text-right tabular-nums">
+                    {{ formatMoney(valorTotal(computeFormula('aves_ponedoras_costos', formData) ?? 0, safePct(formData[item.key], item.pct))) }}
+                  </td>
+                  <td class="border border-border p-1">
+                    <input
+                      type="text"
+                      inputmode="decimal"
+                      :value="formatDecimalDisplay((formData[item.key] ?? item.pct) as number)"
+                      class="h-8 w-full min-w-0 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
+                      @input="(e) => setField(item.key, parseDecimalInput((e.target as HTMLInputElement).value))"
+                      @keydown="onKeydownPesosOnly"
+                    >
+                  </td>
+                </tr>
+              </template>
             </template>
             <tr class="bg-emerald-100 dark:bg-emerald-900/40">
               <td class="border border-border px-3 py-2 font-semibold">
                 Ajuste de mortalidad
               </td>
               <td class="border border-border px-3 py-2 text-right tabular-nums">
-                {{ formatMoney(valorTotal(computeFormula('aves_ponedoras_costos', formData) ?? 0, safePct(formData[MORTALITY_KEY], MORTALITY_PCT))) }}
+                {{ formatMoney(valorTotal(computeFormula('aves_ponedoras_costos', formData) ?? 0, safePct(formData[AVES_MORTALITY_KEY], AVES_MORTALITY_PCT))) }}
               </td>
               <td class="border border-border p-1">
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  :value="formData[MORTALITY_KEY] ?? MORTALITY_PCT"
+                  type="text"
+                  inputmode="decimal"
+                  :value="formatDecimalDisplay((formData[AVES_MORTALITY_KEY] ?? AVES_MORTALITY_PCT) as number)"
                   class="h-8 w-full min-w-0 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
-                  @input="setField(MORTALITY_KEY, ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
+                  @input="(e) => setField(AVES_MORTALITY_KEY, parseDecimalInput((e.target as HTMLInputElement).value))"
+                  @keydown="onKeydownPesosOnly"
                 >
               </td>
             </tr>
@@ -207,10 +219,10 @@ function safePct(val: unknown, defaultPct: number): number {
                 TOTAL
               </td>
               <td class="border border-border px-3 py-2 text-right tabular-nums">
-                {{ formatMoney(computeFormula('aves_ponedoras_costos', formData) ?? 0) }}
+                {{ formatMoney(totalValorSum()) }}
               </td>
               <td class="border border-border px-3 py-2 text-right tabular-nums">
-                100.00%
+                {{ Math.min(totalPctSum(), 100).toFixed(2) }}%
               </td>
             </tr>
           </tbody>

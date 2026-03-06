@@ -1,28 +1,36 @@
 <script setup lang="ts">
 /**
  * Tabla de referencia FINAGRO: % costos promedio anuales por 1 HA para Santander.
- * Valores editables.
+ * Renderiza dinámicamente desde finagro_ranges (según producto: Cacao, Café, etc.).
+ * Solo lectura: los datos vienen de la configuración de la plantilla.
  */
-defineProps<{
+import { formatDecimalDisplay } from '~/composables/usePesosFormat'
+
+interface FinagroRange {
+  edad_min: number
+  edad_max: number
+  label?: string
+  pct_costos: number
+  kg_hectarea: number | null
+}
+
+const props = defineProps<{
   formData: Record<string, unknown>
 }>()
 
-const emit = defineEmits<{
-  'update:field': [payload: { key: string; value: unknown }]
-}>()
+/** Rangos desde formData.finagro_ranges (viene del API por producto). */
+const ranges = computed(() => {
+  const arr = (props.formData.finagro_ranges ?? []) as FinagroRange[]
+  if (!Array.isArray(arr) || arr.length === 0) return []
+  return arr
+})
 
-function setField(key: string, value: unknown) {
-  emit('update:field', { key, value })
+function formatLabel(row: FinagroRange): string {
+  if (row.label) return row.label
+  const min = row.edad_min ?? 1
+  const max = row.edad_max ?? 1
+  return min === max ? `Año ${min}` : `Año ${min} - ${max}`
 }
-
-const FINAGRO_ROWS = [
-  { edad: 'Año 1', keyPct: 'finagro_1_pct', keyKg: 'finagro_1_kg', defaultPct: 100, defaultKg: null as number | null },
-  { edad: 'Año 2', keyPct: 'finagro_2_pct', keyKg: 'finagro_2_kg', defaultPct: 100, defaultKg: 400 },
-  { edad: 'Año 3', keyPct: 'finagro_3_pct', keyKg: 'finagro_3_kg', defaultPct: 70, defaultKg: 875 },
-  { edad: 'Año 4', keyPct: 'finagro_4_pct', keyKg: 'finagro_4_kg', defaultPct: 60, defaultKg: 1050 },
-  { edad: 'Año 5 - 17', keyPct: 'finagro_5_17_pct', keyKg: 'finagro_5_17_kg', defaultPct: 45, defaultKg: 1200 },
-  { edad: 'Año 18 - 20', keyPct: 'finagro_18_20_pct', keyKg: 'finagro_18_20_kg', defaultPct: 55, defaultKg: 1000 },
-] as const
 </script>
 
 <template>
@@ -41,7 +49,10 @@ const FINAGRO_ROWS = [
       </CollapsibleTrigger>
     </div>
     <CollapsibleContent>
-      <div class="overflow-x-auto rounded-b-lg border border-border">
+      <div v-if="ranges.length === 0" class="rounded-b-lg border border-border p-6 text-center text-sm text-muted-foreground">
+        Selecciona el tipo de producto (Cacao, Café, etc.) para cargar la tabla de referencia.
+      </div>
+      <div v-else class="overflow-x-auto rounded-b-lg border border-border">
         <table class="w-full min-w-[280px] border-collapse text-sm">
           <thead>
             <tr class="bg-muted">
@@ -58,34 +69,18 @@ const FINAGRO_ROWS = [
           </thead>
           <tbody>
             <tr
-              v-for="row in FINAGRO_ROWS"
-              :key="row.edad"
+              v-for="(row, idx) in ranges"
+              :key="`${row.edad_min}-${row.edad_max}-${idx}`"
               class="bg-background"
             >
               <td class="border border-border px-3 py-2">
-                {{ row.edad }}
+                {{ formatLabel(row) }}
               </td>
-              <td class="border border-border p-1">
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  :value="formData[row.keyPct] ?? row.defaultPct"
-                  class="h-8 w-full min-w-0 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
-                  @input="setField(row.keyPct, ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
-                >
+              <td class="border border-border px-3 py-2 text-right tabular-nums bg-muted/30">
+                {{ formatDecimalDisplay(row.pct_costos as number) }}%
               </td>
-              <td class="border border-border p-1">
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  :value="formData[row.keyKg] ?? row.defaultKg ?? ''"
-                  class="h-8 w-full min-w-0 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
-                  :placeholder="row.defaultKg == null ? '—' : ''"
-                  @input="setField(row.keyKg, ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
-                >
+              <td class="border border-border px-3 py-2 text-right tabular-nums bg-muted/30">
+                {{ row.kg_hectarea != null ? formatDecimalDisplay(row.kg_hectarea as number) : '—' }}
               </td>
             </tr>
           </tbody>

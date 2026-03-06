@@ -29,7 +29,7 @@ interface TemplateCategory {
   sort_order: number
 }
 
-const TEMPLATES_WITH_CATEGORIES = ['cultivo-permanente', 'cultivo-ciclo-corto']
+const TEMPLATES_WITH_CATEGORIES = ['cultivo-permanente', 'cultivo-ciclo-corto', 'peces-tilapia']
 
 const loading = ref(true)
 const saving = ref<string | null>(null)
@@ -39,6 +39,8 @@ const showCreateCategoryDialog = ref(false)
 const newCategoryTemplate = ref<string | null>(null)
 /** Plantilla seleccionada en la vista de configuración (reduce scroll) */
 const selectedTemplateKey = ref<string | null>(null)
+/** Para plantillas con categorías: producto seleccionado en el desplegable */
+const selectedProductKey = ref<string | null>(null)
 
 const templateLabels: Record<string, string> = {
   'ganado-ceba': 'Ganado para la Ceba',
@@ -47,7 +49,7 @@ const templateLabels: Record<string, string> = {
   'cerdos-ceba': 'Cerdos de Ceba',
   'pollos-engorde': 'Pollos de Engorde',
   'aves-ponedoras': 'Aves Ponedoras',
-  'peces-tilapia': 'Peces Tilapia',
+  'peces-tilapia': 'Peces (Tilapia, Cachama, Otros)',
   'cultivo-permanente': 'Cultivos Permanentes',
   'cultivo-ciclo-corto': 'Cultivos Ciclo Corto',
   'cana-panela': 'Caña de Azúcar (Panela)',
@@ -168,10 +170,41 @@ function selectFirstTemplateIfNone() {
   }
 }
 
+/** Opciones para el desplegable de tipo de cultivo/producto */
+function getProductOptions(templateKey: string): Array<{ value: string; label: string }> {
+  const records = getConfigRecordsForTemplate(templateKey)
+  return records.map(({ productKey }) => ({
+    value: productKey ?? '__default__',
+    label: getProductLabel(productKey),
+  }))
+}
+
+/** Al cambiar plantilla, seleccionar el primer producto disponible */
+function syncSelectedProduct() {
+  const key = selectedTemplateKey.value
+  if (!key || !templateHasCategories(key)) {
+    selectedProductKey.value = null
+    return
+  }
+  const opts = getProductOptions(key)
+  if (opts.length === 0) {
+    selectedProductKey.value = null
+    return
+  }
+  const current = selectedProductKey.value
+  const exists = opts.some(o => o.value === current)
+  selectedProductKey.value = exists ? current : opts[0].value
+}
+
+watch(selectedTemplateKey, syncSelectedProduct)
+watch([categoriesByTemplate, templateData], syncSelectedProduct, { deep: true })
 watch(
   loading,
   () => {
-    if (!loading.value) selectFirstTemplateIfNone()
+    if (!loading.value) {
+      selectFirstTemplateIfNone()
+      syncSelectedProduct()
+    }
   },
   { immediate: true },
 )
@@ -259,19 +292,60 @@ onMounted(() => {
                     </Button>
                   </div>
                   <div class="p-4">
+                    <!-- Desplegable de tipo de cultivo (solo para plantillas con categorías) -->
+                    <div
+                      v-if="templateHasCategories(selectedTemplateKey) && getProductOptions(selectedTemplateKey).length > 0"
+                      class="mb-4"
+                    >
+                      <label class="mb-2 block text-sm font-medium">
+                        Tipo de cultivo / producto
+                      </label>
+                      <Select v-model="selectedProductKey">
+                        <SelectTrigger class="w-full max-w-xs">
+                          <SelectValue placeholder="Seleccionar tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem
+                            v-for="opt in getProductOptions(selectedTemplateKey)"
+                            :key="opt.value"
+                            :value="opt.value"
+                          >
+                            {{ opt.label }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div class="space-y-4">
-                      <TemplateConfigEditor
-                        v-for="{ productKey, record } in getConfigRecordsForTemplate(selectedTemplateKey)"
-                        :key="`${record.template_key}-${productKey ?? 'default'}`"
-                        :record="record"
-                        :template-label="getTemplateLabel(record.template_key)"
-                        :product-label="getProductLabel(productKey)"
-                        :saving="saving === `${record.template_key}::${productKey ?? 'default'}`"
-                        :can-edit="hasPermission('template-config.edit')"
-                        :category-id="getCategoryId(record.template_key, productKey)"
-                        @save="(data) => saveConfig(record.template_key, productKey, data)"
-                        @delete="() => { const id = getCategoryId(record.template_key, productKey); id && deleteCategory(id) }"
-                      />
+                      <template v-if="templateHasCategories(selectedTemplateKey) && selectedProductKey">
+                        <TemplateConfigEditor
+                          v-for="{ productKey, record } in getConfigRecordsForTemplate(selectedTemplateKey).filter(r =>
+                            (r.productKey ?? '__default__') === selectedProductKey
+                          )"
+                          :key="`${record.template_key}-${productKey ?? 'default'}`"
+                          :record="record"
+                          :template-label="getTemplateLabel(record.template_key)"
+                          :product-label="getProductLabel(productKey)"
+                          :saving="saving === `${record.template_key}::${productKey ?? 'default'}`"
+                          :can-edit="hasPermission('template-config.edit')"
+                          :category-id="getCategoryId(record.template_key, productKey)"
+                          @save="(data) => saveConfig(record.template_key, productKey, data)"
+                          @delete="() => { const id = getCategoryId(record.template_key, productKey); id && deleteCategory(id) }"
+                        />
+                      </template>
+                      <template v-else-if="!templateHasCategories(selectedTemplateKey)">
+                        <TemplateConfigEditor
+                          v-for="{ productKey, record } in getConfigRecordsForTemplate(selectedTemplateKey)"
+                          :key="`${record.template_key}-${productKey ?? 'default'}`"
+                          :record="record"
+                          :template-label="getTemplateLabel(record.template_key)"
+                          :product-label="getProductLabel(productKey)"
+                          :saving="saving === `${record.template_key}::${productKey ?? 'default'}`"
+                          :can-edit="hasPermission('template-config.edit')"
+                          :category-id="getCategoryId(record.template_key, productKey)"
+                          @save="(data) => saveConfig(record.template_key, productKey, data)"
+                          @delete="() => { const id = getCategoryId(record.template_key, productKey); id && deleteCategory(id) }"
+                        />
+                      </template>
                       <p
                         v-if="getConfigRecordsForTemplate(selectedTemplateKey).length === 0"
                         class="py-4 text-center text-sm text-muted-foreground"
@@ -297,11 +371,11 @@ onMounted(() => {
                 Categorías de cultivos
               </CardTitle>
               <CardDescription>
-                Crea y gestiona las categorías para Cultivos Permanentes y Cultivos Ciclo Corto
+                Crea y gestiona las categorías para Cultivos Permanentes, Cultivos Ciclo Corto y Tipos de Pez
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-6">
-              <div class="grid gap-6 md:grid-cols-2">
+              <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <div class="rounded-lg border bg-muted/20 p-4">
                   <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h3 class="font-semibold">
@@ -381,6 +455,47 @@ onMounted(() => {
                     </li>
                     <li v-if="!(categoriesByTemplate['cultivo-ciclo-corto'] ?? []).length" class="py-4 text-center text-sm text-muted-foreground">
                       Sin categorías. Crea la primera.
+                    </li>
+                  </ul>
+                </div>
+                <div class="rounded-lg border bg-muted/20 p-4">
+                  <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 class="font-semibold">
+                      Tipos de pez
+                    </h3>
+                    <Button
+                      size="sm"
+                      @click="openCreateCategory('peces-tilapia')"
+                    >
+                      <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                      Agregar tipo
+                    </Button>
+                  </div>
+                  <p class="mb-3 text-xs text-muted-foreground">
+                    Tilapia, Cachama y otras especies acuícolas
+                  </p>
+                  <ul class="space-y-1.5">
+                    <li
+                      v-for="cat in (categoriesByTemplate['peces-tilapia'] ?? [])"
+                      :key="cat.id"
+                      class="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-2 text-sm"
+                    >
+                      <span>{{ cat.name }}</span>
+                      <div class="flex items-center gap-2">
+                        <span class="font-mono text-xs text-muted-foreground">{{ cat.code }}</span>
+                        <Button
+                          v-if="hasPermission('template-config.edit')"
+                          variant="ghost"
+                          size="icon"
+                          class="h-7 w-7 text-destructive hover:text-destructive"
+                          @click="deleteCategory(cat.id)"
+                        >
+                          <Icon name="i-lucide-trash-2" class="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </li>
+                    <li v-if="!(categoriesByTemplate['peces-tilapia'] ?? []).length" class="py-4 text-center text-sm text-muted-foreground">
+                      Sin tipos. Crea el primero.
                     </li>
                   </ul>
                 </div>
