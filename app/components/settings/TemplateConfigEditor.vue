@@ -10,6 +10,10 @@ import {
   AVES_MORTALITY_KEY,
   AVES_MORTALITY_PCT,
 } from '~/constants/aves-cost-breakdown'
+import {
+  CICLO_CORTO_COST_BREAKDOWN_DEFAULT,
+  CICLO_CORTO_COST_BREAKDOWN_KEY,
+} from '~/constants/cultivo-ciclo-corto-cost-breakdown'
 
 interface FlatDataRecord {
   id: number
@@ -83,6 +87,12 @@ function handleSave() {
       }
     }
     if (data[AVES_MORTALITY_KEY] === undefined) data[AVES_MORTALITY_KEY] = AVES_MORTALITY_PCT
+  }
+  if (props.record.template_key === 'cultivo-ciclo-corto') {
+    const arr = data[CICLO_CORTO_COST_BREAKDOWN_KEY]
+    if (!Array.isArray(arr) || arr.length === 0) {
+      data[CICLO_CORTO_COST_BREAKDOWN_KEY] = [...CICLO_CORTO_COST_BREAKDOWN_DEFAULT]
+    }
   }
   emit('save', data)
   editing.value = false
@@ -161,6 +171,18 @@ function handleCancel() {
             {{ section.title }}
           </h5>
           <SettingsCultivoPermanenteFinagroConfig
+            :edited-data="editedData"
+            :editing="editing"
+            :can-edit="canEdit"
+            @update:field="({ key, value }) => (editedData[key] = value)"
+          />
+        </div>
+        <!-- Tabla discriminación de costos (cultivo-ciclo-corto) -->
+        <div v-else-if="section.layout === 'cultivoCicloCortoCostBreakdownTable'" class="space-y-3">
+          <h5 v-if="section.title" class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {{ section.title }}
+          </h5>
+          <SettingsCultivoCicloCortoCostBreakdownConfig
             :edited-data="editedData"
             :editing="editing"
             :can-edit="canEdit"

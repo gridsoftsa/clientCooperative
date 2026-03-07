@@ -4,6 +4,7 @@
  */
 import { computeFormula } from '~/constants/credits-financial-templates'
 import { getAvesCostBreakdownFieldKeys } from '~/constants/aves-cost-breakdown'
+import { getCicloCortoCostBreakdownFieldKeys } from '~/constants/cultivo-ciclo-corto-cost-breakdown'
 
 export type TemplateConfigFieldType = 'money' | 'number' | 'text' | 'formula'
 
@@ -23,8 +24,8 @@ export interface TemplateConfigSchema {
     key: string
     title?: string
     fields: TemplateConfigField[]
-    /** Layout alternativo: tabla de desglose de costos (aves-ponedoras) */
-    layout?: 'avesCostBreakdownTable' | 'cultivoPermanenteFinagroTable' | 'cultivoPermanenteReferencia'
+    /** Layout alternativo: tabla de desglose de costos (aves-ponedoras, cultivo-ciclo-corto) */
+    layout?: 'avesCostBreakdownTable' | 'cultivoCicloCortoCostBreakdownTable' | 'cultivoPermanenteFinagroTable' | 'cultivoPermanenteReferencia'
   }>
 }
 
@@ -76,6 +77,7 @@ const schemaCerdosCria: TemplateConfigSchema = {
       key: 'costos',
       title: 'Discriminación de costos',
       fields: [
+        { key: 'pct_costos_estandar', label: '% de costo estándar', type: 'number' },
         { key: 'pct_sostenimiento_madre', label: 'Sostenimiento de madre – %', type: 'number' },
         { key: 'pct_alimentacion_lechon', label: 'Alimentación lechón – %', type: 'number' },
         { key: 'pct_medicamento_complementos', label: 'Medicamento y complementos – %', type: 'number' },
@@ -100,6 +102,7 @@ const schemaCerdosCeba: TemplateConfigSchema = {
       key: 'costos',
       title: 'Discriminación de costos',
       fields: [
+        { key: 'pct_costos_estandar', label: '% de costo estándar', type: 'number' },
         { key: 'pct_lechon_destetado', label: 'Lechón destetado – %', type: 'number' },
         { key: 'pct_alimentacion_ceba', label: 'Alimentación – %', type: 'number' },
         { key: 'pct_medicamento_complementos_ceba', label: 'Medicamento y complementos – %', type: 'number' },
@@ -116,6 +119,7 @@ const schemaPollosEngorde: TemplateConfigSchema = {
       key: 'valores_estandar_fenavi',
       title: 'Valores estándar FENAVI',
       fields: [
+        { key: 'pct_costos_estandar', label: '% de costo estándar', type: 'number' },
         { key: 'peso_kg_venta', label: 'Peso kg venta', type: 'number' },
         { key: 'precio_venta_pie_kg', label: 'Precio de venta en pie kg', type: 'money' },
         { key: 'costo_kg_venta', label: 'Costo x kg venta', type: 'money' },
@@ -133,6 +137,7 @@ const schemaAvesPonedoras: TemplateConfigSchema = {
       key: 'valores_estandar_fenavi',
       title: 'Valores estándar FENAVI',
       fields: [
+        { key: 'pct_costos_estandar', label: '% de costo estándar', type: 'number' },
         { key: 'pct_costo_huevo', label: '% Costo x huevo', type: 'number' },
         { key: 'pct_mortalidad_postura', label: '% Mortalidad y postura', type: 'number' },
         { key: 'produccion_huevos_ave', label: 'Producción huevos x ave', type: 'number' },
@@ -143,6 +148,23 @@ const schemaAvesPonedoras: TemplateConfigSchema = {
       title: 'Desglose de costos (SIPSA pequeño productor Santander)',
       layout: 'avesCostBreakdownTable',
       fields: [],
+    },
+  ],
+}
+
+const schemaGanadoDobleProposito: TemplateConfigSchema = {
+  template_key: 'ganado-doble-proposito',
+  sections: [
+    {
+      key: 'discriminacion_costos',
+      title: 'Discriminación de costos',
+      fields: [
+        { key: 'pct_alimentacion', label: 'Alimentación – %', type: 'number' },
+        { key: 'pct_mano_obra', label: 'Mano de obra – %', type: 'number' },
+        { key: 'pct_mantenimiento_pasturas', label: 'Mantenimiento pasturas – %', type: 'number' },
+        { key: 'pct_mantenimiento_infraestructura', label: 'Mantenimiento infraestructura – %', type: 'number' },
+        { key: 'pct_insumos_veterinarios', label: 'Insumos veterinarios – %', type: 'number' },
+      ],
     },
   ],
 }
@@ -165,6 +187,35 @@ const schemaCultivoPermanente: TemplateConfigSchema = {
   ],
 }
 
+const schemaCultivoCicloCorto: TemplateConfigSchema = {
+  template_key: 'cultivo-ciclo-corto',
+  sections: [
+    {
+      key: 'discriminacion_costos',
+      title: 'Discriminación de costos',
+      layout: 'cultivoCicloCortoCostBreakdownTable',
+      fields: [],
+    },
+    {
+      key: 'estandar',
+      title: 'Valores estándar Finagro (referencia)',
+      fields: [
+        { key: 'pct_costos_kg', label: '% de costos x kg estándar', type: 'number' },
+        { key: 'kg_x_ha', label: 'KG x hectárea', type: 'number' },
+        { key: 'plantas_x_ha', label: 'Plantas x hectárea', type: 'number' },
+        { key: 'cuantas_plantas', label: '¿Cuántas plantas?', type: 'number' },
+        {
+          key: 'plantas_x_ha_div_cuantas',
+          label: 'Plantas x ha ÷ Cuántas plantas',
+          type: 'formula',
+          formulaKey: 'cultivo_ciclo_corto_plantas_x_ha_div_cuantas',
+          formulaDisplay: 'plantas x hectárea ÷ cuántas plantas',
+        },
+      ],
+    },
+  ],
+}
+
 const schemaPecesTilapia: TemplateConfigSchema = {
   template_key: 'peces-tilapia',
   sections: [
@@ -183,6 +234,7 @@ const schemaPecesTilapia: TemplateConfigSchema = {
       key: 'discriminacion_costos',
       title: 'Discriminación de costos (%)',
       fields: [
+        { key: 'pct_costos_estandar', label: '% de costo estándar', type: 'number' },
         { key: 'pct_mano_obra_tilapia', label: 'Mano de obra', type: 'number' },
         { key: 'pct_preparacion_estanque', label: 'Preparación estanque', type: 'number' },
         { key: 'pct_compra_especies', label: 'Compra de especies', type: 'number' },
@@ -194,14 +246,30 @@ const schemaPecesTilapia: TemplateConfigSchema = {
   ],
 }
 
+const schemaCanaPanela: TemplateConfigSchema = {
+  template_key: 'cana-panela',
+  sections: [
+    {
+      key: 'valores_estandar',
+      title: 'Valores estándar',
+      fields: [
+        { key: 'pct_costos', label: '% de costo estándar', type: 'number' },
+      ],
+    },
+  ],
+}
+
 const TEMPLATE_CONFIG_SCHEMAS: Record<string, TemplateConfigSchema> = {
   'ganado-ceba': schemaGanadoCeba,
+  'ganado-doble-proposito': schemaGanadoDobleProposito,
   'cerdos-cria': schemaCerdosCria,
   'cerdos-ceba': schemaCerdosCeba,
   'pollos-engorde': schemaPollosEngorde,
   'aves-ponedoras': schemaAvesPonedoras,
   'cultivo-permanente': schemaCultivoPermanente,
+  'cultivo-ciclo-corto': schemaCultivoCicloCorto,
   'peces-tilapia': schemaPecesTilapia,
+  'cana-panela': schemaCanaPanela,
 }
 
 export function getTemplateConfigSchema(templateKey: string): TemplateConfigSchema | null {
@@ -209,13 +277,7 @@ export function getTemplateConfigSchema(templateKey: string): TemplateConfigSche
 }
 
 /** Claves que no deben mostrarse en la configuración (son dinámicos, se calculan por radicación). */
-export const EXCLUDED_CONFIG_KEYS: Record<string, string[]> = {
-  'cerdos-cria': ['pct_costos_estandar'],
-  'cerdos-ceba': ['pct_costos_estandar'],
-  'pollos-engorde': ['pct_costos_estandar'],
-  'aves-ponedoras': ['pct_costos_estandar'],
-  'peces-tilapia': ['pct_costos_estandar'],
-}
+export const EXCLUDED_CONFIG_KEYS: Record<string, string[]> = {}
 
 /** Devuelve las claves de campos que provienen de la configuración (valores estandarizados, etc.). */
 export function getConfigFieldKeys(templateKey: string): string[] {
@@ -225,6 +287,8 @@ export function getConfigFieldKeys(templateKey: string): string[] {
   for (const section of schema.sections) {
     if (section.layout === 'avesCostBreakdownTable') {
       keys.push(...getAvesCostBreakdownFieldKeys())
+    } else if (section.layout === 'cultivoCicloCortoCostBreakdownTable') {
+      keys.push(...getCicloCortoCostBreakdownFieldKeys())
     } else if (section.layout === 'cultivoPermanenteFinagroTable') {
       keys.push('finagro_ranges')
     } else if (section.layout === 'cultivoPermanenteReferencia') {

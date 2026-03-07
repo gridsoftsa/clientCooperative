@@ -18,7 +18,8 @@ export function useTemplateFlatData() {
         ? (raw as { config_data: Record<string, unknown> }).config_data
         : (raw as Record<string, unknown>)
       if (import.meta.dev && Object.keys(config).length > 0) {
-        console.log('[useTemplateFlatData] Cargados', Object.keys(config).length, 'valores para', templateKey)
+        const breakdown = config.ciclo_corto_cost_breakdown as unknown[] | undefined
+        console.log('[useTemplateFlatData]', templateKey, productKey ?? 'default', '→', Object.keys(config).length, 'campos, ciclo_corto_cost_breakdown:', Array.isArray(breakdown) ? breakdown.length : 0, 'filas')
       }
       return config ?? {}
     } catch (err) {

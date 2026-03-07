@@ -3,7 +3,9 @@
  * Tabla FINAGRO dinámica: rangos de edad configurables por producto.
  * Cacao: Año 1, 2, 3, 4, 5-17, 18-20. Café: Año 1, 2, 3, 4, 5-7, 8 y 9.
  */
-import { formatDecimalDisplay, parseDecimalInput, onKeydownPesosOnly } from '~/composables/usePesosFormat'
+import { formatDecimalDisplay, onKeydownPesosOnly, useDecimalDraft } from '~/composables/usePesosFormat'
+
+const decimalDraft = useDecimalDraft()
 
 interface FinagroRange {
   edad_min: number
@@ -112,10 +114,12 @@ function removeRow(index: number) {
               <input
                 type="text"
                 inputmode="decimal"
-                :value="formatDecimalDisplay(row.pct_costos as number)"
+                :value="decimalDraft.getDisplayValue(`pct-${idx}`, row.pct_costos)"
                 class="h-8 w-16 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
                 :disabled="!editing || !canEdit"
-                @input="(e) => updateRange(idx, 'pct_costos', parseDecimalInput((e.target as HTMLInputElement).value))"
+                @focus="decimalDraft.onFocus(`pct-${idx}`, row.pct_costos)"
+                @input="(e) => decimalDraft.onInput(`pct-${idx}`, (e.target as HTMLInputElement).value, (v) => updateRange(idx, 'pct_costos', v))"
+                @blur="decimalDraft.onBlur(`pct-${idx}`, (v) => updateRange(idx, 'pct_costos', v))"
                 @keydown="onKeydownPesosOnly"
               >
             </td>
@@ -123,11 +127,13 @@ function removeRow(index: number) {
               <input
                 type="text"
                 inputmode="decimal"
-                :value="row.kg_hectarea != null ? formatDecimalDisplay(row.kg_hectarea as number) : ''"
+                :value="decimalDraft.getDisplayValue(`kg-${idx}`, row.kg_hectarea)"
                 class="h-8 w-20 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
                 :disabled="!editing || !canEdit"
                 placeholder="—"
-                @input="(e) => updateRange(idx, 'kg_hectarea', parseDecimalInput((e.target as HTMLInputElement).value))"
+                @focus="decimalDraft.onFocus(`kg-${idx}`, row.kg_hectarea)"
+                @input="(e) => decimalDraft.onInput(`kg-${idx}`, (e.target as HTMLInputElement).value, (v) => updateRange(idx, 'kg_hectarea', v))"
+                @blur="decimalDraft.onBlur(`kg-${idx}`, (v) => updateRange(idx, 'kg_hectarea', v))"
                 @keydown="onKeydownPesosOnly"
               >
             </td>

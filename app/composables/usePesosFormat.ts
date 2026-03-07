@@ -44,33 +44,74 @@ export function parsePesosInput(input: string): number | undefined {
 }
 
 /**
- * Parsea decimales que aceptan coma (0,4) o punto (0.4).
- * Uso: inputs de porcentajes y números decimales simples.
+ * Parsea decimales que aceptan coma (0,4) o punto (0.4) como separador decimal.
+ * Soporta ambos formatos: 3,45 y 3.45.
  */
 export function parseDecimalInput(input: string): number | null {
-  const trimmed = String(input).trim().replace(',', '.')
-  if (trimmed === '') return null
-  const num = parseFloat(trimmed)
+  const filtered = String(input).replace(/[^\d.,]/g, '').trim()
+  if (filtered === '') return null
+  const lastComma = filtered.lastIndexOf(',')
+  const lastPeriod = filtered.lastIndexOf('.')
+  const lastSep = lastComma > lastPeriod ? lastComma : lastPeriod
+  let normalized: string
+  if (lastSep >= 0) {
+    const intPart = filtered.slice(0, lastSep).replace(/[.,]/g, '')
+    const decPart = filtered.slice(lastSep + 1).replace(/\D/g, '')
+    normalized = decPart ? `${intPart}.${decPart}` : intPart || '0'
+  } else {
+    normalized = filtered
+  }
+  const num = parseFloat(normalized)
   return Number.isFinite(num) ? num : null
 }
 
 /**
  * Formato para display de decimales: usa coma (es-CO).
  * Ej: 0.4 → "0,4", 70.73 → "70,73"
+ * Hasta 4 decimales para porcentajes (3,4567).
  */
 export function formatDecimalDisplay(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return ''
-  const rounded = Math.round(Number(value) * 100) / 100
+  const rounded = Math.round(Number(value) * 10000) / 10000
   const s = rounded.toString()
   return s.includes('.') ? s.replace('.', ',') : s
 }
 
-/** En inputs de pesos: solo permite dígitos, punto y coma. Uso: @keydown="onKeydownPesosOnly" */
+/** En inputs de pesos/decimales: solo permite dígitos, punto y coma. Uso: @keydown="onKeydownPesosOnly" */
 export function onKeydownPesosOnly(e: KeyboardEvent) {
   if (e.ctrlKey || e.metaKey) return
   const key = e.key
   if (key == null || key === '' || ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return
   if (key.length === 1 && !/[\d.,]/.test(key)) e.preventDefault()
+}
+
+/**
+ * Borrador para inputs decimales: preserva "3," o "3." mientras el usuario escribe.
+ * Evita que el valor se sobrescriba antes de completar los decimales.
+ */
+export function useDecimalDraft() {
+  const draft = ref<{ key: string; raw: string } | null>(null)
+  return {
+    getDisplayValue: (fieldKey: string, modelValue: number | null | undefined): string => {
+      if (draft.value?.key === fieldKey) return draft.value.raw
+      return formatDecimalDisplay(modelValue)
+    },
+    onFocus: (fieldKey: string, modelValue: number | null | undefined) => {
+      draft.value = { key: fieldKey, raw: formatDecimalDisplay(modelValue) }
+    },
+    onInput: (fieldKey: string, raw: string, onUpdate: (v: number | null) => void) => {
+      draft.value = { key: fieldKey, raw }
+      const n = parseDecimalInput(raw)
+      if (n !== null) onUpdate(n)
+    },
+    onBlur: (fieldKey: string, onUpdate: (v: number | null) => void) => {
+      if (draft.value?.key === fieldKey) {
+        const n = parseDecimalInput(draft.value.raw)
+        if (n !== null) onUpdate(n)
+      }
+      draft.value = null
+    },
+  }
 }
 
 export function usePesosFormat() {
@@ -81,5 +122,6 @@ export function usePesosFormat() {
     formatDecimalDisplay,
     filterPesosChars,
     onKeydownPesosOnly,
+    useDecimalDraft,
   }
 }

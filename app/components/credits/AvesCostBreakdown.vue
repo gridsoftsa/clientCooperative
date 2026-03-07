@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * Desglose de costos SIPSA para aves ponedoras (pequeño productor Santander).
+ * Solo lectura: los datos vienen de la configuración de la plantilla.
  * Fórmula Valor Total: Costos mensuales × (% participación ÷ 100)
- * Se muestra en un Collapsible para no ocupar espacio si no es necesario.
  */
 import { computeFormula } from '~/constants/credits-financial-templates'
 import {
@@ -11,30 +11,13 @@ import {
   AVES_MORTALITY_PCT,
   getAvesCostBreakdownFieldKeys,
 } from '~/constants/aves-cost-breakdown'
-import { formatDecimalDisplay, parseDecimalInput, onKeydownPesosOnly } from '~/composables/usePesosFormat'
+import { formatDecimalDisplay } from '~/composables/usePesosFormat'
 
 const { formData } = defineProps<{
   formData: Record<string, unknown>
 }>()
 
-const emit = defineEmits<{
-  'update:field': [payload: { key: string; value: unknown }]
-}>()
-
 const ALL_PCT_KEYS = getAvesCostBreakdownFieldKeys()
-
-function setField(key: string, value: unknown) {
-  let finalValue = value
-  if (value != null && typeof value === 'number' && Number.isFinite(value)) {
-    const sumOthers = ALL_PCT_KEYS.filter(k => k !== key).reduce(
-      (acc, k) => acc + safePct(formData[k], getDefaultPct(k)),
-      0,
-    )
-    const maxAllowed = Math.max(0, 100 - sumOthers)
-    finalValue = Math.min(value, maxAllowed)
-  }
-  emit('update:field', { key, value: finalValue })
-}
 
 function getDefaultPct(key: string): number {
   if (key === AVES_MORTALITY_KEY) return AVES_MORTALITY_PCT
@@ -142,15 +125,8 @@ function totalValorSum(): number {
                 <td class="border border-border px-3 py-2 text-right tabular-nums">
                   {{ formatMoney(valorTotal(computeFormula('aves_ponedoras_costos', formData) ?? 0, safePct(formData[group.items[0]!.key], group.items[0]!.pct))) }}
                 </td>
-                <td class="border border-border p-1">
-                  <input
-                    type="text"
-                    inputmode="decimal"
-                    :value="formatDecimalDisplay((formData[group.items[0]!.key] ?? group.items[0]!.pct) as number)"
-                    class="h-8 w-full min-w-0 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
-                    @input="(e) => setField(group.items[0]!.key, parseDecimalInput((e.target as HTMLInputElement).value))"
-                    @keydown="onKeydownPesosOnly"
-                  >
+                <td class="border border-border px-2 py-1 text-right tabular-nums bg-muted/30">
+                  {{ formatDecimalDisplay((formData[group.items[0]!.key] ?? group.items[0]!.pct) as number) }}%
                 </td>
               </tr>
               <!-- Grupo con varios ítems: encabezado + filas (ej. Instalación, Fase de Levante) -->
@@ -183,15 +159,8 @@ function totalValorSum(): number {
                   <td class="border border-border px-3 py-1.5 text-right tabular-nums">
                     {{ formatMoney(valorTotal(computeFormula('aves_ponedoras_costos', formData) ?? 0, safePct(formData[item.key], item.pct))) }}
                   </td>
-                  <td class="border border-border p-1">
-                    <input
-                      type="text"
-                      inputmode="decimal"
-                      :value="formatDecimalDisplay((formData[item.key] ?? item.pct) as number)"
-                      class="h-8 w-full min-w-0 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
-                      @input="(e) => setField(item.key, parseDecimalInput((e.target as HTMLInputElement).value))"
-                      @keydown="onKeydownPesosOnly"
-                    >
+                  <td class="border border-border px-2 py-1 text-right tabular-nums bg-muted/30">
+                    {{ formatDecimalDisplay((formData[item.key] ?? item.pct) as number) }}%
                   </td>
                 </tr>
               </template>
@@ -203,15 +172,8 @@ function totalValorSum(): number {
               <td class="border border-border px-3 py-2 text-right tabular-nums">
                 {{ formatMoney(valorTotal(computeFormula('aves_ponedoras_costos', formData) ?? 0, safePct(formData[AVES_MORTALITY_KEY], AVES_MORTALITY_PCT))) }}
               </td>
-              <td class="border border-border p-1">
-                <input
-                  type="text"
-                  inputmode="decimal"
-                  :value="formatDecimalDisplay((formData[AVES_MORTALITY_KEY] ?? AVES_MORTALITY_PCT) as number)"
-                  class="h-8 w-full min-w-0 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
-                  @input="(e) => setField(AVES_MORTALITY_KEY, parseDecimalInput((e.target as HTMLInputElement).value))"
-                  @keydown="onKeydownPesosOnly"
-                >
+              <td class="border border-border px-2 py-1 text-right tabular-nums bg-muted/30">
+                {{ formatDecimalDisplay((formData[AVES_MORTALITY_KEY] ?? AVES_MORTALITY_PCT) as number) }}%
               </td>
             </tr>
             <tr class="bg-emerald-200 dark:bg-emerald-900/60 font-bold">

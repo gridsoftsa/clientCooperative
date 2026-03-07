@@ -1249,6 +1249,48 @@ function schemaCultivoPermanente(): FormSchemaInput {
         ],
       },
       {
+        key: 'resumen_utilidad',
+        title: 'Resumen de utilidad',
+        fields: [
+          {
+            key: 'total_utilidad_permanente',
+            label: 'TOTAL UTILIDAD',
+            type: 'computed',
+            meta: 'Solo lectura (ventas - costos)',
+            formulaKey: 'cultivo_permanente_total_utilidad',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'total_utilidad_mensual_permanente',
+            label: 'TOTAL UTILIDAD MENSUAL',
+            type: 'computed',
+            meta: 'Solo lectura (total utilidad ÷ duración meses)',
+            formulaKey: 'cultivo_permanente_total_utilidad_mensual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'ventas_anual_permanente',
+            label: 'VENTA ANUAL',
+            type: 'computed',
+            meta: 'Solo lectura (valor total)',
+            formulaKey: 'cultivo_permanente_ventas_anual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'costos_anual_permanente',
+            label: 'COSTO ANUAL',
+            type: 'computed',
+            meta: 'Solo lectura (ventas × % costos)',
+            formulaKey: 'cultivo_permanente_costos_anual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+        ],
+      },
+      {
         key: 'finagro_santander',
         title: 'Referencia FINAGRO',
         layout: 'finagroTable',
@@ -1288,11 +1330,46 @@ function schemaCultivoCicloCorto(): FormSchemaInput {
             required: true,
             cols: 1,
           },
+        ],
+      },
+      {
+        key: 'resumen_utilidad',
+        title: 'Resumen de utilidad',
+        fields: [
           {
-            key: 'pct_costos_kg',
-            label: '% de costos x kg estándar',
-            type: 'number',
-            meta: 'Decimal (ej: 0.8)',
+            key: 'total_utilidad_ciclo_corto',
+            label: 'TOTAL UTILIDAD',
+            type: 'computed',
+            meta: 'Solo lectura (ventas - costos)',
+            formulaKey: 'cultivo_ciclo_corto_total_utilidad',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'total_utilidad_mensual_ciclo_corto',
+            label: 'TOTAL UTILIDAD MENSUAL',
+            type: 'computed',
+            meta: 'Solo lectura (total utilidad ÷ duración meses)',
+            formulaKey: 'cultivo_ciclo_corto_total_utilidad_mensual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'ventas_ciclo_corto',
+            label: 'VENTAS',
+            type: 'computed',
+            meta: 'Solo lectura (kg producidos × precio kg)',
+            formulaKey: 'cultivo_ciclo_corto_ventas',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'costos_ciclo_corto',
+            label: 'COSTOS',
+            type: 'computed',
+            meta: 'Solo lectura (ventas × % costos)',
+            formulaKey: 'cultivo_ciclo_corto_costos',
+            formulaFormat: 'money',
             cols: 1,
           },
         ],
@@ -1311,8 +1388,10 @@ function schemaCultivoCicloCorto(): FormSchemaInput {
           {
             key: 'cant_kg_producidos',
             label: 'Cant. kg producidos',
-            type: 'number',
-            meta: 'Decimal',
+            type: 'computed',
+            meta: 'Solo lectura (hectáreas × kg/hectárea)',
+            formulaKey: 'cultivo_ciclo_corto_cant_kg_producidos',
+            formulaFormat: 'number',
             cols: 1,
           },
           {
@@ -1327,10 +1406,26 @@ function schemaCultivoCicloCorto(): FormSchemaInput {
         key: 'estandar',
         title: 'Valores estándar Finagro (referencia)',
         fields: [
+          { key: 'pct_costos_kg', label: '% de costos x kg estándar', type: 'number', meta: 'Decimal (ej: 80)', cols: 1 },
           { key: 'kg_x_ha', label: 'KG x hectárea', type: 'number', meta: 'Decimal', cols: 1 },
           { key: 'plantas_x_ha', label: 'Plantas x hectárea', type: 'number', meta: 'Int', cols: 1 },
           { key: 'cuantas_plantas', label: '¿Cuántas plantas?', type: 'number', meta: 'Int', cols: 1 },
+          {
+            key: 'plantas_x_ha_div_cuantas',
+            label: 'Plantas x hectárea ÷ ¿Cuántas plantas?',
+            type: 'computed',
+            meta: 'Solo lectura (plantas x ha ÷ cuántas plantas)',
+            formulaKey: 'cultivo_ciclo_corto_plantas_x_ha_div_cuantas',
+            formulaFormat: 'number',
+            cols: 1,
+          },
         ],
+      },
+      {
+        key: 'discriminacion_costos',
+        title: 'Discriminación de costos',
+        layout: 'cicloCortoCostBreakdownTable',
+        fields: [],
       },
     ],
   }
@@ -2028,6 +2123,59 @@ function computeCultivoPermanenteTotalUtilidadMensual(data: Record<string, unkno
   return Number.isFinite(valor) ? valor : null
 }
 
+/** Cultivo Ciclo Corto: plantas_x_ha_div_cuantas = plantas_x_ha ÷ cuantas_plantas */
+function computeCultivoCicloCortoPlantasXHaDivCuantas(data: Record<string, unknown>): number | null {
+  const plantasXHa = Number(data.plantas_x_ha ?? 0)
+  const cuantas = Number(data.cuantas_plantas ?? 0)
+  if (!cuantas) return null
+  const valor = plantasXHa / cuantas
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cultivo Ciclo Corto: cant_kg_producidos = cantidad_hectareas × kg_x_ha */
+function computeCultivoCicloCortoCantKgProducidos(data: Record<string, unknown>): number | null {
+  const hectareas = Number(data.cantidad_hectareas ?? 0)
+  const kgHa = Number(data.kg_x_ha ?? 0)
+  const valor = hectareas * kgHa
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cultivo Ciclo Corto: ventas = cant_kg_producidos × precio_unitario_kg */
+function computeCultivoCicloCortoVentas(data: Record<string, unknown>): number | null {
+  const kg = computeCultivoCicloCortoCantKgProducidos(data)
+  const precio = Number(data.precio_unitario_kg ?? 0)
+  const valor = kg * precio
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cultivo Ciclo Corto: costos = ventas × (pct_costos_kg / 100) */
+function computeCultivoCicloCortoCostos(data: Record<string, unknown>): number | null {
+  const ventas = computeCultivoCicloCortoVentas(data)
+  let pct = Number(data.pct_costos_kg ?? 0)
+  if (pct > 1) pct = pct / 100
+  if (ventas == null || !pct) return null
+  const valor = ventas * pct
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cultivo Ciclo Corto: total_utilidad = ventas - costos */
+function computeCultivoCicloCortoTotalUtilidad(data: Record<string, unknown>): number | null {
+  const ventas = computeCultivoCicloCortoVentas(data)
+  const costos = computeCultivoCicloCortoCostos(data)
+  if (ventas == null || costos == null) return null
+  const valor = ventas - costos
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Cultivo Ciclo Corto: utilidad_mensual = total_utilidad / duracion_ciclo_meses */
+function computeCultivoCicloCortoTotalUtilidadMensual(data: Record<string, unknown>): number | null {
+  const totalUtilidad = computeCultivoCicloCortoTotalUtilidad(data)
+  const meses = Number(data.duracion_ciclo_meses ?? 0)
+  if (totalUtilidad == null || !meses) return null
+  const valor = totalUtilidad / meses
+  return Number.isFinite(valor) ? valor : null
+}
+
 /** Peces Tilapia: ventas = cantidad_alevinos × peso_final_libras × precio_venta_libra */
 function computePecesTilapiaVentas(data: Record<string, unknown>): number | null {
   const cantidad = Number(data.cantidad_alevinos ?? 0)
@@ -2229,6 +2377,12 @@ const formulaComputers: Record<string, (data: Record<string, unknown>) => number
   cultivo_permanente_costos_anual: computeCultivoPermanenteCostosAnual,
   cultivo_permanente_total_utilidad: computeCultivoPermanenteTotalUtilidad,
   cultivo_permanente_total_utilidad_mensual: computeCultivoPermanenteTotalUtilidadMensual,
+  cultivo_ciclo_corto_cant_kg_producidos: computeCultivoCicloCortoCantKgProducidos,
+  cultivo_ciclo_corto_plantas_x_ha_div_cuantas: computeCultivoCicloCortoPlantasXHaDivCuantas,
+  cultivo_ciclo_corto_ventas: computeCultivoCicloCortoVentas,
+  cultivo_ciclo_corto_costos: computeCultivoCicloCortoCostos,
+  cultivo_ciclo_corto_total_utilidad: computeCultivoCicloCortoTotalUtilidad,
+  cultivo_ciclo_corto_total_utilidad_mensual: computeCultivoCicloCortoTotalUtilidadMensual,
 }
 
 /** Evalúa una fórmula calculada dado el formulaKey y los datos del formulario */

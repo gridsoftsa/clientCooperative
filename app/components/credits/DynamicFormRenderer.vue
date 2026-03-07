@@ -10,6 +10,10 @@ import {
   AVES_COST_PCT_DEFAULTS,
   FINAGRO_DEFAULTS,
 } from '~/constants/credits-financial-templates'
+import {
+  CICLO_CORTO_COST_BREAKDOWN_DEFAULT,
+  CICLO_CORTO_COST_BREAKDOWN_KEY,
+} from '~/constants/cultivo-ciclo-corto-cost-breakdown'
 
 const props = withDefaults(
   defineProps<{
@@ -54,6 +58,12 @@ function buildInitialFormData(): Record<string, unknown> {
       continue
     }
     if (section.layout === 'referenciaInfoCeba') {
+      continue
+    }
+    if (section.layout === 'cicloCortoCostBreakdownTable') {
+      if (props.templateKey === 'cultivo-ciclo-corto' && (data[CICLO_CORTO_COST_BREAKDOWN_KEY] === undefined || !Array.isArray(data[CICLO_CORTO_COST_BREAKDOWN_KEY]) || (data[CICLO_CORTO_COST_BREAKDOWN_KEY] as unknown[]).length === 0)) {
+        data[CICLO_CORTO_COST_BREAKDOWN_KEY] = [...CICLO_CORTO_COST_BREAKDOWN_DEFAULT]
+      }
       continue
     }
     if (section.layout === 'eggsTable' && section.tableRows) {
@@ -173,6 +183,16 @@ const inputBaseClass =
         <legend class="sr-only">{{ section.title }}</legend>
         <div class="mt-2">
           <CreditsGanadoCebaReferenciaInfo :form-data="formData" />
+        </div>
+      </fieldset>
+      <!-- Discriminación de costos (cultivo ciclo corto) -->
+      <fieldset
+        v-else-if="section.layout === 'cicloCortoCostBreakdownTable'"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="sr-only">{{ section.title }}</legend>
+        <div class="mt-2">
+          <CreditsCultivoCicloCortoCostBreakdown :form-data="formData" />
         </div>
       </fieldset>
       <!-- Tabla de clasificación de huevos + desglose de costos (aves ponedoras) -->

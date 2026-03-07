@@ -9,7 +9,9 @@ import {
   AVES_MORTALITY_PCT,
   getAvesCostBreakdownFieldKeys,
 } from '~/constants/aves-cost-breakdown'
-import { formatDecimalDisplay, parseDecimalInput, onKeydownPesosOnly } from '~/composables/usePesosFormat'
+import { formatDecimalDisplay, onKeydownPesosOnly, useDecimalDraft } from '~/composables/usePesosFormat'
+
+const decimalDraft = useDecimalDraft()
 
 const { editedData } = defineProps<{
   editedData: Record<string, unknown>
@@ -90,10 +92,12 @@ function totalPctSum(): number {
               <input
                 type="text"
                 inputmode="decimal"
-                :value="formatDecimalDisplay((editedData[group.items[0]!.key] ?? group.items[0]!.pct) as number)"
+                :value="decimalDraft.getDisplayValue(group.items[0]!.key, (editedData[group.items[0]!.key] ?? group.items[0]!.pct) as number)"
                 class="h-8 w-full min-w-0 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
                 :disabled="!editing || !canEdit"
-                @input="(e) => setField(group.items[0]!.key, parseDecimalInput((e.target as HTMLInputElement).value))"
+                @focus="decimalDraft.onFocus(group.items[0]!.key, (editedData[group.items[0]!.key] ?? group.items[0]!.pct) as number)"
+                @input="(e) => decimalDraft.onInput(group.items[0]!.key, (e.target as HTMLInputElement).value, (v) => setField(group.items[0]!.key, v))"
+                @blur="decimalDraft.onBlur(group.items[0]!.key, (v) => setField(group.items[0]!.key, v))"
                 @keydown="onKeydownPesosOnly"
               >
             </td>
@@ -126,10 +130,12 @@ function totalPctSum(): number {
                 <input
                   type="text"
                   inputmode="decimal"
-                  :value="formatDecimalDisplay((editedData[item.key] ?? item.pct) as number)"
+                  :value="decimalDraft.getDisplayValue(item.key, (editedData[item.key] ?? item.pct) as number)"
                   class="h-8 w-full min-w-0 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
                   :disabled="!editing || !canEdit"
-                  @input="(e) => setField(item.key, parseDecimalInput((e.target as HTMLInputElement).value))"
+                  @focus="decimalDraft.onFocus(item.key, (editedData[item.key] ?? item.pct) as number)"
+                  @input="(e) => decimalDraft.onInput(item.key, (e.target as HTMLInputElement).value, (v) => setField(item.key, v))"
+                  @blur="decimalDraft.onBlur(item.key, (v) => setField(item.key, v))"
                   @keydown="onKeydownPesosOnly"
                 >
               </td>
@@ -144,10 +150,12 @@ function totalPctSum(): number {
             <input
               type="text"
               inputmode="decimal"
-              :value="formatDecimalDisplay((editedData[AVES_MORTALITY_KEY] ?? AVES_MORTALITY_PCT) as number)"
+              :value="decimalDraft.getDisplayValue(AVES_MORTALITY_KEY, (editedData[AVES_MORTALITY_KEY] ?? AVES_MORTALITY_PCT) as number)"
               class="h-8 w-full min-w-0 rounded border border-input bg-background px-2 py-1 text-right text-sm tabular-nums"
               :disabled="!editing || !canEdit"
-              @input="(e) => setField(AVES_MORTALITY_KEY, parseDecimalInput((e.target as HTMLInputElement).value))"
+              @focus="decimalDraft.onFocus(AVES_MORTALITY_KEY, (editedData[AVES_MORTALITY_KEY] ?? AVES_MORTALITY_PCT) as number)"
+              @input="(e) => decimalDraft.onInput(AVES_MORTALITY_KEY, (e.target as HTMLInputElement).value, (v) => setField(AVES_MORTALITY_KEY, v))"
+              @blur="decimalDraft.onBlur(AVES_MORTALITY_KEY, (v) => setField(AVES_MORTALITY_KEY, v))"
               @keydown="onKeydownPesosOnly"
             >
           </td>

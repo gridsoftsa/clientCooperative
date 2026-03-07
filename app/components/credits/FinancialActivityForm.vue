@@ -59,6 +59,8 @@ const hasProductSelect = computed(() =>
 )
 
 function setFormData(data: Record<string, unknown>) {
+  // No sobrescribir mientras cargamos la config del producto (evita arrastrar config de Maíz al elegir Papa)
+  if (loadingFlatData.value) return
   formData.value = data
   emitActivityTemplate()
 }
@@ -108,11 +110,18 @@ watch(templateSelected, async (newTemplate) => {
 watch(
   () => formData.value.tipo_producto,
   async (product) => {
-    if (templateSelected.value && templateHasProductSelect(templateSelected.value) && product) {
+    if (!templateSelected.value || !templateHasProductSelect(templateSelected.value) || !product || isSyncingFromProps.value) return
+    loadingFlatData.value = true
+    try {
       const flatData = await fetchFlatData(templateSelected.value, product)
-      formData.value = { ...formData.value, ...flatData }
+      // Reemplazar por completo con la config del producto seleccionado (evita arrastrar config de Maíz al elegir Papa).
+      // Usar flatData como única fuente para ciclo_corto_cost_breakdown, kg_x_ha, etc.
+      formData.value = { ...flatData, tipo_producto: product }
+      formDataVersion.value++
       configuredFieldKeys.value = getConfigFieldKeys(templateSelected.value)
       emitActivityTemplate()
+    } finally {
+      loadingFlatData.value = false
     }
   },
 )
@@ -201,7 +210,7 @@ onMounted(() => {
       </div>
       <CreditsDynamicFormRenderer
         v-else
-        :key="`${templateSelected}-${formDataVersion}`"
+        :key="`${templateSelected}-${formData.tipo_producto ?? 'default'}-${formDataVersion}`"
         :schema="currentSchema"
         :template-key="templateSelected"
         :initial-data="formData"
