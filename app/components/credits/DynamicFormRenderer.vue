@@ -141,6 +141,13 @@ function gridColClass(cols?: number): string {
   return ''
 }
 
+/** Indica si un campo debe mostrarse según visibleWhen */
+function isFieldVisible(field: { visibleWhen?: { fieldKey: string; value: string | number } }): boolean {
+  const vw = field.visibleWhen
+  if (!vw) return true
+  return formData[vw.fieldKey] === vw.value
+}
+
 /** Input nativo estilizado (compartido) */
 const inputBaseClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
@@ -225,7 +232,7 @@ const inputBaseClass =
         </legend>
         <div class="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
         <template v-for="field in (section.fields ?? [])" :key="field.key">
-          <div :class="['grid gap-2', gridColClass(field.cols)]">
+          <div v-if="isFieldVisible(field)" :class="['grid gap-2', gridColClass(field.cols)]">
             <!-- money -->
             <template v-if="field.type === 'money'">
               <CreditsBaseMoneyInput

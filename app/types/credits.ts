@@ -11,6 +11,8 @@ export interface FormFieldSchema {
   formulaKey?: string
   /** Para type='computed': formato de salida ('number' | 'percent' | 'money') */
   formulaFormat?: 'number' | 'percent' | 'money'
+  /** Mostrar el campo solo cuando otro campo tenga un valor específico */
+  visibleWhen?: { fieldKey: string; value: string | number }
 }
 
 /** Fila de la tabla de clasificación de huevos */

@@ -1436,6 +1436,48 @@ function schemaCanaPanela(): FormSchemaInput {
   return {
     sections: [
       {
+        key: 'resumen_utilidad',
+        title: 'Resumen de utilidad',
+        fields: [
+          {
+            key: 'total_utilidad_cana_panela',
+            label: 'TOTAL UTILIDAD',
+            type: 'computed',
+            meta: 'Solo lectura (ventas - costos)',
+            formulaKey: 'cana_panela_total_utilidad',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'total_utilidad_mensual_cana_panela',
+            label: 'TOTAL UTILIDAD MENSUAL',
+            type: 'computed',
+            meta: 'Solo lectura (total utilidad ÷ duración meses)',
+            formulaKey: 'cana_panela_total_utilidad_mensual',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'ventas_cana_panela',
+            label: 'VENTAS',
+            type: 'computed',
+            meta: 'Solo lectura (hectáreas × kg/ha × valor kg)',
+            formulaKey: 'cana_panela_ventas',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'costos_cana_panela',
+            label: 'COSTOS',
+            type: 'computed',
+            meta: 'Solo lectura (ventas × % costos)',
+            formulaKey: 'cana_panela_costos',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+        ],
+      },
+      {
         key: 'producto',
         title: 'Producto y superficie',
         fields: [
@@ -1465,10 +1507,22 @@ function schemaCanaPanela(): FormSchemaInput {
             cols: 1,
           },
           {
+            key: 'cantidad_personas',
+            label: 'Cantidad de personas',
+            type: 'number',
+            meta: 'Número de personas en la sociedad',
+            cols: 1,
+            visibleWhen: { fieldKey: 'cultivo_en_sociedad', value: 'si' },
+          },
+          {
             key: 'pct_sociedad',
             label: '% sociedad',
-            type: 'text',
+            type: 'computed',
+            meta: '100% ÷ cantidad de personas',
+            formulaKey: 'cana_panela_pct_sociedad',
+            formulaFormat: 'percent',
             cols: 1,
+            visibleWhen: { fieldKey: 'cultivo_en_sociedad', value: 'si' },
           },
         ],
       },
@@ -2176,6 +2230,55 @@ function computeCultivoCicloCortoTotalUtilidadMensual(data: Record<string, unkno
   return Number.isFinite(valor) ? valor : null
 }
 
+/** Caña Panela: ventas = hectáreas × kg/hectárea × valor_unitario_kg */
+function computeCanaPanelaVentas(data: Record<string, unknown>): number | null {
+  const hectareas = Number(data.cantidad_hectareas ?? 0)
+  const kgHa = Number(data.cant_kg_hectarea ?? 0)
+  const precio = Number(data.valor_unitario_kg ?? 0)
+  const valor = hectareas * kgHa * precio
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Caña Panela: costos = ventas × (pct_costos / 100) */
+function computeCanaPanelaCostos(data: Record<string, unknown>): number | null {
+  const ventas = computeCanaPanelaVentas(data)
+  let pct = Number(data.pct_costos ?? 0)
+  if (pct > 0 && pct <= 1) pct = pct * 100
+  if (ventas == null) return null
+  const valor = ventas * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Caña Panela: total_utilidad = ventas - costos */
+function computeCanaPanelaTotalUtilidad(data: Record<string, unknown>): number | null {
+  const ventas = computeCanaPanelaVentas(data)
+  const costos = computeCanaPanelaCostos(data)
+  if (ventas == null || costos == null) return null
+  const valor = ventas - costos
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Caña Panela: utilidad_mensual = (total_utilidad / duracion_ciclo_meses) × % sociedad (100% si no es en sociedad) */
+function computeCanaPanelaTotalUtilidadMensual(data: Record<string, unknown>): number | null {
+  const totalUtilidad = computeCanaPanelaTotalUtilidad(data)
+  const meses = Number(data.duracion_ciclo_meses ?? 0)
+  if (totalUtilidad == null || !meses) return null
+  const baseMensual = totalUtilidad / meses
+  const pctSociedad = computeCanaPanelaPctSociedad(data)
+  const factor = pctSociedad != null ? pctSociedad / 100 : 1
+  const valor = baseMensual * factor
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Caña Panela: pct_sociedad = 100% ÷ cantidad_personas (solo cuando cultivo_en_sociedad = 'si') */
+function computeCanaPanelaPctSociedad(data: Record<string, unknown>): number | null {
+  if (data.cultivo_en_sociedad !== 'si') return null
+  const cantidad = Number(data.cantidad_personas ?? 0)
+  if (!cantidad || cantidad <= 0) return null
+  const valor = 100 / cantidad
+  return Number.isFinite(valor) ? valor : null
+}
+
 /** Peces Tilapia: ventas = cantidad_alevinos × peso_final_libras × precio_venta_libra */
 function computePecesTilapiaVentas(data: Record<string, unknown>): number | null {
   const cantidad = Number(data.cantidad_alevinos ?? 0)
@@ -2383,6 +2486,11 @@ const formulaComputers: Record<string, (data: Record<string, unknown>) => number
   cultivo_ciclo_corto_costos: computeCultivoCicloCortoCostos,
   cultivo_ciclo_corto_total_utilidad: computeCultivoCicloCortoTotalUtilidad,
   cultivo_ciclo_corto_total_utilidad_mensual: computeCultivoCicloCortoTotalUtilidadMensual,
+  cana_panela_ventas: computeCanaPanelaVentas,
+  cana_panela_costos: computeCanaPanelaCostos,
+  cana_panela_total_utilidad: computeCanaPanelaTotalUtilidad,
+  cana_panela_total_utilidad_mensual: computeCanaPanelaTotalUtilidadMensual,
+  cana_panela_pct_sociedad: computeCanaPanelaPctSociedad,
 }
 
 /** Evalúa una fórmula calculada dado el formulaKey y los datos del formulario */
