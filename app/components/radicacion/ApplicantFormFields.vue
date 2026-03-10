@@ -98,16 +98,16 @@ function onKeydownPesosOnly(e: KeyboardEvent) {
   if (key.length === 1 && !/[\d.,]/.test(key)) e.preventDefault()
 }
 
-/** Total ingresos = salario + pensión + cultivos/negocio (para mostrar en input readonly). */
+/** Total ingresos = salario + pensión + cultivos/negocio + arriendos + otros (para mostrar en input readonly). */
 const incomeTotalDisplay = computed(() => {
   const inc = financial.value.income
-  return (inc?.salary ?? 0) + (inc?.pension ?? 0) + (inc?.business ?? 0)
+  return (inc?.salary ?? 0) + (inc?.pension ?? 0) + (inc?.business ?? 0) + (inc?.rental ?? 0) + (inc?.other ?? 0)
 })
 
-/** Total gastos = personales + alimentación + servicios/arriendo (para mostrar en input readonly). */
+/** Total gastos = personales + alimentación + servicios/arriendo + salud + pensión + ARL + otros (para mostrar en input readonly). */
 const expensesTotalDisplay = computed(() => {
   const exp = financial.value.expenses
-  return (exp?.personal ?? 0) + (exp?.food ?? 0) + (exp?.rent ?? 0)
+  return (exp?.personal ?? 0) + (exp?.food ?? 0) + (exp?.rent ?? 0) + (exp?.health ?? 0) + (exp?.pension ?? 0) + (exp?.arl ?? 0) + (exp?.other ?? 0)
 })
 
 /** Lista de activos (permite agregar/remover). */
@@ -507,113 +507,256 @@ function formatFileSize(bytes: number): string {
     <!-- Datos financieros (ingresos, gastos, solvencia) -->
     <section v-if="showOnlyFinancial || !hideFinancialSection" :class="sectionClass">
       <h3 :class="sectionTitleClass">Datos financieros</h3>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div :class="fieldClass">
-          <Label>Ingreso salario (COP)</Label>
-          <Input
-            :model-value="formatPesos(financial.income?.salary)"
-            type="text"
-            inputmode="decimal"
-            placeholder="0"
-            @keydown="onKeydownPesosOnly"
-            @update:model-value="(v) => { const inc = financial.income || {}; const n = parsePesosInput(String(v)); const next = { ...inc, salary: n, total: (n ?? 0) + (inc.pension ?? 0) + (inc.business ?? 0) }; setFinancial('income', next); }"
-          />
-        </div>
-        <div :class="fieldClass">
-          <Label>Ingreso pensión (COP)</Label>
-          <Input
-            :model-value="formatPesos(financial.income?.pension)"
-            type="text"
-            inputmode="decimal"
-            placeholder="0"
-            @keydown="onKeydownPesosOnly"
-            @update:model-value="(v) => { const inc = financial.income || {}; const n = parsePesosInput(String(v)); const next = { ...inc, pension: n, total: (inc.salary ?? 0) + (n ?? 0) + (inc.business ?? 0) }; setFinancial('income', next); }"
-          />
-        </div>
-        <div :class="fieldClass">
-          <Label>Ingreso cultivos/negocio (COP)</Label>
-          <Input
-            :model-value="formatPesos(financial.income?.business)"
-            type="text"
-            inputmode="decimal"
-            placeholder="0"
-            @keydown="onKeydownPesosOnly"
-            @update:model-value="(v) => { const inc = financial.income || {}; const n = parsePesosInput(String(v)); const next = { ...inc, business: n, total: (inc.salary ?? 0) + (inc.pension ?? 0) + (n ?? 0) }; setFinancial('income', next); }"
-          />
-        </div>
-        <div :class="fieldClass">
-          <Label>Total ingresos (COP)</Label>
-          <Input
-            :model-value="formatPesos(incomeTotalDisplay)"
-            type="text"
-            placeholder="0"
-            readonly
-            class="bg-muted/50 cursor-default"
-          />
-        </div>
-        <div class="sm:col-span-2 lg:col-span-4" :class="fieldClass">
-          <Label>Descripción ingresos</Label>
+
+      <div class="mb-6 flex flex-col items-center gap-6 sm:flex-row sm:items-stretch sm:justify-center">
+        <!-- Ingresos (tabla) -->
+        <div class="flex flex-col">
+          <h4 class="mb-2 text-sm font-semibold text-foreground">Ingresos</h4>
+          <div class="flex-1 overflow-hidden rounded-lg border border-border sm:w-fit sm:max-w-sm">
+        <table class="w-full table-fixed text-sm">
+          <thead>
+            <tr class="border-b border-border bg-muted/40">
+              <th class="w-44 px-3 py-2.5 text-left font-medium text-foreground">Concepto</th>
+              <th class="w-36 px-3 py-2.5 text-right font-medium text-foreground">Valor (COP)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Ingreso salario</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.income?.salary)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const inc = financial.income || {}; const n = parsePesosInput(String(v)); const next = { ...inc, salary: n, total: (n ?? 0) + (inc.pension ?? 0) + (inc.business ?? 0) + (inc.rental ?? 0) + (inc.other ?? 0) }; setFinancial('income', next); }"
+                />
+              </td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Ingreso pensión</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.income?.pension)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const inc = financial.income || {}; const n = parsePesosInput(String(v)); const next = { ...inc, pension: n, total: (inc.salary ?? 0) + (n ?? 0) + (inc.business ?? 0) + (inc.rental ?? 0) + (inc.other ?? 0) }; setFinancial('income', next); }"
+                />
+              </td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Ingreso cultivos/negocio</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.income?.business)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const inc = financial.income || {}; const n = parsePesosInput(String(v)); const next = { ...inc, business: n, total: (inc.salary ?? 0) + (inc.pension ?? 0) + (n ?? 0) + (inc.rental ?? 0) + (inc.other ?? 0) }; setFinancial('income', next); }"
+                />
+              </td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Ingreso arriendos</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.income?.rental)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const inc = financial.income || {}; const n = parsePesosInput(String(v)); const next = { ...inc, rental: n, total: (inc.salary ?? 0) + (inc.pension ?? 0) + (inc.business ?? 0) + (n ?? 0) + (inc.other ?? 0) }; setFinancial('income', next); }"
+                />
+              </td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Ingresos otros</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.income?.other)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const inc = financial.income || {}; const n = parsePesosInput(String(v)); const next = { ...inc, other: n, total: (inc.salary ?? 0) + (inc.pension ?? 0) + (inc.business ?? 0) + (inc.rental ?? 0) + (n ?? 0) }; setFinancial('income', next); }"
+                />
+              </td>
+            </tr>
+            <tr class="border-t-2 border-border bg-muted/30 font-semibold">
+              <td class="px-3 py-3 text-foreground">Total ingresos</td>
+              <td class="px-3 py-3 text-right">
+                <Input
+                  :model-value="formatPesos(incomeTotalDisplay)"
+                  type="text"
+                  placeholder="0"
+                  readonly
+                  class="h-8 w-full text-right font-medium bg-muted/50 cursor-default"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="border-t border-border px-3 py-2" :class="fieldClass">
+          <Label class="text-xs">Descripción ingresos</Label>
           <textarea
             :value="financial.income?.description"
-            class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            class="mt-1 flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             placeholder="Detalle de ingresos (negocio, cultivos, etc.)"
             rows="2"
             @input="setFinancial('income', { ...(financial.income || {}), description: ($event.target as HTMLTextAreaElement).value })"
           />
         </div>
-        <div :class="fieldClass">
-          <Label>Gastos personales (COP)</Label>
-          <Input
-            :model-value="formatPesos(financial.expenses?.personal)"
-            type="text"
-            inputmode="decimal"
-            placeholder="0"
-            @keydown="onKeydownPesosOnly"
-            @update:model-value="(v) => { const exp = financial.expenses || {}; const n = parsePesosInput(String(v)); const next = { ...exp, personal: n, total: (n ?? 0) + (exp.food ?? 0) + (exp.rent ?? 0) }; setFinancial('expenses', next); }"
-          />
+          </div>
         </div>
-        <div :class="fieldClass">
-          <Label>Gastos alimentación (COP)</Label>
-          <Input
-            :model-value="formatPesos(financial.expenses?.food)"
-            type="text"
-            inputmode="decimal"
-            placeholder="0"
-            @keydown="onKeydownPesosOnly"
-            @update:model-value="(v) => { const exp = financial.expenses || {}; const n = parsePesosInput(String(v)); const next = { ...exp, food: n, total: (exp.personal ?? 0) + (n ?? 0) + (exp.rent ?? 0) }; setFinancial('expenses', next); }"
-          />
-        </div>
-        <div :class="fieldClass">
-          <Label>Gastos servicios/arriendo (COP)</Label>
-          <Input
-            :model-value="formatPesos(financial.expenses?.rent)"
-            type="text"
-            inputmode="decimal"
-            placeholder="0"
-            @keydown="onKeydownPesosOnly"
-            @update:model-value="(v) => { const exp = financial.expenses || {}; const n = parsePesosInput(String(v)); const next = { ...exp, rent: n, total: (exp.personal ?? 0) + (exp.food ?? 0) + (n ?? 0) }; setFinancial('expenses', next); }"
-          />
-        </div>
-        <div :class="fieldClass">
-          <Label>Total gastos (COP)</Label>
-          <Input
-            :model-value="formatPesos(expensesTotalDisplay)"
-            type="text"
-            placeholder="0"
-            readonly
-            class="bg-muted/50 cursor-default"
-          />
-        </div>
-        <div class="sm:col-span-2 lg:col-span-4" :class="fieldClass">
-          <Label>Descripción gastos</Label>
+
+        <!-- Gastos (tabla) -->
+        <div class="flex flex-col">
+          <h4 class="mb-2 text-sm font-semibold text-foreground">Gastos</h4>
+          <div class="flex-1 overflow-hidden rounded-lg border border-border sm:w-fit sm:max-w-sm">
+        <table class="w-full table-fixed text-sm">
+          <thead>
+            <tr class="border-b border-border bg-muted/40">
+              <th class="w-44 px-3 py-2.5 text-left font-medium text-foreground">Concepto</th>
+              <th class="w-36 px-3 py-2.5 text-right font-medium text-foreground">Valor (COP)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Gastos personales</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.expenses?.personal)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const exp = financial.expenses || {}; const n = parsePesosInput(String(v)); const next = { ...exp, personal: n, total: (n ?? 0) + (exp.food ?? 0) + (exp.rent ?? 0) + (exp.health ?? 0) + (exp.pension ?? 0) + (exp.arl ?? 0) + (exp.other ?? 0) }; setFinancial('expenses', next); }"
+                />
+              </td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Gastos alimentación</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.expenses?.food)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const exp = financial.expenses || {}; const n = parsePesosInput(String(v)); const next = { ...exp, food: n, total: (exp.personal ?? 0) + (n ?? 0) + (exp.rent ?? 0) + (exp.health ?? 0) + (exp.pension ?? 0) + (exp.arl ?? 0) + (exp.other ?? 0) }; setFinancial('expenses', next); }"
+                />
+              </td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Gastos servicios/arriendo</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.expenses?.rent)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const exp = financial.expenses || {}; const n = parsePesosInput(String(v)); const next = { ...exp, rent: n, total: (exp.personal ?? 0) + (exp.food ?? 0) + (n ?? 0) + (exp.health ?? 0) + (exp.pension ?? 0) + (exp.arl ?? 0) + (exp.other ?? 0) }; setFinancial('expenses', next); }"
+                />
+              </td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Salud</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.expenses?.health)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const exp = financial.expenses || {}; const n = parsePesosInput(String(v)); const next = { ...exp, health: n, total: (exp.personal ?? 0) + (exp.food ?? 0) + (exp.rent ?? 0) + (n ?? 0) + (exp.pension ?? 0) + (exp.arl ?? 0) + (exp.other ?? 0) }; setFinancial('expenses', next); }"
+                />
+              </td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Pensión</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.expenses?.pension)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const exp = financial.expenses || {}; const n = parsePesosInput(String(v)); const next = { ...exp, pension: n, total: (exp.personal ?? 0) + (exp.food ?? 0) + (exp.rent ?? 0) + (exp.health ?? 0) + (n ?? 0) + (exp.arl ?? 0) + (exp.other ?? 0) }; setFinancial('expenses', next); }"
+                />
+              </td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">ARL</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.expenses?.arl)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const exp = financial.expenses || {}; const n = parsePesosInput(String(v)); const next = { ...exp, arl: n, total: (exp.personal ?? 0) + (exp.food ?? 0) + (exp.rent ?? 0) + (exp.health ?? 0) + (exp.pension ?? 0) + (n ?? 0) + (exp.other ?? 0) }; setFinancial('expenses', next); }"
+                />
+              </td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Otros</td>
+              <td class="px-3 py-2 text-right">
+                <Input
+                  :model-value="formatPesos(financial.expenses?.other)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0"
+                  class="h-8 w-full text-right"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => { const exp = financial.expenses || {}; const n = parsePesosInput(String(v)); const next = { ...exp, other: n, total: (exp.personal ?? 0) + (exp.food ?? 0) + (exp.rent ?? 0) + (exp.health ?? 0) + (exp.pension ?? 0) + (exp.arl ?? 0) + (n ?? 0) }; setFinancial('expenses', next); }"
+                />
+              </td>
+            </tr>
+            <tr class="border-t-2 border-border bg-muted/30 font-semibold">
+              <td class="px-3 py-3 text-foreground">Total gastos</td>
+              <td class="px-3 py-3 text-right">
+                <Input
+                  :model-value="formatPesos(expensesTotalDisplay)"
+                  type="text"
+                  placeholder="0"
+                  readonly
+                  class="h-8 w-full text-right font-medium bg-muted/50 cursor-default"
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="border-t border-border px-3 py-2" :class="fieldClass">
+          <Label class="text-xs">Descripción gastos</Label>
           <textarea
             :value="financial.expenses?.description"
-            class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            class="mt-1 flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             placeholder="Detalle de gastos del hogar"
             rows="2"
             @input="setFinancial('expenses', { ...(financial.expenses || {}), description: ($event.target as HTMLTextAreaElement).value })"
           />
         </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div :class="fieldClass" class="sm:col-span-2 lg:col-span-4">
           <Label>Total activos (COP)</Label>
           <Input

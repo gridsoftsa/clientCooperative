@@ -19,6 +19,8 @@ export interface FinancialInfoForm {
     pension?: number
     crops?: number
     business?: number
+    rental?: number
+    other?: number
     total?: number
     description?: string
   }
@@ -27,6 +29,10 @@ export interface FinancialInfoForm {
     food?: number
     services?: number
     rent?: number
+    health?: number
+    pension?: number
+    arl?: number
+    other?: number
     total?: number
     description?: string
   }

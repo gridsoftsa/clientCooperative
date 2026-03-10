@@ -282,8 +282,10 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
           {
             key: 'produccion_lt_ciclo',
             label: 'Producción LT del ciclo',
-            type: 'number',
-            meta: 'Decimal',
+            type: 'computed',
+            meta: 'Solo lectura (vacas de cría × producción en litros)',
+            formulaKey: 'ganado_doble_produccion_lt_ciclo',
+            formulaFormat: 'number',
             cols: 1,
           },
           {
@@ -313,7 +315,7 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             key: 'costo_total_leche',
             label: 'Costo total',
             type: 'computed',
-            meta: 'Solo lectura (valor total producción × costo producción estándar %)',
+            meta: 'Solo lectura (producción mensual LT × costo producción estándar %)',
             formulaKey: 'ganado_doble_costo_total_leche',
             formulaFormat: 'money',
             cols: 1,
@@ -331,7 +333,7 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             key: 'utilidad_mensual_leche',
             label: 'Utilidad mensual',
             type: 'computed',
-            meta: 'Solo lectura ((valor total - costo total) / ciclo meses)',
+            meta: 'Solo lectura (producción mensual LT - costo total)',
             formulaKey: 'ganado_doble_utilidad_mensual_leche',
             formulaFormat: 'money',
             cols: 2,
@@ -1653,22 +1655,28 @@ function computeGanadoDobleValorTotalCrias(data: Record<string, unknown>): numbe
   return Number.isFinite(valor) ? valor : null
 }
 
+/** Fórmula Ganado Doble Propósito: produccion_lt_ciclo = vacas_cria × produccion_litros_vaca */
+function computeGanadoDobleProduccionLtCiclo(data: Record<string, unknown>): number | null {
+  const vacasCria = Number(data.vacas_cria ?? 0)
+  const produccionLitros = Number(data.produccion_litros_vaca ?? 0)
+  const valor = vacasCria * produccionLitros
+  return Number.isFinite(valor) ? valor : null
+}
+
 /** Fórmula Ganado Doble Propósito: valor_total_produccion_leche = produccion_lt_ciclo × precio_lt_leche */
 function computeGanadoDobleValorTotalProduccionLeche(data: Record<string, unknown>): number | null {
-  const produccionLt = Number(data.produccion_lt_ciclo ?? 0)
+  const produccionLt = computeGanadoDobleProduccionLtCiclo(data) ?? 0
   const precioLt = Number(data.precio_lt_leche ?? 0)
   const valor = produccionLt * precioLt
   return Number.isFinite(valor) ? valor : null
 }
 
-/** Fórmula Ganado Doble Propósito: utilidad_mensual leche = (valor_total - costo_total) / ciclo_meses */
+/** Fórmula Ganado Doble Propósito: utilidad_mensual leche = produccion_mensual_lt - costo_total */
 function computeGanadoDobleUtilidadMensualLeche(data: Record<string, unknown>): number | null {
-  const valorTotal = computeGanadoDobleValorTotalProduccionLeche(data)
+  const produccionMensualLt = computeGanadoDobleProduccionMensualLt(data)
   const costoTotal = computeGanadoDobleCostoTotalLeche(data)
-  const meses = Number(data.ciclo_produccion_leche ?? 0)
-  if (valorTotal == null || costoTotal == null || !meses) return null
-  const utilidad = valorTotal - costoTotal
-  const valor = utilidad / meses
+  if (produccionMensualLt == null || costoTotal == null) return null
+  const valor = produccionMensualLt - costoTotal
   return Number.isFinite(valor) ? valor : null
 }
 
@@ -1684,12 +1692,12 @@ function computeGanadoDobleUtilidadMensualCriasLeche(data: Record<string, unknow
   return Number.isFinite(valor) ? valor : null
 }
 
-/** Fórmula: costo_total = valor_total_produccion_leche × (costo_produccion_estandar% / 100) */
+/** Fórmula: costo_total = produccion_mensual_lt × (costo_produccion_estandar% / 100) */
 function computeGanadoDobleCostoTotalLeche(data: Record<string, unknown>): number | null {
-  const valorTotal = computeGanadoDobleValorTotalProduccionLeche(data)
+  const produccionMensualLt = computeGanadoDobleProduccionMensualLt(data)
   const pctEstandar = Number(data.pct_costo_produccion_estandar ?? 0)
-  if (valorTotal == null || !pctEstandar) return null
-  const valor = valorTotal * (pctEstandar / 100)
+  if (produccionMensualLt == null || !pctEstandar) return null
+  const valor = produccionMensualLt * (pctEstandar / 100)
   return Number.isFinite(valor) ? valor : null
 }
 
@@ -2403,6 +2411,7 @@ function computeGanadoDobleProduccionMensualLt(data: Record<string, unknown>): n
 
 const formulaComputers: Record<string, (data: Record<string, unknown>) => number | null> = {
   ganado_doble_valor_total_crias: computeGanadoDobleValorTotalCrias,
+  ganado_doble_produccion_lt_ciclo: computeGanadoDobleProduccionLtCiclo,
   ganado_doble_valor_total_produccion_leche: computeGanadoDobleValorTotalProduccionLeche,
   ganado_doble_costo_total_leche: computeGanadoDobleCostoTotalLeche,
   ganado_doble_produccion_mensual_lt: computeGanadoDobleProduccionMensualLt,
@@ -2538,4 +2547,94 @@ export function getTemplateSchema(
 /** Indica si la plantilla tiene selector de producto (para mostrar en UI) */
 export function templateHasProductSelect(templateKey: string): boolean {
   return ['cultivo-permanente', 'cultivo-ciclo-corto', 'peces-tilapia'].includes(templateKey)
+}
+
+export interface ValidateTemplateResult {
+  valid: boolean
+  errors: string[]
+}
+
+/** Valida que una plantilla tenga los campos obligatorios completos según su schema. */
+export function validateActivityTemplate(
+  item: { sector?: string; template?: string; product?: string | null; data?: Record<string, unknown> },
+): ValidateTemplateResult {
+  const errors: string[] = []
+
+  if (!item?.sector?.trim()) {
+    errors.push('Selecciona el sector')
+  }
+  if (!item?.template?.trim()) {
+    errors.push('Selecciona la plantilla')
+  }
+
+  if (!item?.sector || !item?.template) {
+    return { valid: false, errors }
+  }
+
+  const schema = getTemplateSchema(item.template, {
+    cultivoPermanente: [],
+    cultivoCicloCorto: [],
+    pecesTipo: [],
+  })
+
+  if (!schema?.sections) {
+    return { valid: true, errors: [] }
+  }
+
+  const data = item.data ?? {}
+
+  for (const section of schema.sections) {
+    const fields = section.fields
+    if (!fields?.length) continue
+
+    for (const field of fields) {
+      if (field.type === 'computed' || !field.required) continue
+
+      const val = data[field.key]
+      const isEmpty =
+        val === undefined ||
+        val === null ||
+        val === '' ||
+        (typeof val === 'number' && Number.isNaN(val))
+
+      if (isEmpty) {
+        errors.push(`${field.label} es obligatorio`)
+      }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  }
+}
+
+/** formulaKey de utilidad mensual por plantilla (para sincronizar con Ingreso cultivos/negocio) */
+const UTILIDAD_MENSUAL_FORMULA_BY_TEMPLATE: Record<string, string> = {
+  'ganado-ceba': 'ganado_ceba_utilidad_mensual',
+  'ganado-doble-proposito': 'ganado_doble_utilidad_mensual_crias_leche',
+  'cerdos-cria': 'cerdos_cria_total_utilidad_mensual',
+  'cerdos-ceba': 'cerdos_ceba_total_utilidad_mensual',
+  'pollos-engorde': 'pollos_engorde_total_utilidad_mensual',
+  'aves-ponedoras': 'aves_ponedoras_total_utilidad_mensual',
+  'peces-tilapia': 'peces_tilapia_total_utilidad_mensual',
+  'cultivo-permanente': 'cultivo_permanente_total_utilidad_mensual',
+  'cultivo-ciclo-corto': 'cultivo_ciclo_corto_total_utilidad_mensual',
+  'cana-panela': 'cana_panela_total_utilidad_mensual',
+}
+
+/** Suma la utilidad mensual de todas las plantillas (para sincronizar con Ingreso cultivos/negocio) */
+export function sumUtilidadMensualFromTemplates(
+  templates: Array<{ template: string; data?: Record<string, unknown> }>,
+): number {
+  let total = 0
+  for (const t of templates) {
+    const formulaKey = UTILIDAD_MENSUAL_FORMULA_BY_TEMPLATE[t.template]
+    if (!formulaKey || !t.data) continue
+    const value = computeFormula(formulaKey, t.data)
+    if (value != null && Number.isFinite(value)) {
+      total += value
+    }
+  }
+  return total
 }

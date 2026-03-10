@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
+import { sumUtilidadMensualFromTemplates } from '~/constants/credits-financial-templates'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 
 definePageMeta({
@@ -10,10 +11,26 @@ definePageMeta({
 const { $api, $csrf } = useNuxtApp()
 const router = useRouter()
 
+/** Siempre inicia en deudor; 'codeudor' solo al agregar codeudor a solicitud existente por URL */
+const mode = ref<'deudor' | 'codeudor'>('deudor')
 const currentStep = ref(1)
 const saving = ref(false)
 const loadingSearch = ref(false)
+const loadingApplication = ref(false)
 const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
+/** Solicitud existente cargada para agregar codeudor (por numero_radicado_externo) */
+const existingApplication = ref<Record<string, unknown> | null>(null)
+/** Dentro del paso Codeudores del deudor: mostrando el flujo de 3 pasos para agregar uno */
+const addingCodeudor = ref(false)
+const codeudorStep = ref(1)
+const codeudorBeingAdded = ref<ApplicantForm>({
+  document_type: 'CC',
+  document_number: '',
+  first_name: '',
+  first_last_name: '',
+  dependents: 0,
+  documents: [],
+})
 
 const form = ref<CreditApplicationForm>({
   debtor: {
@@ -34,13 +51,22 @@ const form = ref<CreditApplicationForm>({
   numero_radicado_externo: '',
 })
 
-const steps = [
+const stepsDeudor = [
   { num: 1, title: 'Datos del Deudor' },
   { num: 2, title: 'Actividad económica' },
   { num: 3, title: 'Datos financieros' },
   { num: 4, title: 'Datos de la Solicitud' },
   { num: 5, title: 'Codeudores' },
 ]
+
+const stepsCodeudor = [
+  { num: 1, title: 'Datos del Codeudor' },
+  { num: 2, title: 'Actividad económica' },
+  { num: 3, title: 'Datos financieros' },
+]
+
+const steps = computed(() => (mode.value === 'codeudor' ? stepsCodeudor : stepsDeudor))
+const maxStep = computed(() => steps.value.length)
 
 async function fetchCatalogs() {
   try {
@@ -88,15 +114,59 @@ async function searchApplicant() {
   }
 }
 
+const emptyCodeudor = (): ApplicantForm => ({
+  document_type: 'CC',
+  document_number: '',
+  first_name: '',
+  first_last_name: '',
+  dependents: 0,
+  documents: [],
+})
+
 function addCoDebtor() {
-  form.value.co_debtors.push({
-    document_type: 'CC',
-    document_number: '',
-    first_name: '',
-    first_last_name: '',
-    dependents: 0,
-    documents: [],
-  })
+  form.value.co_debtors.push(emptyCodeudor())
+}
+
+function startAddingCodeudor() {
+  addingCodeudor.value = true
+  codeudorStep.value = 1
+  codeudorBeingAdded.value = { ...emptyCodeudor() }
+}
+
+function cancelAddingCodeudor() {
+  addingCodeudor.value = false
+  codeudorStep.value = 1
+}
+
+function confirmAddCodeudor() {
+  if (!codeudorBeingAdded.value.document_number?.trim()
+    || !codeudorBeingAdded.value.first_name?.trim()
+    || !codeudorBeingAdded.value.first_last_name?.trim()) {
+    toast.error('Completa documento, primer nombre y primer apellido del codeudor')
+    return
+  }
+  if (hasDocumentsWithoutTitleInApplicant(codeudorBeingAdded.value)) {
+    toast.error('Todos los documentos adjuntos deben tener un título')
+    return
+  }
+  form.value.co_debtors.push({ ...codeudorBeingAdded.value })
+  toast.success('Codeudor agregado')
+  cancelAddingCodeudor()
+}
+
+function hasDocumentsWithoutTitleInApplicant(app: ApplicantForm): boolean {
+  for (const d of app.documents ?? []) {
+    if (d.file && !d.title?.trim()) return true
+  }
+  return false
+}
+
+function nextCodeudorStep() {
+  if (codeudorStep.value < 3) codeudorStep.value++
+}
+
+function prevCodeudorStep() {
+  if (codeudorStep.value > 1) codeudorStep.value--
 }
 
 function removeCoDebtor(index: number) {
@@ -107,10 +177,7 @@ const { formatPesos, parsePesosInput, onKeydownPesosOnly } = usePesosFormat()
 
 /** Sincroniza activity_templates en financial_info desde el formulario de actividad económica. */
 function setActivityTemplates(val: ActivityTemplateData[]): void {
-  ensureFinancialInfo()
-  const fi = form.value.debtor.financial_info as Record<string, unknown>
-  fi.activity_templates = val
-  fi.activity_templates_count = val.length
+  setActivityTemplatesFor(form.value.debtor, val)
 }
 
 function ensureFinancialInfo() {
@@ -122,7 +189,11 @@ function ensureFinancialInfo() {
 
 /** Obtiene la lista de plantillas; migra activity_template (antiguo) si existe. */
 function getActivityTemplates(): ActivityTemplateData[] {
-  const fi = form.value.debtor.financial_info as Record<string, unknown> | undefined
+  return getActivityTemplatesFor(form.value.debtor)
+}
+
+function getActivityTemplatesFor(app: ApplicantForm): ActivityTemplateData[] {
+  const fi = app.financial_info as Record<string, unknown> | undefined
   if (!fi) return []
   const templates = fi.activity_templates
   if (Array.isArray(templates)) {
@@ -131,7 +202,6 @@ function getActivityTemplates(): ActivityTemplateData[] {
         t && typeof t === 'object' && 'sector' in t && 'template' in t && 'data' in t,
     )
   }
-  // Migración: antiguo activity_template único
   const legacy = fi.activity_template
   if (legacy && typeof legacy === 'object' && 'sector' in legacy && 'template' in legacy && 'data' in legacy) {
     return [legacy as ActivityTemplateData]
@@ -139,9 +209,22 @@ function getActivityTemplates(): ActivityTemplateData[] {
   return []
 }
 
-/** Asegura que debtor.financial_info.solvency exista y devuelve referencia. */
+function setActivityTemplatesFor(app: ApplicantForm, val: ActivityTemplateData[]): void {
+  if (!app.financial_info || typeof app.financial_info !== 'object') {
+    app.financial_info = {}
+  }
+  const fi = app.financial_info as Record<string, unknown>
+  fi.activity_templates = val
+  fi.activity_templates_count = val.length
+  // Sincroniza utilidad mensual de plantillas → Ingreso cultivos/negocio (suma de todas las plantillas)
+  const sumUtilidad = sumUtilidadMensualFromTemplates(val)
+  const income = (fi.income ?? {}) as Record<string, unknown>
+  fi.income = { ...income, business: sumUtilidad }
+}
+
+/** Asegura que financial_info.solvency exista y devuelve referencia. */
 function ensureSolvency() {
-  const d = form.value.debtor
+  const d = applicantForFinancialSummary.value
   if (!d.financial_info || typeof d.financial_info !== 'object') {
     d.financial_info = {}
   }
@@ -160,15 +243,20 @@ function setSolvencyField(key: string, value: number | undefined) {
   ensureSolvency()[key] = value
 }
 
+/** Aplicante actual para resumen financiero (codeudor en edición o deudor) */
+const applicantForFinancialSummary = computed(() =>
+  (addingCodeudor.value ? codeudorBeingAdded.value : form.value.debtor),
+)
+
 /** Total de activos (suma de todos los valores en la lista) */
 const totalActivosFromAssets = computed(() => {
-  const assets = (form.value.debtor.financial_info as any)?.assets ?? []
+  const assets = (applicantForFinancialSummary.value.financial_info as any)?.assets ?? []
   return assets.reduce((sum: number, a: { value?: number }) => sum + (a.value ?? 0), 0)
 })
 
 /** Bien raíz (suma de activos marcados como garantía) */
 const bienRaizFromGarantias = computed(() => {
-  const assets = (form.value.debtor.financial_info as any)?.assets ?? []
+  const assets = (applicantForFinancialSummary.value.financial_info as any)?.assets ?? []
   return assets.reduce((sum: number, a: { garantia?: boolean; value?: number }) =>
     (a.garantia ? sum + (a.value ?? 0) : sum), 0)
 })
@@ -180,11 +268,19 @@ watch([totalActivosFromAssets, bienRaizFromGarantias], ([total, bienRaiz]) => {
   s.real_estate = bienRaiz as number
 }, { immediate: true })
 
+/** Monto solicitado para cálculo de solvencia (en codeudor viene de la solicitud existente) */
+const amountForSolvencia = computed(() => {
+  if (mode.value === 'codeudor' && existingApplication.value) {
+    return Number((existingApplication.value as any).amount_requested) || 0
+  }
+  return form.value.amount_requested
+})
+
 /** Solvencia % = ((Pasivos + Bien raíz) / Monto solicitado) × 100. Mayor % = mejor. */
 const solvenciaPercentage = computed(() => {
   const pasivos = getSolvencyField('liabilities') ?? 0
   const bienRaiz = bienRaizFromGarantias.value
-  const monto = form.value.amount_requested
+  const monto = amountForSolvencia.value
   if (!monto || monto <= 0) return null
   const pct = ((pasivos + bienRaiz) / monto) * 100
   return Math.round(pct * 100) / 100 // 2 decimales
@@ -200,7 +296,7 @@ function solvenciaColorClass(pct: number | null): string {
 }
 
 /** Sincroniza el valor de solvencia calculado para persistirlo al guardar */
-watch([solvenciaPercentage, () => form.value.amount_requested], () => {
+watch([solvenciaPercentage, amountForSolvencia], () => {
   const pct = solvenciaPercentage.value
   if (pct != null) setSolvencyField('solvency', pct)
 }, { immediate: true })
@@ -218,9 +314,38 @@ function canProceedStep1(): boolean {
 }
 
 function canProceedStep2(): boolean {
+  if (mode.value === 'codeudor') {
+    return !!form.value.numero_radicado_externo?.trim()
+  }
   return form.value.amount_requested > 0
     && form.value.term_months > 0
     && form.value.agency_id > 0
+}
+
+/** Carga la solicitud existente por numero_radicado_externo (para flujo codeudor) */
+async function fetchApplicationByRadicado(): Promise<boolean> {
+  const num = form.value.numero_radicado_externo?.trim()
+  if (!num) return false
+  loadingApplication.value = true
+  try {
+    const res = await $api<{ data: any[] }>('/credit-applications', {
+      query: { numero_radicado_externo: num, per_page: 1 },
+    })
+    const app = res.data?.[0]
+    if (!app) {
+      toast.error('No se encontró ninguna solicitud con ese número de radicado externo')
+      return false
+    }
+    const full = await $api<{ data: any }>(`/credit-applications/${app.id}`)
+    existingApplication.value = full.data
+    return true
+  } catch (e) {
+    console.error('Error buscando solicitud:', e)
+    toast.error('Error al buscar la solicitud')
+    return false
+  } finally {
+    loadingApplication.value = false
+  }
 }
 
 /** Documentos con archivo deben tener título (deudor y codeudores). */
@@ -250,10 +375,16 @@ function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
   }
 }
 
-async function uploadAllDocuments(applicationId: number, application: { application_applicants?: Array<{ applicant_id: number; role: string }> }) {
+async function uploadAllDocuments(
+  applicationId: number,
+  application: {
+    application_applicants?: Array<{ applicant_id: number; role: string }>
+    co_debtors?: Array<{ applicant_id: number }>
+  },
+) {
   const pivots = application.application_applicants ?? []
   const debtorPivot = pivots.find((p: { role: string }) => p.role === 'DEUDOR')
-  const codeudorPivots = pivots.filter((p: { role: string }) => p.role === 'CODEUDOR')
+  const codeudorApplicantIds = (application.co_debtors ?? []).map((c: { applicant_id: number }) => c.applicant_id)
 
   // Deudor
   if (debtorPivot) {
@@ -267,14 +398,13 @@ async function uploadAllDocuments(applicationId: number, application: { applicat
     }
   }
 
-  // Codeudores
+  // Codeudores (desde tabla co_debtors)
   const coDebtors = form.value.co_debtors ?? []
-  for (let i = 0; i < coDebtors.length && i < codeudorPivots.length; i++) {
+  for (let i = 0; i < coDebtors.length && i < codeudorApplicantIds.length; i++) {
     const co = coDebtors[i]
-    const pivot = codeudorPivots[i]
-    if (!co || !pivot) continue
+    const applicantId = codeudorApplicantIds[i]
+    if (!co || !applicantId) continue
     const docs = co.documents ?? []
-    const applicantId = pivot.applicant_id
     for (const doc of docs) {
       if (!doc.file || !doc.title?.trim()) continue
       const fd = new FormData()
@@ -286,7 +416,93 @@ async function uploadAllDocuments(applicationId: number, application: { applicat
   }
 }
 
+async function saveCodeudor() {
+  if (!form.value.numero_radicado_externo?.trim()) {
+    toast.error('El número de radicado externo es obligatorio')
+    return
+  }
+  if (!canProceedStep1()) {
+    toast.error('Completa documento, primer nombre y primer apellido del codeudor')
+    return
+  }
+  if (hasDocumentsWithoutTitle()) {
+    toast.error('Todos los documentos adjuntos deben tener un título')
+    return
+  }
+  if (!existingApplication.value) {
+    const ok = await fetchApplicationByRadicado()
+    if (!ok) return
+  }
+  const app = existingApplication.value as any
+  if (!app?.id) {
+    toast.error('No se encontró la solicitud')
+    return
+  }
+  if (app.status !== 'Draft') {
+    toast.error('Solo se pueden agregar codeudores a solicitudes en borrador')
+    return
+  }
+
+  saving.value = true
+  try {
+    await $csrf()
+    const existingCoDebtors = (app.co_debtors ?? []).map((c: any) => {
+      const { documents: _d, ...rest } = c
+      return rest
+    })
+    const codeudorFormData = form.value.debtor
+    const { documents: _dd, ...coWithoutDocs } = codeudorFormData
+    const payload = {
+      debtor: app.debtor,
+      co_debtors: [...existingCoDebtors, coWithoutDocs],
+      amount_requested: app.amount_requested,
+      term_months: app.term_months,
+      agency_id: app.agency_id,
+      destination: app.destination ?? '',
+      destination_description: app.destination_description ?? '',
+      numero_radicado_externo: app.numero_radicado_externo ?? form.value.numero_radicado_externo,
+      status: 'Draft',
+    }
+    const { data: updated } = await $api<{ data: { id: number; co_debtors?: Array<{ applicant_id: number }> } }>(
+      `/credit-applications/${app.id}`,
+      { method: 'PUT', body: payload },
+    )
+    const coDebtorsList = (updated.co_debtors ?? []) as Array<{ applicant_id: number }>
+    const createdCoDebtor = coDebtorsList[coDebtorsList.length - 1]
+    if (createdCoDebtor) {
+      const docs = form.value.debtor.documents ?? []
+      for (const doc of docs) {
+        if (!doc.file || !doc.title?.trim()) continue
+        const fd = new FormData()
+        fd.append('title', doc.title.trim())
+        fd.append('file', doc.file)
+        fd.append('applicant_id', String(createdCoDebtor.applicant_id))
+        await $api(`/credit-applications/${updated.id}/documents`, { method: 'POST', body: fd })
+      }
+    }
+    toast.success('Codeudor agregado correctamente')
+    router.push('/radicacion')
+  } catch (e: any) {
+    console.error('Error guardando codeudor:', e)
+    let msg = 'Error al guardar'
+    if (e?.data?.errors && typeof e.data.errors === 'object') {
+      msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
+    } else if (e?.data?.message) {
+      msg = e.data.message
+    } else if (e?.message) {
+      msg = e.message
+    }
+    toast.error(msg)
+  } finally {
+    saving.value = false
+  }
+}
+
 async function saveDraft() {
+  if (mode.value === 'codeudor') {
+    await saveCodeudor()
+    return
+  }
   if (!form.value.numero_radicado_externo?.trim()) {
     toast.error('El número de radicado externo es obligatorio')
     return
@@ -331,6 +547,10 @@ async function saveDraft() {
 }
 
 async function submitApplication() {
+  if (mode.value === 'codeudor') {
+    await saveCodeudor()
+    return
+  }
   if (!form.value.numero_radicado_externo?.trim()) {
     toast.error('El número de radicado externo es obligatorio')
     return
@@ -374,13 +594,39 @@ async function submitApplication() {
   }
 }
 
-function nextStep() {
-  if (currentStep.value < 5) currentStep.value++
+async function nextStep() {
+  if (mode.value === 'codeudor' && currentStep.value === 1) {
+    if (!form.value.numero_radicado_externo?.trim()) {
+      toast.error('Ingresa el número de radicado externo (arriba) antes de continuar')
+      return
+    }
+    const ok = await fetchApplicationByRadicado()
+    if (!ok) return
+  }
+  if (currentStep.value < maxStep.value) currentStep.value++
 }
 
 function prevStep() {
   if (currentStep.value > 1) currentStep.value--
 }
+
+function selectMode(m: 'deudor' | 'codeudor') {
+  mode.value = m
+  currentStep.value = 1
+  existingApplication.value = null
+  if (m === 'codeudor') {
+    form.value.co_debtors = []
+    form.value.debtor = {
+      document_type: 'CC',
+      document_number: '',
+      first_name: '',
+      first_last_name: '',
+      dependents: 0,
+      documents: [],
+    }
+  }
+}
+
 
 onMounted(() => {
   fetchCatalogs()
@@ -404,7 +650,8 @@ onMounted(() => {
       </Button>
     </div>
 
-    <!-- Número de radicado externo (parte superior, obligatorio) -->
+    <!-- Formulario Deudor (o Codeudor si se llegó por query/estado) -->
+    <!-- Número de radicado externo: siempre visible (deudor y codeudor) -->
     <div class="rounded-xl border bg-card p-4">
       <div class="space-y-1.5 max-w-md">
         <Label for="numero_radicado_externo" class="text-sm font-semibold">
@@ -420,15 +667,20 @@ onMounted(() => {
           class="font-mono"
         />
         <p class="text-xs text-muted-foreground">
-          Referencia del radicado en sistemas externos (Finagro, etc.). Obligatorio para guardar o enviar.
+          {{ mode === 'codeudor'
+            ? 'Debe coincidir con el radicado de la solicitud del deudor para vincular este codeudor.'
+            : 'Referencia del radicado en sistemas externos (Finagro, etc.). Obligatorio para guardar o enviar.' }}
         </p>
       </div>
     </div>
 
-    <!-- Resumen financiero (encima de los pasos) -->
-    <div class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
+    <!-- Resumen financiero del deudor o codeudor -->
+    <div
+      v-if="mode"
+      class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4"
+    >
       <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Resumen financiero del deudor
+        Resumen financiero {{ mode === 'codeudor' ? 'del codeudor' : 'del deudor' }}
       </p>
       <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div class="space-y-1">
@@ -490,8 +742,8 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Stepper (cada paso es clickeable para navegar) -->
-    <div class="flex flex-wrap items-center gap-2">
+    <!-- Stepper (cada paso es clickeable para navegar) - oculto al agregar codeudor -->
+    <div v-if="!addingCodeudor" class="flex flex-wrap items-center gap-2">
       <template v-for="(step, idx) in steps" :key="step.num">
         <button
           type="button"
@@ -533,33 +785,54 @@ onMounted(() => {
 
     <Card>
       <CardHeader>
-        <CardTitle>{{ steps[currentStep - 1]?.title ?? '' }}</CardTitle>
+        <CardTitle>
+          {{ addingCodeudor ? `Agregar Codeudor - ${stepsCodeudor[codeudorStep - 1]?.title ?? ''}` : (steps[currentStep - 1]?.title ?? '') }}
+        </CardTitle>
         <CardDescription>
-          {{ currentStep === 1
-            ? 'Busca por cédula o completa el formulario del deudor principal'
-            : currentStep === 2
-              ? 'Plantillas agropecuarias según la actividad económica del deudor'
-              : currentStep === 3
-                ? 'Ingresos, gastos y solvencia del deudor'
-                : currentStep === 4
-                  ? 'Monto, plazo y destino del crédito'
-                  : 'Agrega codeudores si aplica' }}
+          {{ addingCodeudor
+            ? (codeudorStep === 1
+                ? 'Datos personales y concepto del codeudor'
+                : codeudorStep === 2
+                  ? 'Plantillas agropecuarias según la actividad económica'
+                  : 'Ingresos, gastos y solvencia del codeudor')
+            : mode === 'codeudor'
+              ? (currentStep === 1
+                  ? 'Busca por cédula o completa el formulario del codeudor'
+                  : currentStep === 2
+                    ? 'Plantillas agropecuarias según la actividad económica del codeudor'
+                    : 'Ingresos, gastos y solvencia del codeudor')
+              : (currentStep === 1
+                ? 'Busca por cédula o completa el formulario del deudor principal'
+                : currentStep === 2
+                  ? 'Plantillas agropecuarias según la actividad económica del deudor'
+                  : currentStep === 3
+                    ? 'Ingresos, gastos y solvencia del deudor'
+                    : currentStep === 4
+                      ? 'Monto, plazo y destino del crédito'
+                      : 'Agrega codeudores si aplica') }}
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-6">
-        <!-- Paso 1: Deudor -->
-        <div v-if="currentStep === 1" class="space-y-4">
+        <!-- Paso 1: Datos del Deudor o Codeudor -->
+        <div
+          v-if="(mode === 'deudor' && currentStep === 1) || (mode === 'codeudor' && currentStep === 1)"
+          class="space-y-4"
+        >
           <ApplicantFormFields
             v-model="form.debtor"
-            :show-search="true"
+            :show-search="mode === 'deudor'"
             :loading-search="loadingSearch"
             :hide-financial-section="true"
+            :show-co-debtor-concept="mode === 'codeudor'"
             @search="searchApplicant"
           />
         </div>
 
         <!-- Paso 2: Actividad económica -->
-        <div v-else-if="currentStep === 2" class="space-y-4">
+        <div
+          v-else-if="(mode === 'deudor' && currentStep === 2) || (mode === 'codeudor' && currentStep === 2)"
+          class="space-y-4"
+        >
           <CreditsFinancialActivityFormList
             :model-value="getActivityTemplates()"
             @update:model-value="setActivityTemplates"
@@ -567,15 +840,18 @@ onMounted(() => {
         </div>
 
         <!-- Paso 3: Datos financieros -->
-        <div v-else-if="currentStep === 3" class="space-y-4">
+        <div
+          v-else-if="(mode === 'deudor' && currentStep === 3) || (mode === 'codeudor' && currentStep === 3)"
+          class="space-y-4"
+        >
           <ApplicantFormFields
             v-model="form.debtor"
             :show-only-financial="true"
           />
         </div>
 
-        <!-- Paso 4: Solicitud -->
-        <div v-else-if="currentStep === 4" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <!-- Paso 4 Deudor: Solicitud (solo deudor) -->
+        <div v-else-if="mode === 'deudor' && currentStep === 4" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div class="space-y-1.5">
             <Label for="amount">Monto solicitado * (COP)</Label>
             <Input
@@ -637,13 +913,113 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Paso 5: Codeudores -->
-        <div v-else-if="currentStep === 5" class="space-y-6">
+        <!-- Paso 5 Deudor: Codeudores - subflujo agregar codeudor (3 pasos) -->
+        <div
+          v-else-if="mode === 'deudor' && currentStep === 5 && addingCodeudor"
+          class="space-y-6"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              @click="cancelAddingCodeudor"
+            >
+              <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
+              Volver al deudor
+            </Button>
+            <div class="flex flex-wrap items-center gap-2">
+            <template v-for="(s, idx) in stepsCodeudor" :key="s.num">
+              <button
+                type="button"
+                class="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                :class="[
+                  codeudorStep === s.num
+                    ? 'bg-primary text-primary-foreground cursor-default'
+                    : 'cursor-pointer hover:bg-muted',
+                ]"
+                @click="codeudorStep = s.num"
+              >
+                <div
+                  class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ring-border/50"
+                  :class="codeudorStep === s.num ? 'bg-primary text-primary-foreground ring-primary' : 'bg-background'"
+                >
+                  {{ s.num }}
+                </div>
+                <span class="text-sm font-semibold hidden sm:inline">{{ s.title }}</span>
+              </button>
+              <Icon v-if="idx < stepsCodeudor.length - 1" name="i-lucide-chevron-right" class="h-4 w-4 shrink-0 text-muted-foreground" />
+            </template>
+            </div>
+          </div>
+
+          <!-- Paso 1: Datos del Codeudor -->
+          <div v-if="codeudorStep === 1" class="space-y-4">
+            <ApplicantFormFields
+              v-model="codeudorBeingAdded"
+              :show-co-debtor-concept="true"
+              :hide-financial-section="true"
+            />
+          </div>
+          <!-- Paso 2: Actividad económica -->
+          <div v-else-if="codeudorStep === 2" class="space-y-4">
+            <CreditsFinancialActivityFormList
+              :model-value="getActivityTemplatesFor(codeudorBeingAdded)"
+              @update:model-value="(v) => setActivityTemplatesFor(codeudorBeingAdded, v)"
+            />
+          </div>
+          <!-- Paso 3: Datos financieros -->
+          <div v-else-if="codeudorStep === 3" class="space-y-4">
+            <ApplicantFormFields
+              v-model="codeudorBeingAdded"
+              :show-only-financial="true"
+            />
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t">
+            <div class="flex gap-2">
+              <Button
+                v-if="codeudorStep > 1"
+                type="button"
+                variant="outline"
+                @click="prevCodeudorStep"
+              >
+                Anterior
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                @click="cancelAddingCodeudor"
+              >
+                <Icon name="i-lucide-x" class="mr-2 h-4 w-4" />
+                Volver al deudor
+              </Button>
+              <Button
+                v-if="codeudorStep < 3"
+                type="button"
+                @click="nextCodeudorStep"
+              >
+                Siguiente
+              </Button>
+            </div>
+            <Button
+              v-if="codeudorStep === 3"
+              type="button"
+              @click="confirmAddCodeudor"
+            >
+              <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+              Agregar codeudor
+            </Button>
+          </div>
+        </div>
+
+        <!-- Paso 5 Deudor: Codeudores - lista y botón -->
+        <div v-else-if="mode === 'deudor' && currentStep === 5" class="space-y-6">
           <div class="flex items-center justify-between">
             <p class="text-sm text-muted-foreground">
               Agrega codeudores si el crédito lo requiere
             </p>
-            <Button type="button" variant="outline" size="sm" @click="addCoDebtor">
+            <Button type="button" variant="outline" size="sm" @click="startAddingCodeudor">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
               Agregar Codeudor
             </Button>
@@ -691,8 +1067,8 @@ onMounted(() => {
           </Accordion>
         </div>
 
-        <!-- Navegación -->
-        <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t">
+        <!-- Navegación (oculta al agregar codeudor) -->
+        <div v-if="!addingCodeudor" class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t">
           <div class="flex gap-2">
             <Button
               v-if="currentStep > 1"
@@ -703,7 +1079,7 @@ onMounted(() => {
               Anterior
             </Button>
             <Button
-              v-if="currentStep < 5"
+              v-if="currentStep < maxStep"
               type="button"
               @click="nextStep"
             >
@@ -718,9 +1094,10 @@ onMounted(() => {
               @click="saveDraft"
             >
               <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              Guardar borrador
+              {{ mode === 'codeudor' ? 'Guardar codeudor' : 'Guardar borrador' }}
             </Button>
             <Button
+              v-if="mode === 'deudor'"
               :disabled="saving"
               @click="submitApplication"
             >

@@ -2,9 +2,14 @@
 /**
  * Lista de plantillas de actividad económica. Permite añadir varias.
  * Los datos se guardan en debtor.financial_info.activity_templates.
+ * Ofrece "Guardar plantilla" para validar y cerrar la plantilla actual.
  */
+import { toast } from 'vue-sonner'
 import type { ActivityTemplateData } from '~/types/credit-application'
-import { sectorsConfig } from '~/constants/credits-financial-templates'
+import {
+  sectorsConfig,
+  validateActivityTemplate,
+} from '~/constants/credits-financial-templates'
 
 function templateOptionsFor(sector: string) {
   return sectorsConfig.find((s) => s.value === sector)?.templates ?? []
@@ -24,6 +29,8 @@ const emit = defineEmits<{
 }>()
 
 const templates = ref<ActivityTemplateData[]>([...(props.modelValue ?? [])])
+/** Controla qué acordeones están abiertos (activity-0, activity-1, etc.) */
+const openItems = ref<string[]>([])
 
 function addTemplate() {
   templates.value.push({
@@ -32,11 +39,34 @@ function addTemplate() {
     product: null,
     data: {},
   })
+  const newIdx = templates.value.length - 1
+  openItems.value = [...openItems.value, `activity-${newIdx}`]
   emitUpdate()
+}
+
+/** Valida y guarda la plantilla actual; si es válida, la cierra. */
+function saveTemplate(index: number) {
+  const item = templates.value[index]
+  const result = validateActivityTemplate(item)
+  if (!result.valid) {
+    toast.error(result.errors.join('. '))
+    return
+  }
+  emitUpdate()
+  const key = `activity-${index}`
+  openItems.value = openItems.value.filter((v) => v !== key)
+  toast.success('Plantilla guardada correctamente.')
 }
 
 function removeTemplate(index: number) {
   templates.value.splice(index, 1)
+  openItems.value = openItems.value
+    .map((v) => {
+      const num = Number(v.replace('activity-', ''))
+      if (num === index) return null
+      return num > index ? `activity-${num - 1}` : v
+    })
+    .filter((v): v is string => v != null)
   emitUpdate()
 }
 
@@ -68,21 +98,29 @@ watch(
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-center justify-between">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <p class="text-sm text-muted-foreground">
         Añade una o más plantillas según las actividades económicas del deudor
       </p>
-      <Button type="button" variant="outline" size="sm" @click="addTemplate">
-        <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-        Agregar plantilla
-      </Button>
+      <div class="flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" @click="addTemplate">
+          <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+          Agregar plantilla
+        </Button>
+      </div>
     </div>
 
     <div v-if="templates.length === 0" class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
       No hay plantillas. Haz clic en "Agregar plantilla" para comenzar.
     </div>
 
-    <Accordion v-else type="multiple" collapsible class="space-y-2">
+    <Accordion
+      v-else
+      v-model="openItems"
+      type="multiple"
+      collapsible
+      class="space-y-2"
+    >
       <AccordionItem
         v-for="(item, idx) in templates"
         :key="idx"
@@ -114,6 +152,17 @@ watch(
               :model-value="item"
               @update:model-value="(v) => updateTemplate(idx, v)"
             />
+            <div class="mt-4 flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                @click="saveTemplate(idx)"
+              >
+                <Icon name="i-lucide-save" class="mr-2 h-4 w-4" />
+                Guardar plantilla
+              </Button>
+            </div>
           </div>
         </AccordionContent>
       </AccordionItem>

@@ -46,9 +46,11 @@ const assetsTotal = computed(() =>
 )
 const incomeTotal = computed(() =>
   (income.value.salary ?? 0) + (income.value.pension ?? 0) + (income.value.business ?? income.value.crops ?? 0)
+    + (income.value.rental ?? 0) + (income.value.other ?? 0)
 )
 const expensesTotal = computed(() =>
   (expenses.value.personal ?? 0) + (expenses.value.food ?? 0) + (expenses.value.rent ?? expenses.value.services ?? 0)
+    + (expenses.value.health ?? 0) + (expenses.value.pension ?? 0) + (expenses.value.arl ?? 0) + (expenses.value.other ?? 0)
 )
 
 const sectionClass = 'space-y-3'
@@ -184,47 +186,108 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
 
     <section :class="sectionClass">
       <h3 :class="sectionTitleClass">Datos financieros</h3>
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div :class="fieldClass">
-          <p :class="labelClass">Ingreso salario</p>
-          <p>{{ formatPesos(income.salary) }}</p>
-        </div>
-        <div :class="fieldClass">
-          <p :class="labelClass">Ingreso pensión</p>
-          <p>{{ formatPesos(income.pension) }}</p>
-        </div>
-        <div :class="fieldClass">
-          <p :class="labelClass">Ingreso cultivos/negocio</p>
-          <p>{{ formatPesos(income.business ?? income.crops) }}</p>
-        </div>
-        <div :class="fieldClass">
-          <p :class="labelClass">Total ingresos</p>
-          <p class="font-medium">{{ formatPesos(incomeTotal) }}</p>
-        </div>
-        <div v-if="income.description" class="sm:col-span-2 lg:col-span-4" :class="fieldClass">
+
+      <div class="mb-6 flex flex-col items-center gap-6 sm:flex-row sm:items-stretch sm:justify-center">
+        <!-- Ingresos (tabla) -->
+        <div class="flex flex-col">
+          <h4 class="mb-2 text-sm font-semibold text-foreground">Ingresos</h4>
+          <div class="flex-1 overflow-hidden rounded-lg border border-border sm:w-fit sm:max-w-sm">
+        <table class="w-full table-fixed text-sm">
+          <thead>
+            <tr class="border-b border-border bg-muted/40">
+              <th class="w-44 px-3 py-2.5 text-left font-medium text-foreground">Concepto</th>
+              <th class="w-36 px-3 py-2.5 text-right font-medium text-foreground">Valor (COP)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Ingreso salario</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(income.salary) }}</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Ingreso pensión</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(income.pension) }}</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Ingreso cultivos/negocio</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(income.business ?? income.crops) }}</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Ingreso arriendos</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(income.rental) }}</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Ingresos otros</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(income.other) }}</td>
+            </tr>
+            <tr class="border-t-2 border-border bg-muted/30 font-semibold">
+              <td class="px-3 py-3 text-foreground">Total ingresos</td>
+              <td class="px-3 py-3 text-right">{{ formatPesos(incomeTotal) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="income.description" class="border-t border-border px-3 py-2" :class="fieldClass">
           <p :class="labelClass">Descripción ingresos</p>
-          <p class="whitespace-pre-wrap">{{ income.description }}</p>
+          <p class="whitespace-pre-wrap text-sm">{{ income.description }}</p>
         </div>
-        <div :class="fieldClass">
-          <p :class="labelClass">Gastos personales</p>
-          <p>{{ formatPesos(expenses.personal) }}</p>
+          </div>
         </div>
-        <div :class="fieldClass">
-          <p :class="labelClass">Gastos alimentación</p>
-          <p>{{ formatPesos(expenses.food) }}</p>
-        </div>
-        <div :class="fieldClass">
-          <p :class="labelClass">Gastos servicios/arriendo</p>
-          <p>{{ formatPesos(expenses.rent ?? expenses.services) }}</p>
-        </div>
-        <div :class="fieldClass">
-          <p :class="labelClass">Total gastos</p>
-          <p class="font-medium">{{ formatPesos(expensesTotal) }}</p>
-        </div>
-        <div v-if="expenses.description" class="sm:col-span-2 lg:col-span-4" :class="fieldClass">
+
+        <!-- Gastos (tabla) -->
+        <div class="flex flex-col">
+          <h4 class="mb-2 text-sm font-semibold text-foreground">Gastos</h4>
+          <div class="flex-1 overflow-hidden rounded-lg border border-border sm:w-fit sm:max-w-sm">
+        <table class="w-full table-fixed text-sm">
+          <thead>
+            <tr class="border-b border-border bg-muted/40">
+              <th class="w-44 px-3 py-2.5 text-left font-medium text-foreground">Concepto</th>
+              <th class="w-36 px-3 py-2.5 text-right font-medium text-foreground">Valor (COP)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-border">
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Gastos personales</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.personal) }}</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Gastos alimentación</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.food) }}</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Gastos servicios/arriendo</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.rent ?? expenses.services) }}</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Salud</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.health) }}</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Pensión</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.pension) }}</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">ARL</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.arl) }}</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-2.5 text-muted-foreground">Otros</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.other) }}</td>
+            </tr>
+            <tr class="border-t-2 border-border bg-muted/30 font-semibold">
+              <td class="px-3 py-3 text-foreground">Total gastos</td>
+              <td class="px-3 py-3 text-right">{{ formatPesos(expensesTotal) }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="expenses.description" class="border-t border-border px-3 py-2" :class="fieldClass">
           <p :class="labelClass">Descripción gastos</p>
-          <p class="whitespace-pre-wrap">{{ expenses.description }}</p>
+          <p class="whitespace-pre-wrap text-sm">{{ expenses.description }}</p>
         </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div :class="fieldClass">
           <p :class="labelClass">Total activos</p>
           <p>{{ formatPesos(assetsList.length ? assetsTotal : solvency.assets) }}</p>
