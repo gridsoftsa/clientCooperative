@@ -375,6 +375,26 @@ function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
   }
 }
 
+const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024 // 10 MB
+
+function validateAllDocumentsBeforeUpload(): string | null {
+  const check = (docs: Array<{ title?: string; file?: File }>) => {
+    for (const doc of docs) {
+      if (doc.file && doc.file.size > MAX_DOCUMENT_SIZE) {
+        return `"${doc.file.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`
+      }
+    }
+    return null
+  }
+  const debtorErr = check(form.value.debtor.documents ?? [])
+  if (debtorErr) return debtorErr
+  for (const co of form.value.co_debtors ?? []) {
+    const err = check(co.documents ?? [])
+    if (err) return err
+  }
+  return null
+}
+
 async function uploadAllDocuments(
   applicationId: number,
   application: {
@@ -382,6 +402,9 @@ async function uploadAllDocuments(
     co_debtors?: Array<{ applicant_id: number }>
   },
 ) {
+  const sizeErr = validateAllDocumentsBeforeUpload()
+  if (sizeErr) throw new Error(sizeErr)
+
   const pivots = application.application_applicants ?? []
   const debtorPivot = pivots.find((p: { role: string }) => p.role === 'DEUDOR')
   const codeudorApplicantIds = (application.co_debtors ?? []).map((c: { applicant_id: number }) => c.applicant_id)
@@ -471,6 +494,11 @@ async function saveCodeudor() {
     const createdCoDebtor = coDebtorsList[coDebtorsList.length - 1]
     if (createdCoDebtor) {
       const docs = form.value.debtor.documents ?? []
+      for (const d of docs) {
+        if (d.file && d.file.size > MAX_DOCUMENT_SIZE) {
+          throw new Error(`"${d.file.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`)
+        }
+      }
       for (const doc of docs) {
         if (!doc.file || !doc.title?.trim()) continue
         const fd = new FormData()
@@ -485,7 +513,9 @@ async function saveCodeudor() {
   } catch (e: any) {
     console.error('Error guardando codeudor:', e)
     let msg = 'Error al guardar'
-    if (e?.data?.errors && typeof e.data.errors === 'object') {
+    if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
+      msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
+    } else if (e?.data?.errors && typeof e.data.errors === 'object') {
       msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
     } else if (e?.data?.message) {
       msg = e.data.message
@@ -533,7 +563,9 @@ async function saveDraft() {
   } catch (e: any) {
     console.error('Error guardando:', e)
     let msg = 'Error al guardar'
-    if (e?.data?.errors && typeof e.data.errors === 'object') {
+    if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
+      msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
+    } else if (e?.data?.errors && typeof e.data.errors === 'object') {
       msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
     } else if (e?.data?.message) {
       msg = e.data.message
@@ -581,7 +613,9 @@ async function submitApplication() {
   } catch (e: any) {
     console.error('Error enviando:', e)
     let msg = 'Error al enviar'
-    if (e?.data?.errors && typeof e.data.errors === 'object') {
+    if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
+      msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
+    } else if (e?.data?.errors && typeof e.data.errors === 'object') {
       msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
     } else if (e?.data?.message) {
       msg = e.data.message

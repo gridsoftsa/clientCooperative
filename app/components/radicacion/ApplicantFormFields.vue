@@ -174,8 +174,9 @@ function onDocumentFileChange(index: number, e: Event) {
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
-  if (!isValidFile(file)) {
-    toast.error('Archivo no válido. Use PDF, JPG, PNG o DOC. Máx. 10 MB.')
+  const { valid, message } = validateDocumentFile(file)
+  if (!valid) {
+    toast.error(message)
     return
   }
   updateDocument(index, { file })
@@ -185,8 +186,9 @@ function onDocumentDrop(index: number, e: DragEvent) {
   e.preventDefault()
   const file = e.dataTransfer?.files?.[0]
   if (!file) return
-  if (!isValidFile(file)) {
-    toast.error('Archivo no válido. Use PDF, JPG, PNG o DOC. Máx. 10 MB.')
+  const { valid, message } = validateDocumentFile(file)
+  if (!valid) {
+    toast.error(message)
     return
   }
   updateDocument(index, { file })
@@ -197,9 +199,21 @@ function onDocumentDragOver(e: DragEvent) {
   e.dataTransfer!.dropEffect = 'copy'
 }
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+const VALID_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+
+function validateDocumentFile(file: File): { valid: boolean; message: string } {
+  if (file.size > MAX_FILE_SIZE) {
+    return { valid: false, message: `El archivo "${file.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.` }
+  }
+  if (!VALID_MIMES.includes(file.type)) {
+    return { valid: false, message: 'Archivo no válido. Use PDF, JPG, PNG o DOC.' }
+  }
+  return { valid: true, message: '' }
+}
+
 function isValidFile(file: File): boolean {
-  const valid = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-  return valid.includes(file.type) && file.size <= 10 * 1024 * 1024
+  return validateDocumentFile(file).valid
 }
 
 function formatFileSize(bytes: number): string {
