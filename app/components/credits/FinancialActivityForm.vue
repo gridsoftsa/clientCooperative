@@ -12,7 +12,7 @@ import {
 } from '~/constants/credits-financial-templates'
 import { getConfigFieldKeys } from '~/constants/template-config-schemas'
 
-const { cultivoPermanenteOptions, cultivoCicloCortoOptions, pecesTipoOptions, fetchCategories } = useTemplateCategories()
+const { cultivoPermanenteOptions, cultivoCicloCortoOptions, pecesTipoOptions, serviciosTipoOptions, fetchCategories } = useTemplateCategories()
 const { fetchFlatData } = useTemplateFlatData()
 
 const props = withDefaults(
@@ -51,6 +51,7 @@ const currentSchema = computed<FormSchemaInput | null>(() => {
     cultivoPermanente: cultivoPermanenteOptions.value,
     cultivoCicloCorto: cultivoCicloCortoOptions.value,
     pecesTipo: pecesTipoOptions.value,
+    serviciosTipo: serviciosTipoOptions.value,
   })
 })
 

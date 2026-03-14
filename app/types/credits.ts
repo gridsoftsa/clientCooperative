@@ -28,8 +28,12 @@ export interface FormSectionSchema {
   title: string
   fields: FormFieldSchema[]
   /** Layout alternativo: tabla de clasificación de huevos (aves ponedoras) */
-  layout?: 'eggsTable' | 'finagroTable' | 'referenciaInfo' | 'referenciaInfoCeba' | 'cicloCortoCostBreakdownTable'
+  layout?: 'eggsTable' | 'finagroTable' | 'referenciaInfo' | 'referenciaInfoCeba' | 'cicloCortoCostBreakdownTable' | 'serviciosIngresosTable' | 'transporteCargaGastosTable'
   tableRows?: EggsTableRowSchema[]
+  /** Para serviciosIngresosTable: filas de la tabla (tipo día) */
+  serviciosTableRows?: Array<{ suffix: string; label: string }>
+  /** Para transporteCargaGastosTable: filas de gastos por viaje */
+  gastosTableRows?: Array<{ key: string; label: string }>
 }
 
 /** Schema completo para DynamicFormRenderer */

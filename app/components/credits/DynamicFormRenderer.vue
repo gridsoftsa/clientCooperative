@@ -14,6 +14,11 @@ import {
   CICLO_CORTO_COST_BREAKDOWN_DEFAULT,
   CICLO_CORTO_COST_BREAKDOWN_KEY,
 } from '~/constants/cultivo-ciclo-corto-cost-breakdown'
+import { SERVICIOS_INGRESOS_ROWS } from '~/constants/servicios-ingresos-table'
+import { TRANSPORTE_CARGA_GASTOS_ROWS } from '~/constants/transporte-carga-gastos-table'
+import CreditsServiciosIngresosTable from '~/components/credits/ServiciosIngresosTable.vue'
+import CreditsTransporteCargaGastosTable from '~/components/credits/TransporteCargaGastosTable.vue'
+import CreditsTransporteCargaOtrosGastosTable from '~/components/credits/TransporteCargaOtrosGastosTable.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -79,6 +84,27 @@ function buildInitialFormData(): Record<string, unknown> {
         for (const [k, v] of Object.entries(AVES_COST_PCT_DEFAULTS)) {
           if (data[k] === undefined) data[k] = v
         }
+      }
+      continue
+    }
+    if (section.layout === 'serviciosIngresosTable') {
+      const rows = section.serviciosTableRows ?? SERVICIOS_INGRESOS_ROWS
+      for (const row of rows) {
+        const valorKey = `dia_${row.suffix}_valor`
+        const cantidadKey = `dia_${row.suffix}_cantidad`
+        if (data[valorKey] === undefined) data[valorKey] = null
+        if (data[cantidadKey] === undefined) data[cantidadKey] = null
+      }
+      continue
+    }
+    if (section.layout === 'transporteCargaGastosTable') {
+      const rows = section.gastosTableRows ?? TRANSPORTE_CARGA_GASTOS_ROWS
+      for (const row of rows) {
+        if (data[row.key] === undefined) data[row.key] = null
+      }
+      const otrosGastosKeys = ['seguro_soat', 'tecnomecanica', 'llantas_anual', 'repuestos', 'cambios_aceite_cantidad', 'precio_cambio_aceite', 'bajadas_rueda_anual']
+      for (const k of otrosGastosKeys) {
+        if (data[k] === undefined) data[k] = null
       }
       continue
     }
@@ -200,6 +226,65 @@ const inputBaseClass =
         <legend class="sr-only">{{ section.title }}</legend>
         <div class="mt-2">
           <CreditsCultivoCicloCortoCostBreakdown :form-data="formData" />
+        </div>
+      </fieldset>
+      <!-- Tabla editable Ingresos por Servicio (servicios) -->
+      <fieldset
+        v-else-if="section.layout === 'serviciosIngresosTable'"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="text-sm font-semibold text-foreground">
+          {{ section.title }}
+        </legend>
+        <div class="mt-4">
+          <CreditsServiciosIngresosTable
+            :form-data="formData"
+            :table-rows="(section.serviciosTableRows && section.serviciosTableRows.length > 0) ? section.serviciosTableRows : SERVICIOS_INGRESOS_ROWS"
+            @update:field="({ key, value }) => (formData[key] = value)"
+          />
+        </div>
+      </fieldset>
+      <!-- Tabla Gastos por Viaje Redondo + Otros Gastos Anuales (transporte-carga) -->
+      <fieldset
+        v-else-if="section.layout === 'transporteCargaGastosTable'"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="text-sm font-semibold text-foreground">
+          {{ section.title }}
+        </legend>
+        <div class="mt-4 space-y-4">
+          <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <CreditsTransporteCargaGastosTable
+              :form-data="formData"
+              :table-rows="(section.gastosTableRows && section.gastosTableRows.length > 0) ? section.gastosTableRows : TRANSPORTE_CARGA_GASTOS_ROWS"
+              @update:field="({ key, value }) => (formData[key] = value)"
+            />
+            <CreditsTransporteCargaOtrosGastosTable
+              :form-data="formData"
+              @update:field="({ key, value }) => (formData[key] = value)"
+            />
+          </div>
+          <div
+            v-if="(section.fields?.length ?? 0) > 0"
+            class="grid grid-cols-1 gap-6 md:grid-cols-2"
+          >
+            <template v-for="field in section.fields" :key="field.key">
+              <div :class="['grid gap-2', gridColClass(field.cols)]">
+                <Label :for="`field-${field.key}`" class="text-sm font-medium">
+                  {{ field.label }}
+                  <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
+                </Label>
+                <div
+                  :id="`field-${field.key}`"
+                  class="flex h-9 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-foreground select-none cursor-default"
+                  tabindex="-1"
+                  aria-readonly="true"
+                >
+                  {{ formatComputedValue(field) }}
+                </div>
+              </div>
+            </template>
+          </div>
         </div>
       </fieldset>
       <!-- Tabla de clasificación de huevos + desglose de costos (aves ponedoras) -->

@@ -21,6 +21,7 @@ export function useTemplateCategories() {
   const cultivoPermanenteOptions = ref<CategoryOptions[]>([])
   const cultivoCicloCortoOptions = ref<CategoryOptions[]>([])
   const pecesTipoOptions = ref<CategoryOptions[]>([])
+  const serviciosTipoOptions = ref<CategoryOptions[]>([])
   const loading = ref(false)
 
   async function fetchCategories() {
@@ -30,13 +31,16 @@ export function useTemplateCategories() {
       const permanentes = res.data['cultivo-permanente'] ?? []
       const cicloCorto = res.data['cultivo-ciclo-corto'] ?? []
       const pecesTipos = res.data['peces-tilapia'] ?? []
+      const serviciosTipos = res.data['servicios'] ?? []
       cultivoPermanenteOptions.value = permanentes.map((c) => ({ value: c.code, label: c.name }))
       cultivoCicloCortoOptions.value = cicloCorto.map((c) => ({ value: c.code, label: c.name }))
       pecesTipoOptions.value = pecesTipos.map((c) => ({ value: c.code, label: c.name }))
+      serviciosTipoOptions.value = serviciosTipos.map((c) => ({ value: c.code, label: c.name }))
     } catch {
       cultivoPermanenteOptions.value = []
       cultivoCicloCortoOptions.value = []
       pecesTipoOptions.value = []
+      serviciosTipoOptions.value = []
     } finally {
       loading.value = false
     }
@@ -46,6 +50,7 @@ export function useTemplateCategories() {
     cultivoPermanenteOptions,
     cultivoCicloCortoOptions,
     pecesTipoOptions,
+    serviciosTipoOptions,
     loading,
     fetchCategories,
   }

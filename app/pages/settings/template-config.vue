@@ -29,7 +29,7 @@ interface TemplateCategory {
   sort_order: number
 }
 
-const TEMPLATES_WITH_CATEGORIES = ['cultivo-permanente', 'cultivo-ciclo-corto', 'peces-tilapia']
+const TEMPLATES_WITH_CATEGORIES = ['cultivo-permanente', 'cultivo-ciclo-corto', 'peces-tilapia', 'servicios']
 
 const loading = ref(true)
 const saving = ref<string | null>(null)
@@ -53,6 +53,10 @@ const templateLabels: Record<string, string> = {
   'cultivo-permanente': 'Cultivos Permanentes',
   'cultivo-ciclo-corto': 'Cultivos Ciclo Corto',
   'cana-panela': 'Caña de Azúcar (Panela)',
+  'servicios': 'Servicios (Moto taxi, Estilista, Mecánico, Jornales, Taxi)',
+  'plantilla-comercial': 'Plantilla Comercial (Productos)',
+  'transporte-carga': 'Transporte de Carga',
+  'transporte-pasajeros': 'Transporte de Pasajeros',
 }
 
 function getTemplateLabel(key: string): string {

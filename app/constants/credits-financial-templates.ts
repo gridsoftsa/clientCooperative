@@ -42,6 +42,14 @@ export const CULTIVO_ESPECIAL_PRODUCTOS = [
   { value: 'cana', label: 'Caña de Azúcar (Panela)' },
 ] as const
 
+export const SERVICIOS_PRODUCTOS = [
+  { value: 'moto-taxi', label: 'Moto Taxi' },
+  { value: 'estilista', label: 'Estilista' },
+  { value: 'mecanico', label: 'Mecánico' },
+  { value: 'jornales', label: 'Jornales' },
+  { value: 'taxi', label: 'Taxi' },
+] as const
+
 export const sectorsConfig: SectorConfig[] = [
   {
     value: 'ganaderia',
@@ -84,6 +92,31 @@ export const sectorsConfig: SectorConfig[] = [
         value: 'cana-panela',
         label: 'Caña de Azúcar (Panela)',
       },
+    ],
+  },
+  {
+    value: 'servicios',
+    label: 'Servicios',
+    templates: [
+      {
+        value: 'servicios',
+        label: 'Servicios (Moto taxi / Estilista / Mecánico / Jornales / Taxi)',
+      },
+    ],
+  },
+  {
+    value: 'transporte',
+    label: 'Transporte',
+    templates: [
+      { value: 'transporte-carga', label: 'Transporte de Carga' },
+      { value: 'transporte-pasajeros', label: 'Transporte de Pasajeros' },
+    ],
+  },
+  {
+    value: 'comercio',
+    label: 'Comercio',
+    templates: [
+      { value: 'plantilla-comercial', label: 'Plantilla Comercial (Productos)' },
     ],
   },
 ]
@@ -1558,6 +1591,265 @@ function schemaCanaPanela(): FormSchemaInput {
   }
 }
 
+/** Plantilla: Servicios (Moto taxi, Estilista, Mecánico, Jornales, Taxi) */
+function schemaServicios(): FormSchemaInput {
+  return {
+    sections: [
+      {
+        key: 'tipo_producto',
+        title: 'Tipo de servicio',
+        fields: [
+          {
+            key: 'tipo_producto',
+            label: 'Servicio',
+            type: 'select',
+            meta: 'Seleccione el tipo de servicio',
+            required: true,
+            cols: 1,
+          },
+        ],
+      },
+      {
+        key: 'ingresos_servicio',
+        title: 'Ingresos por Servicio',
+        layout: 'serviciosIngresosTable',
+        fields: [],
+        serviciosTableRows: [
+          { suffix: 'bueno', label: 'Día bueno' },
+          { suffix: 'regular', label: 'Día regular' },
+          { suffix: 'malo', label: 'Día malo' },
+        ],
+      },
+      {
+        key: 'totales',
+        title: 'Totales',
+        fields: [
+          {
+            key: 'total_semana',
+            label: 'Total semana',
+            type: 'computed',
+            meta: 'Solo lectura (suma de la tabla)',
+            formulaKey: 'servicios_total_semana',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'semanas_mes',
+            label: 'Semanas al mes',
+            type: 'computed',
+            meta: 'Solo lectura: 4.75 si total días=7, 4 si total días<7',
+            formulaKey: 'servicios_semanas_mes',
+            formulaFormat: 'number',
+            cols: 1,
+          },
+          {
+            key: 'total_mes',
+            label: 'Total mes',
+            type: 'computed',
+            meta: 'Solo lectura (total semana × semanas mes)',
+            formulaKey: 'servicios_total_mes',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+        ],
+      },
+      {
+        key: 'costos_negocio',
+        title: 'Costos del Negocio',
+        fields: [
+          { key: 'empleados', label: 'Empleados', type: 'money', cols: 1 },
+          { key: 'arriendo', label: 'Arriendo', type: 'money', cols: 1 },
+          { key: 'servicios', label: 'Servicios', type: 'money', cols: 1 },
+          { key: 'otros_costos', label: 'Otros', type: 'money', cols: 1 },
+          { key: 'pct_contribucion', label: '% Contribución', type: 'number', meta: 'Ej: 20', cols: 1 },
+          {
+            key: 'total_costos',
+            label: 'Total costos',
+            type: 'computed',
+            meta: 'Solo lectura (suma de costos)',
+            formulaKey: 'servicios_total_costos',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+          {
+            key: 'valor_contribucion',
+            label: 'Valor contribución',
+            type: 'computed',
+            meta: 'Solo lectura (total mes × % contribución)',
+            formulaKey: 'servicios_valor_contribucion',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+        ],
+      },
+      {
+        key: 'resultado',
+        title: 'Resultado',
+        fields: [
+          {
+            key: 'ingresos_netos',
+            label: 'Ingresos netos',
+            type: 'computed',
+            meta: 'Solo lectura (total mes - costos)',
+            formulaKey: 'servicios_ingresos_netos',
+            formulaFormat: 'money',
+            cols: 1,
+          },
+        ],
+      },
+    ],
+  }
+}
+
+/** Plantilla: Plantilla Comercial (Productos) */
+function schemaPlantillaComercial(): FormSchemaInput {
+  return {
+    sections: [
+      {
+        key: 'productos',
+        title: 'Productos',
+        fields: [
+          { key: 'producto', label: 'Producto', type: 'text', meta: 'Nombre', cols: 1 },
+          { key: 'precio_compra', label: 'Precio compra', type: 'money', cols: 1 },
+          { key: 'precio_venta', label: 'Precio de venta', type: 'money', cols: 1 },
+          { key: 'pct_utilidad', label: '% Utilidad', type: 'number', meta: 'Calculado', cols: 1 },
+          { key: 'pct_costos', label: '% Costos', type: 'number', meta: 'Calculado', cols: 1 },
+        ],
+      },
+      {
+        key: 'semanas_dias',
+        title: 'Semanas y Días',
+        fields: [
+          { key: 'semanas_buenas', label: 'Semanas buenas', type: 'number', meta: 'Int', cols: 1 },
+          { key: 'semanas_regulares', label: 'Semanas regulares', type: 'number', meta: 'Int', cols: 1 },
+          { key: 'semanas_malas', label: 'Semanas malas', type: 'number', meta: 'Int', cols: 1 },
+          { key: 'dias_buenos', label: 'Días buenos', type: 'number', meta: 'Int', cols: 1 },
+          { key: 'dias_buenos_venta', label: 'Días buenos - Venta', type: 'money', cols: 1 },
+          { key: 'dias_regulares', label: 'Días regulares', type: 'number', meta: 'Int', cols: 1 },
+          { key: 'dias_regulares_venta', label: 'Días regulares - Venta', type: 'money', cols: 1 },
+          { key: 'dias_malos', label: 'Días malos', type: 'number', meta: 'Int', cols: 1 },
+          { key: 'dias_malos_venta', label: 'Días malos - Venta', type: 'money', cols: 1 },
+          { key: 'venta_semanal', label: 'Venta semanal', type: 'money', meta: 'Calculado', cols: 1 },
+          { key: 'semanas_mes', label: 'Semanas al mes', type: 'number', meta: 'Decimal', cols: 1 },
+          { key: 'venta_mensual', label: 'Venta mensual', type: 'money', meta: 'Calculado', cols: 1 },
+        ],
+      },
+      {
+        key: 'ingresos_gastos',
+        title: 'Ingresos y Gastos Operacionales',
+        fields: [
+          { key: 'ingresos_operacionales', label: 'Ingresos operacionales', type: 'money', cols: 1 },
+          { key: 'arriendo', label: 'Arriendo', type: 'money', cols: 1 },
+          { key: 'gastos_servicios', label: 'Gastos servicios', type: 'money', cols: 1 },
+          { key: 'gastos_imprevistos', label: 'Gastos imprevistos', type: 'money', cols: 1 },
+          { key: 'gastos_empleados', label: 'Gastos empleados', type: 'money', cols: 1 },
+          { key: 'total_gastos_negocio', label: 'Total gastos negocio', type: 'money', meta: 'Calculado', cols: 1 },
+          { key: 'total_ingresos_netos_negocio', label: 'Total ingresos netos negocio', type: 'money', meta: 'Calculado', cols: 1 },
+        ],
+      },
+    ],
+  }
+}
+
+/** Plantilla: Transporte de Carga */
+function schemaTransporteCarga(): FormSchemaInput {
+  return {
+    sections: [
+      {
+        key: 'viajes',
+        title: 'Viajes',
+        fields: [
+          {
+            key: 'viajes_redondos',
+            label: '¿Los viajes son redondos?',
+            type: 'select',
+            options: [
+              { value: 'si', label: 'Sí' },
+              { value: 'no', label: 'No' },
+            ],
+            cols: 1,
+          },
+          { key: 'cantidad_viajes_semana', label: 'Cantidad de viajes por semana', type: 'number', meta: 'Int', cols: 1 },
+          { key: 'carga_ida', label: '¿Qué transporta? Ida', type: 'text', meta: 'Ej: Arena', cols: 1 },
+          { key: 'carga_vuelta', label: '¿Qué transporta? Vuelta', type: 'text', meta: 'Ej: Cemento', cols: 1 },
+        ],
+      },
+      {
+        key: 'flete',
+        title: 'Flete',
+        fields: [
+          { key: 'valor_flete_ida', label: 'Valor flete IDA', type: 'money', cols: 1 },
+          { key: 'valor_flete_vuelta', label: 'Valor flete VUELTA', type: 'money', cols: 1 },
+          { key: 'total_viaje', label: 'Total viaje', type: 'computed', meta: 'Calculado', formulaKey: 'transporte_carga_total_viaje', formulaFormat: 'money', cols: 1 },
+          { key: 'ingreso_total_mes', label: 'Ingreso total en el mes', type: 'computed', meta: 'Calculado', formulaKey: 'transporte_carga_ingreso_total_mes', formulaFormat: 'money', cols: 1 },
+        ],
+      },
+      {
+        key: 'gastos',
+        title: 'Gastos por Viaje',
+        layout: 'transporteCargaGastosTable',
+        gastosTableRows: [
+          { key: 'combustible', label: 'COMBUSTIBLE' },
+          { key: 'peajes', label: 'PEAJES' },
+          { key: 'conductor', label: '% CONDUCTOR' },
+          { key: 'lavado_parqueadero', label: 'LAVADO Y PARQUEDAERO' },
+          { key: 'cargue_descargue', label: 'CARGUE Y DESCARGUE' },
+          { key: 'otros', label: 'OTROS' },
+        ],
+        fields: [
+          { key: 'total_gastos_mensuales', label: 'Total gastos mensuales', type: 'computed', meta: 'Calculado', formulaKey: 'transporte_carga_total_gastos_mensuales', formulaFormat: 'money', cols: 1 },
+          { key: 'ingresos_netos_mes', label: 'Ingresos mensuales netos', type: 'computed', meta: 'Calculado', formulaKey: 'transporte_carga_ingresos_netos_mes', formulaFormat: 'money', cols: 1 },
+        ],
+      },
+    ],
+  }
+}
+
+/** Plantilla: Transporte de Pasajeros */
+function schemaTransportePasajeros(): FormSchemaInput {
+  return {
+    sections: [
+      {
+        key: 'operacion',
+        title: 'Operación',
+        fields: [
+          { key: 'viajes_semana', label: 'Viajes por semana', type: 'number', meta: 'Int', cols: 1 },
+          { key: 'capacidad_buseta', label: 'Capacidad de la buseta (personas)', type: 'number', meta: 'Int', cols: 1 },
+          { key: 'ruta', label: 'Ruta general (ciudad inicial - ciudad final)', type: 'text', meta: 'Ej: Vélez - B/Manga', cols: 1 },
+        ],
+      },
+      {
+        key: 'pasajes',
+        title: 'Pasajes',
+        fields: [
+          { key: 'valor_pasaje_ida', label: 'Valor pasaje ruta IDA', type: 'money', cols: 1 },
+          { key: 'valor_pasaje_vuelta', label: 'Valor pasaje ruta VUELTA', type: 'money', cols: 1 },
+          { key: 'pct_ocupacion', label: '% Ocupación (ajuste)', type: 'number', meta: 'Ej: 80', cols: 1 },
+          { key: 'total_viaje_ida', label: 'Total viaje IDA', type: 'money', cols: 1 },
+          { key: 'total_viaje_vuelta', label: 'Total viaje VUELTA', type: 'money', cols: 1 },
+          { key: 'ingreso_total_mes', label: 'Ingreso total en el mes', type: 'money', cols: 1 },
+        ],
+      },
+      {
+        key: 'gastos',
+        title: 'Gastos',
+        fields: [
+          { key: 'combustible_ida', label: 'Combustible viaje IDA', type: 'money', cols: 1 },
+          { key: 'combustible_vuelta', label: 'Combustible viaje VUELTA', type: 'money', cols: 1 },
+          { key: 'seguro_soat', label: 'Seguro SOAT (anual)', type: 'money', cols: 1 },
+          { key: 'peajes', label: 'Peajes', type: 'money', cols: 1 },
+          { key: 'tecnomecanica', label: 'Tecnomecánica (anual)', type: 'money', cols: 1 },
+          { key: 'llantas_anual', label: 'Llantas en el año', type: 'money', cols: 1 },
+          { key: 'seguro_todo_riesgos', label: 'Seguro todo riesgos (anual)', type: 'money', cols: 1 },
+          { key: 'rodamiento_mensual', label: 'Rodamiento mensual', type: 'money', cols: 1 },
+          { key: 'total_gasto_mes', label: 'Total gasto viaje por mes', type: 'money', meta: 'Calculado', cols: 1 },
+          { key: 'ingresos_netos_mes', label: 'Ingresos mensuales netos', type: 'money', meta: 'Calculado', cols: 1 },
+        ],
+      },
+    ],
+  }
+}
+
 const schemaBuilders: Record<string, () => FormSchemaInput> = {
   'ganado-ceba': schemaGanadoCeba,
   'ganado-doble-proposito': schemaGanadoDobleProposito,
@@ -1569,6 +1861,10 @@ const schemaBuilders: Record<string, () => FormSchemaInput> = {
   'cultivo-permanente': schemaCultivoPermanente,
   'cultivo-ciclo-corto': schemaCultivoCicloCorto,
   'cana-panela': schemaCanaPanela,
+  'servicios': schemaServicios,
+  'plantilla-comercial': schemaPlantillaComercial,
+  'transporte-carga': schemaTransporteCarga,
+  'transporte-pasajeros': schemaTransportePasajeros,
 }
 
 /** Fórmula Ganado Ceba: -(((precio_compra_animal / precio_kg_animal) - peso_kg_final) / tiempo_meses_ceba) */
@@ -2278,6 +2574,148 @@ function computeCanaPanelaTotalUtilidadMensual(data: Record<string, unknown>): n
   return Number.isFinite(valor) ? valor : null
 }
 
+/** Servicios: suma de cantidades por tipo de día (bueno + regular + malo) */
+function computeServiciosSumaCantidadDias(data: Record<string, unknown>): number {
+  let sum = 0
+  for (const suffix of ['bueno', 'regular', 'malo']) {
+    const cantidad = Number(data[`dia_${suffix}_cantidad`] ?? 0)
+    if (Number.isFinite(cantidad)) {
+      sum += cantidad
+    }
+  }
+  return sum
+}
+
+/** Servicios: semanas_mes = IFS(suma_cantidad=7 → 4.75, suma_cantidad<7 → 4) */
+function computeServiciosSemanasMes(data: Record<string, unknown>): number | null {
+  const suma = computeServiciosSumaCantidadDias(data)
+  if (suma === 7) {
+    return 4.75
+  }
+  if (suma < 7) {
+    return 4
+  }
+  // suma > 7: por defecto 4.75 (equivale a semana completa)
+  return 4.75
+}
+
+/** Servicios: total_semana = suma (dia_X_valor × dia_X_cantidad) para bueno, regular, malo */
+function computeServiciosTotalSemana(data: Record<string, unknown>): number | null {
+  let sum = 0
+  for (const suffix of ['bueno', 'regular', 'malo']) {
+    const valor = Number(data[`dia_${suffix}_valor`] ?? 0)
+    const cantidad = Number(data[`dia_${suffix}_cantidad`] ?? 0)
+    if (Number.isFinite(valor) && Number.isFinite(cantidad)) {
+      sum += valor * cantidad
+    }
+  }
+  return Number.isFinite(sum) ? sum : null
+}
+
+/** Servicios: total_mes = total_semana × semanas_mes */
+function computeServiciosTotalMes(data: Record<string, unknown>): number | null {
+  const totalSemana = computeServiciosTotalSemana(data)
+  const semanasMes = computeServiciosSemanasMes(data)
+  if (totalSemana == null || semanasMes == null) return null
+  const valor = totalSemana * semanasMes
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Servicios: valor_contribucion = total_mes × (% contribución / 100) */
+function computeServiciosValorContribucion(data: Record<string, unknown>): number | null {
+  const totalMes = computeServiciosTotalMes(data) ?? Number(data.total_mes ?? 0)
+  if (totalMes == null || !Number.isFinite(totalMes)) return null
+  let pct = Number(data.pct_contribucion ?? 0)
+  if (Number.isFinite(pct) && pct > 1) {
+    pct = pct / 100
+  }
+  const valor = totalMes * pct
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Servicios: total_costos = empleados + arriendo + servicios + otros_costos + valor_contribucion */
+function computeServiciosTotalCostos(data: Record<string, unknown>): number | null {
+  const empleados = Number(data.empleados ?? 0)
+  const arriendo = Number(data.arriendo ?? 0)
+  const servicios = Number(data.servicios ?? 0)
+  const otros = Number(data.otros_costos ?? 0)
+  const valorContribucion = computeServiciosValorContribucion(data) ?? 0
+  const valor = empleados + arriendo + servicios + otros + valorContribucion
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Servicios: ingresos_netos = total_mes - total_costos */
+function computeServiciosIngresosNetos(data: Record<string, unknown>): number | null {
+  const totalMes = computeServiciosTotalMes(data) ?? Number(data.total_mes ?? 0)
+  const totalCostos = computeServiciosTotalCostos(data) ?? 0
+  const valor = totalMes - totalCostos
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Transporte Carga: total_viaje = valor_flete_ida + valor_flete_vuelta */
+function computeTransporteCargaTotalViaje(data: Record<string, unknown>): number | null {
+  const ida = Number(data.valor_flete_ida ?? 0)
+  const vuelta = Number(data.valor_flete_vuelta ?? 0)
+  if (!Number.isFinite(ida) && !Number.isFinite(vuelta)) return null
+  const valor = (Number.isFinite(ida) ? ida : 0) + (Number.isFinite(vuelta) ? vuelta : 0)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Transporte Carga: ingreso_total_mes = total_viaje × cantidad_viajes_semana × 4.33 */
+function computeTransporteCargaIngresoTotalMes(data: Record<string, unknown>): number | null {
+  const totalViaje = computeTransporteCargaTotalViaje(data) ?? 0
+  const viajesSemana = Number(data.cantidad_viajes_semana ?? 0)
+  const semanasMes = 4.33
+  if (!Number.isFinite(totalViaje) || !Number.isFinite(viajesSemana)) return null
+  const valor = totalViaje * viajesSemana * semanasMes
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Transporte Carga: total_gastos_viaje = combustible + peajes + conductor + lavado_parqueadero + cargue_descargue + otros */
+function computeTransporteCargaTotalGastosViaje(data: Record<string, unknown>): number | null {
+  const keys = ['combustible', 'peajes', 'conductor', 'lavado_parqueadero', 'cargue_descargue', 'otros']
+  let sum = 0
+  for (const k of keys) {
+    const v = Number(data[k] ?? 0)
+    if (Number.isFinite(v)) sum += v
+  }
+  return Number.isFinite(sum) ? sum : null
+}
+
+/** Transporte Carga: total_otros_gastos_anuales = seguro_soat + tecnomecanica + llantas_anual + repuestos + (cambios_aceite × precio) + bajadas_rueda */
+function computeTransporteCargaTotalOtrosGastosAnuales(data: Record<string, unknown>): number | null {
+  let sum = 0
+  for (const k of ['seguro_soat', 'tecnomecanica', 'llantas_anual', 'repuestos', 'bajadas_rueda_anual']) {
+    const v = Number(data[k] ?? 0)
+    if (Number.isFinite(v)) sum += v
+  }
+  const cambios = Number(data.cambios_aceite_cantidad ?? 0)
+  const precio = Number(data.precio_cambio_aceite ?? 0)
+  if (Number.isFinite(cambios) && Number.isFinite(precio)) {
+    sum += cambios * precio
+  }
+  return Number.isFinite(sum) ? sum : null
+}
+
+/** Transporte Carga: total_gastos_mensuales = (total_gastos_viaje × viajes_semana × 4.33) + (total_otros_gastos_anuales / 12) */
+function computeTransporteCargaTotalGastosMensuales(data: Record<string, unknown>): number | null {
+  const totalGastosViaje = computeTransporteCargaTotalGastosViaje(data) ?? 0
+  const viajesSemana = Number(data.cantidad_viajes_semana ?? 0)
+  const semanasMes = 4.33
+  const otrosGastosAnuales = computeTransporteCargaTotalOtrosGastosAnuales(data) ?? 0
+  const valor = (totalGastosViaje * viajesSemana * semanasMes) + (otrosGastosAnuales / 12)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Transporte Carga: ingresos_netos_mes = ingreso_total_mes - total_gastos_mensuales */
+function computeTransporteCargaIngresosNetosMes(data: Record<string, unknown>): number | null {
+  const ingresoTotal = computeTransporteCargaIngresoTotalMes(data) ?? 0
+  const totalGastosMensuales = computeTransporteCargaTotalGastosMensuales(data) ?? 0
+  if (!Number.isFinite(ingresoTotal)) return null
+  const valor = ingresoTotal - totalGastosMensuales
+  return Number.isFinite(valor) ? valor : null
+}
+
 /** Caña Panela: pct_sociedad = 100% ÷ cantidad_personas (solo cuando cultivo_en_sociedad = 'si') */
 function computeCanaPanelaPctSociedad(data: Record<string, unknown>): number | null {
   if (data.cultivo_en_sociedad !== 'si') return null
@@ -2500,6 +2938,18 @@ const formulaComputers: Record<string, (data: Record<string, unknown>) => number
   cana_panela_total_utilidad: computeCanaPanelaTotalUtilidad,
   cana_panela_total_utilidad_mensual: computeCanaPanelaTotalUtilidadMensual,
   cana_panela_pct_sociedad: computeCanaPanelaPctSociedad,
+  servicios_semanas_mes: computeServiciosSemanasMes,
+  servicios_total_semana: computeServiciosTotalSemana,
+  servicios_total_mes: computeServiciosTotalMes,
+  servicios_total_costos: computeServiciosTotalCostos,
+  servicios_valor_contribucion: computeServiciosValorContribucion,
+  servicios_ingresos_netos: computeServiciosIngresosNetos,
+  transporte_carga_total_viaje: computeTransporteCargaTotalViaje,
+  transporte_carga_ingreso_total_mes: computeTransporteCargaIngresoTotalMes,
+  transporte_carga_total_gastos_viaje: computeTransporteCargaTotalGastosViaje,
+  transporte_carga_total_otros_gastos_anuales: computeTransporteCargaTotalOtrosGastosAnuales,
+  transporte_carga_total_gastos_mensuales: computeTransporteCargaTotalGastosMensuales,
+  transporte_carga_ingresos_netos_mes: computeTransporteCargaIngresosNetosMes,
 }
 
 /** Evalúa una fórmula calculada dado el formulaKey y los datos del formulario */
@@ -2517,7 +2967,7 @@ export interface CategoryOption {
 /** Obtiene el schema de formulario para una plantilla */
 export function getTemplateSchema(
   templateKey: string,
-  productOptions?: { cultivoPermanente?: CategoryOption[]; cultivoCicloCorto?: CategoryOption[]; pecesTipo?: CategoryOption[] },
+  productOptions?: { cultivoPermanente?: CategoryOption[]; cultivoCicloCorto?: CategoryOption[]; pecesTipo?: CategoryOption[]; serviciosTipo?: CategoryOption[] },
 ): FormSchemaInput | null {
   const builder = schemaBuilders[templateKey]
   const schema = builder ? builder() : null
@@ -2530,7 +2980,9 @@ export function getTemplateSchema(
         ? productOptions.cultivoCicloCorto
         : templateKey === 'peces-tilapia'
           ? productOptions.pecesTipo
-          : undefined
+          : templateKey === 'servicios'
+            ? productOptions.serviciosTipo
+            : undefined
 
   if (!opts?.length) return schema
 
@@ -2546,7 +2998,7 @@ export function getTemplateSchema(
 
 /** Indica si la plantilla tiene selector de producto (para mostrar en UI) */
 export function templateHasProductSelect(templateKey: string): boolean {
-  return ['cultivo-permanente', 'cultivo-ciclo-corto', 'peces-tilapia'].includes(templateKey)
+  return ['cultivo-permanente', 'cultivo-ciclo-corto', 'peces-tilapia', 'servicios'].includes(templateKey)
 }
 
 export interface ValidateTemplateResult {
@@ -2575,6 +3027,7 @@ export function validateActivityTemplate(
     cultivoPermanente: [],
     cultivoCicloCorto: [],
     pecesTipo: [],
+    serviciosTipo: [],
   })
 
   if (!schema?.sections) {
@@ -2621,6 +3074,8 @@ const UTILIDAD_MENSUAL_FORMULA_BY_TEMPLATE: Record<string, string> = {
   'cultivo-permanente': 'cultivo_permanente_total_utilidad_mensual',
   'cultivo-ciclo-corto': 'cultivo_ciclo_corto_total_utilidad_mensual',
   'cana-panela': 'cana_panela_total_utilidad_mensual',
+  'servicios': 'servicios_ingresos_netos',
+  'transporte-carga': 'transporte_carga_ingresos_netos_mes',
 }
 
 /** Suma la utilidad mensual de todas las plantillas (para sincronizar con Ingreso cultivos/negocio) */

@@ -259,6 +259,65 @@ const schemaCanaPanela: TemplateConfigSchema = {
   ],
 }
 
+const schemaServicios: TemplateConfigSchema = {
+  template_key: 'servicios',
+  sections: [
+    {
+      key: 'valores_estandar',
+      title: 'Valores estándar',
+      fields: [
+        { key: 'pct_contribucion_estandar', label: '% Contribución estándar', type: 'number' },
+        { key: 'semanas_mes_default', label: 'Semanas al mes (default)', type: 'number' },
+      ],
+    },
+  ],
+}
+
+const schemaPlantillaComercial: TemplateConfigSchema = {
+  template_key: 'plantilla-comercial',
+  sections: [
+    {
+      key: 'valores_estandar',
+      title: 'Valores estándar',
+      fields: [
+        { key: 'semanas_mes_default', label: 'Semanas al mes (default)', type: 'number' },
+        { key: 'pct_utilidad_default', label: '% Utilidad (default)', type: 'number' },
+        { key: 'pct_costos_default', label: '% Costos (default)', type: 'number' },
+      ],
+    },
+  ],
+}
+
+const schemaTransporteCarga: TemplateConfigSchema = {
+  template_key: 'transporte-carga',
+  sections: [
+    {
+      key: 'valores_estandar',
+      title: 'Valores estándar',
+      fields: [
+        { key: 'cantidad_viajes_semana', label: 'Cantidad viajes por semana', type: 'number' },
+        { key: 'cambios_aceite_anual', label: '# Cambios de aceite (anual)', type: 'number' },
+      ],
+    },
+  ],
+}
+
+const schemaTransportePasajeros: TemplateConfigSchema = {
+  template_key: 'transporte-pasajeros',
+  sections: [
+    {
+      key: 'valores_estandar',
+      title: 'Valores estándar',
+      fields: [
+        { key: 'viajes_semana_default', label: 'Viajes por semana (default)', type: 'number' },
+        { key: 'capacidad_buseta_default', label: 'Capacidad buseta (default)', type: 'number' },
+        { key: 'pct_ocupacion_ajuste', label: '% Ocupación (ajuste)', type: 'number' },
+        { key: 'cambios_aceite_anual', label: '# Cambios de aceite (anual)', type: 'number' },
+      ],
+    },
+  ],
+}
+
 const TEMPLATE_CONFIG_SCHEMAS: Record<string, TemplateConfigSchema> = {
   'ganado-ceba': schemaGanadoCeba,
   'ganado-doble-proposito': schemaGanadoDobleProposito,
@@ -270,6 +329,10 @@ const TEMPLATE_CONFIG_SCHEMAS: Record<string, TemplateConfigSchema> = {
   'cultivo-ciclo-corto': schemaCultivoCicloCorto,
   'peces-tilapia': schemaPecesTilapia,
   'cana-panela': schemaCanaPanela,
+  'servicios': schemaServicios,
+  'plantilla-comercial': schemaPlantillaComercial,
+  'transporte-carga': schemaTransporteCarga,
+  'transporte-pasajeros': schemaTransportePasajeros,
 }
 
 export function getTemplateConfigSchema(templateKey: string): TemplateConfigSchema | null {
