@@ -15,19 +15,9 @@ const teams: {
   plan: string
 }[] = [
   {
-    name: 'Acme Inc',
-    logo: 'i-lucide-gallery-vertical-end',
-    plan: 'Enterprise',
-  },
-  {
-    name: 'Acme Corp.',
-    logo: 'i-lucide-audio-waveform',
-    plan: 'Startup',
-  },
-  {
-    name: 'Evil Corp.',
-    logo: 'i-lucide-command',
-    plan: 'Free',
+    name: 'Coopservivelez',
+    logo: '/Logo-coop-1.ico',
+    plan: 'cooperative',
   },
 ]
 
