@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Motor de renderizado de formularios dinámicos a partir de schema JSON.
- * Soporta: money, select, date, number, text, computed.
+ * Soporta: money, select, date, number, text, textarea, computed, municipality.
  * Layout especial: eggsTable para clasificación de huevos (aves ponedoras).
  */
 import type { FormSchemaInput } from '~/types/credits'
@@ -16,9 +16,14 @@ import {
 } from '~/constants/cultivo-ciclo-corto-cost-breakdown'
 import { SERVICIOS_INGRESOS_ROWS } from '~/constants/servicios-ingresos-table'
 import { TRANSPORTE_CARGA_GASTOS_ROWS } from '~/constants/transporte-carga-gastos-table'
+import { TRANSPORTE_PASAJEROS_PASAJES_ROWS } from '~/constants/transporte-pasajeros-pasajes-table'
 import CreditsServiciosIngresosTable from '~/components/credits/ServiciosIngresosTable.vue'
 import CreditsTransporteCargaGastosTable from '~/components/credits/TransporteCargaGastosTable.vue'
 import CreditsTransporteCargaOtrosGastosTable from '~/components/credits/TransporteCargaOtrosGastosTable.vue'
+import CreditsTransportePasajerosGastosTable from '~/components/credits/TransportePasajerosGastosTable.vue'
+import CreditsTransportePasajerosPasajesTable from '~/components/credits/TransportePasajerosPasajesTable.vue'
+import { Textarea } from '~/components/ui/textarea'
+import Multiselect from '@vueform/multiselect'
 
 const props = withDefaults(
   defineProps<{
@@ -35,6 +40,7 @@ const props = withDefaults(
 )
 
 const readOnlySet = computed(() => new Set(props.readOnlyFieldKeys))
+const { multiselectOptionsByLabel } = useMunicipalities()
 
 function isFieldReadOnly(fieldKey: string): boolean {
   return readOnlySet.value.has(fieldKey)
@@ -104,6 +110,20 @@ function buildInitialFormData(): Record<string, unknown> {
       }
       const otrosGastosKeys = ['seguro_soat', 'tecnomecanica', 'llantas_anual', 'repuestos', 'cambios_aceite_cantidad', 'precio_cambio_aceite', 'bajadas_rueda_anual']
       for (const k of otrosGastosKeys) {
+        if (data[k] === undefined) data[k] = null
+      }
+      continue
+    }
+    if (section.layout === 'transportePasajerosPasajesTable') {
+      const rows = section.pasajesTableRows ?? TRANSPORTE_PASAJEROS_PASAJES_ROWS
+      for (const row of rows) {
+        if ((row as { type?: string }).type === 'computed') continue
+        if (data[row.key] === undefined) data[row.key] = null
+      }
+      continue
+    }
+    if (section.layout === 'transportePasajerosGastosTable') {
+      for (const k of ['combustible_ida', 'peajes_ida', 'otros_ida', 'conductor_ida', 'combustible_vuelta', 'peajes_vuelta', 'otros_vuelta', 'conductor_vuelta', 'seguro_soat', 'tecnomecanica', 'llantas_anual', 'repuestos', 'cambios_aceite_cantidad', 'precio_cambio_aceite', 'bajadas_rueda_anual', 'seguro_todo_riesgos', 'rodamiento_mensual']) {
         if (data[k] === undefined) data[k] = null
       }
       continue
@@ -287,6 +307,58 @@ const inputBaseClass =
           </div>
         </div>
       </fieldset>
+      <!-- Tabla Pasajes (transporte-pasajeros) -->
+      <fieldset
+        v-else-if="section.layout === 'transportePasajerosPasajesTable'"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="text-sm font-semibold text-foreground">
+          {{ section.title }}
+        </legend>
+        <div class="mt-4">
+          <CreditsTransportePasajerosPasajesTable
+            :form-data="formData"
+            :table-rows="(section.pasajesTableRows && section.pasajesTableRows.length > 0) ? section.pasajesTableRows : TRANSPORTE_PASAJEROS_PASAJES_ROWS"
+            @update:field="({ key, value }) => (formData[key] = value)"
+          />
+        </div>
+      </fieldset>
+      <!-- Tabla Gastos (transporte-pasajeros) -->
+      <fieldset
+        v-else-if="section.layout === 'transportePasajerosGastosTable'"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="text-sm font-semibold text-foreground">
+          {{ section.title }}
+        </legend>
+        <div class="mt-4 space-y-4">
+          <CreditsTransportePasajerosGastosTable
+            :form-data="formData"
+            @update:field="({ key, value }) => (formData[key] = value)"
+          />
+          <div
+            v-if="(section.fields?.length ?? 0) > 0"
+            class="grid grid-cols-1 gap-6 md:grid-cols-2"
+          >
+            <template v-for="field in section.fields" :key="field.key">
+              <div :class="['grid gap-2', gridColClass(field.cols)]">
+                <Label :for="`field-${field.key}`" class="text-sm font-medium">
+                  {{ field.label }}
+                  <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
+                </Label>
+                <div
+                  :id="`field-${field.key}`"
+                  class="flex h-9 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-foreground select-none cursor-default"
+                  tabindex="-1"
+                  aria-readonly="true"
+                >
+                  {{ formatComputedValue(field) }}
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </fieldset>
       <!-- Tabla de clasificación de huevos + desglose de costos (aves ponedoras) -->
       <fieldset
         v-else-if="section.layout === 'eggsTable' && section.tableRows"
@@ -353,6 +425,26 @@ const inputBaseClass =
                 </Select>
               </div>
             </template>
+            <!-- municipality (selector de municipios como lugar de expedición) -->
+            <template v-else-if="field.type === 'municipality'">
+              <div class="space-y-1.5">
+                <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
+                  {{ field.label }}
+                </Label>
+                <Multiselect
+                  :model-value="(formData[field.key] as string) ?? null"
+                  :options="multiselectOptionsByLabel"
+                  value-prop="value"
+                  label="label"
+                  :searchable="true"
+                  placeholder="Municipio"
+                  no-options-text="No hay municipios"
+                  no-results-text="No hay resultados. Escribe para filtrar."
+                  class="multiselect-municipality"
+                  @update:model-value="(v) => (formData[field.key] = (v as string) ?? '')"
+                />
+              </div>
+            </template>
             <!-- computed (solo lectura, no modificable) -->
             <template v-else-if="field.type === 'computed'">
               <div class="space-y-1.5">
@@ -398,6 +490,24 @@ const inputBaseClass =
                 :class="inputBaseClass"
               >
             </template>
+            <!-- textarea -->
+            <template v-else-if="field.type === 'textarea'">
+              <div class="space-y-1.5">
+                <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
+                  {{ field.label }}
+                  <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
+                </Label>
+                <Textarea
+                  :id="`field-${field.key}`"
+                  :model-value="(formData[field.key] as string) ?? ''"
+                  :placeholder="field.meta"
+                  rows="6"
+                  :disabled="isFieldReadOnly(field.key)"
+                  class="min-h-36 resize-y"
+                  @update:model-value="(v) => (formData[field.key] = v)"
+                />
+              </div>
+            </template>
             <!-- text (default) -->
             <template v-else>
               <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
@@ -418,3 +528,17 @@ const inputBaseClass =
     </template>
   </form>
 </template>
+
+<style src="@vueform/multiselect/themes/default.css"></style>
+<style scoped>
+.multiselect-municipality {
+  --ms-font-size: 0.875rem;
+  --ms-line-height: 1.25rem;
+  --ms-radius: 0.375rem;
+  --ms-border-color: var(--border);
+  --ms-bg: var(--background);
+  --ms-py: 0.5rem;
+  min-height: 2.25rem;
+  width: 100%;
+}
+</style>

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 /**
  * Tabla editable de Otros Gastos Anuales (plantilla transporte-carga).
- * Incluye: SOAT, Tecnomecánica, Llantas, Repuestos, Cambios de aceite (calculado), Bajadas de rueda.
+ * Imagen 1: SOAT, Tecnomecánica, Llantas, Repuestos, # Cambios aceite + Precio c/u, Bajadas rueda + TOTAL.
  */
 const props = defineProps<{
   formData: Record<string, unknown>
 }>()
+
+const formData = toRef(props, 'formData')
 
 const emit = defineEmits<{
   'update:field': [payload: { key: string; value: unknown }]
@@ -40,11 +42,10 @@ const totalCambiosAceite = computed(() => {
   const cantidad = Number(props.formData.cambios_aceite_cantidad ?? 0)
   const precio = Number(props.formData.precio_cambio_aceite ?? 0)
   if (!Number.isFinite(cantidad) || !Number.isFinite(precio)) return null
-  const total = cantidad * precio
-  return Number.isFinite(total) ? total : null
+  return cantidad * precio
 })
 
-const totalOtrosGastos = computed(() => {
+const totalOtrosGastosAnuales = computed(() => {
   let sum = 0
   for (const row of rowsBeforeAceite) {
     const v = Number(props.formData[row.key] ?? 0)
@@ -95,7 +96,6 @@ const totalOtrosGastos = computed(() => {
             />
           </td>
         </tr>
-        <!-- Cambios de aceite: cantidad + precio con total calculado (celda que abarca 2 filas) -->
         <tr class="bg-white">
           <td class="border border-black px-3 py-2 text-left font-medium text-black">
             # CAMBIOS DE ACEITE
@@ -151,7 +151,7 @@ const totalOtrosGastos = computed(() => {
             TOTAL OTROS GASTOS (ANUALES)
           </td>
           <td class="border border-black px-3 py-2 text-right tabular-nums text-black">
-            {{ formatMoney(totalOtrosGastos) }}
+            {{ formatMoney(totalOtrosGastosAnuales) }}
           </td>
         </tr>
       </tbody>

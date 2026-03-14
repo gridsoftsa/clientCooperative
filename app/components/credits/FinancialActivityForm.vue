@@ -209,15 +209,21 @@ onMounted(() => {
         <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin" />
         Cargando valores configurados...
       </div>
-      <CreditsDynamicFormRenderer
-        v-else
-        :key="`${templateSelected}-${formData.tipo_producto ?? 'default'}-${formDataVersion}`"
-        :schema="currentSchema"
-        :template-key="templateSelected"
-        :initial-data="formData"
-        :read-only-field-keys="configuredFieldKeys"
-        @update:form-data="setFormData"
-      />
+      <ClientOnly v-else>
+        <CreditsDynamicFormRenderer
+          :key="`${templateSelected}-${formData.tipo_producto ?? 'default'}-${formDataVersion}`"
+          :schema="currentSchema"
+          :template-key="templateSelected"
+          :initial-data="formData"
+          :read-only-field-keys="configuredFieldKeys"
+          @update:form-data="setFormData"
+        />
+        <template #fallback>
+          <div class="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+            Cargando formulario...
+          </div>
+        </template>
+      </ClientOnly>
     </div>
     <div v-else class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
       Elige un sector y una plantilla para cargar el formulario de actividad económica.

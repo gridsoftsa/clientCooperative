@@ -1815,35 +1815,38 @@ function schemaTransportePasajeros(): FormSchemaInput {
         fields: [
           { key: 'viajes_semana', label: 'Viajes por semana', type: 'number', meta: 'Int', cols: 1 },
           { key: 'capacidad_buseta', label: 'Capacidad de la buseta (personas)', type: 'number', meta: 'Int', cols: 1 },
-          { key: 'ruta', label: 'Ruta general (ciudad inicial - ciudad final)', type: 'text', meta: 'Ej: Vélez - B/Manga', cols: 1 },
+          { key: 'ruta_ida', label: 'Ruta IDA (municipio origen)', type: 'municipality', cols: 1 },
+          { key: 'ruta_vuelta', label: 'Ruta VUELTA (municipio destino)', type: 'municipality', cols: 1 },
         ],
       },
       {
         key: 'pasajes',
         title: 'Pasajes',
+        layout: 'transportePasajerosPasajesTable',
+        pasajesTableRows: [
+          { key: 'valor_pasaje_ida', label: 'VALOR PASAJE RUTA IDA', type: 'money' },
+          { key: 'valor_pasaje_vuelta', label: 'VALOR PASAJE RUTA VUELTA', type: 'money' },
+          { key: 'pct_ocupacion', label: '% OCUPACIÓN (AJUSTE)', type: 'number' },
+          { key: 'total_viaje_ida', label: 'TOTAL VIAJE IDA', type: 'computed', formulaKey: 'transporte_pasajeros_total_viaje_ida' },
+          { key: 'total_viaje_vuelta', label: 'TOTAL VIAJE VUELTA', type: 'computed', formulaKey: 'transporte_pasajeros_total_viaje_vuelta' },
+          { key: 'ingreso_total_mes', label: 'INGRESO TOTAL EN EL MES', type: 'computed', formulaKey: 'transporte_pasajeros_ingreso_total_mes' },
+        ],
+        fields: [],
+      },
+      {
+        key: 'descripcion',
+        title: 'Descripción',
         fields: [
-          { key: 'valor_pasaje_ida', label: 'Valor pasaje ruta IDA', type: 'money', cols: 1 },
-          { key: 'valor_pasaje_vuelta', label: 'Valor pasaje ruta VUELTA', type: 'money', cols: 1 },
-          { key: 'pct_ocupacion', label: '% Ocupación (ajuste)', type: 'number', meta: 'Ej: 80', cols: 1 },
-          { key: 'total_viaje_ida', label: 'Total viaje IDA', type: 'money', cols: 1 },
-          { key: 'total_viaje_vuelta', label: 'Total viaje VUELTA', type: 'money', cols: 1 },
-          { key: 'ingreso_total_mes', label: 'Ingreso total en el mes', type: 'money', cols: 1 },
+          { key: 'descripcion_adicional', label: 'Descripción adicional', type: 'textarea', meta: 'Información complementaria que el posible deudor desee agregar', cols: 2 },
         ],
       },
       {
         key: 'gastos',
         title: 'Gastos',
+        layout: 'transportePasajerosGastosTable',
         fields: [
-          { key: 'combustible_ida', label: 'Combustible viaje IDA', type: 'money', cols: 1 },
-          { key: 'combustible_vuelta', label: 'Combustible viaje VUELTA', type: 'money', cols: 1 },
-          { key: 'seguro_soat', label: 'Seguro SOAT (anual)', type: 'money', cols: 1 },
-          { key: 'peajes', label: 'Peajes', type: 'money', cols: 1 },
-          { key: 'tecnomecanica', label: 'Tecnomecánica (anual)', type: 'money', cols: 1 },
-          { key: 'llantas_anual', label: 'Llantas en el año', type: 'money', cols: 1 },
-          { key: 'seguro_todo_riesgos', label: 'Seguro todo riesgos (anual)', type: 'money', cols: 1 },
-          { key: 'rodamiento_mensual', label: 'Rodamiento mensual', type: 'money', cols: 1 },
-          { key: 'total_gasto_mes', label: 'Total gasto viaje por mes', type: 'money', meta: 'Calculado', cols: 1 },
-          { key: 'ingresos_netos_mes', label: 'Ingresos mensuales netos', type: 'money', meta: 'Calculado', cols: 1 },
+          { key: 'total_gastos_mensuales', label: 'Total gastos mensuales', type: 'computed', meta: 'Calculado', formulaKey: 'transporte_pasajeros_total_gastos_mensuales', formulaFormat: 'money', cols: 1 },
+          { key: 'ingresos_netos_mes', label: 'Ingresos mensuales netos', type: 'computed', meta: 'Calculado', formulaKey: 'transporte_pasajeros_ingresos_netos_mes', formulaFormat: 'money', cols: 1 },
         ],
       },
     ],
@@ -2707,6 +2710,64 @@ function computeTransporteCargaTotalGastosMensuales(data: Record<string, unknown
   return Number.isFinite(valor) ? valor : null
 }
 
+/** Transporte Pasajeros: total_viaje_ida = (valor_pasaje_ida × capacidad_buseta) × (pct_ocupacion / 100) */
+function computeTransportePasajerosTotalViajeIda(data: Record<string, unknown>): number | null {
+  const valorPasaje = Number(data.valor_pasaje_ida ?? 0)
+  const capacidad = Number(data.capacidad_buseta ?? 0)
+  const pct = Number(data.pct_ocupacion ?? 0)
+  if (!Number.isFinite(valorPasaje) || !Number.isFinite(capacidad) || !Number.isFinite(pct)) return null
+  const valor = (valorPasaje * capacidad) * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Transporte Pasajeros: total_viaje_vuelta = (valor_pasaje_vuelta × capacidad_buseta) × (pct_ocupacion / 100) */
+function computeTransportePasajerosTotalViajeVuelta(data: Record<string, unknown>): number | null {
+  const valorPasaje = Number(data.valor_pasaje_vuelta ?? 0)
+  const capacidad = Number(data.capacidad_buseta ?? 0)
+  const pct = Number(data.pct_ocupacion ?? 0)
+  if (!Number.isFinite(valorPasaje) || !Number.isFinite(capacidad) || !Number.isFinite(pct)) return null
+  const valor = (valorPasaje * capacidad) * (pct / 100)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Transporte Pasajeros: ingreso_total_mes = (total_viaje_vuelta + total_viaje_ida) × viajes_semana × 4.33 */
+function computeTransportePasajerosIngresoTotalMes(data: Record<string, unknown>): number | null {
+  const totalIda = computeTransportePasajerosTotalViajeIda(data) ?? 0
+  const totalVuelta = computeTransportePasajerosTotalViajeVuelta(data) ?? 0
+  const viajesSemana = Number(data.viajes_semana ?? 0)
+  const semanasMes = 4.33
+  if (!Number.isFinite(viajesSemana)) return null
+  const valor = (totalVuelta + totalIda) * viajesSemana * semanasMes
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Transporte Pasajeros: total_gasto_viaje_por_mes = (total_ida_vuelta × viajes × 4.33) + %conductor; total_gastos_mensuales = (otros_anuales/12) + rodamiento + total_gasto_viaje_por_mes */
+function computeTransportePasajerosTotalGastosMensuales(data: Record<string, unknown>): number | null {
+  const totalIda = (Number(data.combustible_ida ?? 0) + Number(data.peajes_ida ?? 0) + Number(data.otros_ida ?? 0))
+  const totalVuelta = (Number(data.combustible_vuelta ?? 0) + Number(data.peajes_vuelta ?? 0) + Number(data.otros_vuelta ?? 0))
+  const totalIdaVuelta = (Number.isFinite(totalIda) ? totalIda : 0) + (Number.isFinite(totalVuelta) ? totalVuelta : 0)
+  const conductor = Number(data.conductor_vuelta ?? 0)
+  const viajesSemana = Number(data.viajes_semana ?? 0)
+  const semanasMes = 4.33
+  const gastosViajeMensual = (totalIdaVuelta * viajesSemana * semanasMes) + (Number.isFinite(conductor) ? conductor : 0)
+  const anuales = (Number(data.seguro_soat ?? 0) + Number(data.tecnomecanica ?? 0) + Number(data.llantas_anual ?? 0)
+    + Number(data.repuestos ?? 0) + Number(data.bajadas_rueda_anual ?? 0) + Number(data.seguro_todo_riesgos ?? 0))
+  const cambiosAceite = Number(data.cambios_aceite_cantidad ?? 0) * Number(data.precio_cambio_aceite ?? 0)
+  const anualesConAceite = anuales + (Number.isFinite(cambiosAceite) ? cambiosAceite : 0)
+  const rodamiento = Number(data.rodamiento_mensual ?? 0)
+  const valor = (anualesConAceite / 12) + (Number.isFinite(rodamiento) ? rodamiento : 0) + gastosViajeMensual
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Transporte Pasajeros: ingresos_netos_mes = ingreso_total_mes - total_gastos_mensuales */
+function computeTransportePasajerosIngresosNetosMes(data: Record<string, unknown>): number | null {
+  const ingresoTotal = computeTransportePasajerosIngresoTotalMes(data) ?? 0
+  const totalGastosMensuales = computeTransportePasajerosTotalGastosMensuales(data) ?? 0
+  if (!Number.isFinite(ingresoTotal)) return null
+  const valor = ingresoTotal - totalGastosMensuales
+  return Number.isFinite(valor) ? valor : null
+}
+
 /** Transporte Carga: ingresos_netos_mes = ingreso_total_mes - total_gastos_mensuales */
 function computeTransporteCargaIngresosNetosMes(data: Record<string, unknown>): number | null {
   const ingresoTotal = computeTransporteCargaIngresoTotalMes(data) ?? 0
@@ -2950,6 +3011,11 @@ const formulaComputers: Record<string, (data: Record<string, unknown>) => number
   transporte_carga_total_otros_gastos_anuales: computeTransporteCargaTotalOtrosGastosAnuales,
   transporte_carga_total_gastos_mensuales: computeTransporteCargaTotalGastosMensuales,
   transporte_carga_ingresos_netos_mes: computeTransporteCargaIngresosNetosMes,
+  transporte_pasajeros_total_viaje_ida: computeTransportePasajerosTotalViajeIda,
+  transporte_pasajeros_total_viaje_vuelta: computeTransportePasajerosTotalViajeVuelta,
+  transporte_pasajeros_ingreso_total_mes: computeTransportePasajerosIngresoTotalMes,
+  transporte_pasajeros_total_gastos_mensuales: computeTransportePasajerosTotalGastosMensuales,
+  transporte_pasajeros_ingresos_netos_mes: computeTransportePasajerosIngresosNetosMes,
 }
 
 /** Evalúa una fórmula calculada dado el formulaKey y los datos del formulario */
@@ -3076,6 +3142,7 @@ const UTILIDAD_MENSUAL_FORMULA_BY_TEMPLATE: Record<string, string> = {
   'cana-panela': 'cana_panela_total_utilidad_mensual',
   'servicios': 'servicios_ingresos_netos',
   'transporte-carga': 'transporte_carga_ingresos_netos_mes',
+  'transporte-pasajeros': 'transporte_pasajeros_ingresos_netos_mes',
 }
 
 /** Suma la utilidad mensual de todas las plantillas (para sincronizar con Ingreso cultivos/negocio) */
