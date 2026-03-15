@@ -2,11 +2,10 @@
 import NumberFlow from '@number-flow/vue'
 import { TrendingDown, TrendingUp, TrendingUpIcon } from 'lucide-vue-next'
 
-// El dashboard es accesible para todos los usuarios autenticados
-// Si necesitas protegerlo con permisos, descomenta la siguiente línea:
-// definePageMeta({
-//   middleware: 'permission:dashboard.view'
-// })
+definePageMeta({
+  middleware: 'permission',
+  permissions: 'dashboard_ver',
+})
 
 const { user } = useAuth()
 const { roles, permissions, isAdmin } = usePermissions()

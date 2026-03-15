@@ -39,16 +39,12 @@ function canAccessItem(item: NavLink | NavGroup): boolean {
     return !item.permission && !item.role && !item.adminOnly
   }
 
-  // Los administradores siempre tienen acceso
-  if (isAdmin.value) {
-    return true
-  }
-
-  // Verificar adminOnly
+  // adminOnly: solo administradores pueden ver
   if (item.adminOnly) {
-    return false
+    return isAdmin.value
   }
 
+  // Verificar permisos/roles (todos los usuarios, incluido admin, deben tener el permiso)
   // Si no tiene permisos definidos, permitir acceso
   if (!item.permission && !item.anyPermission && !item.role && !item.anyRole) {
     return true
@@ -92,22 +88,21 @@ const filteredNavMenu = computed(() => {
   if (import.meta.server || !authUser.value) {
     return navMenu.map(section => ({
       ...section,
-      items: section.items.filter(item => !item.permission && !item.role && !item.adminOnly)
+      items: section.items.filter(item => !('permission' in item && item.permission) && !('role' in item && item.role) && !('adminOnly' in item && item.adminOnly))
     })).filter(section => section.items.length > 0)
   }
 
   return navMenu.map(section => {
-    const filteredItems = section.items.filter(item => {
-      const canAccess = canAccessItem(item)
+    const filteredItems = section.items.filter((item): boolean => {
+      if ('heading' in item && !('link' in item) && !('children' in item)) {
+        return true
+      }
+      const navItem = item as NavLink | NavGroup
+      const canAccess = canAccessItem(navItem)
 
-      // Si es un grupo, filtrar también los hijos
-      if ('children' in item) {
-        const filteredChildren = item.children.filter(child => canAccessItem(child))
-        if (filteredChildren.length === 0) {
-          return false
-        }
-        const itemCopy = { ...item, children: filteredChildren }
-        return canAccessItem(itemCopy)
+      if ('children' in navItem) {
+        const filteredChildren = navItem.children.filter((child: NavLink) => canAccessItem(child))
+        return filteredChildren.length > 0 && canAccess
       }
       return canAccess
     })

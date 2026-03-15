@@ -4,7 +4,7 @@ import type { Role, PaginatedRoles } from '~/types/role'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'roles.view'
+  permissions: 'roles_ver'
 })
 
 const { $api } = useNuxtApp()
@@ -20,9 +20,9 @@ const pagination = ref({
   total: 0
 })
 
-const canCreate = computed(() => hasPermission('roles.create'))
-const canEdit = computed(() => hasPermission('roles.edit'))
-const canDelete = computed(() => hasPermission('roles.delete'))
+const canCreate = computed(() => hasPermission('roles_crear'))
+const canEdit = computed(() => hasPermission('roles_editar'))
+const canDelete = computed(() => hasPermission('roles_eliminar'))
 
 async function fetchRoles() {
   loading.value = true
@@ -94,7 +94,7 @@ watch(searchQuery, () => {
       <h2 class="text-2xl font-bold tracking-tight">
         Gestión de Roles y Permisos
       </h2>
-      <PermissionGate permission="roles.create">
+      <PermissionGate permission="roles_crear">
         <Button @click="$router.push('/admin/roles/create')">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Nuevo Rol
@@ -177,7 +177,7 @@ watch(searchQuery, () => {
                   </TableCell>
                   <TableCell class="text-right">
                     <div class="flex justify-end gap-2">
-                      <PermissionGate permission="roles.edit">
+                      <PermissionGate permission="roles_editar">
                         <Button 
                           variant="outline" 
                           size="sm" 
@@ -186,7 +186,7 @@ watch(searchQuery, () => {
                           <Icon name="i-lucide-edit" class="h-4 w-4" />
                         </Button>
                       </PermissionGate>
-                      <PermissionGate permission="roles.delete">
+                      <PermissionGate permission="roles_eliminar">
                         <Button 
                           variant="destructive" 
                           size="sm" 

@@ -47,12 +47,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
     return
   }
 
-  // Los administradores siempre tienen acceso
-  if (isAdmin.value) {
-    return
-  }
-
-  // Obtener permisos requeridos del meta
+  // Obtener permisos requeridos del meta (se verifican para todos los usuarios, incluido admin)
   const requiredPermissions = to.meta.permissions as string | string[] | undefined
 
   if (!requiredPermissions) {

@@ -29,7 +29,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
     }
     
     if (user.value && guestOnly.has(to.path)) {
-      return navigateTo('/')
+      const { hasPermission } = usePermissions()
+      const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
+      return navigateTo(target)
     }
     return
   }

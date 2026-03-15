@@ -5,7 +5,7 @@ import type { Company } from '~/types/company'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'company.view',
+  permissions: 'empresa_ver',
 })
 
 const { $api, $csrf } = useNuxtApp()
@@ -209,7 +209,7 @@ onMounted(() => {
           </div>
 
           <div class="flex justify-end gap-2">
-            <PermissionGate permission="company.edit">
+            <PermissionGate permission="empresa_editar">
               <Button type="submit" :disabled="saving">
                 <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
                 Guardar

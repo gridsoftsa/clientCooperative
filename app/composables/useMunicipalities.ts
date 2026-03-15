@@ -53,19 +53,25 @@ export function useMunicipalities() {
     return m.department?.name ? `${m.name} (${m.department.name})` : m.name
   }
 
+  /** Normaliza texto quitando tildes para búsqueda insensible a acentos. */
+  function normalizeForSearch(str: string): string {
+    return str.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+  }
+
   /**
    * Opciones filtradas por búsqueda, limitadas para no renderizar miles de ítems.
-   * Busca en nombre del municipio y nombre del departamento.
+   * Busca en nombre del municipio y nombre del departamento (insensible a tildes).
    */
   function getFilteredOptions(search: string, limit = 80): Array<{ id: number; label: string }> {
-    const q = search.trim().toLowerCase()
+    const q = normalizeForSearch(search.trim())
     if (!q) {
       return options.value.slice(0, limit).map((o) => ({ id: o.id, label: o.label }))
     }
     const filtered: Array<{ id: number; label: string }> = []
     for (const o of options.value) {
       if (filtered.length >= limit) break
-      const match = o.label.toLowerCase().includes(q) || o.departmentName.toLowerCase().includes(q)
+      const match =
+        normalizeForSearch(o.label).includes(q) || normalizeForSearch(o.departmentName).includes(q)
       if (match) filtered.push({ id: o.id, label: o.label })
     }
     return filtered

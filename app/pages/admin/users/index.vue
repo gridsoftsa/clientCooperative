@@ -5,7 +5,7 @@ import type { User, PaginatedUsers } from '~/types/user'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'users.view'
+  permissions: 'usuarios_ver'
 })
 
 const { $api } = useNuxtApp()

@@ -12,7 +12,10 @@ function goBack() {
 }
 
 function goHome() {
-  router.push('/')
+  // Ir a Radicación si no tienen dashboard_ver (evita bucle con /)
+  const { hasPermission } = usePermissions()
+  const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
+  router.push(target)
 }
 </script>
 

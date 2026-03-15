@@ -41,17 +41,12 @@ const props = withDefaults(defineProps<Props>(), {
 const { hasRole, hasAnyRole, hasAllRoles, hasPermission, hasAnyPermission, hasAllPermissions, isAdmin } = usePermissions()
 
 const canAccess = computed(() => {
-  // Admin siempre tiene acceso
-  if (isAdmin.value) {
-    return true
-  }
-
-  // Verificar adminOnly
+  // adminOnly: solo administradores pueden ver (admin o super_admin)
   if (props.adminOnly) {
-    return false
+    return isAdmin.value
   }
 
-  // Verificar permisos individuales
+  // Verificar permisos individuales (todos los usuarios, incluido admin, deben tener el permiso)
   if (props.permission && !hasPermission(props.permission)) {
     return false
   }

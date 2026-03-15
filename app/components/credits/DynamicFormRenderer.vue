@@ -437,6 +437,7 @@ const inputBaseClass =
                   value-prop="value"
                   label="label"
                   :searchable="true"
+                  :strict="false"
                   placeholder="Municipio"
                   no-options-text="No hay municipios"
                   no-results-text="No hay resultados. Escribe para filtrar."

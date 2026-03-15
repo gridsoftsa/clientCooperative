@@ -5,7 +5,7 @@ import type { Sucursal } from '~/types/sucursal'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'sucursales.edit',
+  permissions: 'sucursales_editar',
 })
 
 const { $api } = useNuxtApp()

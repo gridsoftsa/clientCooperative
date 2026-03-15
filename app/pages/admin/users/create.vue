@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { Role } from '~/types/role'
+import type { Permission, Role } from '~/types/role'
+import { PERMISSION_CATEGORY_LABELS, formatPermissionDisplayName } from '~/constants/permission-labels'
 
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'users.create'
+  permissions: 'usuarios_crear'
 })
 
 const { $api } = useNuxtApp()
@@ -19,9 +20,34 @@ const form = ref({
   sucursal_id: null as number | null,
   allowed_sucursal_ids: [] as number[],
   roles: [] as string[],
+  permissions: [] as string[],
 })
 
 const roles = ref<Role[]>([])
+const permissions = ref<Permission[]>([])
+const groupedPermissions = computed(() => {
+  const groups: Record<string, Permission[]> = {}
+  for (const p of permissions.value) {
+    const category = p.name.split('_')[0] ?? 'otros'
+    if (!groups[category]) groups[category] = []
+    groups[category].push(p)
+  }
+  return groups
+})
+const getCategoryLabel = (key: string) => PERMISSION_CATEGORY_LABELS[key] ?? key
+
+const openCategories = ref<Record<string, boolean>>({})
+
+const collapseAll = () => {
+  openCategories.value = Object.fromEntries(
+    Object.keys(groupedPermissions.value).map((c) => [c, false]),
+  )
+}
+
+const setCategoryOpen = (category: string, open: boolean) => {
+  openCategories.value = { ...openCategories.value, [category]: open }
+}
+
 const sucursales = ref<Array<{ id: number; name: string; code: string | null; is_main?: boolean }>>([])
 const loading = ref(false)
 const saving = ref(false)
@@ -50,16 +76,28 @@ const fetchRoles = async () => {
   }
 }
 
+const fetchPermissions = async () => {
+  try {
+    const res = await $api<{ data: Permission[] }>('/roles/permissions')
+    permissions.value = res.data
+  } catch {
+    permissions.value = []
+  }
+}
+
 const toggleRole = (roleName: string, checked: boolean) => {
   if (checked) {
-    if (!form.value.roles.includes(roleName)) {
-      form.value.roles.push(roleName)
-    }
+    if (!form.value.roles.includes(roleName)) form.value.roles.push(roleName)
   } else {
-    const index = form.value.roles.indexOf(roleName)
-    if (index > -1) {
-      form.value.roles.splice(index, 1)
-    }
+    form.value.roles = form.value.roles.filter(r => r !== roleName)
+  }
+}
+
+const togglePermission = (name: string, checked: boolean) => {
+  if (checked) {
+    if (!form.value.permissions.includes(name)) form.value.permissions.push(name)
+  } else {
+    form.value.permissions = form.value.permissions.filter(p => p !== name)
   }
 }
 
@@ -91,6 +129,7 @@ const handleSubmit = async () => {
         sucursal_id: form.value.sucursal_id || undefined,
         allowed_sucursal_ids: form.value.allowed_sucursal_ids,
         roles: form.value.roles,
+        permissions: form.value.permissions,
       },
     })
     
@@ -106,7 +145,7 @@ const handleSubmit = async () => {
 }
 
 onMounted(() => {
-  Promise.all([fetchRoles(), fetchSucursales()])
+  Promise.all([fetchRoles(), fetchSucursales(), fetchPermissions()])
 })
 </script>
 
@@ -262,6 +301,54 @@ onMounted(() => {
                 No hay roles disponibles
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader class="flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle>Permisos directos</CardTitle>
+              <CardDescription>
+                Permisos adicionales asignados directamente al usuario (además de los de sus roles)
+              </CardDescription>
+            </div>
+            <Button type="button" variant="outline" size="sm" @click="collapseAll">
+              <Icon name="i-lucide-chevrons-up-down" class="mr-2 h-4 w-4" />
+              Contraer todo
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div class="space-y-2">
+              <Collapsible
+                v-for="(categoryPermissions, category) in groupedPermissions"
+                :key="category"
+                :open="openCategories[category] ?? true"
+                class="border rounded-lg"
+                @update:open="(v) => setCategoryOpen(category, v)"
+              >
+                <div class="flex items-center justify-between px-4 py-2 bg-muted/50 rounded-t-lg">
+                  <CollapsibleTrigger as-child>
+                    <button type="button" class="flex items-center gap-2 w-full text-left font-semibold hover:opacity-80">
+                      <Icon name="i-lucide-chevron-down" class="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
+                      {{ getCategoryLabel(category) }}
+                    </button>
+                  </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent>
+                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-4 border-t">
+                    <div v-for="p in categoryPermissions" :key="p.id" class="flex items-center space-x-2">
+                      <Checkbox
+                        :id="`perm-${p.id}`"
+                        :model-value="form.permissions.includes(p.name)"
+                        @update:model-value="(v: boolean) => togglePermission(p.name, v)"
+                      />
+                      <Label :for="`perm-${p.id}`" class="font-normal cursor-pointer text-sm">{{ formatPermissionDisplayName(p.name) }}</Label>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+            <p v-if="permissions.length === 0" class="text-center py-4 text-muted-foreground text-sm">No hay permisos disponibles</p>
           </CardContent>
         </Card>
 

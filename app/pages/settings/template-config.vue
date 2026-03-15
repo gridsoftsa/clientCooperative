@@ -7,7 +7,7 @@ import CreateCategoryDialog from '~/components/settings/CreateCategoryDialog.vue
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'template-config.view',
+  permissions: 'plantillas_ver',
 })
 
 const { $api, $csrf } = useNuxtApp()
@@ -286,7 +286,7 @@ onMounted(() => {
                       {{ getTemplateLabel(selectedTemplateKey) }}
                     </h3>
                     <Button
-                      v-if="templateHasCategories(selectedTemplateKey) && hasPermission('template-config.edit')"
+                      v-if="templateHasCategories(selectedTemplateKey) && hasPermission('plantillas_crear')"
                       variant="outline"
                       size="sm"
                       @click="openCreateCategory(selectedTemplateKey)"
@@ -330,7 +330,8 @@ onMounted(() => {
                           :template-label="getTemplateLabel(record.template_key)"
                           :product-label="getProductLabel(productKey)"
                           :saving="saving === `${record.template_key}::${productKey ?? 'default'}`"
-                          :can-edit="hasPermission('template-config.edit')"
+                          :can-edit="hasPermission('plantillas_editar')"
+                          :can-delete="hasPermission('plantillas_eliminar')"
                           :category-id="getCategoryId(record.template_key, productKey)"
                           @save="(data) => saveConfig(record.template_key, productKey, data)"
                           @delete="() => { const id = getCategoryId(record.template_key, productKey); id && deleteCategory(id) }"
@@ -344,7 +345,8 @@ onMounted(() => {
                           :template-label="getTemplateLabel(record.template_key)"
                           :product-label="getProductLabel(productKey)"
                           :saving="saving === `${record.template_key}::${productKey ?? 'default'}`"
-                          :can-edit="hasPermission('template-config.edit')"
+                          :can-edit="hasPermission('plantillas_editar')"
+                          :can-delete="hasPermission('plantillas_eliminar')"
                           :category-id="getCategoryId(record.template_key, productKey)"
                           @save="(data) => saveConfig(record.template_key, productKey, data)"
                           @delete="() => { const id = getCategoryId(record.template_key, productKey); id && deleteCategory(id) }"
@@ -385,13 +387,15 @@ onMounted(() => {
                     <h3 class="font-semibold">
                       Cultivos Permanentes
                     </h3>
-                    <Button
-                      size="sm"
-                      @click="openCreateCategory('cultivo-permanente')"
-                    >
-                      <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-                      Agregar categoría
-                    </Button>
+                    <PermissionGate permission="plantillas_crear">
+                      <Button
+                        size="sm"
+                        @click="openCreateCategory('cultivo-permanente')"
+                      >
+                        <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                        Agregar categoría
+                      </Button>
+                    </PermissionGate>
                   </div>
                   <p class="mb-3 text-xs text-muted-foreground">
                     Cacao, Café, Bananito, frutales y especies similares
@@ -406,7 +410,7 @@ onMounted(() => {
                       <div class="flex items-center gap-2">
                         <span class="font-mono text-xs text-muted-foreground">{{ cat.code }}</span>
                         <Button
-                          v-if="hasPermission('template-config.edit')"
+                          v-if="hasPermission('plantillas_eliminar')"
                           variant="ghost"
                           size="icon"
                           class="h-7 w-7 text-destructive hover:text-destructive"
@@ -426,13 +430,15 @@ onMounted(() => {
                     <h3 class="font-semibold">
                       Cultivos de Ciclo Corto
                     </h3>
-                    <Button
-                      size="sm"
-                      @click="openCreateCategory('cultivo-ciclo-corto')"
-                    >
-                      <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-                      Agregar categoría
-                    </Button>
+                    <PermissionGate permission="plantillas_crear">
+                      <Button
+                        size="sm"
+                        @click="openCreateCategory('cultivo-ciclo-corto')"
+                      >
+                        <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                        Agregar categoría
+                      </Button>
+                    </PermissionGate>
                   </div>
                   <p class="mb-3 text-xs text-muted-foreground">
                     Maíz, Papa, Habichuela, Yuca, Tomate y similares
@@ -447,7 +453,7 @@ onMounted(() => {
                       <div class="flex items-center gap-2">
                         <span class="font-mono text-xs text-muted-foreground">{{ cat.code }}</span>
                         <Button
-                          v-if="hasPermission('template-config.edit')"
+                          v-if="hasPermission('plantillas_eliminar')"
                           variant="ghost"
                           size="icon"
                           class="h-7 w-7 text-destructive hover:text-destructive"
@@ -467,13 +473,15 @@ onMounted(() => {
                     <h3 class="font-semibold">
                       Tipos de pez
                     </h3>
-                    <Button
-                      size="sm"
-                      @click="openCreateCategory('peces-tilapia')"
-                    >
-                      <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-                      Agregar tipo
-                    </Button>
+                    <PermissionGate permission="plantillas_crear">
+                      <Button
+                        size="sm"
+                        @click="openCreateCategory('peces-tilapia')"
+                      >
+                        <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                        Agregar tipo
+                      </Button>
+                    </PermissionGate>
                   </div>
                   <p class="mb-3 text-xs text-muted-foreground">
                     Tilapia, Cachama y otras especies acuícolas
@@ -488,7 +496,7 @@ onMounted(() => {
                       <div class="flex items-center gap-2">
                         <span class="font-mono text-xs text-muted-foreground">{{ cat.code }}</span>
                         <Button
-                          v-if="hasPermission('template-config.edit')"
+                          v-if="hasPermission('plantillas_eliminar')"
                           variant="ghost"
                           size="icon"
                           class="h-7 w-7 text-destructive hover:text-destructive"

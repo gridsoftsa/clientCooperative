@@ -29,6 +29,7 @@ const props = defineProps<{
   productLabel: string
   saving: boolean
   canEdit: boolean
+  canDelete?: boolean
   categoryId?: number
 }>()
 
@@ -118,9 +119,9 @@ function handleCancel() {
           Última actualización: {{ new Date(record.updated_at).toLocaleString('es-CO') }}
         </p>
       </div>
-      <div v-if="canEdit" class="flex gap-2">
+      <div v-if="canEdit || canDelete" class="flex gap-2">
         <Button
-          v-if="categoryId"
+          v-if="categoryId && canDelete"
           variant="ghost"
           size="sm"
           class="text-destructive hover:text-destructive"

@@ -4,7 +4,7 @@ import { toast } from 'vue-sonner'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'sucursales.create',
+  permissions: 'sucursales_crear',
 })
 
 const { $api } = useNuxtApp()

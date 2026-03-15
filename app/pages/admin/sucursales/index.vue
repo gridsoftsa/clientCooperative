@@ -5,7 +5,7 @@ import type { Sucursal } from '~/types/sucursal'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'sucursales.view',
+  permissions: 'sucursales_ver',
 })
 
 const { $api } = useNuxtApp()
@@ -59,7 +59,7 @@ onMounted(() => {
       <h2 class="text-2xl font-bold tracking-tight">
         Sucursales
       </h2>
-      <PermissionGate permission="sucursales.create">
+      <PermissionGate permission="sucursales_crear">
         <Button @click="router.push('/admin/sucursales/create')">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Nueva Sucursal
@@ -108,12 +108,12 @@ onMounted(() => {
                   </Badge>
                 </TableCell>
                 <TableCell class="text-right">
-                  <PermissionGate permission="sucursales.edit">
+                  <PermissionGate permission="sucursales_editar">
                     <Button variant="ghost" size="sm" @click="router.push(`/admin/sucursales/${s.id}/edit`)">
                       <Icon name="i-lucide-edit" class="h-4 w-4" />
                     </Button>
                   </PermissionGate>
-                  <PermissionGate permission="sucursales.delete">
+                  <PermissionGate permission="sucursales_eliminar">
                     <Button
                       variant="ghost"
                       size="sm"

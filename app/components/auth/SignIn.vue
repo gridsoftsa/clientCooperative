@@ -23,8 +23,10 @@ async function onSubmit(event: Event) {
       email: email.value,
       password: password.value
     })
-    // Redirect to home (admin dashboard)
-    await navigateTo('/')
+    // Redirigir al dashboard si tiene permiso, si no a radicación
+    const { hasPermission } = usePermissions()
+    const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
+    await navigateTo(target)
   } catch (e: any) {
     // Laravel ValidationException comes as { errors: { field: [msg] } }
     const firstFieldError =
