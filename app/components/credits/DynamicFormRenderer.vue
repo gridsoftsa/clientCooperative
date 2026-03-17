@@ -22,6 +22,9 @@ import CreditsTransporteCargaGastosTable from '~/components/credits/TransporteCa
 import CreditsTransporteCargaOtrosGastosTable from '~/components/credits/TransporteCargaOtrosGastosTable.vue'
 import CreditsTransportePasajerosGastosTable from '~/components/credits/TransportePasajerosGastosTable.vue'
 import CreditsTransportePasajerosPasajesTable from '~/components/credits/TransportePasajerosPasajesTable.vue'
+import CreditsProductosTable from '~/components/credits/ProductosTable.vue'
+import CreditsSemanasDiasTable from '~/components/credits/SemanasDiasTable.vue'
+import CreditsIngresosGastosOperacionalesTable from '~/components/credits/IngresosGastosOperacionalesTable.vue'
 import { Textarea } from '~/components/ui/textarea'
 import Multiselect from '@vueform/multiselect'
 
@@ -125,6 +128,48 @@ function buildInitialFormData(): Record<string, unknown> {
     if (section.layout === 'transportePasajerosGastosTable') {
       for (const k of ['combustible_ida', 'peajes_ida', 'otros_ida', 'conductor_ida', 'combustible_vuelta', 'peajes_vuelta', 'otros_vuelta', 'conductor_vuelta', 'seguro_soat', 'tecnomecanica', 'llantas_anual', 'repuestos', 'cambios_aceite_cantidad', 'precio_cambio_aceite', 'bajadas_rueda_anual', 'seguro_todo_riesgos', 'rodamiento_mensual']) {
         if (data[k] === undefined) data[k] = null
+      }
+      continue
+    }
+    if (section.layout === 'ingresosGastosOperacionalesTable') {
+      for (const k of ['arriendo', 'gastos_servicios', 'gastos_imprevistos', 'gastos_empleados']) {
+        if (data[k] === undefined) data[k] = null
+      }
+      continue
+    }
+    if (section.layout === 'semanasDiasTable') {
+      for (const k of [
+        'semanas_buenas', 'semanas_regulares', 'semanas_malas',
+        'semanas_buenas_valor', 'semanas_regulares_valor', 'semanas_malas_valor',
+        'dias_buenos', 'dias_regulares', 'dias_malos',
+        'dias_buenos_valor', 'dias_regulares_valor', 'dias_malos_valor',
+      ]) {
+        if (data[k] === undefined) data[k] = null
+      }
+      if (data.semanas_mes === undefined) {
+        data.semanas_mes = data.semanas_mes_default ?? null
+      }
+      if (data.sensibilizacion === undefined) {
+        data.sensibilizacion = 90
+      }
+      continue
+    }
+    if (section.layout === 'productosTable') {
+      if (data.productos === undefined) {
+        const producto = data.producto
+        const precioCompra = data.precio_compra
+        const precioVenta = data.precio_venta
+        if (producto != null || precioCompra != null || precioVenta != null) {
+          data.productos = [{
+            producto: String(producto ?? ''),
+            precio_compra: typeof precioCompra === 'number' ? precioCompra : null,
+            precio_venta: typeof precioVenta === 'number' ? precioVenta : null,
+          }]
+          const emptyRows = Array.from({ length: 5 }, () => ({ producto: '', precio_compra: null, precio_venta: null }))
+          data.productos = [...(data.productos as { producto: string; precio_compra: number | null; precio_venta: number | null }[]), ...emptyRows]
+        } else {
+          data.productos = Array.from({ length: 6 }, () => ({ producto: '', precio_compra: null, precio_venta: null }))
+        }
       }
       continue
     }
@@ -374,6 +419,52 @@ const inputBaseClass =
             @update:field="({ key, value }) => (formData[key] = value)"
           />
           <CreditsAvesCostBreakdown
+            :form-data="formData"
+            @update:field="({ key, value }) => (formData[key] = value)"
+          />
+        </div>
+      </fieldset>
+      <!-- Tabla de productos (plantilla comercial) -->
+      <fieldset
+        v-else-if="section.layout === 'productosTable'"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="text-sm font-semibold text-foreground">
+          {{ section.title }}
+        </legend>
+        <div class="mt-4">
+          <CreditsProductosTable
+            :form-data="formData"
+            @update:field="({ key, value }) => (formData[key] = value)"
+          />
+        </div>
+      </fieldset>
+      <!-- Tabla Semanas y Días (plantilla comercial) -->
+      <fieldset
+        v-else-if="section.layout === 'semanasDiasTable'"
+        class="rounded-lg border border-border p-4"
+      >
+        <legend class="text-sm font-semibold text-foreground">
+          {{ section.title }}
+        </legend>
+        <div class="mt-4">
+          <CreditsSemanasDiasTable
+            :form-data="formData"
+            @update:field="({ key, value }) => (formData[key] = value)"
+          />
+        </div>
+      </fieldset>
+      <!-- Ingresos y Gastos Operacionales (plantilla comercial) -->
+      <fieldset
+        v-else-if="section.layout === 'ingresosGastosOperacionalesTable'"
+        :id="`section-${section.key}`"
+        class="rounded-lg border-2 border-primary/30 bg-primary/5 p-4"
+      >
+        <legend class="text-base font-semibold text-foreground">
+          {{ section.title }}
+        </legend>
+        <div class="mt-4">
+          <CreditsIngresosGastosOperacionalesTable
             :form-data="formData"
             @update:field="({ key, value }) => (formData[key] = value)"
           />

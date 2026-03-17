@@ -208,7 +208,7 @@ function handleCancel() {
             {{ section.title }}
           </h5>
           <div class="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-end">
-          <template v-for="field in section.fields" :key="field.key">
+          <template v-for="field in section.fields.filter(f => !f.hidden)" :key="field.key">
             <!-- Campo fórmula (solo lectura) -->
             <div v-if="field.type === 'formula'" class="flex flex-col gap-1 min-w-0">
               <Label :for="`cfg-${record.id}-${field.key}`" class="text-xs">

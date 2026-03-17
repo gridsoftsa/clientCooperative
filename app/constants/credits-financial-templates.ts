@@ -2,7 +2,7 @@
  * Plantillas de actividad financiera basadas en OFICIAL PLANTILLAS AGRO AREA CREDITO 2026.
  * Consolidadas por sector: Ganadería, Pecuaria, Cultivos Permanentes, Cultivos Ciclo Corto.
  */
-import type { FormSchemaInput } from '~/types/credits'
+import type { FormSchemaInput, FormSectionSchema } from '~/types/credits'
 
 /** Sectores con sus plantillas disponibles */
 export interface SectorTemplate {
@@ -1708,44 +1708,20 @@ function schemaPlantillaComercial(): FormSchemaInput {
       {
         key: 'productos',
         title: 'Productos',
-        fields: [
-          { key: 'producto', label: 'Producto', type: 'text', meta: 'Nombre', cols: 1 },
-          { key: 'precio_compra', label: 'Precio compra', type: 'money', cols: 1 },
-          { key: 'precio_venta', label: 'Precio de venta', type: 'money', cols: 1 },
-          { key: 'pct_utilidad', label: '% Utilidad', type: 'number', meta: 'Calculado', cols: 1 },
-          { key: 'pct_costos', label: '% Costos', type: 'number', meta: 'Calculado', cols: 1 },
-        ],
+        layout: 'productosTable' as FormSectionSchema['layout'],
+        fields: [],
       },
       {
         key: 'semanas_dias',
         title: 'Semanas y Días',
-        fields: [
-          { key: 'semanas_buenas', label: 'Semanas buenas', type: 'number', meta: 'Int', cols: 1 },
-          { key: 'semanas_regulares', label: 'Semanas regulares', type: 'number', meta: 'Int', cols: 1 },
-          { key: 'semanas_malas', label: 'Semanas malas', type: 'number', meta: 'Int', cols: 1 },
-          { key: 'dias_buenos', label: 'Días buenos', type: 'number', meta: 'Int', cols: 1 },
-          { key: 'dias_buenos_venta', label: 'Días buenos - Venta', type: 'money', cols: 1 },
-          { key: 'dias_regulares', label: 'Días regulares', type: 'number', meta: 'Int', cols: 1 },
-          { key: 'dias_regulares_venta', label: 'Días regulares - Venta', type: 'money', cols: 1 },
-          { key: 'dias_malos', label: 'Días malos', type: 'number', meta: 'Int', cols: 1 },
-          { key: 'dias_malos_venta', label: 'Días malos - Venta', type: 'money', cols: 1 },
-          { key: 'venta_semanal', label: 'Venta semanal', type: 'money', meta: 'Calculado', cols: 1 },
-          { key: 'semanas_mes', label: 'Semanas al mes', type: 'number', meta: 'Decimal', cols: 1 },
-          { key: 'venta_mensual', label: 'Venta mensual', type: 'money', meta: 'Calculado', cols: 1 },
-        ],
+        layout: 'semanasDiasTable' as FormSectionSchema['layout'],
+        fields: [],
       },
       {
         key: 'ingresos_gastos',
         title: 'Ingresos y Gastos Operacionales',
-        fields: [
-          { key: 'ingresos_operacionales', label: 'Ingresos operacionales', type: 'money', cols: 1 },
-          { key: 'arriendo', label: 'Arriendo', type: 'money', cols: 1 },
-          { key: 'gastos_servicios', label: 'Gastos servicios', type: 'money', cols: 1 },
-          { key: 'gastos_imprevistos', label: 'Gastos imprevistos', type: 'money', cols: 1 },
-          { key: 'gastos_empleados', label: 'Gastos empleados', type: 'money', cols: 1 },
-          { key: 'total_gastos_negocio', label: 'Total gastos negocio', type: 'money', meta: 'Calculado', cols: 1 },
-          { key: 'total_ingresos_netos_negocio', label: 'Total ingresos netos negocio', type: 'money', meta: 'Calculado', cols: 1 },
-        ],
+        layout: 'ingresosGastosOperacionalesTable' as FormSectionSchema['layout'],
+        fields: [],
       },
     ],
   }
@@ -2589,17 +2565,18 @@ function computeServiciosSumaCantidadDias(data: Record<string, unknown>): number
   return sum
 }
 
-/** Servicios: semanas_mes = IFS(suma_cantidad=7 → 4.75, suma_cantidad<7 → 4) */
+/** Servicios: semanas_mes = IFS(suma_cantidad=7 → config, suma_cantidad<7 → config). Configurable en plantilla. */
 function computeServiciosSemanasMes(data: Record<string, unknown>): number | null {
   const suma = computeServiciosSumaCantidadDias(data)
+  const completa = Number(data.semanas_mes_completa_default ?? data.semanas_mes_default ?? 4.75)
+  const parcial = Number(data.semanas_mes_parcial_default ?? 4)
   if (suma === 7) {
-    return 4.75
+    return Number.isFinite(completa) ? completa : 4.75
   }
   if (suma < 7) {
-    return 4
+    return Number.isFinite(parcial) ? parcial : 4
   }
-  // suma > 7: por defecto 4.75 (equivale a semana completa)
-  return 4.75
+  return Number.isFinite(completa) ? completa : 4.75
 }
 
 /** Servicios: total_semana = suma (dia_X_valor × dia_X_cantidad) para bueno, regular, malo */
@@ -2664,13 +2641,13 @@ function computeTransporteCargaTotalViaje(data: Record<string, unknown>): number
   return Number.isFinite(valor) ? valor : null
 }
 
-/** Transporte Carga: ingreso_total_mes = total_viaje × cantidad_viajes_semana × 4.33 */
+/** Transporte Carga: ingreso_total_mes = total_viaje × cantidad_viajes_semana × semanas_mes (configurable) */
 function computeTransporteCargaIngresoTotalMes(data: Record<string, unknown>): number | null {
   const totalViaje = computeTransporteCargaTotalViaje(data) ?? 0
   const viajesSemana = Number(data.cantidad_viajes_semana ?? 0)
-  const semanasMes = 4.33
+  const semanasMes = Number(data.semanas_mes_default ?? 4.33)
   if (!Number.isFinite(totalViaje) || !Number.isFinite(viajesSemana)) return null
-  const valor = totalViaje * viajesSemana * semanasMes
+  const valor = totalViaje * viajesSemana * (Number.isFinite(semanasMes) ? semanasMes : 4.33)
   return Number.isFinite(valor) ? valor : null
 }
 
@@ -2700,13 +2677,14 @@ function computeTransporteCargaTotalOtrosGastosAnuales(data: Record<string, unkn
   return Number.isFinite(sum) ? sum : null
 }
 
-/** Transporte Carga: total_gastos_mensuales = (total_gastos_viaje × viajes_semana × 4.33) + (total_otros_gastos_anuales / 12) */
+/** Transporte Carga: total_gastos_mensuales = (total_gastos_viaje × viajes_semana × semanas_mes) + (otros_anuales/12). Semanas configurable. */
 function computeTransporteCargaTotalGastosMensuales(data: Record<string, unknown>): number | null {
   const totalGastosViaje = computeTransporteCargaTotalGastosViaje(data) ?? 0
   const viajesSemana = Number(data.cantidad_viajes_semana ?? 0)
-  const semanasMes = 4.33
+  const semanasMes = Number(data.semanas_mes_default ?? 4.33)
   const otrosGastosAnuales = computeTransporteCargaTotalOtrosGastosAnuales(data) ?? 0
-  const valor = (totalGastosViaje * viajesSemana * semanasMes) + (otrosGastosAnuales / 12)
+  const sm = Number.isFinite(semanasMes) ? semanasMes : 4.33
+  const valor = (totalGastosViaje * viajesSemana * sm) + (otrosGastosAnuales / 12)
   return Number.isFinite(valor) ? valor : null
 }
 
@@ -2730,26 +2708,28 @@ function computeTransportePasajerosTotalViajeVuelta(data: Record<string, unknown
   return Number.isFinite(valor) ? valor : null
 }
 
-/** Transporte Pasajeros: ingreso_total_mes = (total_viaje_vuelta + total_viaje_ida) × viajes_semana × 4.33 */
+/** Transporte Pasajeros: ingreso_total_mes = (total_viaje_vuelta + total_viaje_ida) × viajes_semana × semanas_mes. Configurable. */
 function computeTransportePasajerosIngresoTotalMes(data: Record<string, unknown>): number | null {
   const totalIda = computeTransportePasajerosTotalViajeIda(data) ?? 0
   const totalVuelta = computeTransportePasajerosTotalViajeVuelta(data) ?? 0
   const viajesSemana = Number(data.viajes_semana ?? 0)
-  const semanasMes = 4.33
+  const semanasMes = Number(data.semanas_mes_default ?? 4.33)
   if (!Number.isFinite(viajesSemana)) return null
-  const valor = (totalVuelta + totalIda) * viajesSemana * semanasMes
+  const sm = Number.isFinite(semanasMes) ? semanasMes : 4.33
+  const valor = (totalVuelta + totalIda) * viajesSemana * sm
   return Number.isFinite(valor) ? valor : null
 }
 
-/** Transporte Pasajeros: total_gasto_viaje_por_mes = (total_ida_vuelta × viajes × 4.33) + %conductor; total_gastos_mensuales = (otros_anuales/12) + rodamiento + total_gasto_viaje_por_mes */
+/** Transporte Pasajeros: total_gasto_viaje_por_mes = (total_ida_vuelta × viajes × semanas_mes) + %conductor. Semanas configurable. */
 function computeTransportePasajerosTotalGastosMensuales(data: Record<string, unknown>): number | null {
   const totalIda = (Number(data.combustible_ida ?? 0) + Number(data.peajes_ida ?? 0) + Number(data.otros_ida ?? 0))
   const totalVuelta = (Number(data.combustible_vuelta ?? 0) + Number(data.peajes_vuelta ?? 0) + Number(data.otros_vuelta ?? 0))
   const totalIdaVuelta = (Number.isFinite(totalIda) ? totalIda : 0) + (Number.isFinite(totalVuelta) ? totalVuelta : 0)
   const conductor = Number(data.conductor_vuelta ?? 0)
   const viajesSemana = Number(data.viajes_semana ?? 0)
-  const semanasMes = 4.33
-  const gastosViajeMensual = (totalIdaVuelta * viajesSemana * semanasMes) + (Number.isFinite(conductor) ? conductor : 0)
+  const semanasMes = Number(data.semanas_mes_default ?? 4.33)
+  const sm = Number.isFinite(semanasMes) ? semanasMes : 4.33
+  const gastosViajeMensual = (totalIdaVuelta * viajesSemana * sm) + (Number.isFinite(conductor) ? conductor : 0)
   const anuales = (Number(data.seguro_soat ?? 0) + Number(data.tecnomecanica ?? 0) + Number(data.llantas_anual ?? 0)
     + Number(data.repuestos ?? 0) + Number(data.bajadas_rueda_anual ?? 0) + Number(data.seguro_todo_riesgos ?? 0))
   const cambiosAceite = Number(data.cambios_aceite_cantidad ?? 0) * Number(data.precio_cambio_aceite ?? 0)
@@ -2765,6 +2745,24 @@ function computeTransportePasajerosIngresosNetosMes(data: Record<string, unknown
   const totalGastosMensuales = computeTransportePasajerosTotalGastosMensuales(data) ?? 0
   if (!Number.isFinite(ingresoTotal)) return null
   const valor = ingresoTotal - totalGastosMensuales
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Plantilla comercial: total_gastos_negocio = arriendo + gastos_servicios + gastos_imprevistos + gastos_empleados */
+function computePlantillaComercialTotalGastosNegocio(data: Record<string, unknown>): number | null {
+  const a = Number(data.arriendo ?? 0) || 0
+  const s = Number(data.gastos_servicios ?? 0) || 0
+  const i = Number(data.gastos_imprevistos ?? 0) || 0
+  const e = Number(data.gastos_empleados ?? 0) || 0
+  const valor = a + s + i + e
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** Plantilla comercial: total_ingresos_netos_negocio = ingresos_operacionales - total_gastos_negocio */
+function computePlantillaComercialTotalIngresosNetosNegocio(data: Record<string, unknown>): number | null {
+  const ing = Number(data.ingresos_operacionales ?? 0) || 0
+  const gast = computePlantillaComercialTotalGastosNegocio(data) ?? 0
+  const valor = ing - gast
   return Number.isFinite(valor) ? valor : null
 }
 
@@ -3016,6 +3014,8 @@ const formulaComputers: Record<string, (data: Record<string, unknown>) => number
   transporte_pasajeros_ingreso_total_mes: computeTransportePasajerosIngresoTotalMes,
   transporte_pasajeros_total_gastos_mensuales: computeTransportePasajerosTotalGastosMensuales,
   transporte_pasajeros_ingresos_netos_mes: computeTransportePasajerosIngresosNetosMes,
+  plantilla_comercial_total_gastos_negocio: computePlantillaComercialTotalGastosNegocio,
+  plantilla_comercial_total_ingresos_netos_negocio: computePlantillaComercialTotalIngresosNetosNegocio,
 }
 
 /** Evalúa una fórmula calculada dado el formulaKey y los datos del formulario */
@@ -3143,6 +3143,7 @@ const UTILIDAD_MENSUAL_FORMULA_BY_TEMPLATE: Record<string, string> = {
   'servicios': 'servicios_ingresos_netos',
   'transporte-carga': 'transporte_carga_ingresos_netos_mes',
   'transporte-pasajeros': 'transporte_pasajeros_ingresos_netos_mes',
+  'plantilla-comercial': 'plantilla_comercial_total_ingresos_netos_negocio',
 }
 
 /** Suma la utilidad mensual de todas las plantillas (para sincronizar con Ingreso cultivos/negocio) */

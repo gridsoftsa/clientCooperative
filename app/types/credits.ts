@@ -28,7 +28,7 @@ export interface FormSectionSchema {
   title: string
   fields: FormFieldSchema[]
   /** Layout alternativo: tabla de clasificación de huevos (aves ponedoras) */
-  layout?: 'eggsTable' | 'finagroTable' | 'referenciaInfo' | 'referenciaInfoCeba' | 'cicloCortoCostBreakdownTable' | 'serviciosIngresosTable' | 'transporteCargaGastosTable' | 'transportePasajerosPasajesTable' | 'transportePasajerosGastosTable'
+  layout?: 'eggsTable' | 'finagroTable' | 'referenciaInfo' | 'referenciaInfoCeba' | 'cicloCortoCostBreakdownTable' | 'serviciosIngresosTable' | 'transporteCargaGastosTable' | 'transportePasajerosPasajesTable' | 'transportePasajerosGastosTable' | 'productosTable' | 'semanasDiasTable' | 'ingresosGastosOperacionalesTable'
   tableRows?: EggsTableRowSchema[]
   /** Para serviciosIngresosTable: filas de la tabla (tipo día) */
   serviciosTableRows?: Array<{ suffix: string; label: string }>

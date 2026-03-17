@@ -80,8 +80,9 @@ const totalGastoViajePorMes = computed(() => {
   const totalIdaVuelta = totalGastosViajeIdaVuelta.value ?? 0
   const conductor = Number(props.formData.conductor_vuelta ?? 0)
   const viajesSemana = Number(props.formData.viajes_semana ?? 0)
-  const semanasMes = 4.33
-  const gastoBase = totalIdaVuelta * viajesSemana * semanasMes
+  const semanasMes = Number(props.formData.semanas_mes_default ?? 4.33)
+  const sm = Number.isFinite(semanasMes) ? semanasMes : 4.33
+  const gastoBase = totalIdaVuelta * viajesSemana * sm
   const sum = gastoBase + (Number.isFinite(conductor) ? conductor : 0)
   return Number.isFinite(sum) ? sum : null
 })

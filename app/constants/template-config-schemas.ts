@@ -16,6 +16,8 @@ export interface TemplateConfigField {
   formulaKey?: string
   /** Fórmula legible para mostrar (ej: "precio compra ÷ precio kg") */
   formulaDisplay?: string
+  /** Si true, el campo existe en config pero no se muestra en la UI de configuración */
+  hidden?: boolean
 }
 
 export interface TemplateConfigSchema {
@@ -267,7 +269,8 @@ const schemaServicios: TemplateConfigSchema = {
       title: 'Valores estándar',
       fields: [
         { key: 'pct_contribucion_estandar', label: '% Contribución estándar', type: 'number' },
-        { key: 'semanas_mes_default', label: 'Semanas al mes (default)', type: 'number' },
+        { key: 'semanas_mes_completa_default', label: 'Semanas al mes (días=7, semana completa)', type: 'number', formulaDisplay: 'default 4.75' },
+        { key: 'semanas_mes_parcial_default', label: 'Semanas al mes (días<7, semana parcial)', type: 'number', formulaDisplay: 'default 4' },
       ],
     },
   ],
@@ -281,8 +284,7 @@ const schemaPlantillaComercial: TemplateConfigSchema = {
       title: 'Valores estándar',
       fields: [
         { key: 'semanas_mes_default', label: 'Semanas al mes (default)', type: 'number' },
-        { key: 'pct_utilidad_default', label: '% Utilidad (default)', type: 'number' },
-        { key: 'pct_costos_default', label: '% Costos (default)', type: 'number' },
+        { key: 'sensibilizacion', label: '% Sensibilización', type: 'number' },
       ],
     },
   ],
@@ -295,6 +297,7 @@ const schemaTransporteCarga: TemplateConfigSchema = {
       key: 'valores_estandar',
       title: 'Valores estándar',
       fields: [
+        { key: 'semanas_mes_default', label: 'Semanas al mes (para cálculos mensuales)', type: 'number', formulaDisplay: '52/12 ≈ 4.33' },
         { key: 'cantidad_viajes_semana', label: 'Cantidad viajes por semana', type: 'number' },
         { key: 'cambios_aceite_anual', label: '# Cambios de aceite (anual)', type: 'number' },
       ],
@@ -309,6 +312,7 @@ const schemaTransportePasajeros: TemplateConfigSchema = {
       key: 'valores_estandar',
       title: 'Valores estándar',
       fields: [
+        { key: 'semanas_mes_default', label: 'Semanas al mes (para cálculos mensuales)', type: 'number', formulaDisplay: '52/12 ≈ 4.33' },
         { key: 'viajes_semana_default', label: 'Viajes por semana (default)', type: 'number' },
         { key: 'capacidad_buseta_default', label: 'Capacidad buseta (default)', type: 'number' },
         { key: 'pct_ocupacion_ajuste', label: '% Ocupación (ajuste)', type: 'number' },
