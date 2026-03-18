@@ -158,6 +158,13 @@ const schemaGanadoDobleProposito: TemplateConfigSchema = {
   template_key: 'ganado-doble-proposito',
   sections: [
     {
+      key: 'parametros_crias',
+      title: 'Parámetros de crías',
+      fields: [
+        { key: 'porcentaje_sensibilizacion', label: '% Sensibilización (para número de crías ≥ 10)', type: 'number' },
+      ],
+    },
+    {
       key: 'discriminacion_costos',
       title: 'Discriminación de costos',
       fields: [

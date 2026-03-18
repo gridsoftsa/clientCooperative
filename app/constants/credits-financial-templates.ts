@@ -276,6 +276,15 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             cols: 1,
           },
           {
+            key: 'numero_crias_con_sensibilizacion',
+            label: 'Número de crías con % sensibilización',
+            type: 'computed',
+            meta: 'Solo lectura. Si número de crías ≥ 10: número × % sensibilización; si < 10: número de crías',
+            formulaKey: 'ganado_doble_numero_crias_con_sensibilizacion',
+            formulaFormat: 'number',
+            cols: 1,
+          },
+          {
             key: 'edad_vacas_crias',
             label: 'Edad de las vacas (años)',
             type: 'number',
@@ -299,7 +308,7 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             key: 'valor_total_crias',
             label: 'Valor total crías',
             type: 'computed',
-            meta: 'Solo lectura (número de crías × valor unitario venta cría)',
+            meta: 'Solo lectura (número de crías con % sensibilización × valor unitario venta cría)',
             formulaKey: 'ganado_doble_valor_total_crias',
             formulaFormat: 'money',
             cols: 1,
@@ -1922,11 +1931,27 @@ function computeGanadoCebaPctAumento(data: Record<string, unknown>): number | nu
   return null
 }
 
-/** Fórmula Ganado Doble Propósito: valor_total_crias = numero_crias × valor_unitario_venta_cria */
-function computeGanadoDobleValorTotalCrias(data: Record<string, unknown>): number | null {
+/**
+ * Fórmula Ganado Doble Propósito: número de crías con % sensibilización.
+ * IFS(numero_crias >= 10 → numero_crias × porcentaje_sensibilizacion/100; numero_crias < 10 → numero_crias)
+ * porcentaje_sensibilizacion es parametrizable en configuración (default 90%).
+ */
+function computeGanadoDobleNumeroCriasConSensibilizacion(data: Record<string, unknown>): number | null {
   const numeroCrias = Number(data.numero_crias ?? 0)
+  const pctSensibilizacion = Number(data.porcentaje_sensibilizacion ?? 90)
+  if (numeroCrias >= 10) {
+    const valor = numeroCrias * (pctSensibilizacion / 100)
+    return Number.isFinite(valor) ? valor : null
+  }
+  return numeroCrias
+}
+
+/** Fórmula Ganado Doble Propósito: valor_total_crias = numero_crias_con_sensibilizacion × valor_unitario_venta_cria */
+function computeGanadoDobleValorTotalCrias(data: Record<string, unknown>): number | null {
+  const numeroCriasEfectivo = computeGanadoDobleNumeroCriasConSensibilizacion(data)
   const valorUnitario = Number(data.valor_unitario_venta_cria ?? 0)
-  const valor = numeroCrias * valorUnitario
+  if (numeroCriasEfectivo == null) return null
+  const valor = numeroCriasEfectivo * valorUnitario
   return Number.isFinite(valor) ? valor : null
 }
 
@@ -2907,6 +2932,7 @@ function computeGanadoDobleProduccionMensualLt(data: Record<string, unknown>): n
 }
 
 const formulaComputers: Record<string, (data: Record<string, unknown>) => number | null> = {
+  ganado_doble_numero_crias_con_sensibilizacion: computeGanadoDobleNumeroCriasConSensibilizacion,
   ganado_doble_valor_total_crias: computeGanadoDobleValorTotalCrias,
   ganado_doble_produccion_lt_ciclo: computeGanadoDobleProduccionLtCiclo,
   ganado_doble_valor_total_produccion_leche: computeGanadoDobleValorTotalProduccionLeche,

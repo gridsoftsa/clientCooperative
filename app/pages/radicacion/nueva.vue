@@ -605,10 +605,10 @@ async function submitApplication() {
     await $csrf()
     const { data: application } = await $api<{ data: { id: number; code?: string; application_applicants?: Array<{ applicant_id: number; role: string }> } }>('/credit-applications', {
       method: 'POST',
-      body: payloadWithoutDocuments('Submitted'),
+      body: payloadWithoutDocuments('Draft'),
     })
     await uploadAllDocuments(application.id, application)
-    toast.success('Solicitud enviada correctamente')
+    toast.success('Solicitud enviada correctamente (estado: Borrador)')
     try {
       const { downloadApplicationPdf } = useDocumentDownload()
       await downloadApplicationPdf(application.id, `solicitud-${application.code ?? application.id}.pdf`)
@@ -1130,13 +1130,14 @@ onMounted(() => {
           </div>
           <div class="flex gap-2">
             <Button
+              v-if="mode === 'codeudor'"
               type="button"
               variant="outline"
               :disabled="saving"
               @click="saveDraft"
             >
               <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              {{ mode === 'codeudor' ? 'Guardar codeudor' : 'Guardar borrador' }}
+              Guardar codeudor
             </Button>
             <Button
               v-if="mode === 'deudor'"
