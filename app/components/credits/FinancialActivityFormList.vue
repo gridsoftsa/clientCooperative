@@ -18,9 +18,12 @@ function templateOptionsFor(sector: string) {
 const props = withDefaults(
   defineProps<{
     modelValue?: ActivityTemplateData[]
+    /** Modo solo lectura (sin edición) */
+    readonly?: boolean
   }>(),
   {
     modelValue: () => [],
+    readonly: false,
   },
 )
 
@@ -102,7 +105,7 @@ watch(
       <p class="text-sm text-muted-foreground">
         Añade una o más plantillas según las actividades económicas del deudor
       </p>
-      <div class="flex flex-wrap gap-2">
+      <div v-if="!readonly" class="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" @click="addTemplate">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Agregar plantilla
@@ -128,6 +131,7 @@ watch(
         class="relative rounded-lg border border-border px-4 pr-12 data-[state=open]:border-primary/30"
       >
         <Button
+          v-if="!readonly"
           type="button"
           variant="ghost"
           size="icon"
@@ -150,9 +154,10 @@ watch(
           <div class="border-t border-border px-4 pt-4 pb-2">
             <CreditsFinancialActivityForm
               :model-value="item"
+              :readonly="readonly"
               @update:model-value="(v) => updateTemplate(idx, v)"
             />
-            <div class="mt-4 flex justify-end">
+            <div v-if="!readonly" class="mt-4 flex justify-end">
               <Button
                 type="button"
                 variant="outline"

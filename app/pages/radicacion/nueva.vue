@@ -603,12 +603,20 @@ async function submitApplication() {
   saving.value = true
   try {
     await $csrf()
-    const { data: application } = await $api<{ data: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }> } }>('/credit-applications', {
+    const { data: application } = await $api<{ data: { id: number; code?: string; application_applicants?: Array<{ applicant_id: number; role: string }> } }>('/credit-applications', {
       method: 'POST',
       body: payloadWithoutDocuments('Submitted'),
     })
     await uploadAllDocuments(application.id, application)
     toast.success('Solicitud enviada correctamente')
+    try {
+      const { downloadApplicationPdf } = useDocumentDownload()
+      await downloadApplicationPdf(application.id, `solicitud-${application.code ?? application.id}.pdf`)
+      toast.success('PDF descargado. Puedes imprimirlo para que firmen el asesor, deudor y codeudores.')
+    } catch (e) {
+      console.warn('No se pudo descargar el PDF automáticamente:', e)
+      toast.info('Solicitud guardada. Puedes descargar el PDF desde la vista de la solicitud.')
+    }
     router.push('/radicacion')
   } catch (e: any) {
     console.error('Error enviando:', e)

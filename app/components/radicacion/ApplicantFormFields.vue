@@ -3,18 +3,23 @@ import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import type { ApplicantForm, ApplicantDocumentForm, FinancialInfoForm } from '~/types/credit-application'
 
-const props = defineProps<{
-  modelValue: ApplicantForm
-  showSearch?: boolean
-  loadingSearch?: boolean
-  /** Muestra campo "Concepto" (ej. Codeudor bien raíz) para codeudores */
-  showCoDebtorConcept?: boolean
-  /** Oculta la sección Datos financieros (ej. cuando está en paso separado) */
-  hideFinancialSection?: boolean
-  /** Muestra solo la sección Datos financieros (para paso dedicado) */
-  showOnlyFinancial?: boolean
-  onSearch?: () => void
-}>()
+const props = withDefaults(
+  defineProps<{
+    modelValue: ApplicantForm
+    showSearch?: boolean
+    loadingSearch?: boolean
+    /** Muestra campo "Concepto" (ej. Codeudor bien raíz) para codeudores */
+    showCoDebtorConcept?: boolean
+    /** Oculta la sección Datos financieros (ej. cuando está en paso separado) */
+    hideFinancialSection?: boolean
+    /** Muestra solo la sección Datos financieros (para paso dedicado) */
+    showOnlyFinancial?: boolean
+    /** Modo solo lectura (sin edición) */
+    readonly?: boolean
+    onSearch?: () => void
+  }>(),
+  { readonly: false },
+)
 
 const emit = defineEmits<{
   'update:modelValue': [ApplicantForm]
@@ -224,9 +229,9 @@ function formatFileSize(bytes: number): string {
 </script>
 
 <template>
-  <div class="flex flex-col gap-8">
+  <fieldset class="flex flex-col gap-8" :disabled="readonly">
     <!-- Búsqueda por cédula (solo para deudor) -->
-    <section v-if="!showOnlyFinancial && showSearch" :class="sectionClass">
+    <section v-if="!showOnlyFinancial && showSearch && !readonly" :class="sectionClass">
       <h3 :class="sectionTitleClass">Buscar por documento</h3>
       <div class="rounded-lg border border-border bg-muted/30 p-4">
         <div class="flex flex-wrap items-end gap-3">
@@ -267,7 +272,7 @@ function formatFileSize(bytes: number): string {
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div :class="fieldClass">
           <Label for="doc_type">Tipo documento *</Label>
-          <Select v-model="local.document_type">
+          <Select v-model="local.document_type" :disabled="readonly">
             <SelectTrigger id="doc_type">
               <SelectValue placeholder="Seleccionar" />
             </SelectTrigger>
@@ -285,7 +290,7 @@ function formatFileSize(bytes: number): string {
             v-model="local.document_number"
             placeholder="Ej: 1234567890"
             inputmode="numeric"
-            :readonly="!!showSearch"
+            :readonly="!!showSearch || readonly"
             @input="onDigitsOnlyInput($event, v => (local.document_number = v))"
           />
         </div>
@@ -302,6 +307,7 @@ function formatFileSize(bytes: number): string {
           <Multiselect
             :model-value="local.expedition_place ?? null"
             :options="multiselectOptionsByLabel"
+            :disabled="readonly"
             value-prop="value"
             label="label"
             :searchable="true"
@@ -346,7 +352,7 @@ function formatFileSize(bytes: number): string {
         </div>
         <div :class="fieldClass">
           <Label for="marital">Estado civil</Label>
-          <Select v-model="local.marital_status">
+          <Select v-model="local.marital_status" :disabled="readonly">
             <SelectTrigger id="marital">
               <SelectValue placeholder="Seleccionar" />
             </SelectTrigger>
@@ -415,6 +421,7 @@ function formatFileSize(bytes: number): string {
           <Multiselect
             :model-value="local.residence_city_name ?? null"
             :options="multiselectOptionsByLabel"
+            :disabled="readonly"
             value-prop="value"
             label="label"
             :searchable="true"
@@ -428,7 +435,7 @@ function formatFileSize(bytes: number): string {
         </div>
         <div :class="fieldClass">
           <Label for="residence_type">Tipo vivienda</Label>
-          <Select v-model="local.residence_type">
+          <Select v-model="local.residence_type" :disabled="readonly">
             <SelectTrigger id="residence_type">
               <SelectValue placeholder="Seleccionar" />
             </SelectTrigger>
@@ -454,6 +461,7 @@ function formatFileSize(bytes: number): string {
           <Label for="activity_type">Tipo de actividad económica</Label>
           <Select
             :model-value="financial.activity_type ?? null"
+            :disabled="readonly"
             @update:model-value="setFinancial('activity_type', $event != null ? String($event) : undefined)"
           >
             <SelectTrigger id="activity_type">
@@ -501,6 +509,7 @@ function formatFileSize(bytes: number): string {
           <Label for="co_debtor_concept">Concepto</Label>
           <Select
             :model-value="financial.concept ?? null"
+            :disabled="readonly"
             @update:model-value="setFinancial('concept', $event != null ? String($event) : undefined)"
           >
             <SelectTrigger id="co_debtor_concept">
@@ -834,7 +843,7 @@ function formatFileSize(bytes: number): string {
               <span class="text-xs text-muted-foreground">Bien raíz:</span>
               <span class="font-semibold">{{ formatPesos(bienRaizFromGarantias) || '0' }}</span>
             </div>
-            <Button type="button" variant="outline" size="sm" @click="addAsset">
+            <Button v-if="!readonly" type="button" variant="outline" size="sm" @click="addAsset">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
               Agregar activo
             </Button>
@@ -894,6 +903,7 @@ function formatFileSize(bytes: number): string {
                 </p>
               </div>
               <Button
+                v-if="!readonly"
                 type="button"
                 variant="ghost"
                 size="icon"
@@ -965,6 +975,7 @@ function formatFileSize(bytes: number): string {
             </label>
           </div>
           <Button
+            v-if="!readonly"
             type="button"
             variant="ghost"
             size="icon"
@@ -974,13 +985,13 @@ function formatFileSize(bytes: number): string {
             <Icon name="i-lucide-trash" class="h-4 w-4" />
           </Button>
         </div>
-        <Button type="button" variant="outline" size="sm" @click="addDocument">
+        <Button v-if="!readonly" type="button" variant="outline" size="sm" @click="addDocument">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Agregar documento
         </Button>
       </div>
     </section>
-  </div>
+  </fieldset>
 </template>
 
 <style src="@vueform/multiselect/themes/default.css"></style>

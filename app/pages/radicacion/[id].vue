@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import ApplicantViewFields from '~/components/radicacion/ApplicantViewFields.vue'
+import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
+import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 
 definePageMeta({
   layout: 'default',
@@ -12,12 +13,40 @@ const id = computed(() => route.params.id as string)
 const application = ref<any>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
+const currentStep = ref(1)
+const form = ref<CreditApplicationForm>({
+  debtor: {
+    document_type: 'CC',
+    document_number: '',
+    first_name: '',
+    first_last_name: '',
+    dependents: 0,
+    documents: [],
+  },
+  amount_requested: 0,
+  term_months: 12,
+  destination: '',
+  destination_description: '',
+  agency_id: 0,
+  status: 'Draft',
+  co_debtors: [],
+  numero_radicado_externo: '',
+})
+
+const stepsDeudor = [
+  { num: 1, title: 'Datos del Deudor' },
+  { num: 2, title: 'Actividad económica' },
+  { num: 3, title: 'Datos financieros' },
+  { num: 4, title: 'Datos de la Solicitud' },
+  { num: 5, title: 'Codeudores' },
+]
 
 const { formatPesos } = usePesosFormat()
+const { downloadDocument, downloadApplicationPdf } = useDocumentDownload()
+const downloadingPdf = ref(false)
+const downloadingId = ref<number | null>(null)
 
-/**
- * Deudor y codeudores vienen del API (debtor, co_debtors) o se construyen desde applicants/pivots.
- */
 function parseJsonField(val: unknown): Record<string, unknown> {
   if (val == null) return {}
   if (typeof val === 'object' && !Array.isArray(val)) return val as Record<string, unknown>
@@ -45,20 +74,61 @@ function parseReferences(val: unknown): any[] {
   return []
 }
 
+function getActivityTemplates(app: any): ActivityTemplateData[] {
+  const fi = (app?.financial_info || {}) as Record<string, unknown>
+  const templates = fi.activity_templates
+  if (Array.isArray(templates)) {
+    return templates.filter(
+      (t): t is ActivityTemplateData =>
+        t && typeof t === 'object' && 'sector' in t && 'template' in t && 'data' in t,
+    )
+  }
+  return []
+}
+
+function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
+  const fi = parseJsonField(api?.financial_info)
+  const residenceName = (typeof api?.residence_city_name === 'string' && api.residence_city_name?.trim())
+    ? api.residence_city_name
+    : (api?.residence_city as { name?: string } | null)?.name ?? ''
+  return {
+    document_type: api?.document_type ?? 'CC',
+    document_number: api?.document_number ?? '',
+    expedition_date: api?.expedition_date,
+    expedition_place: api?.expedition_place,
+    first_name: api?.first_name ?? '',
+    second_name: api?.second_name,
+    first_last_name: api?.first_last_name ?? '',
+    second_last_name: api?.second_last_name,
+    birth_date: api?.birth_date,
+    gender: api?.gender,
+    marital_status: api?.marital_status,
+    dependents: api?.dependents ?? 0,
+    mobile_phone: api?.mobile_phone,
+    landline: api?.landline,
+    email: api?.email,
+    residence_address: api?.residence_address,
+    residence_city_name: residenceName,
+    residence_city_id: api?.residence_city_id,
+    residence_type: api?.residence_type,
+    time_in_residence: api?.time_in_residence,
+    occupation: api?.occupation,
+    company_name: api?.company_name,
+    position: api?.position,
+    contract_type: api?.contract_type,
+    time_in_job: api?.time_in_job,
+    financial_info: fi,
+    references: parseReferences(api?.references),
+    documents: docs.map((d) => ({ title: d.title || d.original_name || 'Documento' })),
+  }
+}
+
 const debtor = computed(() => {
   const app = application.value
   if (!app) return null
-
-  // 1. API retorna debtor explícito
   if (app.debtor && typeof app.debtor === 'object') {
-    return {
-      ...app.debtor,
-      financial_info: parseJsonField(app.debtor.financial_info),
-      references: parseReferences(app.debtor.references),
-    }
+    return { ...app.debtor, financial_info: parseJsonField(app.debtor.financial_info), references: parseReferences(app.debtor.references) }
   }
-
-  // 2. applicants + application_applicants
   const apps = app.applicants ?? []
   const pivots = app.application_applicants ?? app.applicationApplicants ?? []
   const debtorPivot = pivots.find((p: any) => (p.role ?? p.Role) === 'DEUDOR')
@@ -72,8 +142,6 @@ const debtor = computed(() => {
       }
     }
   }
-
-  // 3. applicants con pivot (cada applicant tiene pivot.role)
   const withPivot = apps.find((a: any) => (a.pivot?.role ?? a.pivot?.Role) === 'DEUDOR')
   if (withPivot) {
     return {
@@ -82,8 +150,6 @@ const debtor = computed(() => {
       references: parseReferences(withPivot.pivot?.references),
     }
   }
-
-  // 4. Primer applicant como deudor (legacy)
   if (apps.length) {
     const first = apps[0]
     const pivot = first.pivot ?? {}
@@ -93,15 +159,12 @@ const debtor = computed(() => {
       references: parseReferences(pivot.references),
     }
   }
-
   return null
 })
 
 const coDebtors = computed(() => {
   const app = application.value
   if (!app) return []
-
-  // 1. API retorna co_debtors
   if (Array.isArray(app.co_debtors) && app.co_debtors.length) {
     return app.co_debtors.map((c: any) => ({
       ...c,
@@ -109,8 +172,6 @@ const coDebtors = computed(() => {
       references: parseReferences(c.references),
     }))
   }
-
-  // 2. application_applicants con role CODEUDOR
   const apps = app.applicants ?? []
   const pivots = app.application_applicants ?? app.applicationApplicants ?? []
   const coPivots = pivots.filter((p: any) => (p.role ?? p.Role) === 'CODEUDOR')
@@ -118,14 +179,10 @@ const coDebtors = computed(() => {
     return coPivots
       .map((pivot: any) => {
         const applicant = apps.find((a: any) => a.id === pivot.applicant_id)
-        return applicant
-          ? { ...applicant, financial_info: parseJsonField(pivot.financial_info), references: parseReferences(pivot.references) }
-          : null
+        return applicant ? { ...applicant, financial_info: parseJsonField(pivot.financial_info), references: parseReferences(pivot.references) } : null
       })
       .filter(Boolean)
   }
-
-  // 3. applicants con pivot role CODEUDOR
   return apps
     .filter((a: any) => (a.pivot?.role ?? a.pivot?.Role) === 'CODEUDOR')
     .map((a: any) => ({
@@ -135,7 +192,6 @@ const coDebtors = computed(() => {
     }))
 })
 
-/** Documentos agrupados por applicant_id (usa claves numéricas y string para lookup) */
 const documentsByApplicant = computed(() => {
   const docs = application.value?.documents ?? []
   const byApplicant: Record<string, any[]> = {}
@@ -149,37 +205,84 @@ const documentsByApplicant = computed(() => {
   return byApplicant
 })
 
-/** Obtiene documentos de un solicitante (deudor o codeudor) por su id */
 function getDocumentsForApplicant(applicantId: number | string | null | undefined): any[] {
   if (applicantId == null) return []
-  const key = String(applicantId)
-  return documentsByApplicant.value[key] ?? []
+  return documentsByApplicant.value[String(applicantId)] ?? []
 }
 
-function getStatusLabel(status: string): string {
-  const map: Record<string, string> = {
-    Draft: 'Borrador',
-    Submitted: 'Enviada',
-    In_Analysis: 'En análisis',
-    Approved: 'Aprobada',
-    Rejected: 'Rechazada',
-  }
-  return map[status] ?? status
-}
+const solvenciaPercentage = computed(() => {
+  const d = debtor.value
+  if (!d?.financial_info) return null
+  const sol = (d.financial_info as any)?.solvency
+  const pct = sol?.solvency
+  if (pct != null && typeof pct === 'number') return pct
+  const pasivos = sol?.liabilities ?? 0
+  const bienRaiz = sol?.real_estate ?? 0
+  const monto = application.value?.amount_requested
+  if (!monto || monto <= 0) return null
+  return Math.round(((pasivos + bienRaiz) / monto) * 100 * 100) / 100
+})
 
-function getStatusBadgeVariant(status: string) {
-  const map: Record<string, string> = {
-    Draft: 'secondary',
-    Submitted: 'default',
-    In_Analysis: 'outline',
-    Approved: 'default',
-    Rejected: 'destructive',
-  }
-  return map[status] || 'outline'
+function solvenciaColorClass(pct: number | null): string {
+  if (pct == null) return 'bg-muted text-muted-foreground'
+  if (pct < 50) return 'bg-destructive/20 text-destructive border-destructive/40'
+  if (pct < 100) return 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/40'
+  if (pct < 150) return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/40'
+  return 'bg-green-600/20 text-green-700 dark:text-green-400 border-green-600/40'
 }
 
 function fullName(a: any): string {
   return [a.first_name, a.second_name, a.first_last_name, a.second_last_name].filter(Boolean).join(' ') || '-'
+}
+
+async function handleDownloadPdf() {
+  if (!application.value?.id || downloadingPdf.value) return
+  downloadingPdf.value = true
+  try {
+    await downloadApplicationPdf(application.value.id, `solicitud-${application.value.code ?? application.value.id}.pdf`)
+    const { toast } = await import('vue-sonner')
+    toast.success('PDF descargado')
+  } catch (e) {
+    console.error('Error descargando PDF:', e)
+    const { toast } = await import('vue-sonner')
+    toast.error('No se pudo descargar el PDF')
+  } finally {
+    downloadingPdf.value = false
+  }
+}
+
+async function handleDownload(doc: { id: number; title?: string; original_name?: string }) {
+  if (downloadingId.value) return
+  downloadingId.value = doc.id
+  try {
+    await downloadDocument(application.value.id, doc.id, doc.title || doc.original_name || 'documento')
+  } catch (e) {
+    console.error('Error descargando:', e)
+    const { toast } = await import('vue-sonner')
+    toast.error('No se pudo descargar el documento.')
+  } finally {
+    downloadingId.value = null
+  }
+}
+
+function syncFormFromApplication() {
+  const app = application.value
+  if (!app || !debtor.value) return
+  const debtorDocs = getDocumentsForApplicant(debtor.value.id)
+  form.value = {
+    debtor: apiApplicantToForm(debtor.value, debtorDocs),
+    amount_requested: Number(app.amount_requested) || 0,
+    term_months: app.term_months ?? 12,
+    destination: app.destination ?? '',
+    destination_description: app.destination_description ?? '',
+    agency_id: app.agency_id ?? 0,
+    status: app.status ?? 'Draft',
+    numero_radicado_externo: app.numero_radicado_externo ?? '',
+    co_debtors: coDebtors.value.map((c) => {
+      const docs = getDocumentsForApplicant(c.id)
+      return apiApplicantToForm(c, docs)
+    }),
+  }
 }
 
 async function fetchApplication() {
@@ -192,6 +295,7 @@ async function fetchApplication() {
       ...data,
       documents: Array.isArray(data?.documents) ? data.documents : [],
     }
+    syncFormFromApplication()
   } catch (e) {
     console.error('Error cargando solicitud:', e)
     error.value = 'No se pudo cargar la solicitud'
@@ -201,9 +305,23 @@ async function fetchApplication() {
   }
 }
 
+async function fetchCatalogs() {
+  try {
+    const agenciesRes = await $api<{ data: typeof agencies.value }>('/catalogs/agencies')
+    agencies.value = agenciesRes.data
+  } catch (e) {
+    console.error('Error cargando catálogos:', e)
+  }
+}
+
 onMounted(() => {
   fetchApplication()
+  fetchCatalogs()
 })
+
+watch([application, debtor, coDebtors], () => {
+  if (application.value && debtor.value) syncFormFromApplication()
+}, { deep: true })
 </script>
 
 <template>
@@ -217,10 +335,20 @@ onMounted(() => {
           Solicitud de crédito - Solo lectura
         </p>
       </div>
-      <Button variant="outline" @click="router.push('/radicacion')">
-        <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
-        Volver
-      </Button>
+      <div class="flex gap-2">
+        <Button
+          variant="default"
+          :disabled="downloadingPdf"
+          @click="handleDownloadPdf"
+        >
+          <Icon :name="downloadingPdf ? 'i-lucide-loader-2' : 'i-lucide-file-down'" class="mr-2 h-4 w-4" :class="{ 'animate-spin': downloadingPdf }" />
+          {{ downloadingPdf ? 'Descargando...' : 'Descargar PDF' }}
+        </Button>
+        <Button variant="outline" @click="router.push('/radicacion')">
+          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
+          Volver
+        </Button>
+      </div>
     </div>
 
     <div v-if="loading" class="flex justify-center py-12">
@@ -234,125 +362,229 @@ onMounted(() => {
       </Button>
     </div>
 
-    <template v-else-if="application">
-      <!-- Encabezado: código, estado, datos principales -->
-      <Card>
-        <CardHeader>
-          <div class="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <CardTitle class="text-xl">
-                {{ application.code || `Solicitud #${application.id}` }}
-              </CardTitle>
-              <CardDescription>
-                Creada el {{ new Date(application.created_at).toLocaleDateString('es-CO', { dateStyle: 'long' }) }}
-              </CardDescription>
-            </div>
-            <Badge :variant="getStatusBadgeVariant(application.status) as any" class="text-sm px-4 py-1.5">
-              {{ getStatusLabel(application.status) }}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div class="space-y-1">
-              <p class="text-sm font-medium text-muted-foreground">Monto solicitado</p>
-              <p class="text-lg font-semibold">{{ formatPesos(Number(application.amount_requested)) }}</p>
-            </div>
-            <div class="space-y-1">
-              <p class="text-sm font-medium text-muted-foreground">Plazo</p>
-              <p class="text-lg font-semibold">{{ application.term_months }} meses</p>
-            </div>
-            <div class="space-y-1 sm:col-span-2">
-              <p class="text-sm font-medium text-muted-foreground">Sucursal / Agencia</p>
-              <p class="text-lg font-semibold">
-                {{ application.sucursal?.name ?? application.agency?.name ?? '-' }}
-              </p>
-            </div>
-            <div class="space-y-1 sm:col-span-2">
-              <p class="text-sm font-medium text-muted-foreground">Destino del crédito</p>
-              <p>{{ application.destination || '-' }}</p>
-            </div>
-            <div v-if="application.destination_description" class="space-y-1 sm:col-span-2">
-              <p class="text-sm font-medium text-muted-foreground">Descripción del destino</p>
-              <p class="whitespace-pre-wrap">{{ application.destination_description }}</p>
+    <template v-else-if="application && debtor">
+      <!-- Número de radicado externo -->
+      <div class="rounded-xl border bg-card p-4">
+        <div class="space-y-1.5 max-w-md">
+          <p class="text-sm font-semibold">
+            Número de radicado externo
+          </p>
+          <p class="font-mono text-muted-foreground">
+            {{ form.numero_radicado_externo || '-' }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Resumen financiero del deudor -->
+      <div class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
+        <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Resumen financiero del deudor
+        </p>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="space-y-1">
+            <p class="text-sm font-bold uppercase">Solvencia</p>
+            <div
+              class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
+              :class="solvenciaColorClass(solvenciaPercentage)"
+            >
+              {{ solvenciaPercentage != null ? `${solvenciaPercentage.toFixed(2)} %` : '—' }}
             </div>
           </div>
-        </CardContent>
-      </Card>
+          <div class="space-y-1">
+            <p class="text-sm font-bold uppercase">Activos</p>
+            <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+              {{ formatPesos((debtor.financial_info as any)?.solvency?.assets ?? (debtor.financial_info as any)?.assets?.reduce((s: number, a: any) => s + (a?.value ?? 0), 0) ?? 0) }}
+            </p>
+          </div>
+          <div class="space-y-1">
+            <p class="text-sm font-bold uppercase">Pasivos</p>
+            <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+              {{ formatPesos((debtor.financial_info as any)?.solvency?.liabilities) }}
+            </p>
+          </div>
+          <div class="space-y-1">
+            <p class="text-sm font-bold uppercase">Bien raíz</p>
+            <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+              {{ formatPesos((debtor.financial_info as any)?.solvency?.real_estate) }}
+            </p>
+          </div>
+        </div>
+      </div>
 
-      <!-- Deudor -->
-      <Card>
-        <Collapsible :default-open="true" class="group/debtor">
-          <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-            <div>
-              <CardTitle>Datos del Deudor</CardTitle>
-              <CardDescription>
-                {{ debtor ? fullName(debtor) : 'Información del solicitante principal' }}
-              </CardDescription>
+      <!-- Stepper -->
+      <div class="flex flex-wrap items-center gap-2">
+        <template v-for="(step, idx) in stepsDeudor" :key="step.num">
+          <button
+            type="button"
+            class="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            :class="[
+              currentStep === step.num
+                ? 'bg-primary text-primary-foreground cursor-default'
+                : 'cursor-pointer hover:bg-muted',
+            ]"
+            @click="currentStep = step.num"
+          >
+            <div
+              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ring-border/50"
+              :class="currentStep === step.num ? 'bg-primary text-primary-foreground ring-primary' : currentStep > step.num ? 'bg-primary/30 text-primary ring-primary/30' : 'bg-background text-foreground ring-muted-foreground/40'"
+            >
+              {{ step.num }}
             </div>
-            <CollapsibleTrigger as-child>
-              <Button variant="ghost" size="icon">
-                <Icon
-                  name="i-lucide-chevron-down"
-                  class="h-5 w-5 transition-transform duration-200 group-data-[state=open]/debtor:rotate-180"
-                />
-              </Button>
-            </CollapsibleTrigger>
-          </CardHeader>
-          <CollapsibleContent>
-            <CardContent>
-              <ApplicantViewFields
-                v-if="debtor"
-                :key="`debtor-${debtor.id}`"
-                :applicant="debtor"
-                :documents="getDocumentsForApplicant(debtor.id)"
-                :application-id="application.id"
-              />
-              <p v-else class="text-muted-foreground py-4">
-                No se encontraron datos del solicitante para esta radicación.
-              </p>
-            </CardContent>
-          </CollapsibleContent>
-        </Collapsible>
-      </Card>
+            <span class="text-sm font-semibold hidden sm:inline" :class="currentStep === step.num ? 'text-primary-foreground' : 'text-foreground'">
+              {{ step.title }}
+            </span>
+          </button>
+          <Icon v-if="idx < stepsDeudor.length - 1" name="i-lucide-chevron-right" class="h-4 w-4 shrink-0 text-muted-foreground" />
+        </template>
+      </div>
 
-      <!-- Codeudores -->
-      <Card v-if="coDebtors.length > 0">
+      <Card>
         <CardHeader>
-          <CardTitle>Codeudores</CardTitle>
-          <CardDescription>Personas que respaldan la solicitud</CardDescription>
+          <CardTitle>{{ stepsDeudor[currentStep - 1]?.title ?? '' }}</CardTitle>
+          <CardDescription>
+            {{ currentStep === 1
+              ? 'Datos personales del deudor principal'
+              : currentStep === 2
+                ? 'Plantillas agropecuarias según la actividad económica'
+                : currentStep === 3
+                  ? 'Ingresos, gastos y solvencia del deudor'
+                  : currentStep === 4
+                    ? 'Monto, plazo y destino del crédito'
+                    : 'Codeudores de la solicitud' }}
+          </CardDescription>
         </CardHeader>
         <CardContent class="space-y-6">
-          <Collapsible
-            v-for="(co, idx) in coDebtors"
-            :key="co.id"
-            :default-open="true"
-            class="group/co rounded-lg border border-border"
-          >
-            <div class="flex flex-row items-center justify-between px-4 py-3">
-              <h4 class="font-semibold">
-                Codeudor {{ idx + 1 }}: {{ fullName(co) }}
-              </h4>
-              <CollapsibleTrigger as-child>
-                <Button variant="ghost" size="icon">
-                  <Icon
-                    name="i-lucide-chevron-down"
-                    class="h-5 w-5 transition-transform duration-200 group-data-[state=open]/co:rotate-180"
-                  />
+          <!-- Paso 1: Datos del Deudor -->
+          <div v-if="currentStep === 1" class="space-y-4">
+            <ApplicantFormFields
+              v-model="form.debtor"
+              :show-search="false"
+              :hide-financial-section="true"
+              :show-co-debtor-concept="false"
+              readonly
+            />
+            <div v-if="getDocumentsForApplicant(debtor.id).length > 0" class="space-y-3 border-t pt-4">
+              <p class="text-sm font-semibold">Documentos adjuntos</p>
+              <div class="flex flex-wrap gap-2">
+                <Button
+                  v-for="doc in getDocumentsForApplicant(debtor.id)"
+                  :key="doc.id"
+                  variant="outline"
+                  size="sm"
+                  class="h-auto gap-2 py-2"
+                  :disabled="downloadingId === doc.id"
+                  @click="handleDownload(doc)"
+                >
+                  <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
+                  {{ doc.title || doc.original_name || 'Documento' }}
+                  <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 </Button>
-              </CollapsibleTrigger>
-            </div>
-            <CollapsibleContent>
-              <div class="border-t border-border p-4 pt-4">
-                <ApplicantViewFields
-                  :key="`co-${co.id}`"
-                  :applicant="co"
-                  :documents="getDocumentsForApplicant(co.id)"
-                  :application-id="application.id"
-                />
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+            </div>
+          </div>
+
+          <!-- Paso 2: Actividad económica -->
+          <div v-else-if="currentStep === 2" class="space-y-4">
+            <CreditsFinancialActivityFormList
+              :model-value="getActivityTemplates(debtor)"
+              readonly
+            />
+          </div>
+
+          <!-- Paso 3: Datos financieros -->
+          <div v-else-if="currentStep === 3" class="space-y-4">
+            <ApplicantFormFields
+              v-model="form.debtor"
+              :show-only-financial="true"
+              readonly
+            />
+          </div>
+
+          <!-- Paso 4: Datos de la Solicitud -->
+          <div v-else-if="currentStep === 4" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="space-y-1.5">
+              <p class="text-sm font-medium">Monto solicitado (COP)</p>
+              <p class="rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+                {{ formatPesos(form.amount_requested) }}
+              </p>
+            </div>
+            <div class="space-y-1.5">
+              <p class="text-sm font-medium">Plazo (meses)</p>
+              <p class="rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+                {{ form.term_months }}
+              </p>
+            </div>
+            <div class="space-y-1.5">
+              <p class="text-sm font-medium">Sucursal</p>
+              <p class="rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+                {{ agencies.find(a => a.id === form.agency_id)?.name ?? application?.sucursal?.name ?? application?.agency?.name ?? '-' }}
+              </p>
+            </div>
+            <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+              <p class="text-sm font-medium">Destino del crédito</p>
+              <p class="rounded-md border bg-muted/50 px-3 py-2">
+                {{ form.destination || '-' }}
+              </p>
+            </div>
+            <div v-if="form.destination_description" class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+              <p class="text-sm font-medium">Descripción del destino</p>
+              <p class="whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2">
+                {{ form.destination_description }}
+              </p>
+            </div>
+          </div>
+
+          <!-- Paso 5: Codeudores -->
+          <div v-else-if="currentStep === 5" class="space-y-6">
+            <div v-if="form.co_debtors.length === 0" class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+              No hay codeudores en esta solicitud.
+            </div>
+            <Accordion v-else type="multiple" collapsible class="space-y-2">
+              <AccordionItem
+                v-for="(co, idx) in form.co_debtors"
+                :key="idx"
+                :value="`codeudor-${idx}`"
+                class="relative rounded-lg border border-border px-4 pr-12 data-[state=open]:border-primary/30"
+              >
+                <AccordionTrigger class="py-3 pr-8 hover:no-underline">
+                  <span class="font-medium">
+                    Codeudor {{ idx + 1 }}
+                    <span class="ml-2 text-muted-foreground font-normal">
+                      ({{ [co.first_name, co.first_last_name].filter(Boolean).join(' ') || 'Sin nombre' }})
+                    </span>
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div class="border-t border-border px-4 pt-4 pb-2 space-y-4">
+                    <ApplicantFormFields
+                      :model-value="co"
+                      :show-co-debtor-concept="true"
+                      readonly
+                      @update:model-value="() => {}"
+                    />
+                    <div v-if="getDocumentsForApplicant(coDebtors[idx]?.id ?? coDebtors[idx]?.applicant_id).length > 0" class="space-y-3">
+                      <p class="text-sm font-semibold">Documentos adjuntos</p>
+                      <div class="flex flex-wrap gap-2">
+                        <Button
+                          v-for="doc in getDocumentsForApplicant(coDebtors[idx]?.id ?? coDebtors[idx]?.applicant_id)"
+                          :key="doc.id"
+                          variant="outline"
+                          size="sm"
+                          class="h-auto gap-2 py-2"
+                          :disabled="downloadingId === doc.id"
+                          @click="handleDownload(doc)"
+                        >
+                          <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
+                          {{ doc.title || doc.original_name || 'Documento' }}
+                          <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
         </CardContent>
       </Card>
     </template>

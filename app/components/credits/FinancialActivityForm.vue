@@ -18,9 +18,11 @@ const { fetchFlatData } = useTemplateFlatData()
 const props = withDefaults(
   defineProps<{
     modelValue?: ActivityTemplateData | null
+    readonly?: boolean
   }>(),
   {
     modelValue: () => null,
+    readonly: false,
   },
 )
 
@@ -161,6 +163,7 @@ onMounted(() => {
             <Label for="sector" class="text-sm font-medium">Sector</Label>
             <Select
               v-model="sectorSelected"
+              :disabled="readonly"
               @update:model-value="templateSelected = ''"
             >
               <SelectTrigger id="sector" class="w-full">
@@ -179,7 +182,7 @@ onMounted(() => {
           </div>
           <div class="space-y-1.5">
             <Label for="template" class="text-sm font-medium">Plantilla</Label>
-            <Select v-model="templateSelected">
+            <Select v-model="templateSelected" :disabled="readonly">
               <SelectTrigger id="template" class="w-full">
                 <SelectValue placeholder="Seleccionar plantilla" />
               </SelectTrigger>
@@ -216,6 +219,7 @@ onMounted(() => {
           :template-key="templateSelected"
           :initial-data="formData"
           :read-only-field-keys="configuredFieldKeys"
+          :readonly="readonly"
           @update:form-data="setFormData"
         />
         <template #fallback>

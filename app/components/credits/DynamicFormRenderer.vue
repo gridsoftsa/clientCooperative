@@ -35,10 +35,13 @@ const props = withDefaults(
     initialData?: Record<string, unknown>
     /** Campos que vienen de configuración y no deben ser editables en radicación */
     readOnlyFieldKeys?: string[]
+    /** Cuando true, todos los campos son solo lectura */
+    readonly?: boolean
   }>(),
   {
     initialData: () => ({}),
     readOnlyFieldKeys: () => [],
+    readonly: false,
   },
 )
 
@@ -46,6 +49,7 @@ const readOnlySet = computed(() => new Set(props.readOnlyFieldKeys))
 const { multiselectOptionsByLabel } = useMunicipalities()
 
 function isFieldReadOnly(fieldKey: string): boolean {
+  if (props.readonly) return true
   return readOnlySet.value.has(fieldKey)
 }
 

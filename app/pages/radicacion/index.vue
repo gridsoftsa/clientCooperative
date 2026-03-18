@@ -5,6 +5,8 @@ definePageMeta({
 
 const router = useRouter()
 const { $api } = useNuxtApp()
+const { downloadApplicationPdf } = useDocumentDownload()
+const downloadingPdfId = ref<number | null>(null)
 
 const applications = ref<any[]>([])
 const loading = ref(false)
@@ -59,6 +61,22 @@ function getStatusLabel(status: string): string {
     Rejected: 'Rechazada',
   }
   return map[status] ?? status
+}
+
+async function handleDownloadPdf(app: { id: number; code?: string }) {
+  if (downloadingPdfId.value) return
+  downloadingPdfId.value = app.id
+  try {
+    const { toast } = await import('vue-sonner')
+    await downloadApplicationPdf(app.id, `solicitud-${app.code ?? app.id}.pdf`)
+    toast.success('PDF descargado')
+  } catch (e) {
+    console.error('Error descargando PDF:', e)
+    const { toast } = await import('vue-sonner')
+    toast.error('No se pudo descargar el PDF')
+  } finally {
+    downloadingPdfId.value = null
+  }
 }
 
 onMounted(() => {
@@ -116,13 +134,25 @@ onMounted(() => {
                 </TableCell>
                 <TableCell>{{ new Date(app.created_at).toLocaleDateString('es-CO') }}</TableCell>
                 <TableCell class="text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    @click="router.push(`/radicacion/${app.id}`)"
-                  >
-                    <Icon name="i-lucide-eye" class="h-4 w-4" />
-                  </Button>
+                  <div class="flex justify-end gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Descargar PDF"
+                      :disabled="downloadingPdfId === app.id"
+                      @click="handleDownloadPdf(app)"
+                    >
+                      <Icon :name="downloadingPdfId === app.id ? 'i-lucide-loader-2' : 'i-lucide-file-down'" class="h-4 w-4" :class="{ 'animate-spin': downloadingPdfId === app.id }" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="Ver detalle"
+                      @click="router.push(`/radicacion/${app.id}`)"
+                    >
+                      <Icon name="i-lucide-eye" class="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             </TableBody>
