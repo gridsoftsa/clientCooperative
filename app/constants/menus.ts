@@ -29,6 +29,13 @@ export const navMenu: NavMenu[] = [
         title: 'Radicación',
         icon: 'i-lucide-file-text',
         link: '/radicacion',
+        permission: 'radicacion_ver',
+      },
+      {
+        title: 'Solicitantes',
+        icon: 'i-lucide-user-check',
+        link: '/admin/applicants',
+        permission: 'solicitantes_ver',
       },
     ],
   },

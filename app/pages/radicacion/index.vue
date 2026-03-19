@@ -1,12 +1,17 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
+
 definePageMeta({
   layout: 'default',
+  middleware: 'permission',
+  permissions: 'radicacion_ver',
 })
 
 const router = useRouter()
 const { $api } = useNuxtApp()
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
+const deactivatingId = ref<number | null>(null)
 
 const applications = ref<any[]>([])
 const loading = ref(false)
@@ -63,6 +68,30 @@ function getStatusLabel(status: string): string {
   return map[status] ?? status
 }
 
+const deactivateSuccess = ref(false)
+
+async function handleDeactivate(app: { id: number }) {
+  if (deactivatingId.value) return
+  if (!confirm('¿Desactivar esta solicitud? No se mostrará en el listado.')) return
+  deactivatingId.value = app.id
+  deactivateSuccess.value = false
+  try {
+    await $api(`/credit-applications/${app.id}`, { method: 'DELETE' })
+    deactivateSuccess.value = true
+    toast.success('Solicitud desactivada', {
+      description: 'La solicitud ya no aparecerá en el listado.',
+      duration: 4000,
+    })
+    await fetchApplications()
+  } catch (e: any) {
+    console.error('Error desactivando:', e)
+    toast.error(e?.data?.message ?? 'No se pudo desactivar')
+  } finally {
+    deactivatingId.value = null
+    setTimeout(() => { deactivateSuccess.value = false }, 3000)
+  }
+}
+
 async function handleDownloadPdf(app: { id: number; code?: string }) {
   if (downloadingPdfId.value) return
   downloadingPdfId.value = app.id
@@ -90,11 +119,21 @@ onMounted(() => {
       <h2 class="text-2xl font-bold tracking-tight">
         Entrevista de Crédito (Radicación)
       </h2>
-      <Button @click="router.push('/radicacion/nueva')">
-        <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-        Nueva Solicitud
-      </Button>
+      <PermissionGate permission="radicacion_crear">
+        <Button @click="router.push('/radicacion/nueva')">
+          <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+          Nueva Solicitud
+        </Button>
+      </PermissionGate>
     </div>
+
+    <Alert v-if="deactivateSuccess" class="mb-4 border-green-500/50 bg-green-500/10">
+      <Icon name="i-lucide-check-circle" class="h-4 w-4 text-green-600" />
+      <AlertTitle>Solicitud desactivada</AlertTitle>
+      <AlertDescription>
+        La solicitud se desactivó correctamente y ya no aparece en el listado.
+      </AlertDescription>
+    </Alert>
 
     <Card>
       <CardHeader>
@@ -135,23 +174,49 @@ onMounted(() => {
                 <TableCell>{{ new Date(app.created_at).toLocaleDateString('es-CO') }}</TableCell>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      title="Descargar PDF"
-                      :disabled="downloadingPdfId === app.id"
-                      @click="handleDownloadPdf(app)"
-                    >
-                      <Icon :name="downloadingPdfId === app.id ? 'i-lucide-loader-2' : 'i-lucide-file-down'" class="h-4 w-4" :class="{ 'animate-spin': downloadingPdfId === app.id }" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      title="Ver detalle"
-                      @click="router.push(`/radicacion/${app.id}`)"
-                    >
-                      <Icon name="i-lucide-eye" class="h-4 w-4" />
-                    </Button>
+                    <PermissionGate permission="radicacion_descargar_pdf">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Descargar PDF"
+                        :disabled="downloadingPdfId === app.id"
+                        @click="handleDownloadPdf(app)"
+                      >
+                        <Icon :name="downloadingPdfId === app.id ? 'i-lucide-loader-2' : 'i-lucide-file-down'" class="h-4 w-4" :class="{ 'animate-spin': downloadingPdfId === app.id }" />
+                      </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="radicacion_editar">
+                      <Button
+                        v-if="app.status === 'Draft'"
+                        variant="ghost"
+                        size="sm"
+                        title="Editar"
+                        @click="router.push(`/radicacion/${app.id}/editar`)"
+                      >
+                        <Icon name="i-lucide-pencil" class="h-4 w-4" />
+                      </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="radicacion_ver">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Ver detalle"
+                        @click="router.push(`/radicacion/${app.id}`)"
+                      >
+                        <Icon name="i-lucide-eye" class="h-4 w-4" />
+                      </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="radicacion_desactivar">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Desactivar"
+                        :disabled="deactivatingId === app.id"
+                        @click="handleDeactivate(app)"
+                      >
+                        <Icon :name="deactivatingId === app.id ? 'i-lucide-loader-2' : 'i-lucide-ban'" class="h-4 w-4" :class="{ 'animate-spin': deactivatingId === app.id }" />
+                      </Button>
+                    </PermissionGate>
                   </div>
                 </TableCell>
               </TableRow>

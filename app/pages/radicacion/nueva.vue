@@ -6,6 +6,8 @@ import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from 
 
 definePageMeta({
   layout: 'default',
+  middleware: 'permission',
+  permissions: 'radicacion_crear',
 })
 
 const { $api, $csrf } = useNuxtApp()

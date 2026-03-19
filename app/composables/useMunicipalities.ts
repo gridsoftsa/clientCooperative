@@ -48,6 +48,12 @@ export function useMunicipalities() {
     return list.value.find((m) => m.id === id)
   }
 
+  /** Obtener municipio por label (ej. "Bogotá (Cundinamarca)") */
+  function getByLabel(label: string | undefined): Municipality | undefined {
+    if (!label?.trim()) return undefined
+    return list.value.find((m) => getLabel(m) === label.trim())
+  }
+
   /** Label para mostrar (municipio + departamento) */
   function getLabel(m: Municipality): string {
     return m.department?.name ? `${m.name} (${m.department.name})` : m.name
@@ -83,6 +89,7 @@ export function useMunicipalities() {
     multiselectOptionsByCity,
     multiselectOptionsByLabel,
     getById,
+    getByLabel,
     getLabel,
     getFilteredOptions,
   }

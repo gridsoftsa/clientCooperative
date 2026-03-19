@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 
 definePageMeta({
   layout: 'default',
+  middleware: 'permission',
+  permissions: 'radicacion_ver',
 })
 
 const route = useRoute()
@@ -46,6 +49,7 @@ const { formatPesos } = usePesosFormat()
 const { downloadDocument, downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdf = ref(false)
 const downloadingId = ref<number | null>(null)
+const deactivating = ref(false)
 
 function parseJsonField(val: unknown): Record<string, unknown> {
   if (val == null) return {}
@@ -251,6 +255,25 @@ async function handleDownloadPdf() {
   }
 }
 
+async function handleDeactivate() {
+  if (!application.value?.id || deactivating.value) return
+  if (!confirm('¿Desactivar esta solicitud? No se mostrará en el listado.')) return
+  deactivating.value = true
+  try {
+    await $api(`/credit-applications/${application.value.id}`, { method: 'DELETE' })
+    toast.success('Solicitud desactivada', {
+      description: 'La solicitud ya no aparecerá en el listado.',
+      duration: 4000,
+    })
+    await router.push('/radicacion')
+  } catch (e: any) {
+    console.error('Error desactivando:', e)
+    toast.error(e?.data?.message ?? 'No se pudo desactivar')
+  } finally {
+    deactivating.value = false
+  }
+}
+
 async function handleDownload(doc: { id: number; title?: string; original_name?: string }) {
   if (downloadingId.value) return
   downloadingId.value = doc.id
@@ -335,15 +358,37 @@ watch([application, debtor, coDebtors], () => {
           Solicitud de crédito - Solo lectura
         </p>
       </div>
-      <div class="flex gap-2">
-        <Button
-          variant="default"
-          :disabled="downloadingPdf"
-          @click="handleDownloadPdf"
-        >
-          <Icon :name="downloadingPdf ? 'i-lucide-loader-2' : 'i-lucide-file-down'" class="mr-2 h-4 w-4" :class="{ 'animate-spin': downloadingPdf }" />
-          {{ downloadingPdf ? 'Descargando...' : 'Descargar PDF' }}
-        </Button>
+      <div class="flex gap-2 flex-wrap">
+        <PermissionGate permission="radicacion_editar">
+          <Button
+            v-if="application?.status === 'Draft'"
+            variant="default"
+            @click="router.push(`/radicacion/${application?.id}/editar`)"
+          >
+            <Icon name="i-lucide-pencil" class="mr-2 h-4 w-4" />
+            Editar
+          </Button>
+        </PermissionGate>
+        <PermissionGate permission="radicacion_descargar_pdf">
+          <Button
+            variant="default"
+            :disabled="downloadingPdf"
+            @click="handleDownloadPdf"
+          >
+            <Icon :name="downloadingPdf ? 'i-lucide-loader-2' : 'i-lucide-file-down'" class="mr-2 h-4 w-4" :class="{ 'animate-spin': downloadingPdf }" />
+            {{ downloadingPdf ? 'Descargando...' : 'Descargar PDF' }}
+          </Button>
+        </PermissionGate>
+        <PermissionGate permission="radicacion_desactivar">
+          <Button
+            variant="destructive"
+            :disabled="deactivating"
+            @click="handleDeactivate"
+          >
+            <Icon :name="deactivating ? 'i-lucide-loader-2' : 'i-lucide-ban'" class="mr-2 h-4 w-4" :class="{ 'animate-spin': deactivating }" />
+            {{ deactivating ? 'Desactivando...' : 'Desactivar' }}
+          </Button>
+        </PermissionGate>
         <Button variant="outline" @click="router.push('/radicacion')">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
@@ -466,19 +511,19 @@ watch([application, debtor, coDebtors], () => {
             <div v-if="getDocumentsForApplicant(debtor.id).length > 0" class="space-y-3 border-t pt-4">
               <p class="text-sm font-semibold">Documentos adjuntos</p>
               <div class="flex flex-wrap gap-2">
-                <Button
-                  v-for="doc in getDocumentsForApplicant(debtor.id)"
-                  :key="doc.id"
-                  variant="outline"
-                  size="sm"
-                  class="h-auto gap-2 py-2"
-                  :disabled="downloadingId === doc.id"
-                  @click="handleDownload(doc)"
-                >
-                  <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
-                  {{ doc.title || doc.original_name || 'Documento' }}
-                  <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                </Button>
+                <PermissionGate v-for="doc in getDocumentsForApplicant(debtor.id)" :key="doc.id" permission="radicacion_descargar_documentos">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="h-auto gap-2 py-2"
+                    :disabled="downloadingId === doc.id"
+                    @click="handleDownload(doc)"
+                  >
+                    <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
+                    {{ doc.title || doc.original_name || 'Documento' }}
+                    <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  </Button>
+                </PermissionGate>
               </div>
             </div>
           </div>
@@ -565,19 +610,19 @@ watch([application, debtor, coDebtors], () => {
                     <div v-if="getDocumentsForApplicant(coDebtors[idx]?.id ?? coDebtors[idx]?.applicant_id).length > 0" class="space-y-3">
                       <p class="text-sm font-semibold">Documentos adjuntos</p>
                       <div class="flex flex-wrap gap-2">
-                        <Button
-                          v-for="doc in getDocumentsForApplicant(coDebtors[idx]?.id ?? coDebtors[idx]?.applicant_id)"
-                          :key="doc.id"
-                          variant="outline"
-                          size="sm"
-                          class="h-auto gap-2 py-2"
-                          :disabled="downloadingId === doc.id"
-                          @click="handleDownload(doc)"
-                        >
-                          <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
-                          {{ doc.title || doc.original_name || 'Documento' }}
-                          <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                        </Button>
+                        <PermissionGate v-for="doc in getDocumentsForApplicant(coDebtors[idx]?.id ?? coDebtors[idx]?.applicant_id)" :key="doc.id" permission="radicacion_descargar_documentos">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            class="h-auto gap-2 py-2"
+                            :disabled="downloadingId === doc.id"
+                            @click="handleDownload(doc)"
+                          >
+                            <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
+                            {{ doc.title || doc.original_name || 'Documento' }}
+                            <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          </Button>
+                        </PermissionGate>
                       </div>
                     </div>
                   </div>
