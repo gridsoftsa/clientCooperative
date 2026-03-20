@@ -42,10 +42,7 @@ const loadingFlatData = ref(false)
 /** Claves de campos que vienen de configuración y deben ser solo lectura (cuando se cargó flat data) */
 const configuredFieldKeys = ref<string[]>([])
 
-const templateOptions = computed(() => {
-  if (!sectorSelected.value) return []
-  return sectorsConfig.find((s) => s.value === sectorSelected.value)?.templates ?? []
-})
+const templateOptions = ref<Array<{ value: string; label: string }>>([])
 
 const currentSchema = computed<FormSchemaInput | null>(() => {
   if (!templateSelected.value) return null
@@ -69,8 +66,17 @@ function setFormData(data: Record<string, unknown>) {
 }
 
 function emitActivityTemplate() {
-  if (!sectorSelected.value || !templateSelected.value) {
+  if (!sectorSelected.value) {
     emit('update:modelValue', null)
+    return
+  }
+  if (!templateSelected.value) {
+    emit('update:modelValue', {
+      sector: sectorSelected.value,
+      template: '',
+      product: null,
+      data: {},
+    })
     return
   }
   emit('update:modelValue', {
@@ -129,16 +135,30 @@ watch(
   },
 )
 
-watch(sectorSelected, () => {
-  templateSelected.value = ''
-})
+watch(sectorSelected, (newSector) => {
+  const templates = sectorsConfig.find((s) => s.value === newSector)?.templates ?? []
+  templateOptions.value = templates
+  if (isSyncingFromProps.value) return
+  // Si el sector tiene solo una plantilla, auto-seleccionarla
+  if (templates.length === 1) {
+    templateSelected.value = templates[0].value
+  } else {
+    templateSelected.value = ''
+  }
+}, { immediate: true })
 
 watch(
   () => props.modelValue,
   (val) => {
+    // No sobrescribir si ya tenemos los mismos valores (evita deselección al cambiar plantilla)
+    const newSector = val?.sector ?? ''
+    const newTemplate = val?.template ?? ''
+    if (newSector === sectorSelected.value && newTemplate === templateSelected.value) {
+      return
+    }
     isSyncingFromProps.value = true
-    sectorSelected.value = val?.sector ?? ''
-    templateSelected.value = val?.template ?? ''
+    sectorSelected.value = newSector
+    templateSelected.value = newTemplate
     formData.value = { ...(val?.data ?? {}) }
     configuredFieldKeys.value = val?.template ? getConfigFieldKeys(val.template) : []
     nextTick(() => { isSyncingFromProps.value = false })
@@ -157,48 +177,49 @@ onMounted(() => {
       <h3 class="mb-4 text-sm font-semibold">
         Sector y plantilla
       </h3>
-      <ClientOnly>
-        <div class="grid gap-4 sm:grid-cols-2">
+      <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
             <Label for="sector" class="text-sm font-medium">Sector</Label>
-            <Select
+            <select
+              id="sector"
               v-model="sectorSelected"
               :disabled="readonly"
-              @update:model-value="templateSelected = ''"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <SelectTrigger id="sector" class="w-full">
-                <SelectValue placeholder="Seleccionar sector" />
-              </SelectTrigger>
-              <SelectContent class="bg-popover text-popover-foreground">
-                <SelectItem
-                  v-for="s in sectorsConfig"
-                  :key="s.value"
-                  :value="s.value"
-                >
-                  {{ s.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              <option value="">
+                Seleccionar sector
+              </option>
+              <option
+                v-for="s in sectorsConfig"
+                :key="s.value"
+                :value="s.value"
+              >
+                {{ s.label }}
+              </option>
+            </select>
           </div>
           <div class="space-y-1.5">
-            <Label for="template" class="text-sm font-medium">Plantilla</Label>
-            <Select v-model="templateSelected" :disabled="readonly">
-              <SelectTrigger id="template" class="w-full">
-                <SelectValue placeholder="Seleccionar plantilla" />
-              </SelectTrigger>
-              <SelectContent class="bg-popover text-popover-foreground">
-                <SelectItem
-                  v-for="t in templateOptions"
-                  :key="t.value"
-                  :value="t.value"
-                >
-                  {{ t.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <Label :for="`template-${sectorSelected || 'none'}`" class="text-sm font-medium">Plantilla</Label>
+            <select
+              :id="`template-${sectorSelected || 'none'}`"
+              :key="sectorSelected"
+              v-model="templateSelected"
+              :disabled="readonly"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="">
+                Seleccionar plantilla
+              </option>
+              <option
+                v-for="t in templateOptions"
+                :key="t.value"
+                :value="t.value"
+              >
+                {{ t.label }}
+              </option>
+            </select>
           </div>
         </div>
-      </ClientOnly>
       <p
         v-if="hasProductSelect"
         class="mt-3 text-xs text-muted-foreground"
