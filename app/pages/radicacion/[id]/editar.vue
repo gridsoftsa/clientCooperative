@@ -101,6 +101,18 @@ function parseReferences(val: unknown): any[] {
   return []
 }
 
+/** Normaliza fecha ISO (ej. 1995-06-13T00:00:00.000000Z) a yyyy-MM-dd para input type="date". */
+function toDateInputFormat(val: string | null | undefined): string | undefined {
+  if (val == null || val === '') return undefined
+  const str = String(val).trim()
+  if (!str) return undefined
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`
+  const d = new Date(str)
+  if (Number.isNaN(d.getTime())) return undefined
+  return d.toISOString().slice(0, 10)
+}
+
 function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
   const fi = parseJsonField(api?.financial_info)
   const residenceName = (typeof api?.residence_city_name === 'string' && api.residence_city_name?.trim())
@@ -109,13 +121,13 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
   return {
     document_type: api?.document_type ?? 'CC',
     document_number: api?.document_number ?? '',
-    expedition_date: api?.expedition_date,
+    expedition_date: toDateInputFormat(api?.expedition_date) ?? api?.expedition_date,
     expedition_place: api?.expedition_place,
     first_name: api?.first_name ?? '',
     second_name: api?.second_name,
     first_last_name: api?.first_last_name ?? '',
     second_last_name: api?.second_last_name,
-    birth_date: api?.birth_date,
+    birth_date: toDateInputFormat(api?.birth_date) ?? api?.birth_date,
     gender: api?.gender,
     marital_status: api?.marital_status,
     dependents: api?.dependents ?? 0,
@@ -575,10 +587,6 @@ async function uploadAllDocuments(
 }
 
 async function saveChanges() {
-  if (!form.value.numero_radicado_externo?.trim()) {
-    toast.error('El número de radicado externo es obligatorio')
-    return
-  }
   if (!canProceedStep1()) {
     toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
     return
@@ -684,15 +692,14 @@ onMounted(() => {
       <div class="rounded-xl border bg-card p-4">
         <div class="space-y-1.5 max-w-md">
           <Label for="numero_radicado_externo" class="text-sm font-semibold">
-            Número de radicado externo *
+            Número de radicado externo
           </Label>
           <Input
             id="numero_radicado_externo"
             v-model="form.numero_radicado_externo"
             type="text"
             maxlength="100"
-            placeholder="Ej: RAD-EXT-2025-001234"
-            required
+            placeholder="Ej: RAD-EXT-2025-001234 (se asigna al pasar a análisis)"
             class="font-mono"
           />
         </div>
@@ -830,9 +837,11 @@ onMounted(() => {
           >
             <ApplicantFormFields
               v-model="form.debtor"
-              :show-search="false"
+              :show-search="true"
+              :loading-search="loadingSearch"
               :hide-financial-section="true"
               :readonly="false"
+              @search="searchApplicant"
             />
           </div>
 

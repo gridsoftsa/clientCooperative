@@ -12,6 +12,7 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const { $api } = useNuxtApp()
+const { hasPermission } = usePermissions()
 const id = computed(() => route.params.id as string)
 const application = ref<any>(null)
 const loading = ref(true)
@@ -317,6 +318,10 @@ async function fetchApplication() {
     application.value = {
       ...data,
       documents: Array.isArray(data?.documents) ? data.documents : [],
+    }
+    if (application.value?.status === 'Draft' && hasPermission('radicacion_editar')) {
+      await router.replace(`/radicacion/${id.value}/editar`)
+      return
     }
     syncFormFromApplication()
   } catch (e) {

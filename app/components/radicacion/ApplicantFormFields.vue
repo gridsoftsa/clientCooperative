@@ -30,6 +30,11 @@ const local = computed({
   set: (v: ApplicantForm) => emit('update:modelValue', v),
 })
 
+/** Actualiza un campo del solicitante y emite al padre (evita problemas de mutación/reactividad). */
+function updateField<K extends keyof ApplicantForm>(key: K, value: ApplicantForm[K] | string | number | unknown) {
+  emit('update:modelValue', { ...props.modelValue, [key]: value as ApplicantForm[K] })
+}
+
 const financial = computed({
   get: () => (props.modelValue.financial_info || {}) as FinancialInfoForm,
   set: (v: FinancialInfoForm) => emit('update:modelValue', { ...props.modelValue, financial_info: v }),
@@ -229,7 +234,7 @@ function formatFileSize(bytes: number): string {
 </script>
 
 <template>
-  <fieldset class="flex flex-col gap-8" :disabled="readonly">
+  <div class="flex flex-col gap-8">
     <!-- Búsqueda por cédula (solo para deudor) -->
     <section v-if="!showOnlyFinancial && showSearch && !readonly" :class="sectionClass">
       <h3 :class="sectionTitleClass">Buscar por documento</h3>
@@ -272,7 +277,11 @@ function formatFileSize(bytes: number): string {
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div :class="fieldClass">
           <Label for="doc_type">Tipo documento *</Label>
-          <Select v-model="local.document_type" :disabled="readonly">
+          <Select
+            :model-value="local.document_type"
+            :disabled="readonly"
+            @update:model-value="updateField('document_type', String($event ?? ''))"
+          >
             <SelectTrigger id="doc_type">
               <SelectValue placeholder="Seleccionar" />
             </SelectTrigger>
@@ -287,19 +296,22 @@ function formatFileSize(bytes: number): string {
           <Label for="doc_number">Número documento *</Label>
           <Input
             id="doc_number"
-            v-model="local.document_number"
+            :model-value="local.document_number"
             placeholder="Ej: 1234567890"
             inputmode="numeric"
-            :readonly="!!showSearch || readonly"
-            @input="onDigitsOnlyInput($event, v => (local.document_number = v))"
+            :disabled="readonly"
+            :readonly="readonly"
+            @input="onDigitsOnlyInput($event, v => updateField('document_number', v))"
           />
         </div>
         <div :class="fieldClass">
           <Label for="exp_date">Fecha expedición</Label>
           <Input
             id="exp_date"
-            v-model="local.expedition_date"
+            :model-value="local.expedition_date"
             type="date"
+            :disabled="readonly"
+            @update:model-value="updateField('expedition_date', $event ?? '')"
           />
         </div>
         <div :class="fieldClass">
@@ -316,7 +328,7 @@ function formatFileSize(bytes: number): string {
             no-options-text="No hay municipios"
             no-results-text="No hay resultados. Escribe para filtrar."
             class="multiselect-municipality"
-            @update:model-value="local = { ...local, expedition_place: ($event as string) ?? '' }"
+            @update:model-value="updateField('expedition_place', ($event as string) ?? '')"
           />
         </div>
       </div>
@@ -328,31 +340,71 @@ function formatFileSize(bytes: number): string {
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div :class="fieldClass">
           <Label for="first_name">Primer nombre *</Label>
-          <Input id="first_name" v-model="local.first_name" placeholder="Ej: Juan" />
+          <Input
+            id="first_name"
+            :model-value="local.first_name"
+            placeholder="Ej: Juan"
+            :disabled="readonly"
+            @update:model-value="updateField('first_name', String($event ?? ''))"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="second_name">Segundo nombre</Label>
-          <Input id="second_name" v-model="local.second_name" placeholder="Ej: Carlos" />
+          <Input
+            id="second_name"
+            :model-value="local.second_name"
+            placeholder="Ej: Carlos"
+            :disabled="readonly"
+            @update:model-value="updateField('second_name', String($event ?? ''))"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="first_last">Primer apellido *</Label>
-          <Input id="first_last" v-model="local.first_last_name" placeholder="Ej: Pérez" />
+          <Input
+            id="first_last"
+            :model-value="local.first_last_name"
+            placeholder="Ej: Pérez"
+            :disabled="readonly"
+            @update:model-value="updateField('first_last_name', String($event ?? ''))"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="second_last">Segundo apellido</Label>
-          <Input id="second_last" v-model="local.second_last_name" placeholder="Ej: Gómez" />
+          <Input
+            id="second_last"
+            :model-value="local.second_last_name"
+            placeholder="Ej: Gómez"
+            :disabled="readonly"
+            @update:model-value="updateField('second_last_name', String($event ?? ''))"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="birth_date">Fecha nacimiento</Label>
-          <Input id="birth_date" v-model="local.birth_date" type="date" />
+          <Input
+            id="birth_date"
+            :model-value="local.birth_date"
+            type="date"
+            :disabled="readonly"
+            @update:model-value="updateField('birth_date', String($event ?? ''))"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="gender">Género</Label>
-          <Input id="gender" v-model="local.gender" placeholder="M/F" />
+          <Input
+            id="gender"
+            :model-value="local.gender"
+            placeholder="M/F"
+            :disabled="readonly"
+            @update:model-value="updateField('gender', String($event ?? ''))"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="marital">Estado civil</Label>
-          <Select v-model="local.marital_status" :disabled="readonly">
+          <Select
+            :model-value="local.marital_status"
+            :disabled="readonly"
+            @update:model-value="updateField('marital_status', String($event ?? ''))"
+          >
             <SelectTrigger id="marital">
               <SelectValue placeholder="Seleccionar" />
             </SelectTrigger>
@@ -367,11 +419,13 @@ function formatFileSize(bytes: number): string {
           <Label for="dependents">Personas a cargo</Label>
           <Input
             id="dependents"
-            v-model.number="local.dependents"
+            :model-value="local.dependents"
             type="number"
             min="0"
             inputmode="numeric"
+            :disabled="readonly"
             @keydown="onKeydownNumeric($event, false)"
+            @update:model-value="updateField('dependents', Number($event) ?? 0)"
           />
         </div>
       </div>
@@ -385,25 +439,34 @@ function formatFileSize(bytes: number): string {
           <Label for="mobile">Celular</Label>
           <Input
             id="mobile"
-            v-model="local.mobile_phone"
+            :model-value="local.mobile_phone"
             placeholder="3001234567"
             inputmode="numeric"
-            @input="onDigitsOnlyInput($event, v => (local.mobile_phone = v))"
+            :disabled="readonly"
+            @input="onDigitsOnlyInput($event, v => updateField('mobile_phone', v))"
           />
         </div>
         <div :class="fieldClass">
           <Label for="landline">Teléfono fijo</Label>
           <Input
             id="landline"
-            v-model="local.landline"
+            :model-value="local.landline"
             placeholder="6011234567"
             inputmode="numeric"
-            @input="onDigitsOnlyInput($event, v => (local.landline = v))"
+            :disabled="readonly"
+            @input="onDigitsOnlyInput($event, v => updateField('landline', v))"
           />
         </div>
         <div class="sm:col-span-2 lg:col-span-1" :class="fieldClass">
           <Label for="email">Email</Label>
-          <Input id="email" v-model="local.email" type="email" placeholder="correo@ejemplo.com" />
+          <Input
+            id="email"
+            :model-value="local.email"
+            type="email"
+            placeholder="correo@ejemplo.com"
+            :disabled="readonly"
+            @update:model-value="updateField('email', String($event ?? ''))"
+          />
         </div>
       </div>
     </section>
@@ -414,7 +477,13 @@ function formatFileSize(bytes: number): string {
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div class="sm:col-span-2 lg:col-span-3" :class="fieldClass">
           <Label for="address">Dirección de residencia</Label>
-          <Input id="address" v-model="local.residence_address" placeholder="Calle 123 #45-67, barrio..." />
+          <Input
+            id="address"
+            :model-value="local.residence_address"
+            placeholder="Calle 123 #45-67, barrio..."
+            :disabled="readonly"
+            @update:model-value="updateField('residence_address', String($event ?? ''))"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="residence_city">Ciudad / Municipio de residencia</Label>
@@ -430,12 +499,16 @@ function formatFileSize(bytes: number): string {
             no-options-text="No hay municipios"
             no-results-text="No hay resultados. Escribe para filtrar."
             class="multiselect-municipality"
-            @update:model-value="local = { ...local, residence_city_name: ($event as string) ?? '' }"
+            @update:model-value="updateField('residence_city_name', ($event as string) ?? '')"
           />
         </div>
         <div :class="fieldClass">
           <Label for="residence_type">Tipo vivienda</Label>
-          <Select v-model="local.residence_type" :disabled="readonly">
+          <Select
+            :model-value="local.residence_type"
+            :disabled="readonly"
+            @update:model-value="updateField('residence_type', String($event ?? ''))"
+          >
             <SelectTrigger id="residence_type">
               <SelectValue placeholder="Seleccionar" />
             </SelectTrigger>
@@ -448,7 +521,13 @@ function formatFileSize(bytes: number): string {
         </div>
         <div :class="fieldClass">
           <Label for="time_residence">Tiempo en residencia</Label>
-          <Input id="time_residence" v-model="local.time_in_residence" placeholder="Ej: 2 años" />
+          <Input
+            id="time_residence"
+            :model-value="local.time_in_residence"
+            placeholder="Ej: 2 años"
+            :disabled="readonly"
+            @update:model-value="updateField('time_in_residence', String($event ?? ''))"
+          />
         </div>
       </div>
     </section>
@@ -480,23 +559,53 @@ function formatFileSize(bytes: number): string {
         </div>
         <div :class="fieldClass">
           <Label for="occupation">Ocupación</Label>
-          <Input id="occupation" v-model="local.occupation" placeholder="Ej: Comerciante" />
+          <Input
+            id="occupation"
+            :model-value="local.occupation"
+            placeholder="Ej: Comerciante"
+            :disabled="readonly"
+            @update:model-value="updateField('occupation', String($event ?? ''))"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="company">Empresa</Label>
-          <Input id="company" v-model="local.company_name" placeholder="Nombre empresa" />
+          <Input
+            id="company"
+            :model-value="local.company_name"
+            placeholder="Nombre empresa"
+            :disabled="readonly"
+            @update:model-value="updateField('company_name', String($event ?? ''))"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="position">Cargo</Label>
-          <Input id="position" v-model="local.position" placeholder="Ej: Vendedor" />
+          <Input
+            id="position"
+            :model-value="local.position"
+            placeholder="Ej: Vendedor"
+            :disabled="readonly"
+            @update:model-value="updateField('position', String($event ?? ''))"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="contract">Tipo contrato</Label>
-          <Input id="contract" v-model="local.contract_type" placeholder="Indefinido, Término fijo..." />
+          <Input
+            id="contract"
+            :model-value="local.contract_type"
+            placeholder="Indefinido, Término fijo..."
+            :disabled="readonly"
+            @update:model-value="updateField('contract_type', String($event ?? ''))"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="time_job">Tiempo en el trabajo</Label>
-          <Input id="time_job" v-model="local.time_in_job" placeholder="Ej: 3 años" />
+          <Input
+            id="time_job"
+            :model-value="local.time_in_job"
+            placeholder="Ej: 3 años"
+            :disabled="readonly"
+            @update:model-value="updateField('time_in_job', String($event ?? ''))"
+          />
         </div>
       </div>
     </section>
@@ -991,7 +1100,7 @@ function formatFileSize(bytes: number): string {
         </Button>
       </div>
     </section>
-  </fieldset>
+  </div>
 </template>
 
 <style src="@vueform/multiselect/themes/default.css"></style>

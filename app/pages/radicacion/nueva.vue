@@ -2,6 +2,10 @@
 import { toast } from 'vue-sonner'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
 import { sumUtilidadMensualFromTemplates } from '~/constants/credits-financial-templates'
+import {
+  clearLocalDraft,
+  useAutoSaveCreditApplication,
+} from '~/composables/useAutoSaveCreditApplication'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 
 definePageMeta({
@@ -83,6 +87,18 @@ async function fetchCatalogs() {
   }
 }
 
+function mergeApplicantFromApi(target: ApplicantForm, data: ApplicantForm | null | undefined): void {
+  if (!data) return
+  const d = data as unknown as Record<string, unknown>
+  const residenceName = (d.residence_city_name as string) || (d.residence_city as { name?: string } | null)?.name || ''
+  Object.assign(target, {
+    ...data,
+    document_number: data.document_number,
+    residence_city_name: residenceName,
+    documents: target.documents ?? [],
+  })
+}
+
 async function searchApplicant() {
   const doc = form.value.debtor.document_number?.trim()
   if (!doc) {
@@ -96,20 +112,67 @@ async function searchApplicant() {
       { query: { document_number: doc } },
     )
     if (res.found && res.data) {
-      const d = res.data as unknown as Record<string, unknown>
-      const residenceName = (d.residence_city_name as string) || (d.residence_city as { name?: string } | null)?.name || ''
-      form.value.debtor = {
-        ...form.value.debtor,
-        ...res.data,
-        document_number: res.data.document_number,
-        residence_city_name: residenceName,
-      }
+      mergeApplicantFromApi(form.value.debtor, res.data)
       toast.success('Solicitante encontrado. Revisa y completa los datos.')
     } else {
       toast.info('No encontrado. Completa el formulario con los datos del solicitante.')
     }
   } catch (e) {
     console.error('Error buscando:', e)
+    toast.error('Error al buscar')
+  } finally {
+    loadingSearch.value = false
+  }
+}
+
+async function searchApplicantForCodeudor() {
+  const doc = codeudorBeingAdded.value.document_number?.trim()
+  if (!doc) {
+    toast.error('Ingresa el número de documento del codeudor')
+    return
+  }
+  loadingSearch.value = true
+  try {
+    const res = await $api<{ data: ApplicantForm | null; found: boolean }>(
+      '/credit-applications/applicants/find',
+      { query: { document_number: doc } },
+    )
+    if (res.found && res.data) {
+      mergeApplicantFromApi(codeudorBeingAdded.value, res.data)
+      toast.success('Codeudor encontrado. Revisa y completa los datos.')
+    } else {
+      toast.info('No encontrado. Completa el formulario con los datos del codeudor.')
+    }
+  } catch (e) {
+    console.error('Error buscando codeudor:', e)
+    toast.error('Error al buscar')
+  } finally {
+    loadingSearch.value = false
+  }
+}
+
+async function searchApplicantForCoDebtor(idx: number) {
+  const co = form.value.co_debtors[idx]
+  if (!co) return
+  const doc = co.document_number?.trim()
+  if (!doc) {
+    toast.error('Ingresa el número de documento del codeudor')
+    return
+  }
+  loadingSearch.value = true
+  try {
+    const res = await $api<{ data: ApplicantForm | null; found: boolean }>(
+      '/credit-applications/applicants/find',
+      { query: { document_number: doc } },
+    )
+    if (res.found && res.data && co) {
+      mergeApplicantFromApi(co, res.data)
+      toast.success('Codeudor encontrado. Revisa y completa los datos.')
+    } else {
+      toast.info('No encontrado. Completa el formulario con los datos del codeudor.')
+    }
+  } catch (e) {
+    console.error('Error buscando codeudor:', e)
     toast.error('Error al buscar')
   } finally {
     loadingSearch.value = false
@@ -176,6 +239,15 @@ function removeCoDebtor(index: number) {
 }
 
 const { formatPesos, parsePesosInput, onKeydownPesosOnly } = usePesosFormat()
+
+function formatTimeAgo(date: Date): string {
+  const sec = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (sec < 60) return 'hace un momento'
+  if (sec < 120) return 'hace 1 min'
+  if (sec < 3600) return `hace ${Math.floor(sec / 60)} min`
+  if (sec < 7200) return 'hace 1 h'
+  return `hace ${Math.floor(sec / 3600)} h`
+}
 
 /** Sincroniza activity_templates en financial_info desde el formulario de actividad económica. */
 function setActivityTemplates(val: ActivityTemplateData[]): void {
@@ -317,25 +389,28 @@ function canProceedStep1(): boolean {
 
 function canProceedStep2(): boolean {
   if (mode.value === 'codeudor') {
-    return !!form.value.numero_radicado_externo?.trim()
+    return !!(form.value.numero_radicado_externo?.trim())
   }
   return form.value.amount_requested > 0
     && form.value.term_months > 0
     && form.value.agency_id > 0
 }
 
-/** Carga la solicitud existente por numero_radicado_externo (para flujo codeudor) */
+/** Carga la solicitud existente por numero_radicado_externo o código (para flujo codeudor) */
 async function fetchApplicationByRadicado(): Promise<boolean> {
-  const num = form.value.numero_radicado_externo?.trim()
-  if (!num) return false
+  const search = form.value.numero_radicado_externo?.trim()
+  if (!search) return false
   loadingApplication.value = true
   try {
+    const isCode = /^RAD-\d{4}-\d+$/i.test(search)
     const res = await $api<{ data: any[] }>('/credit-applications', {
-      query: { numero_radicado_externo: num, per_page: 1 },
+      query: isCode ? { code: search, per_page: 1 } : { numero_radicado_externo: search, per_page: 1 },
     })
     const app = res.data?.[0]
     if (!app) {
-      toast.error('No se encontró ninguna solicitud con ese número de radicado externo')
+      toast.error(isCode
+        ? 'No se encontró ninguna solicitud con ese código'
+        : 'No se encontró ninguna solicitud con ese número de radicado externo')
       return false
     }
     const full = await $api<{ data: any }>(`/credit-applications/${app.id}`)
@@ -369,13 +444,50 @@ function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
   const { debtor, co_debtors, ...rest } = form.value
   const { documents: _d, ...debtorWithoutDocs } = debtor
   const coDebtorsWithoutDocs = (co_debtors ?? []).map(({ documents: _doc, ...co }) => co)
+  const radicado = form.value.numero_radicado_externo?.trim() || null
   return {
     ...rest,
     debtor: debtorWithoutDocs,
     co_debtors: coDebtorsWithoutDocs,
+    numero_radicado_externo: radicado,
     status,
   }
 }
+
+/** Payload para auto-guardado: usa valores por defecto si faltan (permite crear borrador temprano) */
+function payloadForAutoSave(): Record<string, unknown> {
+  const base = payloadWithoutDocuments('Draft')
+  const agencyId = form.value.agency_id > 0 ? form.value.agency_id : (agencies.value[0]?.id ?? 0)
+  return {
+    ...base,
+    amount_requested: form.value.amount_requested > 0 ? form.value.amount_requested : 1,
+    term_months: form.value.term_months > 0 ? form.value.term_months : 12,
+    agency_id: agencyId,
+  }
+}
+
+/** Puede crear borrador para auto-guardado (mínimo: deudor básico + agencias cargadas). Radicado externo es opcional. */
+function canCreateDraft(): boolean {
+  if (mode.value !== 'deudor' || addingCodeudor.value) return false
+  if (!canProceedStep1()) return false
+  if (!agencies.value.length) return false
+  return true
+}
+
+const autoSaveEnabled = computed(() => mode.value === 'deudor' && !addingCodeudor.value)
+
+const {
+  draftId,
+  saveStatus,
+  lastSavedAt,
+  hasLocalDraft,
+} = useAutoSaveCreditApplication(form, {
+  canCreate: canCreateDraft,
+  payloadWithoutDocuments: payloadForAutoSave,
+  api: $api as (url: string, opts: { method: string; body?: unknown }) => Promise<{ data: { id: number } }>,
+  csrf: async () => { await $csrf() },
+  enabled: autoSaveEnabled,
+})
 
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024 // 10 MB
 
@@ -443,7 +555,7 @@ async function uploadAllDocuments(
 
 async function saveCodeudor() {
   if (!form.value.numero_radicado_externo?.trim()) {
-    toast.error('El número de radicado externo es obligatorio')
+    toast.error('Ingresa el código (RAD-XXX) o radicado externo para vincular el codeudor')
     return
   }
   if (!canProceedStep1()) {
@@ -535,10 +647,6 @@ async function saveDraft() {
     await saveCodeudor()
     return
   }
-  if (!form.value.numero_radicado_externo?.trim()) {
-    toast.error('El número de radicado externo es obligatorio')
-    return
-  }
   if (!canProceedStep1()) {
     toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
     return
@@ -555,11 +663,22 @@ async function saveDraft() {
   saving.value = true
   try {
     await $csrf()
-    const { data: application } = await $api<{ data: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }> } }>('/credit-applications', {
-      method: 'POST',
-      body: payloadWithoutDocuments('Draft'),
-    })
+    let application: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> }
+    if (draftId.value) {
+      const { data } = await $api<{ data: typeof application }>(`/credit-applications/${draftId.value}`, {
+        method: 'PUT',
+        body: payloadWithoutDocuments('Draft'),
+      })
+      application = data
+    } else {
+      const { data } = await $api<{ data: typeof application }>('/credit-applications', {
+        method: 'POST',
+        body: payloadWithoutDocuments('Draft'),
+      })
+      application = data
+    }
     await uploadAllDocuments(application.id, application)
+    clearLocalDraft()
     toast.success('Borrador guardado. Puedes retomarlo más tarde.')
     router.push('/radicacion')
   } catch (e: any) {
@@ -585,10 +704,6 @@ async function submitApplication() {
     await saveCodeudor()
     return
   }
-  if (!form.value.numero_radicado_externo?.trim()) {
-    toast.error('El número de radicado externo es obligatorio')
-    return
-  }
   if (!canProceedStep1()) {
     toast.error('Completa los datos obligatorios del deudor')
     return
@@ -605,11 +720,22 @@ async function submitApplication() {
   saving.value = true
   try {
     await $csrf()
-    const { data: application } = await $api<{ data: { id: number; code?: string; application_applicants?: Array<{ applicant_id: number; role: string }> } }>('/credit-applications', {
-      method: 'POST',
-      body: payloadWithoutDocuments('Draft'),
-    })
+    let application: { id: number; code?: string; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> }
+    if (draftId.value) {
+      const { data } = await $api<{ data: typeof application }>(`/credit-applications/${draftId.value}`, {
+        method: 'PUT',
+        body: payloadWithoutDocuments('Draft'),
+      })
+      application = data
+    } else {
+      const { data } = await $api<{ data: typeof application }>('/credit-applications', {
+        method: 'POST',
+        body: payloadWithoutDocuments('Draft'),
+      })
+      application = data
+    }
     await uploadAllDocuments(application.id, application)
+    clearLocalDraft()
     toast.success('Solicitud enviada correctamente (estado: Borrador)')
     try {
       const { downloadApplicationPdf } = useDocumentDownload()
@@ -641,7 +767,7 @@ async function submitApplication() {
 async function nextStep() {
   if (mode.value === 'codeudor' && currentStep.value === 1) {
     if (!form.value.numero_radicado_externo?.trim()) {
-      toast.error('Ingresa el número de radicado externo (arriba) antes de continuar')
+      toast.error('Ingresa el código (RAD-XXX) o radicado externo para buscar la solicitud')
       return
     }
     const ok = await fetchApplicationByRadicado()
@@ -688,10 +814,43 @@ onMounted(() => {
           Radicación - Módulo 1
         </p>
       </div>
-      <Button variant="outline" @click="router.push('/radicacion')">
-        <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
-        Volver
-      </Button>
+      <div class="flex items-center gap-3">
+        <!-- Indicador de auto-guardado (solo flujo deudor) -->
+        <div
+          v-if="mode === 'deudor' && !addingCodeudor"
+          class="flex items-center gap-2 text-sm"
+          :class="{
+            'text-muted-foreground': saveStatus === 'idle' || saveStatus === 'saved',
+            'text-amber-600 dark:text-amber-400': saveStatus === 'saving',
+            'text-destructive': saveStatus === 'error',
+          }"
+        >
+          <Icon
+            v-if="saveStatus === 'saving'"
+            name="i-lucide-loader-2"
+            class="h-4 w-4 animate-spin"
+          />
+          <Icon
+            v-else-if="saveStatus === 'saved'"
+            name="i-lucide-check-circle"
+            class="h-4 w-4 text-green-600 dark:text-green-400"
+          />
+          <Icon
+            v-else-if="saveStatus === 'error'"
+            name="i-lucide-alert-circle"
+            class="h-4 w-4"
+          />
+          <span v-if="saveStatus === 'saving'">Guardando...</span>
+          <span v-else-if="saveStatus === 'saved'">
+            Guardado {{ lastSavedAt ? `hace ${formatTimeAgo(lastSavedAt)}` : '' }}
+          </span>
+          <span v-else-if="saveStatus === 'error'">Error al guardar (datos en copia local)</span>
+        </div>
+        <Button variant="outline" @click="router.push('/radicacion')">
+          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
+          Volver
+        </Button>
+      </div>
     </div>
 
     <!-- Formulario Deudor (o Codeudor si se llegó por query/estado) -->
@@ -699,21 +858,21 @@ onMounted(() => {
     <div class="rounded-xl border bg-card p-4">
       <div class="space-y-1.5 max-w-md">
         <Label for="numero_radicado_externo" class="text-sm font-semibold">
-          Número de radicado externo *
+          {{ mode === 'codeudor' ? 'Código o radicado externo *' : 'Número de radicado externo' }}
         </Label>
         <Input
           id="numero_radicado_externo"
           v-model="form.numero_radicado_externo"
           type="text"
           maxlength="100"
-          placeholder="Ej: RAD-EXT-2025-001234"
-          required
+          :placeholder="mode === 'codeudor' ? 'Ej: RAD-2026-000001 o RAD-EXT-2025-001234' : 'Ej: RAD-EXT-2025-001234 (se asigna al pasar a análisis)'"
+          :required="mode === 'codeudor'"
           class="font-mono"
         />
         <p class="text-xs text-muted-foreground">
           {{ mode === 'codeudor'
-            ? 'Debe coincidir con el radicado de la solicitud del deudor para vincular este codeudor.'
-            : 'Referencia del radicado en sistemas externos (Finagro, etc.). Obligatorio para guardar o enviar.' }}
+            ? 'Código interno (RAD-XXX) o radicado externo para vincular este codeudor a la solicitud.'
+            : 'Opcional al crear. Se asigna al enviar al sistema externo y pasar la solicitud a análisis.' }}
         </p>
       </div>
     </div>
@@ -864,7 +1023,7 @@ onMounted(() => {
         >
           <ApplicantFormFields
             v-model="form.debtor"
-            :show-search="mode === 'deudor'"
+            :show-search="true"
             :loading-search="loadingSearch"
             :hide-financial-section="true"
             :show-co-debtor-concept="mode === 'codeudor'"
@@ -1001,8 +1160,11 @@ onMounted(() => {
           <div v-if="codeudorStep === 1" class="space-y-4">
             <ApplicantFormFields
               v-model="codeudorBeingAdded"
+              :show-search="true"
+              :loading-search="loadingSearch"
               :show-co-debtor-concept="true"
               :hide-financial-section="true"
+              @search="searchApplicantForCodeudor"
             />
           </div>
           <!-- Paso 2: Actividad económica -->
@@ -1102,7 +1264,10 @@ onMounted(() => {
                 <div class="border-t border-border px-4 pt-4 pb-2">
                   <ApplicantFormFields
                     :model-value="co"
+                    :show-search="true"
+                    :loading-search="loadingSearch"
                     :show-co-debtor-concept="true"
+                    @search="() => searchApplicantForCoDebtor(idx)"
                     @update:model-value="form.co_debtors[idx] = $event"
                   />
                 </div>

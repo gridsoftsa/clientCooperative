@@ -9,12 +9,18 @@ definePageMeta({
 
 const router = useRouter()
 const { $api } = useNuxtApp()
+const { hasPermission } = usePermissions()
+const hasEditPermission = computed(() => hasPermission('radicacion_editar'))
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
 
 const applications = ref<any[]>([])
 const loading = ref(false)
+const movingToAnalysisId = ref<number | null>(null)
+const toAnalysisRadicado = ref('')
+const toAnalysisDialogOpen = ref(false)
+const applicationToMove = ref<{ id: number; code?: string } | null>(null)
 const pagination = ref({
   current_page: 1,
   last_page: 1,
@@ -92,6 +98,43 @@ async function handleDeactivate(app: { id: number }) {
   }
 }
 
+function openToAnalysisDialog(app: { id: number; code?: string }) {
+  applicationToMove.value = app
+  toAnalysisRadicado.value = ''
+  toAnalysisDialogOpen.value = true
+}
+
+function closeToAnalysisDialog() {
+  applicationToMove.value = null
+  toAnalysisRadicado.value = ''
+  toAnalysisDialogOpen.value = false
+}
+
+async function confirmMoveToAnalysis() {
+  const app = applicationToMove.value
+  if (!app || !toAnalysisRadicado.value?.trim()) {
+    toast.error('Ingresa el número de radicado externo')
+    return
+  }
+  movingToAnalysisId.value = app.id
+  try {
+    const { $api, $csrf } = useNuxtApp()
+    await $csrf()
+    await $api(`/credit-applications/${app.id}/to-analysis`, {
+      method: 'PATCH',
+      body: { numero_radicado_externo: toAnalysisRadicado.value.trim() },
+    })
+    toast.success('Solicitud pasada a análisis correctamente')
+    closeToAnalysisDialog()
+    await fetchApplications()
+  } catch (e: any) {
+    console.error('Error pasando a análisis:', e)
+    toast.error(e?.data?.message ?? 'No se pudo pasar a análisis')
+  } finally {
+    movingToAnalysisId.value = null
+  }
+}
+
 async function handleDownloadPdf(app: { id: number; code?: string }) {
   if (downloadingPdfId.value) return
   downloadingPdfId.value = app.id
@@ -154,6 +197,7 @@ onMounted(() => {
             <TableHeader>
               <TableRow>
                 <TableHead>Código</TableHead>
+                <TableHead>Radicado externo</TableHead>
                 <TableHead>Monto</TableHead>
                 <TableHead>Plazo</TableHead>
                 <TableHead>Estado</TableHead>
@@ -163,7 +207,18 @@ onMounted(() => {
             </TableHeader>
             <TableBody>
               <TableRow v-for="app in applications" :key="app.id">
-                <TableCell class="font-medium">{{ app.code || '-' }}</TableCell>
+                <TableCell class="font-medium">
+                  <NuxtLink
+                    v-if="app.status === 'Draft' && hasEditPermission"
+                    :to="`/radicacion/${app.id}/editar`"
+                    class="text-primary hover:underline"
+                  >
+                    {{ app.code || '-' }}
+                    <span class="text-xs text-muted-foreground ml-1">(continuar editando)</span>
+                  </NuxtLink>
+                  <span v-else>{{ app.code || '-' }}</span>
+                </TableCell>
+                <TableCell class="font-mono text-sm">{{ app.numero_radicado_externo || '-' }}</TableCell>
                 <TableCell>{{ formatCurrency(Number(app.amount_requested)) }}</TableCell>
                 <TableCell>{{ app.term_months }} meses</TableCell>
                 <TableCell>
@@ -174,6 +229,17 @@ onMounted(() => {
                 <TableCell>{{ new Date(app.created_at).toLocaleDateString('es-CO') }}</TableCell>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-1">
+                    <PermissionGate permission="radicacion_editar">
+                      <Button
+                        v-if="app.status === 'Draft'"
+                        variant="ghost"
+                        size="sm"
+                        title="Pasar a análisis"
+                        @click="openToAnalysisDialog(app)"
+                      >
+                        <Icon name="i-lucide-send" class="h-4 w-4" />
+                      </Button>
+                    </PermissionGate>
                     <PermissionGate permission="radicacion_descargar_pdf">
                       <Button
                         variant="ghost"
@@ -249,5 +315,43 @@ onMounted(() => {
         </div>
       </CardContent>
     </Card>
+
+    <Dialog :open="toAnalysisDialogOpen" @update:open="(v) => { if (!v) closeToAnalysisDialog() }">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Pasar a análisis</DialogTitle>
+          <DialogDescription>
+            Ingresa el número de radicado que devolvió el sistema externo (Finagro, etc.) al enviar la solicitud. La solicitud pasará de Borrador a En análisis.
+          </DialogDescription>
+        </DialogHeader>
+        <div class="space-y-4 py-2">
+          <div v-if="applicationToMove" class="rounded-md bg-muted/50 px-3 py-2 text-sm">
+            Solicitud: <strong>{{ applicationToMove.code }}</strong>
+          </div>
+          <div class="space-y-2">
+            <Label for="to-analysis-radicado">Número de radicado externo *</Label>
+            <Input
+              id="to-analysis-radicado"
+              v-model="toAnalysisRadicado"
+              placeholder="Ej: RAD-EXT-2025-001234"
+              class="font-mono"
+              @keyup.enter="confirmMoveToAnalysis"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="closeToAnalysisDialog">
+            Cancelar
+          </Button>
+          <Button
+            :disabled="!toAnalysisRadicado?.trim() || movingToAnalysisId !== null"
+            @click="confirmMoveToAnalysis"
+          >
+            <Icon v-if="movingToAnalysisId" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+            Pasar a análisis
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
