@@ -2,7 +2,10 @@
 import { toast } from 'vue-sonner'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
-import { sumUtilidadMensualFromTemplates } from '~/constants/credits-financial-templates'
+import {
+  sumUtilidadMensualFromTemplates,
+  validateAllActivityTemplates,
+} from '~/constants/credits-financial-templates'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 
 definePageMeta({
@@ -413,6 +416,24 @@ function setActivityTemplatesFor(app: ApplicantForm, val: ActivityTemplateData[]
   fi.income = { ...income, business: sumUtilidad }
 }
 
+function validateActivityTemplatesBeforeSave(): string | null {
+  const debtorT = getActivityTemplates()
+  let r = validateAllActivityTemplates(debtorT)
+  if (!r.valid) {
+    return r.errors.join(' ')
+  }
+  const cos = form.value.co_debtors ?? []
+  for (let i = 0; i < cos.length; i++) {
+    const co = cos[i]
+    if (!co) continue
+    r = validateAllActivityTemplates(getActivityTemplatesFor(co))
+    if (!r.valid) {
+      return `Codeudor ${i + 1}: ${r.errors.join(' ')}`
+    }
+  }
+  return null
+}
+
 const applicantForFinancialSummary = computed(() =>
   (addingCodeudor.value ? codeudorBeingAdded.value : form.value.debtor),
 )
@@ -458,24 +479,33 @@ const amountForSolvencia = computed(() => form.value.amount_requested)
 
 const solvenciaPercentage = computed(() => {
   const pasivos = getSolvencyField('liabilities') ?? 0
-  const bienRaiz = bienRaizFromGarantias.value
+  const activos = totalActivosFromAssets.value
   const monto = amountForSolvencia.value
-  if (!monto || monto <= 0) return null
-  const pct = ((pasivos + bienRaiz) / monto) * 100
+  if (!activos || activos <= 0 || !monto || monto <= 0) return null
+  const pct = ((pasivos + monto) / activos) * 100
   return Math.round(pct * 100) / 100
 })
 
+const endeudamientoPercentage = computed(() => {
+  const pasivos = getSolvencyField('liabilities') ?? 0
+  const bienRaiz = bienRaizFromGarantias.value
+  const monto = amountForSolvencia.value
+  if (!bienRaiz || bienRaiz <= 0 || !monto || monto <= 0) return null
+  const pct = ((pasivos + monto) / bienRaiz) * 100
+  return Math.round(pct * 100) / 100
+})
+
+/** Menor % = mejor: <50 verde, 50-100 ámbar, ≥100 rojo */
 function solvenciaColorClass(pct: number | null): string {
   if (pct == null) return 'bg-muted text-muted-foreground'
-  if (pct < 50) return 'bg-destructive/20 text-destructive border-destructive/40'
+  if (pct < 50) return 'bg-green-600/20 text-green-700 dark:text-green-400 border-green-600/40'
   if (pct < 100) return 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/40'
-  if (pct < 150) return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/40'
-  return 'bg-green-600/20 text-green-700 dark:text-green-400 border-green-600/40'
+  return 'bg-destructive/20 text-destructive border-destructive/40'
 }
 
-watch([solvenciaPercentage, amountForSolvencia], () => {
-  const pct = solvenciaPercentage.value
-  if (pct != null) setSolvencyField('solvency', pct)
+watch([solvenciaPercentage, endeudamientoPercentage], () => {
+  setSolvencyField('solvency', solvenciaPercentage.value ?? undefined)
+  setSolvencyField('endeudamiento', endeudamientoPercentage.value ?? undefined)
 }, { immediate: true })
 
 function onKeydownNumeric(e: KeyboardEvent, allowDecimal = false) {
@@ -599,6 +629,11 @@ async function saveChanges() {
     toast.error('Todos los documentos adjuntos deben tener un título')
     return
   }
+  const errTemplates = validateActivityTemplatesBeforeSave()
+  if (errTemplates) {
+    toast.error(errTemplates)
+    return
+  }
 
   saving.value = true
   try {
@@ -709,7 +744,7 @@ onMounted(() => {
         <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Resumen financiero {{ addingCodeudor ? 'del codeudor' : 'del deudor' }}
         </p>
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <div class="space-y-1">
             <Label for="res_solvencia" class="text-sm font-bold uppercase">Solvencia</Label>
             <div
@@ -720,7 +755,20 @@ onMounted(() => {
               {{ solvenciaPercentage != null ? `${solvenciaPercentage.toFixed(2)} %` : '—' }}
             </div>
             <p class="text-[10px] text-muted-foreground">
-              (Pasivos + Bien raíz) ÷ Monto solicitado
+              (Pasivos + monto solicitado) ÷ Activos
+            </p>
+          </div>
+          <div class="space-y-1">
+            <Label for="res_endeudamiento" class="text-sm font-bold uppercase">Endeudamiento</Label>
+            <div
+              id="res_endeudamiento"
+              class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
+              :class="solvenciaColorClass(endeudamientoPercentage)"
+            >
+              {{ endeudamientoPercentage != null ? `${endeudamientoPercentage.toFixed(2)} %` : '—' }}
+            </div>
+            <p class="text-[10px] text-muted-foreground">
+              (Pasivos + monto solicitado) ÷ Bien raíz
             </p>
           </div>
           <div class="space-y-1">

@@ -9,6 +9,9 @@ import {
   computeFormula,
   AVES_COST_PCT_DEFAULTS,
   FINAGRO_DEFAULTS,
+  GANADO_CEBA_MAX_GANANCIA_MENSUAL_KG,
+  isGanadoCebaGananciaMensualSobreMaximo,
+  isGanadoDobleCriasSuperaVacasCria,
 } from '~/constants/credits-financial-templates'
 import {
   CICLO_CORTO_COST_BREAKDOWN_DEFAULT,
@@ -206,6 +209,21 @@ function formatComputedValue(field: { formulaKey?: string; formulaFormat?: strin
 }
 
 const formData = reactive<Record<string, unknown>>(buildInitialFormData())
+
+function isGanadoCebaCantidadCalculadaField(field: { key: string; type?: string }): boolean {
+  return props.templateKey === 'ganado-ceba'
+    && field.type === 'computed'
+    && field.key === 'cantidad_ganado_calculada'
+}
+
+function showGanadoCebaCantidadCalculadaAlert(field: { key: string; type?: string }): boolean {
+  return isGanadoCebaCantidadCalculadaField(field)
+    && isGanadoCebaGananciaMensualSobreMaximo(formData)
+}
+
+const ganadoDobleCriasExceedsVacasCria = computed(() =>
+  props.templateKey === 'ganado-doble-proposito' && isGanadoDobleCriasSuperaVacasCria(formData),
+)
 
 watch(
   () => [props.schema, props.initialData],
@@ -482,9 +500,10 @@ const inputBaseClass =
         <legend class="text-sm font-semibold text-foreground">
           {{ section.title }}
         </legend>
-        <div class="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div class="mt-4 grid grid-cols-1 items-end gap-6 md:grid-cols-2">
         <template v-for="field in (section.fields ?? [])" :key="field.key">
-          <div v-if="isFieldVisible(field)" :class="['grid gap-2', gridColClass(field.cols)]">
+          <template v-if="isFieldVisible(field)">
+          <div :class="['grid w-full min-w-0 gap-2', gridColClass(field.cols)]">
             <!-- money -->
             <template v-if="field.type === 'money'">
               <CreditsBaseMoneyInput
@@ -543,7 +562,22 @@ const inputBaseClass =
             </template>
             <!-- computed (solo lectura, no modificable) -->
             <template v-else-if="field.type === 'computed'">
-              <div class="space-y-1.5">
+              <div v-if="isGanadoCebaCantidadCalculadaField(field)" class="space-y-1.5">
+                <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
+                  {{ field.label }}
+                  <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
+                </Label>
+                <div
+                  :id="`field-${field.key}`"
+                  class="flex h-9 w-full items-center rounded-md border bg-muted/50 px-3 py-2 text-sm text-foreground select-none cursor-default"
+                  :class="showGanadoCebaCantidadCalculadaAlert(field) ? 'border-destructive ring-1 ring-destructive/30' : 'border-input'"
+                  tabindex="-1"
+                  aria-readonly="true"
+                >
+                  {{ formatComputedValue(field) }}
+                </div>
+              </div>
+              <div v-else class="space-y-1.5">
                 <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
                   {{ field.label }}
                   <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
@@ -583,8 +617,20 @@ const inputBaseClass =
                 type="number"
                 step="any"
                 :disabled="isFieldReadOnly(field.key)"
-                :class="inputBaseClass"
+                :class="[
+                  inputBaseClass,
+                  ganadoDobleCriasExceedsVacasCria && (field.key === 'numero_crias' || field.key === 'vacas_cria')
+                    ? 'border-destructive ring-1 ring-destructive/30'
+                    : '',
+                ]"
               >
+              <p
+                v-if="field.key === 'vacas_cria' && ganadoDobleCriasExceedsVacasCria"
+                class="m-0 rounded border border-destructive/30 bg-destructive/5 px-1.5 py-1 text-[11px] font-medium leading-snug text-destructive"
+                role="alert"
+              >
+                Las crías no pueden superar las vacas de cría. Corrija en «Crías» o aquí.
+              </p>
             </template>
             <!-- textarea -->
             <template v-else-if="field.type === 'textarea'">
@@ -618,6 +664,20 @@ const inputBaseClass =
               >
             </template>
           </div>
+          <div
+            v-if="isGanadoCebaCantidadCalculadaField(field) && showGanadoCebaCantidadCalculadaAlert(field)"
+            class="col-span-1 md:col-span-2 w-full min-w-0"
+          >
+            <Alert variant="destructive" class="py-2">
+              <AlertTitle class="text-sm">
+                Tiempo de ceba muy corto
+              </AlertTitle>
+              <AlertDescription class="text-xs">
+                La ganancia mensual calculada supera el máximo de referencia ({{ GANADO_CEBA_MAX_GANANCIA_MENSUAL_KG }} kg/mes). Ajuste el tiempo en meses de ceba o revise pesos y datos ingresados.
+              </AlertDescription>
+            </Alert>
+          </div>
+          </template>
         </template>
         </div>
       </fieldset>

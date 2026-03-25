@@ -3,6 +3,9 @@ import {
   getTemplateConfigSchema,
   computeFormulaForConfig,
   EXCLUDED_CONFIG_KEYS,
+  GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT,
+  GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT,
+  GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT,
   type TemplateConfigField,
 } from '~/constants/template-config-schemas'
 import {
@@ -43,6 +46,20 @@ const editedData = ref<Record<string, unknown>>({ ...props.record.config_data })
 
 watch(() => props.record.config_data, (newVal) => {
   editedData.value = { ...newVal }
+  if (props.record.template_key === 'ganado-doble-proposito') {
+    const c = editedData.value.ciclo_produccion_terneros_meses
+    if (c === undefined || c === null || c === '') {
+      editedData.value.ciclo_produccion_terneros_meses = GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT
+    }
+    const cl = editedData.value.ciclo_produccion_leche
+    if (cl === undefined || cl === null || cl === '') {
+      editedData.value.ciclo_produccion_leche = GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT
+    }
+    const tm = editedData.value.pct_tasa_mortalidad
+    if (tm === undefined || tm === null || tm === '') {
+      editedData.value.pct_tasa_mortalidad = GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT
+    }
+  }
 }, { immediate: true })
 
 const schema = computed(() => getTemplateConfigSchema(props.record.template_key))

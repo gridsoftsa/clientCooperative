@@ -121,6 +121,12 @@ export const sectorsConfig: SectorConfig[] = [
   },
 ]
 
+/**
+ * Ganancia mensual máxima de referencia (kg/mes) para la cantidad calculada en ganado ceba.
+ * Si el cálculo la supera, se muestra alerta (tiempo de ceba insuficiente).
+ */
+export const GANADO_CEBA_MAX_GANANCIA_MENSUAL_KG = 16
+
 /** Plantilla: Ganado para la Ceba */
 function schemaGanadoCeba(): FormSchemaInput {
   return {
@@ -191,7 +197,7 @@ function schemaGanadoCeba(): FormSchemaInput {
             key: 'cantidad_ganado_calculada',
             label: 'Cantidad calculada (fórmula)',
             type: 'computed',
-            meta: 'Solo lectura',
+            meta: `Solo lectura; referencia máx. ${GANADO_CEBA_MAX_GANANCIA_MENSUAL_KG} kg/mes`,
             formulaKey: 'ganado_ceba_cantidad',
             cols: 1,
           },
@@ -295,7 +301,7 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             key: 'ciclo_produccion_terneros_meses',
             label: 'Ciclo de producción terneros (meses)',
             type: 'number',
-            meta: 'Int',
+            meta: 'Solo lectura (configuración de plantilla)',
             cols: 1,
           },
           {
@@ -334,7 +340,7 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             key: 'ciclo_produccion_leche',
             label: 'Ciclo de producción leche (meses)',
             type: 'number',
-            meta: 'Int',
+            meta: 'Solo lectura (configuración de plantilla)',
             cols: 1,
           },
           {
@@ -390,7 +396,7 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             key: 'pct_tasa_mortalidad',
             label: 'Tasa de mortalidad (%)',
             type: 'number',
-            meta: 'Ej: 10',
+            meta: 'Solo lectura (configuración de plantilla)',
             cols: 1,
           },
         ],
@@ -1855,17 +1861,6 @@ const schemaBuilders: Record<string, () => FormSchemaInput> = {
   'transporte-pasajeros': schemaTransportePasajeros,
 }
 
-/** Fórmula Ganado Ceba: -(((precio_compra_animal / precio_kg_animal) - peso_kg_final) / tiempo_meses_ceba) */
-function computeGanadoCebaCantidad(data: Record<string, unknown>): number | null {
-  const precio = Number(data.precio_compra_animal ?? 0)
-  const precioKg = Number(data.precio_kg_animal ?? 0)
-  const pesoFinal = Number(data.peso_kg_final ?? 0)
-  const meses = Number(data.tiempo_meses_ceba ?? 0)
-  if (!precioKg || !meses) return null
-  const valor = -(((precio / precioKg) - pesoFinal) / meses)
-  return Number.isFinite(valor) ? valor : null
-}
-
 /** Fórmula Ganado Ceba: peso_kg_inicial = precio_compra_animal / precio_kg_animal */
 function computeGanadoCebaPesoInicial(data: Record<string, unknown>): number | null {
   const precio = Number(data.precio_compra_animal ?? 0)
@@ -1873,6 +1868,38 @@ function computeGanadoCebaPesoInicial(data: Record<string, unknown>): number | n
   if (!precioKg) return null
   const valor = precio / precioKg
   return Number.isFinite(valor) ? valor : null
+}
+
+/** Fórmula Ganado Ceba: -(((precio_compra_animal / precio_kg_animal) - peso_kg_final) / tiempo_meses_ceba) */
+function computeGanadoCebaCantidad(data: Record<string, unknown>): number | null {
+  const pesoInicial = computeGanadoCebaPesoInicial(data)
+  const pesoFinal = Number(data.peso_kg_final ?? 0)
+  const meses = Number(data.tiempo_meses_ceba ?? 0)
+  if (!meses || pesoInicial == null) return null
+  const valor = -((pesoInicial - pesoFinal) / meses)
+  return Number.isFinite(valor) ? valor : null
+}
+
+/** True si la ganancia mensual (kg/mes) supera {@link GANADO_CEBA_MAX_GANANCIA_MENSUAL_KG}. */
+export function isGanadoCebaGananciaMensualSobreMaximo(data: Record<string, unknown>): boolean {
+  const v = computeGanadoCebaCantidad(data)
+  return v != null && v > GANADO_CEBA_MAX_GANANCIA_MENSUAL_KG
+}
+
+/** True si el número de crías supera el de vacas de cría (ganado doble propósito). */
+export function isGanadoDobleCriasSuperaVacasCria(data: Record<string, unknown>): boolean {
+  const rawCrias = data.numero_crias
+  const rawVacas = data.vacas_cria
+  if (rawCrias === undefined || rawCrias === null || rawCrias === ''
+    || rawVacas === undefined || rawVacas === null || rawVacas === '') {
+    return false
+  }
+  const nCrias = Number(rawCrias)
+  const nVacas = Number(rawVacas)
+  if (!Number.isFinite(nCrias) || !Number.isFinite(nVacas)) {
+    return false
+  }
+  return nCrias > nVacas
 }
 
 /** Fórmula Ganado Ceba: ventas = cantidad_ganado × peso_kg_final × precio_kg_animal */
@@ -3148,10 +3175,52 @@ export function validateActivityTemplate(
     }
   }
 
+  if (item.template === 'ganado-ceba' && isGanadoCebaGananciaMensualSobreMaximo(data)) {
+    errors.push(
+      `La ganancia mensual calculada supera ${GANADO_CEBA_MAX_GANANCIA_MENSUAL_KG} kg/mes (tiempo de ceba muy corto). Ajuste el tiempo en meses de ceba o los datos hasta que la cantidad calculada esté en rango`,
+    )
+  }
+
+  if (item.template === 'ganado-doble-proposito' && isGanadoDobleCriasSuperaVacasCria(data)) {
+    errors.push('El número de crías no puede ser superior al número de vacas de cría')
+  }
+
   return {
     valid: errors.length === 0,
     errors,
   }
+}
+
+/**
+ * Valida todas las plantillas de actividad con sector y plantilla elegidos (p. ej. antes de guardar borrador).
+ * Omite entradas totalmente vacías; marca error si hay sector sin plantilla o viceversa.
+ */
+export function validateAllActivityTemplates(
+  templates: Array<{ sector?: string; template?: string; product?: string | null; data?: Record<string, unknown> }>,
+): ValidateTemplateResult {
+  const errors: string[] = []
+  for (let i = 0; i < templates.length; i++) {
+    const item = templates[i]
+    if (!item) {
+      continue
+    }
+    const hasSector = Boolean(item?.sector?.trim())
+    const hasTemplate = Boolean(item?.template?.trim())
+    if (!hasSector && !hasTemplate) {
+      continue
+    }
+    if (!hasSector || !hasTemplate) {
+      errors.push(`Plantilla ${i + 1}: completa sector y plantilla o elimina la plantilla vacía`)
+      continue
+    }
+    const r = validateActivityTemplate(item)
+    if (!r.valid) {
+      for (const e of r.errors) {
+        errors.push(`Plantilla ${i + 1}: ${e}`)
+      }
+    }
+  }
+  return { valid: errors.length === 0, errors }
 }
 
 /** formulaKey de utilidad mensual por plantilla (para sincronizar con Ingreso cultivos/negocio) */

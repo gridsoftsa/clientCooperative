@@ -3,6 +3,8 @@ const props = defineProps<{
   applicant: any
   documents?: any[]
   applicationId: number
+  /** Monto solicitado del crédito (para recalcular solvencia/endeudamiento en vista) */
+  amountRequested?: number
 }>()
 
 const { formatPesos } = usePesosFormat()
@@ -40,6 +42,26 @@ const financial = computed(() => props.applicant?.financial_info || {})
 const income = computed(() => financial.value.income || {})
 const expenses = computed(() => financial.value.expenses || {})
 const solvency = computed(() => financial.value.solvency || {})
+
+const amountForMetrics = computed(() => Number(props.amountRequested) || 0)
+
+/** (Pasivos + monto) ÷ Activos × 100 */
+const solvenciaDisplayPct = computed(() => {
+  const pasivos = solvency.value.liabilities ?? 0
+  const activos = assetsList.value.length ? assetsTotal.value : (solvency.value.assets ?? 0)
+  const monto = amountForMetrics.value
+  if (!activos || activos <= 0 || !monto) return null
+  return Math.round(((pasivos + monto) / activos) * 100 * 100) / 100
+})
+
+/** (Pasivos + monto) ÷ Bien raíz × 100 */
+const endeudamientoDisplayPct = computed(() => {
+  const pasivos = solvency.value.liabilities ?? 0
+  const br = solvency.value.real_estate ?? 0
+  const monto = amountForMetrics.value
+  if (!br || br <= 0 || !monto) return null
+  return Math.round(((pasivos + monto) / br) * 100 * 100) / 100
+})
 const assetsList = computed(() => financial.value.assets ?? [])
 const assetsTotal = computed(() =>
   assetsList.value.reduce((sum, a) => sum + (a.value ?? 0), 0)
@@ -287,7 +309,17 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
         </div>
       </div>
 
-      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div :class="fieldClass">
+          <p :class="labelClass">Solvencia</p>
+          <p>{{ solvenciaDisplayPct != null ? `${solvenciaDisplayPct.toFixed(2)} %` : '—' }}</p>
+          <p class="text-[10px] text-muted-foreground">(Pasivos + monto solicitado) ÷ Activos</p>
+        </div>
+        <div :class="fieldClass">
+          <p :class="labelClass">Endeudamiento</p>
+          <p>{{ endeudamientoDisplayPct != null ? `${endeudamientoDisplayPct.toFixed(2)} %` : '—' }}</p>
+          <p class="text-[10px] text-muted-foreground">(Pasivos + monto solicitado) ÷ Bien raíz</p>
+        </div>
         <div :class="fieldClass">
           <p :class="labelClass">Total activos</p>
           <p>{{ formatPesos(assetsList.length ? assetsTotal : solvency.assets) }}</p>
@@ -299,10 +331,6 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
         <div :class="fieldClass">
           <p :class="labelClass">Bien raíz valor</p>
           <p>{{ formatPesos(solvency.real_estate) }}</p>
-        </div>
-        <div :class="fieldClass">
-          <p :class="labelClass">Endeudamiento (ratio)</p>
-          <p>{{ solvency.debt_ratio != null ? solvency.debt_ratio : '-' }}</p>
         </div>
         <div v-if="assetsList.length" class="sm:col-span-2 lg:col-span-4" :class="fieldClass">
           <p :class="labelClass">Activos reportados</p>

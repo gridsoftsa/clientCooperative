@@ -45,8 +45,10 @@ export interface FinancialInfoForm {
     garantia?: boolean
   }>
   solvency?: {
-    /** Valor de solvencia (fórmula - se llena automático o manual) */
+    /** (Pasivos + monto solicitado) ÷ Activos × 100 — se calcula en resumen */
     solvency?: number
+    /** (Pasivos + monto solicitado) ÷ Bien raíz × 100 — se calcula en resumen */
+    endeudamiento?: number
     assets?: number
     liabilities?: number
     real_estate?: number

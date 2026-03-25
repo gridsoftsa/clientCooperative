@@ -6,6 +6,15 @@ import { computeFormula } from '~/constants/credits-financial-templates'
 import { getAvesCostBreakdownFieldKeys } from '~/constants/aves-cost-breakdown'
 import { getCicloCortoCostBreakdownFieldKeys } from '~/constants/cultivo-ciclo-corto-cost-breakdown'
 
+/** Valor por defecto en configuración / radicación — ciclo terneros (meses), ganado doble propósito. */
+export const GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT = 8
+
+/** Valor por defecto — ciclo producción leche (meses), ganado doble propósito. */
+export const GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT = 8
+
+/** Valor por defecto — tasa de mortalidad (%), ganado doble propósito. */
+export const GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT = 10
+
 export type TemplateConfigFieldType = 'money' | 'number' | 'text' | 'formula'
 
 export interface TemplateConfigField {
@@ -28,6 +37,11 @@ export interface TemplateConfigSchema {
     fields: TemplateConfigField[]
     /** Layout alternativo: tabla de desglose de costos (aves-ponedoras, cultivo-ciclo-corto) */
     layout?: 'avesCostBreakdownTable' | 'cultivoCicloCortoCostBreakdownTable' | 'cultivoPermanenteFinagroTable' | 'cultivoPermanenteReferencia'
+    /**
+     * Si true, en radicación los campos de esta sección no se marcan solo lectura aunque vengan de la plantilla
+     * (el deudor puede ajustarlos; p. ej. ganado-ceba — valores estandarizados).
+     */
+    excludeFromRadicacionReadonly?: boolean
   }>
 }
 
@@ -37,6 +51,7 @@ const schemaGanadoCeba: TemplateConfigSchema = {
     {
       key: 'valores',
       title: 'Valores estandarizados',
+      excludeFromRadicacionReadonly: true,
       fields: [
         { key: 'precio_compra_animal', label: 'Precio compra por animal', type: 'money' },
         { key: 'precio_kg_animal', label: 'Precio por kg', type: 'money' },
@@ -162,6 +177,29 @@ const schemaGanadoDobleProposito: TemplateConfigSchema = {
       title: 'Parámetros de crías',
       fields: [
         { key: 'porcentaje_sensibilizacion', label: '% Sensibilización (para número de crías ≥ 10)', type: 'number' },
+        {
+          key: 'ciclo_produccion_terneros_meses',
+          label: 'Ciclo de producción terneros (meses)',
+          type: 'number',
+        },
+      ],
+    },
+    {
+      key: 'parametros_leche',
+      title: 'Parámetros de recolección de leche',
+      fields: [
+        {
+          key: 'ciclo_produccion_leche',
+          label: 'Ciclo de producción leche (meses)',
+          type: 'number',
+        },
+      ],
+    },
+    {
+      key: 'tasa_mortalidad',
+      title: 'Tasa de mortalidad',
+      fields: [
+        { key: 'pct_tasa_mortalidad', label: 'Tasa de mortalidad (%)', type: 'number' },
       ],
     },
     {
@@ -367,6 +405,8 @@ export function getConfigFieldKeys(templateKey: string): string[] {
       keys.push('finagro_ranges')
     } else if (section.layout === 'cultivoPermanenteReferencia') {
       keys.push('plantas_x_ha', 'anio_inicio_produccion', 'descripcion')
+    } else if (section.excludeFromRadicacionReadonly) {
+      continue
     } else {
       for (const field of section.fields) {
         keys.push(field.key)

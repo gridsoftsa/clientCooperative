@@ -217,23 +217,36 @@ function getDocumentsForApplicant(applicantId: number | string | null | undefine
 
 const solvenciaPercentage = computed(() => {
   const d = debtor.value
-  if (!d?.financial_info) return null
-  const sol = (d.financial_info as any)?.solvency
-  const pct = sol?.solvency
-  if (pct != null && typeof pct === 'number') return pct
+  if (!d?.financial_info || !application.value) return null
+  const fi = d.financial_info as any
+  const sol = fi?.solvency ?? {}
+  const assetsArr = fi?.assets ?? []
+  const activos = Array.isArray(assetsArr)
+    ? assetsArr.reduce((s: number, a: any) => s + (a?.value ?? 0), 0)
+    : 0
   const pasivos = sol?.liabilities ?? 0
-  const bienRaiz = sol?.real_estate ?? 0
-  const monto = application.value?.amount_requested
-  if (!monto || monto <= 0) return null
-  return Math.round(((pasivos + bienRaiz) / monto) * 100 * 100) / 100
+  const monto = Number(application.value.amount_requested) || 0
+  if (!activos || activos <= 0 || !monto) return null
+  return Math.round(((pasivos + monto) / activos) * 100 * 100) / 100
 })
 
+const endeudamientoPercentage = computed(() => {
+  const d = debtor.value
+  if (!d?.financial_info || !application.value) return null
+  const sol = (d.financial_info as any)?.solvency ?? {}
+  const bienRaiz = sol?.real_estate ?? 0
+  const pasivos = sol?.liabilities ?? 0
+  const monto = Number(application.value.amount_requested) || 0
+  if (!bienRaiz || bienRaiz <= 0 || !monto) return null
+  return Math.round(((pasivos + monto) / bienRaiz) * 100 * 100) / 100
+})
+
+/** Menor % = mejor */
 function solvenciaColorClass(pct: number | null): string {
   if (pct == null) return 'bg-muted text-muted-foreground'
-  if (pct < 50) return 'bg-destructive/20 text-destructive border-destructive/40'
+  if (pct < 50) return 'bg-green-600/20 text-green-700 dark:text-green-400 border-green-600/40'
   if (pct < 100) return 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/40'
-  if (pct < 150) return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/40'
-  return 'bg-green-600/20 text-green-700 dark:text-green-400 border-green-600/40'
+  return 'bg-destructive/20 text-destructive border-destructive/40'
 }
 
 function fullName(a: any): string {
@@ -430,7 +443,7 @@ watch([application, debtor, coDebtors], () => {
         <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Resumen financiero del deudor
         </p>
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <div class="space-y-1">
             <p class="text-sm font-bold uppercase">Solvencia</p>
             <div
@@ -439,6 +452,21 @@ watch([application, debtor, coDebtors], () => {
             >
               {{ solvenciaPercentage != null ? `${solvenciaPercentage.toFixed(2)} %` : '—' }}
             </div>
+            <p class="text-[10px] text-muted-foreground">
+              (Pasivos + monto solicitado) ÷ Activos
+            </p>
+          </div>
+          <div class="space-y-1">
+            <p class="text-sm font-bold uppercase">Endeudamiento</p>
+            <div
+              class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
+              :class="solvenciaColorClass(endeudamientoPercentage)"
+            >
+              {{ endeudamientoPercentage != null ? `${endeudamientoPercentage.toFixed(2)} %` : '—' }}
+            </div>
+            <p class="text-[10px] text-muted-foreground">
+              (Pasivos + monto solicitado) ÷ Bien raíz
+            </p>
           </div>
           <div class="space-y-1">
             <p class="text-sm font-bold uppercase">Activos</p>

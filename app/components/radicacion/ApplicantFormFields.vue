@@ -926,20 +926,6 @@ function formatFileSize(bytes: number): string {
             Suma de activos marcados como garantía para el crédito
           </p>
         </div>
-        <div :class="fieldClass">
-          <Label>Endeudamiento (ratio 0-1)</Label>
-          <Input
-            :model-value="financial.solvency?.debt_ratio"
-            type="number"
-            min="0"
-            max="1"
-            step="0.01"
-            placeholder="Ej: 0.3"
-            inputmode="decimal"
-            @keydown="onKeydownNumeric($event, true)"
-            @update:model-value="setFinancial('solvency', { ...(financial.solvency || {}), debt_ratio: Number($event) || undefined })"
-          />
-        </div>
         <div class="sm:col-span-2 lg:col-span-4 flex flex-col gap-3">
           <div class="flex flex-wrap items-center justify-between gap-2">
             <div>

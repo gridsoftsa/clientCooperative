@@ -10,7 +10,12 @@ import {
   getTemplateSchema,
   templateHasProductSelect,
 } from '~/constants/credits-financial-templates'
-import { getConfigFieldKeys } from '~/constants/template-config-schemas'
+import {
+  getConfigFieldKeys,
+  GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT,
+  GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT,
+  GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT,
+} from '~/constants/template-config-schemas'
 
 const { cultivoPermanenteOptions, cultivoCicloCortoOptions, pecesTipoOptions, serviciosTipoOptions, fetchCategories } = useTemplateCategories()
 const { fetchFlatData } = useTemplateFlatData()
@@ -92,8 +97,23 @@ async function loadFlatDataForTemplate(template: string, product: string | null)
   try {
     const flatData = await fetchFlatData(template, product)
     formData.value = { ...flatData, ...formData.value }
+    if (template === 'ganado-doble-proposito') {
+      const d = formData.value
+      const cTern = d.ciclo_produccion_terneros_meses
+      if (cTern === undefined || cTern === null || cTern === '') {
+        d.ciclo_produccion_terneros_meses = GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT
+      }
+      const cLeche = d.ciclo_produccion_leche
+      if (cLeche === undefined || cLeche === null || cLeche === '') {
+        d.ciclo_produccion_leche = GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT
+      }
+      const tasaMort = d.pct_tasa_mortalidad
+      if (tasaMort === undefined || tasaMort === null || tasaMort === '') {
+        d.pct_tasa_mortalidad = GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT
+      }
+    }
     formDataVersion.value++ // Forzar que DynamicFormRenderer reciba los datos en su mount
-    // Plantillas con esquema de config (ganado-ceba, etc.): valores estandarizados siempre son solo lectura
+    // Plantillas con esquema de config: campos marcados en el schema como “solo desde plantilla” quedan solo lectura
     configuredFieldKeys.value = getConfigFieldKeys(template)
     emitActivityTemplate()
   } finally {
@@ -160,6 +180,21 @@ watch(
     sectorSelected.value = newSector
     templateSelected.value = newTemplate
     formData.value = { ...(val?.data ?? {}) }
+    if (newTemplate === 'ganado-doble-proposito') {
+      const d = formData.value
+      const cTern = d.ciclo_produccion_terneros_meses
+      if (cTern === undefined || cTern === null || cTern === '') {
+        d.ciclo_produccion_terneros_meses = GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT
+      }
+      const cLeche = d.ciclo_produccion_leche
+      if (cLeche === undefined || cLeche === null || cLeche === '') {
+        d.ciclo_produccion_leche = GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT
+      }
+      const tasaMort = d.pct_tasa_mortalidad
+      if (tasaMort === undefined || tasaMort === null || tasaMort === '') {
+        d.pct_tasa_mortalidad = GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT
+      }
+    }
     configuredFieldKeys.value = val?.template ? getConfigFieldKeys(val.template) : []
     nextTick(() => { isSyncingFromProps.value = false })
   },
