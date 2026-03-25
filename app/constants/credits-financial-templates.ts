@@ -535,7 +535,7 @@ function schemaCerdosCria(): FormSchemaInput {
             key: 'duracion_ciclo_dias',
             label: 'Duración del ciclo (días)',
             type: 'number',
-            meta: 'Int',
+            meta: 'Solo lectura (configuración de plantilla)',
             cols: 1,
           },
           {
@@ -639,7 +639,7 @@ function schemaCerdosCeba(): FormSchemaInput {
             key: 'peso_promedio_kg_ceba',
             label: 'Peso promedio (kg)',
             type: 'number',
-            meta: 'Editable',
+            meta: 'Solo lectura (configuración de plantilla)',
             cols: 1,
           },
         ],
@@ -654,7 +654,7 @@ function schemaCerdosCeba(): FormSchemaInput {
             key: 'duracion_ciclo_meses',
             label: 'Duración del ciclo (meses)',
             type: 'number',
-            meta: 'Decimal',
+            meta: 'Solo lectura (configuración de plantilla)',
             cols: 1,
           },
           {

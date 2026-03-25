@@ -15,6 +15,12 @@ export const GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT = 8
 /** Valor por defecto — tasa de mortalidad (%), ganado doble propósito. */
 export const GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT = 10
 
+/** Valor por defecto — duración del ciclo (días), cerdos de cría. */
+export const CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT = 45
+
+/** Valor por defecto — duración del ciclo (meses), cerdos de ceba. */
+export const CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT = 4
+
 export type TemplateConfigFieldType = 'money' | 'number' | 'text' | 'formula'
 
 export interface TemplateConfigField {
@@ -91,6 +97,13 @@ const schemaCerdosCria: TemplateConfigSchema = {
       ],
     },
     {
+      key: 'parametros_ciclo',
+      title: 'Parámetros del ciclo',
+      fields: [
+        { key: 'duracion_ciclo_dias', label: 'Duración del ciclo (días)', type: 'number' },
+      ],
+    },
+    {
       key: 'costos',
       title: 'Discriminación de costos',
       fields: [
@@ -113,6 +126,13 @@ const schemaCerdosCeba: TemplateConfigSchema = {
       title: 'Valores estándar por cerdo',
       fields: [
         { key: 'peso_promedio_kg_ceba', label: 'Peso final para la venta (kg)', type: 'number' },
+      ],
+    },
+    {
+      key: 'parametros_ciclo',
+      title: 'Parámetros del ciclo',
+      fields: [
+        { key: 'duracion_ciclo_meses', label: 'Duración del ciclo (meses)', type: 'number' },
       ],
     },
     {

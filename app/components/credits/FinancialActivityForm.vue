@@ -12,6 +12,8 @@ import {
 } from '~/constants/credits-financial-templates'
 import {
   getConfigFieldKeys,
+  CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT,
+  CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT,
   GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT,
   GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT,
   GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT,
@@ -112,6 +114,20 @@ async function loadFlatDataForTemplate(template: string, product: string | null)
         d.pct_tasa_mortalidad = GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT
       }
     }
+    if (template === 'cerdos-cria') {
+      const d = formData.value
+      const dias = d.duracion_ciclo_dias
+      if (dias === undefined || dias === null || dias === '') {
+        d.duracion_ciclo_dias = CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT
+      }
+    }
+    if (template === 'cerdos-ceba') {
+      const d = formData.value
+      const meses = d.duracion_ciclo_meses
+      if (meses === undefined || meses === null || meses === '') {
+        d.duracion_ciclo_meses = CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT
+      }
+    }
     formDataVersion.value++ // Forzar que DynamicFormRenderer reciba los datos en su mount
     // Plantillas con esquema de config: campos marcados en el schema como “solo desde plantilla” quedan solo lectura
     configuredFieldKeys.value = getConfigFieldKeys(template)
@@ -193,6 +209,20 @@ watch(
       const tasaMort = d.pct_tasa_mortalidad
       if (tasaMort === undefined || tasaMort === null || tasaMort === '') {
         d.pct_tasa_mortalidad = GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT
+      }
+    }
+    if (newTemplate === 'cerdos-cria') {
+      const d = formData.value
+      const dias = d.duracion_ciclo_dias
+      if (dias === undefined || dias === null || dias === '') {
+        d.duracion_ciclo_dias = CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT
+      }
+    }
+    if (newTemplate === 'cerdos-ceba') {
+      const d = formData.value
+      const meses = d.duracion_ciclo_meses
+      if (meses === undefined || meses === null || meses === '') {
+        d.duracion_ciclo_meses = CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT
       }
     }
     configuredFieldKeys.value = val?.template ? getConfigFieldKeys(val.template) : []

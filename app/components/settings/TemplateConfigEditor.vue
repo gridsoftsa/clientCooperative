@@ -3,6 +3,8 @@ import {
   getTemplateConfigSchema,
   computeFormulaForConfig,
   EXCLUDED_CONFIG_KEYS,
+  CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT,
+  CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT,
   GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT,
   GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT,
   GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT,
@@ -58,6 +60,18 @@ watch(() => props.record.config_data, (newVal) => {
     const tm = editedData.value.pct_tasa_mortalidad
     if (tm === undefined || tm === null || tm === '') {
       editedData.value.pct_tasa_mortalidad = GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT
+    }
+  }
+  if (props.record.template_key === 'cerdos-cria') {
+    const dd = editedData.value.duracion_ciclo_dias
+    if (dd === undefined || dd === null || dd === '') {
+      editedData.value.duracion_ciclo_dias = CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT
+    }
+  }
+  if (props.record.template_key === 'cerdos-ceba') {
+    const dm = editedData.value.duracion_ciclo_meses
+    if (dm === undefined || dm === null || dm === '') {
+      editedData.value.duracion_ciclo_meses = CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT
     }
   }
 }, { immediate: true })
