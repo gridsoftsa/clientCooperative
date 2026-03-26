@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
+import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
+import { parseActivityTemplateList } from '~/types/credit-application'
 
 definePageMeta({
   layout: 'default',
@@ -32,6 +34,7 @@ const form = ref<CreditApplicationForm>({
   term_months: 12,
   destination: '',
   destination_description: '',
+  destination_activity_templates: [],
   agency_id: 0,
   status: 'Draft',
   co_debtors: [],
@@ -312,6 +315,7 @@ function syncFormFromApplication() {
     term_months: app.term_months ?? 12,
     destination: app.destination ?? '',
     destination_description: app.destination_description ?? '',
+    destination_activity_templates: parseActivityTemplateList(app.destination_activity_templates),
     agency_id: app.agency_id ?? 0,
     status: app.status ?? 'Draft',
     numero_radicado_externo: app.numero_radicado_externo ?? '',
@@ -579,36 +583,51 @@ watch([application, debtor, coDebtors], () => {
           </div>
 
           <!-- Paso 4: Datos de la Solicitud -->
-          <div v-else-if="currentStep === 4" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div class="space-y-1.5">
-              <p class="text-sm font-medium">Monto solicitado (COP)</p>
-              <p class="rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-                {{ formatPesos(form.amount_requested) }}
-              </p>
+          <div v-else-if="currentStep === 4" class="space-y-8">
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div class="space-y-1.5">
+                <p class="text-sm font-medium">Monto solicitado (COP)</p>
+                <p class="rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+                  {{ formatPesos(form.amount_requested) }}
+                </p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-sm font-medium">Plazo (meses)</p>
+                <p class="rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+                  {{ form.term_months }}
+                </p>
+              </div>
+              <div class="space-y-1.5">
+                <p class="text-sm font-medium">Sucursal</p>
+                <p class="rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+                  {{ agencies.find(a => a.id === form.agency_id)?.name ?? application?.sucursal?.name ?? application?.agency?.name ?? '-' }}
+                </p>
+              </div>
+              <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+                <p class="text-sm font-medium">Destino del crédito</p>
+                <p class="rounded-md border bg-muted/50 px-3 py-2">
+                  {{ form.destination || '-' }}
+                </p>
+              </div>
+              <div v-if="form.destination_description" class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+                <p class="text-sm font-medium">Descripción del destino</p>
+                <p class="whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2">
+                  {{ form.destination_description }}
+                </p>
+              </div>
             </div>
-            <div class="space-y-1.5">
-              <p class="text-sm font-medium">Plazo (meses)</p>
-              <p class="rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-                {{ form.term_months }}
+            <div
+              v-if="(form.destination_activity_templates ?? []).length"
+              class="space-y-4 border-t border-border pt-6"
+            >
+              <p class="text-sm font-medium">
+                Actividades del destino (referencia)
               </p>
-            </div>
-            <div class="space-y-1.5">
-              <p class="text-sm font-medium">Sucursal</p>
-              <p class="rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-                {{ agencies.find(a => a.id === form.agency_id)?.name ?? application?.sucursal?.name ?? application?.agency?.name ?? '-' }}
-              </p>
-            </div>
-            <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
-              <p class="text-sm font-medium">Destino del crédito</p>
-              <p class="rounded-md border bg-muted/50 px-3 py-2">
-                {{ form.destination || '-' }}
-              </p>
-            </div>
-            <div v-if="form.destination_description" class="space-y-1.5 sm:col-span-2 lg:col-span-3">
-              <p class="text-sm font-medium">Descripción del destino</p>
-              <p class="whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2">
-                {{ form.destination_description }}
-              </p>
+              <CreditsFinancialActivityFormList
+                :model-value="form.destination_activity_templates ?? []"
+                readonly
+                list-hint="Detalle de actividades asociadas al uso del crédito; valores informativos respecto al perfil financiero."
+              />
             </div>
           </div>
 

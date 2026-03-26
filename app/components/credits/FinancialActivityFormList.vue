@@ -20,10 +20,13 @@ const props = withDefaults(
     modelValue?: ActivityTemplateData[]
     /** Modo solo lectura (sin edición) */
     readonly?: boolean
+    /** Texto bajo el título (por defecto: actividades del deudor) */
+    listHint?: string
   }>(),
   {
     modelValue: () => [],
     readonly: false,
+    listHint: '',
   },
 )
 
@@ -103,7 +106,7 @@ watch(
   <div class="space-y-6">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <p class="text-sm text-muted-foreground">
-        Añade una o más plantillas según las actividades económicas del deudor
+        {{ listHint || 'Añade una o más plantillas según las actividades económicas del deudor' }}
       </p>
       <div v-if="!readonly" class="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" @click="addTemplate">

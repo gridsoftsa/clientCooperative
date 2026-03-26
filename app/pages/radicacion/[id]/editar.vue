@@ -7,6 +7,7 @@ import {
   validateAllActivityTemplates,
 } from '~/constants/credits-financial-templates'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
+import { parseActivityTemplateList } from '~/types/credit-application'
 
 definePageMeta({
   layout: 'default',
@@ -50,6 +51,7 @@ const form = ref<CreditApplicationForm>({
   term_months: 12,
   destination: '',
   destination_description: '',
+  destination_activity_templates: [],
   agency_id: 0,
   status: 'Draft',
   co_debtors: [],
@@ -250,6 +252,7 @@ function syncFormFromApplication() {
     term_months: app.term_months ?? 12,
     destination: app.destination ?? '',
     destination_description: app.destination_description ?? '',
+    destination_activity_templates: parseActivityTemplateList(app.destination_activity_templates),
     agency_id: app.agency_id ?? 0,
     status: 'Draft',
     numero_radicado_externo: app.numero_radicado_externo ?? '',
@@ -430,6 +433,11 @@ function validateActivityTemplatesBeforeSave(): string | null {
     if (!r.valid) {
       return `Codeudor ${i + 1}: ${r.errors.join(' ')}`
     }
+  }
+  const destT = form.value.destination_activity_templates ?? []
+  r = validateAllActivityTemplates(destT)
+  if (!r.valid) {
+    return `Destino del crédito (actividades de referencia): ${r.errors.join(' ')}`
   }
   return null
 }
@@ -914,64 +922,80 @@ onMounted(() => {
             />
           </div>
 
-          <div v-else-if="!addingCodeudor && currentStep === 4" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div class="space-y-1.5">
-              <Label for="amount">Monto solicitado * (COP)</Label>
-              <Input
-                id="amount"
-                :model-value="formatPesos(form.amount_requested)"
-                type="text"
-                inputmode="decimal"
-                placeholder="Ej: 5.000.000"
-                @keydown="onKeydownPesosOnly"
-                @update:model-value="(v) => (form.amount_requested = parsePesosInput(String(v)) ?? 0)"
-              />
+          <div v-else-if="!addingCodeudor && currentStep === 4" class="space-y-8">
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div class="space-y-1.5">
+                <Label for="amount">Monto solicitado * (COP)</Label>
+                <Input
+                  id="amount"
+                  :model-value="formatPesos(form.amount_requested)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="Ej: 5.000.000"
+                  @keydown="onKeydownPesosOnly"
+                  @update:model-value="(v) => (form.amount_requested = parsePesosInput(String(v)) ?? 0)"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <Label for="term">Plazo (meses) *</Label>
+                <Input
+                  id="term"
+                  v-model.number="form.term_months"
+                  type="number"
+                  min="1"
+                  placeholder="Ej: 12"
+                  inputmode="numeric"
+                  @keydown="onKeydownNumeric($event, false)"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <Label for="agency">Sucursal *</Label>
+                <Select v-model="form.agency_id">
+                  <SelectTrigger id="agency">
+                    <SelectValue placeholder="Seleccionar agencia" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="a in agencies"
+                      :key="a.id"
+                      :value="a.id"
+                    >
+                      {{ a.name }}{{ a.code ? ` (${a.code})` : '' }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+                <Label for="destination">Destino del crédito</Label>
+                <Input
+                  id="destination"
+                  v-model="form.destination"
+                  placeholder="Ej: Capital de trabajo, vivienda..."
+                />
+              </div>
+              <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+                <Label for="destination_description">Descripción específica del destino del crédito</Label>
+                <textarea
+                  id="destination_description"
+                  v-model="form.destination_description"
+                  class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Describa en detalle el uso que se le dará al crédito"
+                  rows="4"
+                />
+              </div>
             </div>
-            <div class="space-y-1.5">
-              <Label for="term">Plazo (meses) *</Label>
-              <Input
-                id="term"
-                v-model.number="form.term_months"
-                type="number"
-                min="1"
-                placeholder="Ej: 12"
-                inputmode="numeric"
-                @keydown="onKeydownNumeric($event, false)"
-              />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="agency">Sucursal *</Label>
-              <Select v-model="form.agency_id">
-                <SelectTrigger id="agency">
-                  <SelectValue placeholder="Seleccionar agencia" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem
-                    v-for="a in agencies"
-                    :key="a.id"
-                    :value="a.id"
-                  >
-                    {{ a.name }}{{ a.code ? ` (${a.code})` : '' }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
-              <Label for="destination">Destino del crédito</Label>
-              <Input
-                id="destination"
-                v-model="form.destination"
-                placeholder="Ej: Capital de trabajo, vivienda..."
-              />
-            </div>
-            <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
-              <Label for="destination_description">Descripción específica del destino del crédito</Label>
-              <textarea
-                id="destination_description"
-                v-model="form.destination_description"
-                class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder="Describa en detalle el uso que se le dará al crédito"
-                rows="4"
+            <div class="space-y-4 border-t border-border pt-6">
+              <div>
+                <p class="text-sm font-medium">
+                  Actividades económicas del destino (referencia)
+                </p>
+                <p class="mt-1 text-xs text-muted-foreground">
+                  Los valores aquí son solo informativos y no alteran ingresos ni datos financieros del deudor.
+                </p>
+              </div>
+              <CreditsFinancialActivityFormList
+                v-model="form.destination_activity_templates"
+                list-hint="Añade plantillas que ilustren cómo se invertirá o destinará el crédito. No se sincronizan con el paso 2 ni el 3."
               />
             </div>
           </div>

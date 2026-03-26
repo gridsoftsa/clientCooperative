@@ -101,11 +101,35 @@ export interface CreditApplicationForm {
   term_months: number
   destination?: string
   destination_description?: string
+  /**
+   * Plantillas agropecuarias descritas en el paso “Datos de la solicitud”, solo informativas.
+   * No se sincronizan con ingresos del deudor (eso queda en paso 2).
+   */
+  destination_activity_templates?: ActivityTemplateData[]
   agency_id: number
   status: 'Draft' | 'Submitted'
   co_debtors: ApplicantForm[]
   /** Número de radicado externo (sistema externo, ej. Finagro) - obligatorio */
   numero_radicado_externo: string
+}
+
+/** Normaliza lista de plantillas desde API (JSON string o arreglo). */
+export function parseActivityTemplateList(val: unknown): ActivityTemplateData[] {
+  let raw: unknown = val
+  if (typeof raw === 'string') {
+    try {
+      raw = JSON.parse(raw)
+    } catch {
+      return []
+    }
+  }
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  return raw.filter(
+    (t): t is ActivityTemplateData =>
+      Boolean(t && typeof t === 'object' && 'sector' in t && 'template' in t && 'data' in t),
+  )
 }
 
 export const emptyApplicant = (): ApplicantForm => ({
