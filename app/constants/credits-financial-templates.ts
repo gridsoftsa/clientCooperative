@@ -741,7 +741,7 @@ function schemaPollosEngorde(): FormSchemaInput {
             key: 'costos_pollos',
             label: 'COSTOS',
             type: 'computed',
-            meta: 'Solo lectura (pollos supervivientes × peso kg × costo kg)',
+            meta: 'Solo lectura (ventas × % costo estándar)',
             formulaKey: 'pollos_engorde_costos',
             formulaFormat: 'money',
             cols: 1,
@@ -791,7 +791,7 @@ function schemaPollosEngorde(): FormSchemaInput {
             key: 'precio_kg_pie_fenavi',
             label: 'Precio kg en pie FENAVI (referencia)',
             type: 'money',
-            meta: 'Referencia externa',
+            meta: 'Solo lectura (configuración de plantilla)',
             cols: 1,
           },
         ],
@@ -1293,7 +1293,7 @@ function schemaCultivoPermanente(): FormSchemaInput {
             key: 'duracion_meses',
             label: 'Duración (meses)',
             type: 'number',
-            meta: 'Int',
+            meta: 'Solo lectura (configuración de plantilla)',
             cols: 1,
           },
         ],
@@ -1432,7 +1432,7 @@ function schemaCultivoCicloCorto(): FormSchemaInput {
             key: 'duracion_ciclo_meses',
             label: 'Duración del ciclo (meses)',
             type: 'number',
-            meta: 'Int',
+            meta: 'Solo lectura (plantilla por producto)',
             cols: 1,
           },
           {
@@ -1584,14 +1584,14 @@ function schemaCanaPanela(): FormSchemaInput {
             key: 'duracion_ciclo_meses',
             label: 'Duración del ciclo (meses)',
             type: 'number',
-            meta: 'Int',
+            meta: 'Solo lectura (plantilla)',
             cols: 1,
           },
           {
             key: 'cant_kg_hectarea',
             label: 'Cant. kg x hectárea',
             type: 'number',
-            meta: 'Decimal',
+            meta: 'Solo lectura (plantilla)',
             cols: 1,
           },
           {
@@ -1676,7 +1676,7 @@ function schemaServicios(): FormSchemaInput {
           { key: 'arriendo', label: 'Arriendo', type: 'money', cols: 1 },
           { key: 'servicios', label: 'Servicios', type: 'money', cols: 1 },
           { key: 'otros_costos', label: 'Otros', type: 'money', cols: 1 },
-          { key: 'pct_contribucion', label: '% Contribución', type: 'number', meta: 'Ej: 20', cols: 1 },
+          { key: 'pct_contribucion', label: '% Contribución', type: 'number', meta: 'Solo lectura (plantilla)', cols: 1 },
           {
             key: 'total_costos',
             label: 'Total costos',
@@ -2295,13 +2295,13 @@ function computePollosEngordeVentas(data: Record<string, unknown>): number | nul
   return Number.isFinite(valor) ? valor : null
 }
 
-/** Pollos Engorde: costos = supervivientes × peso_kg_venta × costo_kg_venta */
+/** Pollos Engorde: costos = ventas × pct_costos_estandar (pct: 0.7 o 70) */
 function computePollosEngordeCostos(data: Record<string, unknown>): number | null {
-  const supervivientes = getPollosEngordeSupervivientes(data)
-  const peso = Number(data.peso_kg_venta ?? 0)
-  const costoKg = Number(data.costo_kg_venta ?? 0)
-  if (supervivientes == null || !peso || !costoKg) return null
-  const valor = supervivientes * peso * costoKg
+  const ventas = computePollosEngordeVentas(data)
+  let pct = Number(data.pct_costos_estandar ?? 0)
+  if (ventas == null) return null
+  if (pct > 1) pct = pct / 100
+  const valor = ventas * pct
   return Number.isFinite(valor) ? valor : null
 }
 
@@ -2657,7 +2657,7 @@ function computeServiciosTotalMes(data: Record<string, unknown>): number | null 
 function computeServiciosValorContribucion(data: Record<string, unknown>): number | null {
   const totalMes = computeServiciosTotalMes(data) ?? Number(data.total_mes ?? 0)
   if (totalMes == null || !Number.isFinite(totalMes)) return null
-  let pct = Number(data.pct_contribucion ?? 0)
+  let pct = Number(data.pct_contribucion ?? data.pct_contribucion_estandar ?? 0)
   if (Number.isFinite(pct) && pct > 1) {
     pct = pct / 100
   }

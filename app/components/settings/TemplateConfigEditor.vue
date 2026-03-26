@@ -1,13 +1,16 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
 import {
   getTemplateConfigSchema,
   computeFormulaForConfig,
   EXCLUDED_CONFIG_KEYS,
   CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT,
   CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT,
+  CULTIVO_PERMANENTE_DURACION_MESES_DEFAULT,
   GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT,
   GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT,
   GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT,
+  SERVICIOS_PCT_CONTRIBUCION_DEFAULT,
   type TemplateConfigField,
 } from '~/constants/template-config-schemas'
 import {
@@ -19,6 +22,7 @@ import {
   CICLO_CORTO_COST_BREAKDOWN_DEFAULT,
   CICLO_CORTO_COST_BREAKDOWN_KEY,
 } from '~/constants/cultivo-ciclo-corto-cost-breakdown'
+import { validateTemplateConfigPctSums } from '~/utils/template-config-percent-sums'
 
 interface FlatDataRecord {
   id: number
@@ -74,6 +78,21 @@ watch(() => props.record.config_data, (newVal) => {
       editedData.value.duracion_ciclo_meses = CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT
     }
   }
+  if (props.record.template_key === 'cultivo-permanente') {
+    const du = editedData.value.duracion_meses
+    if (du === undefined || du === null || du === '') {
+      editedData.value.duracion_meses = CULTIVO_PERMANENTE_DURACION_MESES_DEFAULT
+    }
+  }
+  if (props.record.template_key === 'servicios') {
+    const pc = editedData.value.pct_contribucion
+    if (pc === undefined || pc === null || pc === '') {
+      const legacy = editedData.value.pct_contribucion_estandar
+      editedData.value.pct_contribucion = legacy !== undefined && legacy !== null && legacy !== ''
+        ? Number(legacy)
+        : SERVICIOS_PCT_CONTRIBUCION_DEFAULT
+    }
+  }
 }, { immediate: true })
 
 const schema = computed(() => getTemplateConfigSchema(props.record.template_key))
@@ -110,8 +129,18 @@ const visibleConfigEntries = computed(() =>
   ),
 )
 
+/** Suma de % de discriminación no puede superar 100 % */
+const pctSumValidation = computed(() =>
+  validateTemplateConfigPctSums(props.record.template_key, editedData.value),
+)
+
 function handleSave() {
   let data = { ...editedData.value }
+  const pctCheck = validateTemplateConfigPctSums(props.record.template_key, data)
+  if (!pctCheck.ok) {
+    toast.error(pctCheck.message)
+    return
+  }
   if (props.record.template_key === 'aves-ponedoras') {
     for (const group of AVES_COST_BREAKDOWN) {
       for (const item of group.items) {
@@ -125,6 +154,9 @@ function handleSave() {
     if (!Array.isArray(arr) || arr.length === 0) {
       data[CICLO_CORTO_COST_BREAKDOWN_KEY] = [...CICLO_CORTO_COST_BREAKDOWN_DEFAULT]
     }
+  }
+  if (props.record.template_key === 'servicios') {
+    delete data.pct_contribucion_estandar
   }
   emit('save', data)
   editing.value = false
@@ -174,13 +206,19 @@ function handleCancel() {
           <Button variant="ghost" size="sm" :disabled="saving" @click="handleCancel">
             Cancelar
           </Button>
-          <Button size="sm" :disabled="saving" @click="handleSave">
+          <Button size="sm" :disabled="saving || !pctSumValidation.ok" @click="handleSave">
             <Icon v-if="saving" name="i-lucide-loader-2" class="mr-1 h-4 w-4 animate-spin" />
             Guardar
           </Button>
         </template>
       </div>
     </div>
+
+    <Alert v-if="editing && !pctSumValidation.ok" variant="destructive">
+      <AlertDescription>
+        {{ pctSumValidation.message }}
+      </AlertDescription>
+    </Alert>
 
     <!-- Con schema (ganado-ceba, etc.): orden, tipos, fórmula -->
     <template v-if="schema">

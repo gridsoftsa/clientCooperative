@@ -21,6 +21,18 @@ export const CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT = 45
 /** Valor por defecto — duración del ciclo (meses), cerdos de ceba. */
 export const CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT = 4
 
+/** Valor por defecto — duración (meses) en producción, cultivos permanentes. */
+export const CULTIVO_PERMANENTE_DURACION_MESES_DEFAULT = 12
+
+/** Valor por defecto — duración del ciclo (meses), caña de azúcar (panela). */
+export const CANA_PANELA_DURACION_CICLO_MESES_DEFAULT = 18
+
+/** Valor por defecto — kg por hectárea, caña de azúcar (panela). */
+export const CANA_PANELA_CANT_KG_HECTAREA_DEFAULT = 10_000
+
+/** Valor por defecto — % contribución (plantilla servicios), p. ej. 20 → 20 % en fórmulas. */
+export const SERVICIOS_PCT_CONTRIBUCION_DEFAULT = 20
+
 export type TemplateConfigFieldType = 'money' | 'number' | 'text' | 'formula'
 
 export interface TemplateConfigField {
@@ -162,6 +174,11 @@ const schemaPollosEngorde: TemplateConfigSchema = {
         { key: 'costo_kg_venta', label: 'Costo x kg venta', type: 'money' },
         { key: 'tasa_mortalidad_pct', label: 'Tasa mortalidad (%)', type: 'number' },
         { key: 'precio_libra_conversion', label: 'Precio de libra conversión', type: 'money' },
+        {
+          key: 'precio_kg_pie_fenavi',
+          label: 'Precio kg en pie FENAVI (referencia)',
+          type: 'money',
+        },
       ],
     },
   ],
@@ -268,6 +285,7 @@ const schemaCultivoCicloCorto: TemplateConfigSchema = {
       title: 'Valores estándar Finagro (referencia)',
       fields: [
         { key: 'pct_costos_kg', label: '% de costos x kg estándar', type: 'number' },
+        { key: 'duracion_ciclo_meses', label: 'Duración del ciclo (meses)', type: 'number' },
         { key: 'kg_x_ha', label: 'KG x hectárea', type: 'number' },
         { key: 'plantas_x_ha', label: 'Plantas x hectárea', type: 'number' },
         { key: 'cuantas_plantas', label: '¿Cuántas plantas?', type: 'number' },
@@ -321,6 +339,8 @@ const schemaCanaPanela: TemplateConfigSchema = {
       title: 'Valores estándar',
       fields: [
         { key: 'pct_costos', label: '% de costo estándar', type: 'number' },
+        { key: 'duracion_ciclo_meses', label: 'Duración del ciclo (meses)', type: 'number' },
+        { key: 'cant_kg_hectarea', label: 'Cant. kg x hectárea', type: 'number' },
       ],
     },
   ],
@@ -333,7 +353,7 @@ const schemaServicios: TemplateConfigSchema = {
       key: 'valores_estandar',
       title: 'Valores estándar',
       fields: [
-        { key: 'pct_contribucion_estandar', label: '% Contribución estándar', type: 'number' },
+        { key: 'pct_contribucion', label: '% Contribución', type: 'number' },
         { key: 'semanas_mes_completa_default', label: 'Semanas al mes (días=7, semana completa)', type: 'number', formulaDisplay: 'default 4.75' },
         { key: 'semanas_mes_parcial_default', label: 'Semanas al mes (días<7, semana parcial)', type: 'number', formulaDisplay: 'default 4' },
       ],
@@ -424,7 +444,7 @@ export function getConfigFieldKeys(templateKey: string): string[] {
     } else if (section.layout === 'cultivoPermanenteFinagroTable') {
       keys.push('finagro_ranges')
     } else if (section.layout === 'cultivoPermanenteReferencia') {
-      keys.push('plantas_x_ha', 'anio_inicio_produccion', 'descripcion')
+      keys.push('plantas_x_ha', 'anio_inicio_produccion', 'duracion_meses', 'descripcion')
     } else if (section.excludeFromRadicacionReadonly) {
       continue
     } else {

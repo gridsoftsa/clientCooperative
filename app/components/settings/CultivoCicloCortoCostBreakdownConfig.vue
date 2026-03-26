@@ -44,6 +44,18 @@ function setRows(newRows: CicloCortoCostRow[]) {
 }
 
 function updateRow(index: number, field: keyof CicloCortoCostRow, value: unknown) {
+  if (field === 'pct') {
+    const v = Number(value)
+    const othersSum = rows.value.reduce((acc, r, i) => {
+      if (i === index) return acc
+      return acc + (Number.isFinite(r.pct) ? r.pct : 0)
+    }, 0)
+    const maxAllowed = Math.max(0, 100 - othersSum)
+    const pct = Number.isFinite(v) ? Math.min(Math.max(0, v), maxAllowed) : 0
+    const next = rows.value.map((r, i) => (i === index ? { ...r, pct } : r))
+    setRows(next)
+    return
+  }
   const next = rows.value.map((r, i) => (i === index ? { ...r, [field]: value } : r))
   setRows(next)
 }
@@ -212,7 +224,12 @@ const groupedRows = computed(() => {
           </template>
         </tbody>
         <tfoot>
-          <tr class="bg-emerald-200 dark:bg-emerald-900/60 font-bold">
+          <tr
+            class="font-bold"
+            :class="totalPct() > 100.01
+              ? 'bg-destructive/15 text-destructive dark:bg-destructive/25'
+              : 'bg-emerald-200 dark:bg-emerald-900/60'"
+          >
             <td class="border border-border px-3 py-2">
               TOTAL
             </td>
@@ -224,6 +241,18 @@ const groupedRows = computed(() => {
         </tfoot>
       </table>
     </div>
+    <p
+      v-if="editing && canEdit && totalPct() > 100.01"
+      class="text-xs text-destructive"
+    >
+      La suma de % no puede superar 100%. Ajuste los valores o elimine filas.
+    </p>
+    <p
+      v-else-if="editing && canEdit"
+      class="text-xs text-muted-foreground"
+    >
+      El total de % participación no puede superar 100%; al editar, cada celda se limita automáticamente.
+    </p>
     <div v-if="editing && canEdit" class="flex flex-wrap gap-2">
       <Button
         variant="outline"

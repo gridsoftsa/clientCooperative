@@ -12,11 +12,15 @@ import {
 } from '~/constants/credits-financial-templates'
 import {
   getConfigFieldKeys,
+  CULTIVO_PERMANENTE_DURACION_MESES_DEFAULT,
+  CANA_PANELA_DURACION_CICLO_MESES_DEFAULT,
+  CANA_PANELA_CANT_KG_HECTAREA_DEFAULT,
   CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT,
   CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT,
   GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT,
   GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT,
   GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT,
+  SERVICIOS_PCT_CONTRIBUCION_DEFAULT,
 } from '~/constants/template-config-schemas'
 
 const { cultivoPermanenteOptions, cultivoCicloCortoOptions, pecesTipoOptions, serviciosTipoOptions, fetchCategories } = useTemplateCategories()
@@ -70,6 +74,20 @@ function setFormData(data: Record<string, unknown>) {
   if (loadingFlatData.value) return
   formData.value = data
   emitActivityTemplate()
+}
+
+/** Alinea % contribución con plantilla (clave nueva `pct_contribucion` o legado `pct_contribucion_estandar`). */
+function applyServiciosPctContribucion(d: Record<string, unknown>) {
+  const cur = d.pct_contribucion
+  if (cur !== undefined && cur !== null && cur !== '') {
+    return
+  }
+  const legacy = d.pct_contribucion_estandar
+  if (legacy !== undefined && legacy !== null && legacy !== '') {
+    d.pct_contribucion = Number(legacy)
+    return
+  }
+  d.pct_contribucion = SERVICIOS_PCT_CONTRIBUCION_DEFAULT
 }
 
 function emitActivityTemplate() {
@@ -128,6 +146,27 @@ async function loadFlatDataForTemplate(template: string, product: string | null)
         d.duracion_ciclo_meses = CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT
       }
     }
+    if (template === 'cultivo-permanente') {
+      const d = formData.value
+      const dur = d.duracion_meses
+      if (dur === undefined || dur === null || dur === '') {
+        d.duracion_meses = CULTIVO_PERMANENTE_DURACION_MESES_DEFAULT
+      }
+    }
+    if (template === 'cana-panela') {
+      const d = formData.value
+      const meses = d.duracion_ciclo_meses
+      if (meses === undefined || meses === null || meses === '') {
+        d.duracion_ciclo_meses = CANA_PANELA_DURACION_CICLO_MESES_DEFAULT
+      }
+      const kgHa = d.cant_kg_hectarea
+      if (kgHa === undefined || kgHa === null || kgHa === '') {
+        d.cant_kg_hectarea = CANA_PANELA_CANT_KG_HECTAREA_DEFAULT
+      }
+    }
+    if (template === 'servicios') {
+      applyServiciosPctContribucion(formData.value)
+    }
     formDataVersion.value++ // Forzar que DynamicFormRenderer reciba los datos en su mount
     // Plantillas con esquema de config: campos marcados en el schema como “solo desde plantilla” quedan solo lectura
     configuredFieldKeys.value = getConfigFieldKeys(template)
@@ -162,6 +201,9 @@ watch(
       // Reemplazar por completo con la config del producto seleccionado (evita arrastrar config de Maíz al elegir Papa).
       // Usar flatData como única fuente para ciclo_corto_cost_breakdown, kg_x_ha, etc.
       formData.value = { ...flatData, tipo_producto: product }
+      if (templateSelected.value === 'servicios') {
+        applyServiciosPctContribucion(formData.value)
+      }
       formDataVersion.value++
       configuredFieldKeys.value = getConfigFieldKeys(templateSelected.value)
       emitActivityTemplate()
@@ -224,6 +266,27 @@ watch(
       if (meses === undefined || meses === null || meses === '') {
         d.duracion_ciclo_meses = CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT
       }
+    }
+    if (newTemplate === 'cultivo-permanente') {
+      const d = formData.value
+      const dur = d.duracion_meses
+      if (dur === undefined || dur === null || dur === '') {
+        d.duracion_meses = CULTIVO_PERMANENTE_DURACION_MESES_DEFAULT
+      }
+    }
+    if (newTemplate === 'cana-panela') {
+      const d = formData.value
+      const meses = d.duracion_ciclo_meses
+      if (meses === undefined || meses === null || meses === '') {
+        d.duracion_ciclo_meses = CANA_PANELA_DURACION_CICLO_MESES_DEFAULT
+      }
+      const kgHa = d.cant_kg_hectarea
+      if (kgHa === undefined || kgHa === null || kgHa === '') {
+        d.cant_kg_hectarea = CANA_PANELA_CANT_KG_HECTAREA_DEFAULT
+      }
+    }
+    if (newTemplate === 'servicios') {
+      applyServiciosPctContribucion(formData.value)
     }
     configuredFieldKeys.value = val?.template ? getConfigFieldKeys(val.template) : []
     nextTick(() => { isSyncingFromProps.value = false })

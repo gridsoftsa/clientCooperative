@@ -53,6 +53,23 @@ function setField(key: string, value: unknown) {
           Ej: Café inicia en año 2
         </p>
       </div>
+      <div class="flex flex-col gap-2">
+        <label class="text-xs font-medium">
+          Duración producción (meses)
+        </label>
+        <input
+          type="number"
+          step="1"
+          min="1"
+          :value="editedData.duracion_meses ?? 12"
+          class="h-9 w-full max-w-[8rem] rounded-md border border-input bg-background px-3 py-1 text-right text-sm tabular-nums"
+          :disabled="!editing || !canEdit"
+          @input="setField('duracion_meses', ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
+        >
+        <p class="text-xs text-muted-foreground">
+          Valor en radicación — sección Producción (meses); default 12.
+        </p>
+      </div>
     </div>
     <div class="flex flex-col gap-2">
       <label class="text-xs font-medium">

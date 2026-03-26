@@ -1,7 +1,8 @@
 /**
  * Tabla editable de Ingresos por Servicio (plantilla servicios).
  * Filas: Día bueno, Día regular, Día malo.
- * Columnas: Valor, Cantidad/semana, Total (calculado).
+ * Cantidades: días a la semana (cada fila ≤ 7; suma de filas ≤ 7).
+ * Columnas: Valor, Cant. / sem., Total (calculado).
  */
 export interface ServiciosIngresosRow {
   suffix: string
