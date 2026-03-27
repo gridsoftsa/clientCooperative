@@ -725,7 +725,7 @@ async function saveDraft() {
     await uploadAllDocuments(application.id, application)
     clearLocalDraft()
     toast.success('Borrador guardado. Puedes retomarlo más tarde.')
-    router.push('/radicacion')
+    await navigateTo(`/radicacion/editar/${application.id}`)
   } catch (e: any) {
     console.error('Error guardando:', e)
     let msg = 'Error al guardar'
@@ -795,7 +795,7 @@ async function submitApplication() {
       console.warn('No se pudo descargar el PDF automáticamente:', e)
       toast.info('Solicitud guardada. Puedes descargar el PDF desde la vista de la solicitud.')
     }
-    router.push('/radicacion')
+    await navigateTo(`/radicacion/editar/${application.id}`)
   } catch (e: any) {
     console.error('Error enviando:', e)
     let msg = 'Error al enviar'

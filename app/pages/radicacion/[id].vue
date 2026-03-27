@@ -14,11 +14,25 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const { $api } = useNuxtApp()
-const { hasPermission } = usePermissions()
+const { hasPermission, hasAnyPermission } = usePermissions()
 const id = computed(() => route.params.id as string)
 const application = ref<any>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+
+/** Borradores editables: redirige a /editar (también si el permiso llega un tick después del fetch). */
+const shouldRedirectDraftToEdit = computed(() =>
+  Boolean(
+    !loading.value
+      && application.value?.status === 'Draft'
+      && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
+  ),
+)
+
+watch(shouldRedirectDraftToEdit, async (go) => {
+  if (!go || !id.value) return
+  await navigateTo(`/radicacion/editar/${id.value}`, { replace: true })
+})
 const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
 const currentStep = ref(1)
 const form = ref<CreditApplicationForm>({
@@ -336,8 +350,8 @@ async function fetchApplication() {
       ...data,
       documents: Array.isArray(data?.documents) ? data.documents : [],
     }
-    if (application.value?.status === 'Draft' && hasPermission('radicacion_editar')) {
-      await router.replace(`/radicacion/${id.value}/editar`)
+    if (application.value?.status === 'Draft' && hasAnyPermission(['radicacion_crear', 'radicacion_editar'])) {
+      await navigateTo(`/radicacion/editar/${id.value}`, { replace: true })
       return
     }
     syncFormFromApplication()
@@ -381,14 +395,16 @@ watch([application, debtor, coDebtors], () => {
         </p>
       </div>
       <div class="flex gap-2 flex-wrap">
-        <PermissionGate permission="radicacion_editar">
+        <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
           <Button
-            v-if="application?.status === 'Draft'"
+            v-if="application?.status === 'Draft' && application?.id"
             variant="default"
-            @click="router.push(`/radicacion/${application?.id}/editar`)"
+            as-child
           >
-            <Icon name="i-lucide-pencil" class="mr-2 h-4 w-4" />
-            Editar
+            <NuxtLink :to="`/radicacion/editar/${application.id}`">
+              <Icon name="i-lucide-pencil" class="mr-2 h-4 w-4" />
+              Editar
+            </NuxtLink>
           </Button>
         </PermissionGate>
         <PermissionGate permission="radicacion_descargar_pdf">

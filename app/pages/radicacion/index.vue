@@ -9,7 +9,9 @@ definePageMeta({
 
 const router = useRouter()
 const { $api } = useNuxtApp()
-const { hasPermission } = usePermissions()
+const { hasPermission, hasAnyPermission } = usePermissions()
+/** Editar / continuar borrador: crear o editar (nueva solo exige crear) */
+const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
 const hasEditPermission = computed(() => hasPermission('radicacion_editar'))
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
@@ -209,9 +211,10 @@ onMounted(() => {
               <TableRow v-for="app in applications" :key="app.id">
                 <TableCell class="font-medium">
                   <NuxtLink
-                    v-if="app.status === 'Draft' && hasEditPermission"
-                    :to="`/radicacion/${app.id}/editar`"
-                    class="text-primary hover:underline"
+                    v-if="app.status === 'Draft' && canOpenDraftForm"
+                    :to="`/radicacion/editar/${app.id}`"
+                    class="font-medium text-primary hover:underline"
+                    title="Abrir formulario editable del borrador"
                   >
                     {{ app.code || '-' }}
                     <span class="text-xs text-muted-foreground ml-1">(continuar editando)</span>
@@ -251,22 +254,24 @@ onMounted(() => {
                         <Icon :name="downloadingPdfId === app.id ? 'i-lucide-loader-2' : 'i-lucide-file-down'" class="h-4 w-4" :class="{ 'animate-spin': downloadingPdfId === app.id }" />
                       </Button>
                     </PermissionGate>
-                    <PermissionGate permission="radicacion_editar">
+                    <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
                       <Button
                         v-if="app.status === 'Draft'"
                         variant="ghost"
                         size="sm"
-                        title="Editar"
-                        @click="router.push(`/radicacion/${app.id}/editar`)"
+                        title="Editar borrador (formulario completo)"
+                        as-child
                       >
-                        <Icon name="i-lucide-pencil" class="h-4 w-4" />
+                        <NuxtLink :to="`/radicacion/editar/${app.id}`">
+                          <Icon name="i-lucide-pencil" class="h-4 w-4" />
+                        </NuxtLink>
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_ver">
                       <Button
                         variant="ghost"
                         size="sm"
-                        title="Ver detalle"
+                        title="Ver solo lectura (no permite cambiar datos)"
                         @click="router.push(`/radicacion/${app.id}`)"
                       >
                         <Icon name="i-lucide-eye" class="h-4 w-4" />
