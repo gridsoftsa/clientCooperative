@@ -10,7 +10,6 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
-const { hasPermission } = usePermissions()
 const { user: authUser } = useAuth()
 
 const users = ref<User[]>([])
@@ -22,10 +21,6 @@ const pagination = ref({
   per_page: 15,
   total: 0
 })
-
-const canCreate = computed(() => hasPermission('users.create'))
-const canEdit = computed(() => hasPermission('users.edit'))
-const canDelete = computed(() => hasPermission('users.delete'))
 
 async function fetchUsers() {
   loading.value = true
@@ -93,7 +88,7 @@ watch(searchQuery, () => {
       <h2 class="text-2xl font-bold tracking-tight">
         Gestión de Usuarios
       </h2>
-      <PermissionGate permission="users.create">
+      <PermissionGate permission="usuarios_crear">
         <Button @click="router.push('/admin/users/create')">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Nuevo Usuario
@@ -136,10 +131,13 @@ watch(searchQuery, () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>ID</TableHead>
-                  <TableHead>Nombre</TableHead>
+                  <TableHead>Nombre de usuario</TableHead>
+                  <TableHead>Nombre completo</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Teléfono</TableHead>
                   <TableHead>Sucursal</TableHead>
                   <TableHead>Roles</TableHead>
+                  <TableHead>Estado</TableHead>
                   <TableHead>Fecha de Creación</TableHead>
                   <TableHead class="text-right">Acciones</TableHead>
                 </TableRow>
@@ -148,7 +146,13 @@ watch(searchQuery, () => {
                 <TableRow v-for="user in users" :key="user.id">
                   <TableCell class="font-medium">{{ user.id }}</TableCell>
                   <TableCell>{{ user.name }}</TableCell>
+                  <TableCell>
+                    <span class="text-muted-foreground text-sm">{{ user.full_name?.trim() || '—' }}</span>
+                  </TableCell>
                   <TableCell>{{ user.email }}</TableCell>
+                  <TableCell>
+                    <span class="text-muted-foreground text-sm font-mono">{{ user.phone?.trim() || '—' }}</span>
+                  </TableCell>
                   <TableCell>
                     <span class="text-muted-foreground text-sm">{{ user.sucursal?.name ?? '—' }}</span>
                   </TableCell>
@@ -161,11 +165,16 @@ watch(searchQuery, () => {
                     </div>
                   </TableCell>
                   <TableCell>
+                    <Badge :variant="user.is_active !== false ? 'default' : 'secondary'">
+                      {{ user.is_active !== false ? 'Activo' : 'Inactivo' }}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
                     {{ new Date(user.created_at).toLocaleDateString() }}
                   </TableCell>
                   <TableCell class="text-right">
                     <div class="flex justify-end gap-2">
-                      <PermissionGate permission="users.edit">
+                      <PermissionGate permission="usuarios_editar">
                         <Button 
                           variant="outline" 
                           size="sm" 
@@ -174,7 +183,7 @@ watch(searchQuery, () => {
                           <Icon name="i-lucide-edit" class="h-4 w-4" />
                         </Button>
                       </PermissionGate>
-                      <PermissionGate permission="users.delete">
+                      <PermissionGate permission="usuarios_eliminar">
                         <Button 
                           variant="destructive" 
                           size="sm" 

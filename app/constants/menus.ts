@@ -176,6 +176,7 @@ export const navMenu: NavMenu[] = [
         title: 'Configuración',
         icon: 'i-lucide-settings',
         new: true,
+        permission: 'settings_ver',
         children: [
           {
             title: 'Profile',

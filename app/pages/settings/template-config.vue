@@ -7,7 +7,7 @@ import CreateCategoryDialog from '~/components/settings/CreateCategoryDialog.vue
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'plantillas_ver',
+  permissionsAll: ['settings_ver', 'plantillas_ver'],
 })
 
 const { $api, $csrf } = useNuxtApp()

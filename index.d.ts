@@ -1,5 +1,12 @@
 import type { AppSettings } from '~/types/appSettings'
 
+declare module '#app' {
+  interface PageMeta {
+    /** Requiere todos estos permisos (AND). */
+    permissionsAll?: string | string[]
+  }
+}
+
 declare module 'nuxt/schema' {
   interface AppConfigInput {
     /** App settings */

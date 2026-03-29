@@ -4,11 +4,14 @@ import { cn } from '@/lib/utils'
 interface Item {
   title: string
   href: string
+  /** Si se define, el enlace solo se muestra con este permiso (además de acceder a /settings con `settings_ver`). */
+  permission?: string
 }
 
 const route = useRoute()
+const { hasPermission } = usePermissions()
 
-const sidebarNavItems: Item[] = [
+const allNavItems: Item[] = [
   {
     title: 'Profile',
     href: '/settings/profile',
@@ -32,8 +35,13 @@ const sidebarNavItems: Item[] = [
   {
     title: 'Configurar plantillas',
     href: '/settings/template-config',
+    permission: 'plantillas_ver',
   },
 ]
+
+const sidebarNavItems = computed(() =>
+  allNavItems.filter(item => !item.permission || hasPermission(item.permission)),
+)
 </script>
 
 <template>

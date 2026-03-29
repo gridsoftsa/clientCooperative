@@ -18,6 +18,12 @@
  *   middleware: 'permission',
  *   permissions: 'users.view|users.edit'
  * })
+ *
+ * Todos los permisos (AND):
+ * definePageMeta({
+ *   middleware: 'permission',
+ *   permissionsAll: ['settings_ver', 'plantillas_ver']
+ * })
  */
 export default defineNuxtRouteMiddleware(async (to, from) => {
   // Skip on server
@@ -26,7 +32,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   }
 
   const { user, fetchUser } = useAuth()
-  const { hasPermission, hasAnyPermission, isAdmin } = usePermissions()
+  const { hasAnyPermission, hasAllPermissions } = usePermissions()
 
   // Asegurarse de que el usuario esté cargado antes de verificar permisos
   // El middleware auth.global debería haberlo cargado, pero por si acaso
@@ -45,6 +51,18 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
       return navigateTo('/login')
     }
     return
+  }
+
+  /** Todos los permisos requeridos (AND). Útil p. ej. settings + plantillas. */
+  const requiredAll = to.meta.permissionsAll as string | string[] | undefined
+  if (requiredAll) {
+    const all: string[] = typeof requiredAll === 'string' ? [requiredAll] : requiredAll
+    if (all.length > 0 && !hasAllPermissions(all)) {
+      if (to.path === '/unauthorized') {
+        return
+      }
+      return navigateTo('/unauthorized')
+    }
   }
 
   // Obtener permisos requeridos del meta (se verifican para todos los usuarios, incluido admin)

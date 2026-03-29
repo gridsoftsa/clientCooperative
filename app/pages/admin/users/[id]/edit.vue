@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import Multiselect from '@vueform/multiselect'
 import type { User } from '~/types/user'
+import { normalizeRoleNames } from '~/utils/userRoles'
 import type { Permission, Role } from '~/types/role'
 import { PERMISSION_CATEGORY_LABELS, formatPermissionDisplayName } from '~/constants/permission-labels'
 
@@ -19,6 +21,9 @@ const userId = route.params.id as string
 
 const form = ref({
   name: '',
+  full_name: '',
+  phone: '',
+  is_active: true,
   email: '',
   password: '',
   password_confirmation: '',
@@ -41,6 +46,22 @@ const groupedPermissions = computed(() => {
   return groups
 })
 const getCategoryLabel = (key: string) => PERMISSION_CATEGORY_LABELS[key] ?? key
+
+const roleSelectOptions = computed(() =>
+  roles.value.map((r) => ({
+    value: r.name,
+    label: r.name === 'admin' ? `${r.name} (Sistema)` : r.name,
+  })),
+)
+
+function rolesMultipleLabel(values: unknown): string {
+  const names = normalizeRoleNames(values)
+  if (!names.length) {
+    return 'Seleccione…'
+  }
+  const opts = roleSelectOptions.value
+  return names.map(name => opts.find(o => o.value === name)?.label ?? name).join(', ')
+}
 
 const openCategories = ref<Record<string, boolean>>({})
 
@@ -78,12 +99,15 @@ const fetchUser = async () => {
     const permissionNames = normalizePermissionNames(response.data.permissions)
     form.value = {
       name: response.data.name,
+      full_name: response.data.full_name ?? '',
+      phone: response.data.phone ?? '',
+      is_active: response.data.is_active !== false,
       email: response.data.email,
       password: '',
       password_confirmation: '',
       sucursal_id: response.data.sucursal_id ?? null,
       allowed_sucursal_ids: response.data.allowed_sucursal_ids ?? [],
-      roles: response.data.roles || [],
+      roles: normalizeRoleNames(response.data.roles),
       permissions: permissionNames,
     }
   } catch (error) {
@@ -123,14 +147,6 @@ const fetchPermissions = async () => {
   }
 }
 
-const toggleRole = (roleName: string, checked: boolean) => {
-  if (checked) {
-    if (!form.value.roles.includes(roleName)) form.value.roles.push(roleName)
-  } else {
-    form.value.roles = form.value.roles.filter(r => r !== roleName)
-  }
-}
-
 const togglePermission = (name: string, checked: boolean) => {
   if (checked) {
     if (!form.value.permissions.includes(name)) form.value.permissions.push(name)
@@ -166,6 +182,9 @@ const handleSubmit = async () => {
   try {
     const body: any = {
       name: form.value.name,
+      full_name: form.value.full_name?.trim() || undefined,
+      phone: form.value.phone?.trim() || undefined,
+      is_active: form.value.is_active,
       email: form.value.email,
       sucursal_id: form.value.sucursal_id || undefined,
       allowed_sucursal_ids: form.value.allowed_sucursal_ids,
@@ -195,7 +214,8 @@ const handleSubmit = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([fetchUser(), fetchRoles(), fetchSucursales(), fetchPermissions()])
+  await Promise.all([fetchRoles(), fetchSucursales(), fetchPermissions()])
+  await fetchUser()
 })
 </script>
 
@@ -233,56 +253,98 @@ onMounted(async () => {
               Información básica del usuario
             </CardDescription>
           </CardHeader>
-          <CardContent class="space-y-4">
-            <div>
-              <Label for="name">Nombre *</Label>
-              <Input
-                id="name"
-                v-model="form.name"
-                required
-                placeholder="Nombre completo"
+          <CardContent class="space-y-6">
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
+              <div class="space-y-3">
+                <Label for="name" class="leading-snug">Nombre de usuario *</Label>
+                <Input
+                  id="name"
+                  v-model="form.name"
+                  required
+                  placeholder="Identificador o alias de acceso"
+                  autocomplete="username"
+                />
+              </div>
+
+              <div class="space-y-3">
+                <Label for="full_name" class="leading-snug">Nombre completo</Label>
+                <Input
+                  id="full_name"
+                  v-model="form.full_name"
+                  placeholder="Opcional — nombre y apellidos"
+                  autocomplete="name"
+                />
+              </div>
+
+              <div class="space-y-3">
+                <Label for="phone" class="leading-snug">Teléfono de contacto</Label>
+                <Input
+                  id="phone"
+                  v-model="form.phone"
+                  type="tel"
+                  placeholder="Opcional"
+                  autocomplete="tel"
+                />
+              </div>
+
+              <div class="space-y-3">
+                <Label for="email" class="leading-snug">Email *</Label>
+                <Input
+                  id="email"
+                  v-model="form.email"
+                  type="email"
+                  required
+                  placeholder="usuario@ejemplo.com"
+                />
+              </div>
+
+              <div class="space-y-3 md:col-span-2">
+                <Label for="sucursal" class="leading-snug">Sucursal (pertenencia)</Label>
+                <Select v-model="form.sucursal_id">
+                  <SelectTrigger id="sucursal">
+                    <SelectValue placeholder="Seleccionar sucursal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="s in sucursales" :key="s.id" :value="s.id">
+                      {{ s.name }}{{ s.is_main ? ' (Principal)' : '' }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-4 rounded-lg border p-4">
+              <div class="space-y-1.5">
+                <Label for="is_active_edit" class="text-base leading-snug">Usuario activo</Label>
+                <p class="text-sm text-muted-foreground leading-relaxed">
+                  Los usuarios inactivos no pueden iniciar sesión.
+                </p>
+              </div>
+              <Switch
+                id="is_active_edit"
+                v-model:checked="form.is_active"
+                :disabled="isOwnUser"
+                class="shrink-0"
               />
             </div>
+            <p v-if="isOwnUser" class="text-xs text-muted-foreground">
+              No puedes desactivar tu propia cuenta desde aquí.
+            </p>
 
-            <div>
-              <Label for="email">Email *</Label>
-              <Input
-                id="email"
-                v-model="form.email"
-                type="email"
-                required
-                placeholder="usuario@ejemplo.com"
-              />
-            </div>
-
-            <div>
-              <Label for="sucursal">Sucursal (pertenencia)</Label>
-              <Select v-model="form.sucursal_id">
-                <SelectTrigger id="sucursal">
-                  <SelectValue placeholder="Seleccionar sucursal" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="s in sucursales" :key="s.id" :value="s.id">
-                    {{ s.name }}{{ s.is_main ? ' (Principal)' : '' }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div class="space-y-4">
-              <div class="flex items-center space-x-2">
+            <div class="space-y-5">
+              <div class="flex items-center gap-3">
                 <Switch
                   id="changePassword"
                   v-model:checked="changePassword"
                 />
-                <Label for="changePassword" class="font-normal">
+                <Label for="changePassword" class="font-normal leading-snug">
                   Cambiar contraseña
                 </Label>
               </div>
 
-              <div v-if="changePassword" class="grid grid-cols-2 gap-4">
-                <div>
-                  <Label for="password">Nueva Contraseña *</Label>
+              <div v-if="changePassword" class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div class="space-y-3">
+                  <Label for="password" class="leading-snug">Nueva Contraseña *</Label>
                   <PasswordInput
                     id="password"
                     v-model="form.password"
@@ -291,8 +353,8 @@ onMounted(async () => {
                   />
                 </div>
 
-                <div>
-                  <Label for="password_confirmation">Confirmar Contraseña *</Label>
+                <div class="space-y-3">
+                  <Label for="password_confirmation" class="leading-snug">Confirmar Contraseña *</Label>
                   <PasswordInput
                     id="password_confirmation"
                     v-model="form.password_confirmation"
@@ -339,29 +401,27 @@ onMounted(async () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div class="space-y-3">
-              <div
-                v-for="role in roles"
-                :key="role.id"
-                class="flex items-center space-x-2"
-              >
-                <Checkbox
-                  :id="`role-${role.id}`"
-                  :checked="form.roles.includes(role.name)"
-                  @update:checked="(checked: boolean) => toggleRole(role.name, checked)"
-                />
-                <Label
-                  :for="`role-${role.id}`"
-                  class="font-normal cursor-pointer"
-                >
-                  {{ role.name }}
-                  <Badge v-if="role.name === 'admin'" variant="default" class="ml-2">Sistema</Badge>
-                </Label>
-              </div>
-
-              <div v-if="roles.length === 0" class="text-center py-8 text-muted-foreground">
+            <div class="space-y-2">
+              <Label class="leading-snug">Roles asignados</Label>
+              <Multiselect
+                v-model="form.roles"
+                mode="multiple"
+                :object="false"
+                :options="roleSelectOptions"
+                value-prop="value"
+                label="label"
+                :searchable="true"
+                :close-on-select="false"
+                :hide-selected="false"
+                placeholder="Seleccione…"
+                no-options-text="No hay roles configurados"
+                no-results-text="Sin coincidencias"
+                :multiple-label="rolesMultipleLabel"
+                class="multiselect-roles"
+              />
+              <p v-if="roles.length === 0" class="text-center py-4 text-sm text-muted-foreground">
                 No hay roles disponibles
-              </div>
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -427,3 +487,19 @@ onMounted(async () => {
     </form>
   </div>
 </template>
+
+<style src="@vueform/multiselect/themes/default.css"></style>
+<style scoped>
+.multiselect-roles {
+  --ms-font-size: 0.875rem;
+  --ms-line-height: 1.25rem;
+  --ms-radius: 0.375rem;
+  --ms-border-color: var(--border);
+  --ms-bg: var(--background);
+  --ms-py: 0.5rem;
+  --ms-dropdown-radius: 0.375rem;
+  min-height: 2.75rem;
+  width: 100%;
+  min-width: 0;
+}
+</style>

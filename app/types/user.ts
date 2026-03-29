@@ -1,6 +1,9 @@
 export interface User {
   id: number
   name: string
+  full_name?: string | null
+  phone?: string | null
+  is_active?: boolean
   email: string
   email_verified_at?: string | null
   sucursal_id?: number | null

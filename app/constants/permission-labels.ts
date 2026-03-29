@@ -19,6 +19,7 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
   plantillas: 'Plantillas',
   solicitantes: 'Solicitantes (Deudores/Codeudores)',
   radicacion: 'Radicación (Solicitudes de crédito)',
+  settings: 'Configuración (menú app / ajustes)',
 }
 
 /** Acciones traducidas (primera letra mayúscula) */
