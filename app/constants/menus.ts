@@ -40,43 +40,49 @@ export const navMenu: NavMenu[] = [
     ],
   },
   {
-    heading: 'Administración',
+    heading: 'Sistema',
     items: [
       {
-        title: 'Empresa principal',
-        icon: 'i-lucide-building',
-        link: '/admin/company',
-        permission: 'empresa_ver',
-      },
-      {
-        title: 'Usuarios',
-        icon: 'i-lucide-users',
-        link: '/admin/users',
-        permission: 'usuarios_ver',
-      },
-      {
-        title: 'Sucursales',
-        icon: 'i-lucide-building-2',
-        link: '/admin/sucursales',
-        permission: 'sucursales_ver',
-      },
-      {
-        title: 'Roles',
-        icon: 'i-lucide-shield-check',
-        link: '/admin/roles',
-        permission: 'roles_ver',
-      },
-      {
-        title: 'Permisos',
-        icon: 'i-lucide-key',
-        link: '/admin/permissions',
-        permission: 'permisos_ver',
-      },
-      {
-        title: 'Auditoría',
-        icon: 'i-lucide-file-text',
-        link: '/admin/audit',
-        permission: 'admin_acceso',
+        title: 'Administración',
+        icon: 'i-lucide-sliders-horizontal',
+        children: [
+          {
+            title: 'Empresa principal',
+            icon: 'i-lucide-building',
+            link: '/admin/company',
+            permission: 'empresa_ver',
+          },
+          {
+            title: 'Usuarios',
+            icon: 'i-lucide-users',
+            link: '/admin/users',
+            permission: 'usuarios_ver',
+          },
+          {
+            title: 'Sucursales',
+            icon: 'i-lucide-building-2',
+            link: '/admin/sucursales',
+            permission: 'sucursales_ver',
+          },
+          {
+            title: 'Roles',
+            icon: 'i-lucide-shield-check',
+            link: '/admin/roles',
+            permission: 'roles_ver',
+          },
+          {
+            title: 'Permisos',
+            icon: 'i-lucide-key',
+            link: '/admin/permissions',
+            permission: 'permisos_ver',
+          },
+          {
+            title: 'Auditoría',
+            icon: 'i-lucide-clipboard-list',
+            link: '/admin/audit',
+            permission: 'admin_acceso',
+          },
+        ],
       },
     ],
   },
@@ -167,7 +173,7 @@ export const navMenu: NavMenu[] = [
         ],
       }, */
       {
-        title: 'Settings',
+        title: 'Configuración',
         icon: 'i-lucide-settings',
         new: true,
         children: [
