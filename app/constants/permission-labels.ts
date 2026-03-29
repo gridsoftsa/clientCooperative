@@ -44,7 +44,16 @@ function capitalizeWords(str: string): string {
  * Ej: plantillas_ver → "Ver Configuración de plantillas"
  * Ej: usuarios_crear → "Crear Usuarios"
  */
+/** Etiquetas fijas cuando el nombre en varias partes no basta (ej. enviar a análisis) */
+const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
+  radicacion_enviar_analisis: 'Enviar solicitud a análisis (Radicación)',
+}
+
 export function getPermissionLabel(name: string): string {
+  const override = PERMISSION_LABEL_OVERRIDES[name]
+  if (override) {
+    return override
+  }
   const parts = name.split('_')
   const category = parts[0] ?? ''
   const action = parts[1] ?? ''

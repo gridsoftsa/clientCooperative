@@ -786,15 +786,9 @@ async function submitApplication() {
     }
     await uploadAllDocuments(application.id, application)
     clearLocalDraft()
-    toast.success('Solicitud enviada correctamente (estado: Borrador)')
-    try {
-      const { downloadApplicationPdf } = useDocumentDownload()
-      await downloadApplicationPdf(application.id, `solicitud-${application.code ?? application.id}.pdf`)
-      toast.success('PDF descargado. Puedes imprimirlo para que firmen el asesor, deudor y codeudores.')
-    } catch (e) {
-      console.warn('No se pudo descargar el PDF automáticamente:', e)
-      toast.info('Solicitud guardada. Puedes descargar el PDF desde la vista de la solicitud.')
-    }
+    toast.success(
+      'Solicitud guardada (estado: Borrador). Cuando quieras, descarga el PDF desde la vista o el listado de radicación.',
+    )
     await navigateTo(`/radicacion/editar/${application.id}`)
   } catch (e: any) {
     console.error('Error enviando:', e)

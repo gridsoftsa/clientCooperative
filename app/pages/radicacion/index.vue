@@ -9,10 +9,9 @@ definePageMeta({
 
 const router = useRouter()
 const { $api } = useNuxtApp()
-const { hasPermission, hasAnyPermission } = usePermissions()
+const { hasAnyPermission } = usePermissions()
 /** Editar / continuar borrador: crear o editar (nueva solo exige crear) */
 const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
-const hasEditPermission = computed(() => hasPermission('radicacion_editar'))
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
@@ -232,7 +231,7 @@ onMounted(() => {
                 <TableCell>{{ new Date(app.created_at).toLocaleDateString('es-CO') }}</TableCell>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-1">
-                    <PermissionGate permission="radicacion_editar">
+                    <PermissionGate permission="radicacion_enviar_analisis">
                       <Button
                         v-if="app.status === 'Draft'"
                         variant="ghost"
