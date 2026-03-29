@@ -29,12 +29,58 @@ const pagination = ref({
   total: 0,
 })
 
+/** Filtros de listado (estado + rango por fecha de creación) */
+const filterStatus = ref<string>('all')
+const filterDateFrom = ref('')
+const filterDateTo = ref('')
+
+const statusFilterOptions = [
+  { value: 'all', label: 'Todos los estados' },
+  { value: 'Draft', label: 'Borrador' },
+  { value: 'Submitted', label: 'Enviada' },
+  { value: 'In_Analysis', label: 'En análisis' },
+  { value: 'Approved', label: 'Aprobada' },
+  { value: 'Rejected', label: 'Rechazada' },
+] as const
+
+const hasActiveFilters = computed(() => {
+  return filterStatus.value !== 'all'
+    || Boolean(filterDateFrom.value?.trim())
+    || Boolean(filterDateTo.value?.trim())
+})
+
+function buildListQuery(): Record<string, string | number> {
+  const q: Record<string, string | number> = {
+    per_page: pagination.value.per_page,
+    page: pagination.value.current_page,
+  }
+  if (filterStatus.value !== 'all') {
+    q.status = filterStatus.value
+  }
+  const from = filterDateFrom.value?.trim()
+  const to = filterDateTo.value?.trim()
+  if (from) {
+    q.created_from = from
+  }
+  if (to) {
+    q.created_to = to
+  }
+  return q
+}
+
 async function fetchApplications() {
+  const from = filterDateFrom.value?.trim()
+  const to = filterDateTo.value?.trim()
+  if (from && to && from > to) {
+    toast.error('La fecha inicial no puede ser posterior a la fecha final')
+    return
+  }
+
   loading.value = true
   try {
     const res = await $api<{ data: any[]; meta: typeof pagination.value }>(
       '/credit-applications',
-      { query: { per_page: pagination.value.per_page, page: pagination.value.current_page } },
+      { query: buildListQuery() },
     )
     applications.value = res.data
     pagination.value = res.meta
@@ -43,6 +89,19 @@ async function fetchApplications() {
   } finally {
     loading.value = false
   }
+}
+
+function applyFilters() {
+  pagination.value.current_page = 1
+  fetchApplications()
+}
+
+function clearFilters() {
+  filterStatus.value = 'all'
+  filterDateFrom.value = ''
+  filterDateTo.value = ''
+  pagination.value.current_page = 1
+  fetchApplications()
 }
 
 function formatCurrency(value: number) {
@@ -186,12 +245,76 @@ onMounted(() => {
           Gestiona las solicitudes de crédito en proceso
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent class="space-y-4">
+        <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+          <div class="grid w-full gap-3 sm:max-w-[220px] sm:shrink-0">
+            <Label for="filter-status" class="text-xs text-muted-foreground">Estado</Label>
+            <Select v-model="filterStatus">
+              <SelectTrigger id="filter-status" class="w-full">
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="opt in statusFilterOptions"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="grid w-full gap-2 sm:max-w-[160px]">
+            <Label for="filter-from" class="text-xs text-muted-foreground">Creada desde</Label>
+            <Input
+              id="filter-from"
+              v-model="filterDateFrom"
+              type="date"
+              class="font-mono"
+            />
+          </div>
+          <div class="grid w-full gap-2 sm:max-w-[160px]">
+            <Label for="filter-to" class="text-xs text-muted-foreground">Creada hasta</Label>
+            <Input
+              id="filter-to"
+              v-model="filterDateTo"
+              type="date"
+              class="font-mono"
+            />
+          </div>
+          <div class="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
+            <Button type="button" variant="default" @click="applyFilters">
+              <Icon name="i-lucide-filter" class="mr-2 h-4 w-4" />
+              Aplicar filtros
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              :disabled="!hasActiveFilters"
+              @click="clearFilters"
+            >
+              Limpiar
+            </Button>
+          </div>
+        </div>
+
+        <p v-if="!loading" class="text-sm text-muted-foreground">
+          {{ pagination.total }} solicitud{{ pagination.total === 1 ? '' : 'es' }} encontrada{{ pagination.total === 1 ? '' : 's' }}.
+        </p>
+
         <div v-if="loading" class="flex justify-center py-8">
           <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
         <div v-else-if="applications.length === 0" class="text-center py-12 text-muted-foreground">
-          No hay solicitudes. Crea una nueva para comenzar.
+          <template v-if="hasActiveFilters">
+            No hay solicitudes que coincidan con los filtros. Prueba otros criterios o
+            <button type="button" class="text-primary underline underline-offset-2" @click="clearFilters">
+              limpiar filtros
+            </button>.
+          </template>
+          <template v-else>
+            No hay solicitudes. Crea una nueva para comenzar.
+          </template>
         </div>
         <div v-else class="border rounded-lg overflow-hidden">
           <Table>
