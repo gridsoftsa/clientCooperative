@@ -37,6 +37,11 @@ const allNavItems: Item[] = [
     href: '/settings/template-config',
     permission: 'plantillas_ver',
   },
+  {
+    title: 'Configurar plantilla Score',
+    href: '/settings/score-template',
+    permission: 'plantillas_ver',
+  },
 ]
 
 const sidebarNavItems = computed(() =>

@@ -209,6 +209,12 @@ export const navMenu: NavMenu[] = [
             link: '/settings/template-config',
             permission: 'plantillas_ver',
           },
+          {
+            title: 'Configurar plantilla Score',
+            icon: 'i-lucide-circle',
+            link: '/settings/score-template',
+            permission: 'plantillas_ver',
+          },
         ],
       },
     ],

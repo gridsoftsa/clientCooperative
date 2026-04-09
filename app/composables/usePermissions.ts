@@ -1,10 +1,20 @@
-import type { AuthUser } from '~/types/auth'
-
 /**
  * Composable para verificar roles y permisos del usuario autenticado
  */
 export function usePermissions() {
   const { user } = useAuth()
+
+  /**
+   * super_admin debe pasar cualquier comprobación de permiso en UI (coincide con reglas de negocio en API).
+   * Evita menús ocultos si `settings_ver` u otro permiso está inactivo en BD o la lista efectiva viene vacía.
+   */
+  function bypassesPermissionChecks(): boolean {
+    if (import.meta.server || !user.value?.roles?.length) {
+      return false
+    }
+
+    return user.value.roles.includes('super_admin')
+  }
 
   /**
    * Verifica si el usuario tiene un rol específico
@@ -44,11 +54,15 @@ export function usePermissions() {
     if (import.meta.server) {
       return false
     }
-    
+
+    if (bypassesPermissionChecks()) {
+      return true
+    }
+
     if (!user.value?.permissions) {
       return false
     }
-    
+
     return user.value.permissions.includes(permission)
   }
 
@@ -60,11 +74,15 @@ export function usePermissions() {
     if (import.meta.server) {
       return false
     }
-    
+
+    if (bypassesPermissionChecks()) {
+      return true
+    }
+
     if (!user.value?.permissions || permissions.length === 0) {
       return false
     }
-    
+
     return permissions.some(permission => user.value?.permissions?.includes(permission))
   }
 
@@ -72,9 +90,18 @@ export function usePermissions() {
    * Verifica si el usuario tiene todos los permisos especificados
    */
   function hasAllPermissions(permissions: string[]): boolean {
+    if (import.meta.server) {
+      return false
+    }
+
+    if (bypassesPermissionChecks()) {
+      return true
+    }
+
     if (!user.value?.permissions || permissions.length === 0) {
       return false
     }
+
     return permissions.every(permission => user.value?.permissions?.includes(permission))
   }
 

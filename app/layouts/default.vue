@@ -8,8 +8,8 @@
         <LayoutAppSidebar />
         <SidebarInset>
           <LayoutHeader />
-          <div class="flex flex-col flex-1">
-            <div class="@container/main p-1 lg:p-2 grow">
+          <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div class="@container/main min-h-0 flex-1 overflow-y-auto p-1 lg:p-2">
               <slot />
             </div>
           </div>

@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { Role, Permission } from '~/types/role'
-import { PERMISSION_CATEGORY_LABELS, formatPermissionDisplayName } from '~/constants/permission-labels'
+import {
+  PERMISSION_CATEGORY_LABELS,
+  formatPermissionDisplayName,
+  sortPermissionCategoryKeys,
+} from '~/constants/permission-labels'
 
 definePageMeta({
   layout: 'default',
@@ -33,6 +37,10 @@ const groupedPermissions = computed(() => {
   }
   return groups
 })
+
+const orderedCategoryKeys = computed(() =>
+  sortPermissionCategoryKeys(Object.keys(groupedPermissions.value)),
+)
 
 const getCategoryLabel = (key: string) => PERMISSION_CATEGORY_LABELS[key] ?? key
 
@@ -192,7 +200,7 @@ onMounted(async () => {
           <CardContent>
             <div class="space-y-2">
               <Collapsible
-                v-for="(categoryPermissions, category) in groupedPermissions"
+                v-for="category in orderedCategoryKeys"
                 :key="category"
                 :open="openCategories[category] ?? true"
                 class="group/perm border rounded-lg"
@@ -210,7 +218,7 @@ onMounted(async () => {
                       />
                       {{ getCategoryLabel(category) }}
                       <Badge variant="secondary" class="ml-2">
-                        {{ categoryPermissions.filter(p => formData.permissions.includes(p.name)).length }}/{{ categoryPermissions.length }}
+                        {{ (groupedPermissions[category] ?? []).filter(p => formData.permissions.includes(p.name)).length }}/{{ (groupedPermissions[category] ?? []).length }}
                       </Badge>
                     </button>
                   </CollapsibleTrigger>
@@ -220,13 +228,13 @@ onMounted(async () => {
                     size="sm"
                     @click.stop="toggleCategory(category)"
                   >
-                    {{ categoryPermissions.every(p => formData.permissions.includes(p.name)) ? 'Deseleccionar' : 'Seleccionar' }} todos
+                    {{ (groupedPermissions[category] ?? []).every(p => formData.permissions.includes(p.name)) ? 'Deseleccionar' : 'Seleccionar' }} todos
                   </Button>
                 </div>
                 <CollapsibleContent>
                   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-4 border-t">
                     <div
-                      v-for="p in categoryPermissions"
+                      v-for="p in groupedPermissions[category] ?? []"
                       :key="p.id"
                       class="flex items-center space-x-2"
                     >

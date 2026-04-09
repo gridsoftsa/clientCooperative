@@ -19,7 +19,47 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
   plantillas: 'Plantillas',
   solicitantes: 'Solicitantes (Deudores/Codeudores)',
   radicacion: 'Radicación (Solicitudes de crédito)',
-  settings: 'Configuración (menú app / ajustes)',
+  /** Prefijo `settings_*` — menú Configuración del sidebar y rutas /settings (ver seeder API). */
+  settings: 'Menú Configuración (/settings)',
+}
+
+/**
+ * Orden de bloques en la UI de roles (crear/editar). Categorías no listadas van al final, ordenadas A–Z.
+ * Mantiene el bloque de configuración aparte y visible, no pegado al orden alfabético del API.
+ */
+export const PERMISSION_CATEGORY_ORDER: string[] = [
+  'dashboard',
+  'admin',
+  'settings',
+  'usuarios',
+  'roles',
+  'permisos',
+  'sucursales',
+  'empresa',
+  'plantillas',
+  'solicitantes',
+  'radicacion',
+]
+
+export function sortPermissionCategoryKeys(categories: string[]): string[] {
+  const order = PERMISSION_CATEGORY_ORDER
+  return [...categories].sort((a, b) => {
+    const ia = order.indexOf(a)
+    const ib = order.indexOf(b)
+    const aKnown = ia !== -1
+    const bKnown = ib !== -1
+    if (aKnown && bKnown) {
+      return ia - ib
+    }
+    if (aKnown) {
+      return -1
+    }
+    if (bKnown) {
+      return 1
+    }
+
+    return a.localeCompare(b)
+  })
 }
 
 /** Acciones traducidas (primera letra mayúscula) */
@@ -48,6 +88,7 @@ function capitalizeWords(str: string): string {
 /** Etiquetas fijas cuando el nombre en varias partes no basta (ej. enviar a análisis) */
 const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   radicacion_enviar_analisis: 'Enviar solicitud a análisis (Radicación)',
+  settings_ver: 'Ver menú Configuración (perfil, cuenta, apariencia, notificaciones, etc.)',
 }
 
 export function getPermissionLabel(name: string): string {

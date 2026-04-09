@@ -92,21 +92,24 @@ const filteredNavMenu = computed(() => {
     })).filter(section => section.items.length > 0)
   }
 
-  return navMenu.map(section => {
-    const filteredItems = section.items.filter((item): boolean => {
+  return navMenu.map((section) => {
+    const filteredItems = section.items.flatMap((item) => {
       if ('heading' in item && !('link' in item) && !('children' in item)) {
-        return true
+        return [item]
       }
       const navItem = item as NavLink | NavGroup
-      const canAccess = canAccessItem(navItem)
 
       if ('children' in navItem) {
         const filteredChildren = navItem.children.filter((child: NavLink) => canAccessItem(child))
-        return filteredChildren.length > 0 && canAccess
+        if (filteredChildren.length === 0 || !canAccessItem(navItem)) {
+          return []
+        }
+        return [{ ...navItem, children: filteredChildren }]
       }
-      return canAccess
+
+      return canAccessItem(navItem as NavLink) ? [navItem as NavLink] : []
     })
-    
+
     return { ...section, items: filteredItems }
   }).filter(section => section.items.length > 0)
 })
