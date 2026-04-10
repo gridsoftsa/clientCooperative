@@ -1,55 +1,155 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
 import { cn } from '@/lib/utils'
 import type { ScoreMatrixLine } from '~/constants/analisis-score-matrix'
+import {
+  normalizeScoreMatrixLines,
+  percentInputToWeightDecimal,
+  validateSectionVariableWeightsNotOver100,
+  weightDecimalToPercentInput,
+} from '~/utils/score-matrix-weights'
 
-const props = defineProps<{
-  sheetTitle: string
-  totalPuntos: string
-  lines: ScoreMatrixLine[]
+const props = withDefaults(
+  defineProps<{
+    sheetTitle: string
+    totalPuntos: string
+    lines: ScoreMatrixLine[]
+    /** Permite editar pesos (columna y cabeceras de sección) y puntajes */
+    editable?: boolean
+  }>(),
+  {
+    editable: false,
+  },
+)
+
+const emit = defineEmits<{
+  'update:lines': [lines: ScoreMatrixLine[]]
 }>()
 
-type MatrixSectionBlock = { type: 'section'; line: Extract<ScoreMatrixLine, { k: 's' }> }
+const localLines = ref<ScoreMatrixLine[]>([])
+
+watch(
+  () => props.lines,
+  (v) => {
+    localLines.value = normalizeScoreMatrixLines(v)
+  },
+  { immediate: true },
+)
+
+function emitLines(): void {
+  const err = validateSectionVariableWeightsNotOver100(localLines.value)
+  if (err) {
+    toast.error(err)
+    return
+  }
+  emit('update:lines', normalizeScoreMatrixLines(localLines.value))
+}
+
+function setSectionField(lineIndex: number, field: 'peso' | 'max', value: string): void {
+  const line = localLines.value[lineIndex]
+  if (!line || matrixLineKind(line) !== 's') {
+    return
+  }
+  if (field === 'peso') {
+    line.peso = percentInputToWeightDecimal(value)
+  } else {
+    line.max = value
+  }
+  emitLines()
+}
+
+function setVariablePeso(firstLineIndex: number, value: string): void {
+  const line = localLines.value[firstLineIndex]
+  if (!line || matrixLineKind(line) !== 'r') {
+    return
+  }
+  const previousP = line.p
+  line.p = percentInputToWeightDecimal(value)
+  const err = validateSectionVariableWeightsNotOver100(localLines.value)
+  if (err) {
+    line.p = previousP
+    toast.error(err)
+    return
+  }
+  emit('update:lines', normalizeScoreMatrixLines(localLines.value))
+}
+
+function setRowPt(lineIndex: number, value: string): void {
+  const line = localLines.value[lineIndex]
+  if (!line || matrixLineKind(line) !== 'r') {
+    return
+  }
+  line.pt = value
+  emitLines()
+}
+
+type MatrixSectionBlock = { type: 'section'; line: Extract<ScoreMatrixLine, { k: 's' }>; lineIndex: number }
 type MatrixVariableBlock = {
   type: 'variable'
   variable: string
   peso: string
   rows: Array<{ d: string; h: string; pt: string }>
-  /** Si todas las filas tienen «Hasta» vacío (solo opciones discretas), se unen Desde+Hasta en una columna centrada. */
   mergeDesdeHasta: boolean
+  firstLineIndex: number
+  rowLineIndices: number[]
 }
 
 type MatrixBlock = MatrixSectionBlock | MatrixVariableBlock
 
 type ScoreMatrixSection = {
   header: Extract<ScoreMatrixLine, { k: 's' }>
+  lineIndex: number
   variableBlocks: MatrixVariableBlock[]
 }
 
-/**
- * Agrupa filas `r` como en el Excel: la primera fila trae variable + peso; las siguientes con v/p vacíos
- * son rangos de la misma variable (rowspan en Variable y Peso).
- */
+function matrixLineKind(line: ScoreMatrixLine | undefined): 's' | 'r' | null {
+  if (!line) {
+    return null
+  }
+  const k = String(line.k ?? '')
+    .trim()
+    .toLowerCase()
+  if (k === 's') {
+    return 's'
+  }
+  if (k === 'r') {
+    return 'r'
+  }
+  return null
+}
+
 const groupedMatrix = computed((): MatrixBlock[] => {
-  const lines = props.lines
+  const lines = localLines.value
   const out: MatrixBlock[] = []
   let i = 0
   while (i < lines.length) {
     const line = lines[i]
-    if (line.k === 's') {
-      out.push({ type: 'section', line })
+    if (!line) {
+      break
+    }
+    const kind = matrixLineKind(line)
+    if (kind === 's') {
+      out.push({ type: 'section', line: line as Extract<ScoreMatrixLine, { k: 's' }>, lineIndex: i })
+      i++
+      continue
+    }
+    if (kind !== 'r') {
       i++
       continue
     }
     const variable = line.v
     const peso = line.p
+    const firstLineIndex = i
+    const rowLineIndices: number[] = [i]
     const rows = [{ d: line.d, h: line.h, pt: line.pt }]
     i++
     while (i < lines.length) {
       const next = lines[i]
-      if (next.k === 's') {
+      if (!next || matrixLineKind(next) === 's') {
         break
       }
-      if (next.k === 'r' && next.v === '' && next.p === '') {
+      if (matrixLineKind(next) === 'r' && next.v === '' && next.p === '') {
+        rowLineIndices.push(i)
         rows.push({ d: next.d, h: next.h, pt: next.pt })
         i++
       } else {
@@ -57,37 +157,36 @@ const groupedMatrix = computed((): MatrixBlock[] => {
       }
     }
     const mergeDesdeHasta = rows.every((r) => !String(r.h ?? '').trim())
-    out.push({ type: 'variable', variable, peso, rows, mergeDesdeHasta })
+    out.push({ type: 'variable', variable, peso, rows, mergeDesdeHasta, firstLineIndex, rowLineIndices })
   }
   return out
 })
 
-/** CUALITATIVAS / CUANTITATIVAS con sus bloques de variables (para desplegables). */
 const scoreMatrixSections = computed((): ScoreMatrixSection[] => {
   const blocks = groupedMatrix.value
   const sections: ScoreMatrixSection[] = []
-  let i = 0
-  while (i < blocks.length) {
-    const b = blocks[i]
+  let idx = 0
+  while (idx < blocks.length) {
+    const b = blocks[idx]
     if (b.type !== 'section') {
-      i++
+      idx++
       continue
     }
     const header = b.line
-    i++
+    const lineIndex = b.lineIndex
+    idx++
     const variableBlocks: MatrixVariableBlock[] = []
-    while (i < blocks.length && blocks[i].type === 'variable') {
-      variableBlocks.push(blocks[i] as MatrixVariableBlock)
-      i++
+    while (idx < blocks.length && blocks[idx].type === 'variable') {
+      variableBlocks.push(blocks[idx] as MatrixVariableBlock)
+      idx++
     }
-    sections.push({ header, variableBlocks })
+    sections.push({ header, lineIndex, variableBlocks })
   }
   return sections
 })
 
-/** Colores por tipo de sección para que el asesor distinga CUALITATIVAS vs CUANTITATIVAS. */
-function scoreSectionUi(label: string) {
-  const n = label.trim().toUpperCase()
+function scoreSectionUi(label: string | undefined | null) {
+  const n = String(label ?? '').trim().toUpperCase()
   if (n.includes('CUANTITAT')) {
     return {
       root: 'border-amber-500/45 bg-amber-500/[0.07] dark:border-amber-400/40 dark:bg-amber-950/35',
@@ -121,7 +220,6 @@ const scoreMatrixSectionsWithUi = computed(() =>
   })),
 )
 
-/** Tono por bloque de variable (cada criterio rota color dentro de la sección). */
 const VARIABLE_BLOCK_TONES = [
   {
     row: 'bg-violet-500/[0.08] dark:bg-violet-950/30 hover:bg-violet-500/[0.14] dark:hover:bg-violet-950/45',
@@ -169,20 +267,21 @@ function variableBlockRowClass(bIdx: number, rIdx: number): string {
   )
 }
 
-/** Muestra peso como porcentaje cuando es decimal 0–1 (p. ej. 0.2 → 20%). */
-function formatPeso(p: string): string {
-  const t = p.trim()
+function formatPeso(p: string | undefined | null): string {
+  const t = String(p ?? '').trim()
   if (!t) {
     return '—'
   }
-  const n = Number(t.replace(',', '.'))
-  if (!Number.isNaN(n) && n >= 0 && n <= 1) {
-    return `${Math.round(n * 100)}%`
+  const n2 = Number(t.replace(',', '.'))
+  if (!Number.isNaN(n2) && n2 >= 0 && n2 <= 1) {
+    return `${Math.round(n2 * 100)}%`
   }
   return t
 }
 
-/** Casilla estándar (filas de rango / puntaje). */
+const inputCellClass =
+  'h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-center text-xs font-mono shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60'
+
 function casilla(extra?: string): string {
   return cn(
     'flex min-h-10 w-full items-center rounded-md border border-border bg-muted/30 px-2.5 py-2 text-sm shadow-sm',
@@ -190,7 +289,6 @@ function casilla(extra?: string): string {
   )
 }
 
-/** Casilla en celdas con rowspan (variable / peso); el td usa align-middle para centrar en el alto del bloque. */
 function casillaRowspan(extra?: string): string {
   return cn(
     'w-full rounded-md border border-border bg-muted/30 px-1.5 py-1.5 text-xs leading-snug shadow-sm',
@@ -205,15 +303,20 @@ function casillaRowspan(extra?: string): string {
       <h3 class="text-lg font-semibold tracking-tight">
         {{ sheetTitle }}
       </h3>
-      <p class="text-sm text-muted-foreground">
-        Puntaje total referencia: <span class="font-mono font-medium text-foreground">{{ totalPuntos }}</span>
-      </p>
+      <div class="text-right">
+        <p class="text-sm text-muted-foreground">
+          Puntaje total referencia: <span class="font-mono font-medium text-foreground">{{ totalPuntos }}</span>
+        </p>
+        <p v-if="editable" class="mt-1 max-w-xl text-xs text-muted-foreground">
+          Columna <span class="font-medium text-foreground">Peso</span>: ingrese porcentaje entre 0 y 100 (ej. 20 equivale a 20 %). Por sección (Cualitativas / Cuantitativas), la suma de esos pesos no puede superar el 100 %.
+        </p>
+      </div>
     </div>
     <div class="space-y-3">
       <Collapsible
         v-for="(sec, sIdx) in scoreMatrixSectionsWithUi"
         :key="sIdx"
-        :default-open="false"
+        :default-open="true"
         :class="cn('group/scoreMat overflow-hidden rounded-md border-2', sec.ui.root)"
       >
         <CollapsibleTrigger as-child>
@@ -237,14 +340,37 @@ function casillaRowspan(extra?: string): string {
               <span class="font-semibold text-foreground">
                 {{ sec.header.label }}
               </span>
-              <span class="text-muted-foreground text-xs font-mono sm:text-sm">
-                <span class="opacity-80">Peso</span>
-                {{ formatPeso(sec.header.peso) }}
-              </span>
-              <span class="text-muted-foreground text-xs font-mono sm:text-sm">
-                <span class="opacity-80">Máx.</span>
-                {{ sec.header.max }}
-              </span>
+              <template v-if="editable">
+                <span class="flex items-center gap-1 text-muted-foreground text-xs">
+                  <span class="opacity-80">Peso (%)</span>
+                  <input
+                    :value="weightDecimalToPercentInput(sec.header.peso)"
+                    type="text"
+                    inputmode="decimal"
+                    :class="cn(inputCellClass, 'w-14')"
+                    @input="setSectionField(sec.lineIndex, 'peso', ($event.target as HTMLInputElement).value)"
+                  >
+                </span>
+                <span class="flex items-center gap-1 text-muted-foreground text-xs">
+                  <span class="opacity-80">Máx.</span>
+                  <input
+                    :value="sec.header.max"
+                    type="text"
+                    :class="cn(inputCellClass, 'w-14')"
+                    @input="setSectionField(sec.lineIndex, 'max', ($event.target as HTMLInputElement).value)"
+                  >
+                </span>
+              </template>
+              <template v-else>
+                <span class="text-muted-foreground text-xs font-mono sm:text-sm">
+                  <span class="opacity-80">Peso</span>
+                  {{ formatPeso(sec.header.peso) }}
+                </span>
+                <span class="text-muted-foreground text-xs font-mono sm:text-sm">
+                  <span class="opacity-80">Máx.</span>
+                  {{ sec.header.max }}
+                </span>
+              </template>
             </div>
           </button>
         </CollapsibleTrigger>
@@ -263,8 +389,8 @@ function casillaRowspan(extra?: string): string {
                   <TableHead class="px-1.5 py-2 text-center text-xs font-medium whitespace-normal">
                     Variable
                   </TableHead>
-                  <TableHead class="px-1 py-2 text-center text-xs">
-                    Peso
+                  <TableHead class="px-1 py-2 text-center text-xs whitespace-normal">
+                    Peso<span v-if="editable" class="block font-normal opacity-80">(%)</span>
                   </TableHead>
                   <TableHead class="px-1 py-2 text-center text-xs font-medium whitespace-normal">
                     Desde
@@ -292,7 +418,7 @@ function casillaRowspan(extra?: string): string {
                       <div
                         :class="casillaRowspan('break-words text-center font-medium text-foreground hyphens-auto [overflow-wrap:anywhere]')"
                       >
-                        {{ block.variable.trim() || '—' }}
+                        {{ (block.variable ?? '').trim() || '—' }}
                       </div>
                     </TableCell>
                     <TableCell
@@ -300,7 +426,15 @@ function casillaRowspan(extra?: string): string {
                       :rowspan="block.rows.length"
                       class="p-1.5 align-middle"
                     >
-                      <div :class="casillaRowspan('text-center font-mono text-sm font-medium')">
+                      <input
+                        v-if="editable"
+                        :value="weightDecimalToPercentInput(block.peso)"
+                        type="text"
+                        inputmode="decimal"
+                        :class="cn(inputCellClass, 'min-h-[2.25rem]')"
+                        @input="setVariablePeso(block.firstLineIndex, ($event.target as HTMLInputElement).value)"
+                      >
+                      <div v-else :class="casillaRowspan('text-center font-mono text-sm font-medium')">
                         {{ formatPeso(block.peso) }}
                       </div>
                     </TableCell>
@@ -332,7 +466,14 @@ function casillaRowspan(extra?: string): string {
                       </TableCell>
                     </template>
                     <TableCell :key="`pt-${sIdx}-${bIdx}-${rIdx}`" class="p-1.5 align-top">
-                      <div :class="casilla('min-h-10 justify-end font-mono text-sm text-foreground')">
+                      <input
+                        v-if="editable"
+                        :value="sub.pt"
+                        type="text"
+                        :class="cn(inputCellClass, 'min-h-10 text-right')"
+                        @input="setRowPt(block.rowLineIndices[rIdx]!, ($event.target as HTMLInputElement).value)"
+                      >
+                      <div v-else :class="casilla('min-h-10 justify-end font-mono text-sm text-foreground')">
                         {{ sub.pt }}
                       </div>
                     </TableCell>

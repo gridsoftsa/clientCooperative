@@ -8,10 +8,19 @@ import {
   IMPRIMIR_INDEPENDIENTE_VARIABLES,
 } from '~/constants/analisis-score-imprimir'
 import {
-  ANALISIS_SCORE_IMPRIMIR_TABS,
+  EMPLEADO_PENSIONADO_MATRIX,
+  INDEPENDIENTE_MATRIX,
+  type ScoreMatrixLine,
+} from '~/constants/analisis-score-matrix'
+import {
   ANALISIS_SCORE_PERFIL_OPTIONS,
   type AnalisisScorePerfilValue,
 } from '~/constants/analisis-score'
+import { isScoreMatrixLinesRenderable, normalizeScoreMatrixLines } from '~/utils/score-matrix-weights'
+
+type ScoreMatricesApiResponse = {
+  data: Record<string, { lines?: ScoreMatrixLine[] } | null>
+}
 
 definePageMeta({
   layout: 'default',
@@ -22,6 +31,7 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const { hasPermission } = usePermissions()
+const { $api } = useNuxtApp()
 
 const solicitudId = computed(() => {
   const q = route.query.solicitud
@@ -29,33 +39,128 @@ const solicitudId = computed(() => {
   return null
 })
 
-const perfilesSeleccionados = ref<AnalisisScorePerfilValue[]>([])
-const perfilPopoverOpen = ref(false)
-
-function togglePerfil(value: AnalisisScorePerfilValue, checked: boolean) {
-  const set = new Set(perfilesSeleccionados.value)
-  if (checked) {
-    set.add(value)
-  } else {
-    set.delete(value)
-  }
-  perfilesSeleccionados.value = Array.from(set)
-}
-
-function isPerfilChecked(value: AnalisisScorePerfilValue): boolean {
-  return perfilesSeleccionados.value.includes(value)
-}
-
-const perfilTriggerLabel = computed(() => {
-  if (perfilesSeleccionados.value.length === 0) {
-    return 'Selecciona uno o más perfiles…'
-  }
-  return perfilesSeleccionados.value
-    .map((v) => ANALISIS_SCORE_PERFIL_OPTIONS.find((o) => o.value === v)?.label ?? v)
-    .join(', ')
+const scoreCabecera = ref({
+  fecha: '',
+  cedula: '',
+  nombre: '',
 })
 
-const defaultTab = ANALISIS_SCORE_IMPRIMIR_TABS[0]?.value ?? 'imprimir-independiente'
+const loadingSolicitud = ref(false)
+
+const scoreLinesIndep = ref<ScoreMatrixLine[]>(normalizeScoreMatrixLines(INDEPENDIENTE_MATRIX))
+const scoreLinesEmp = ref<ScoreMatrixLine[]>(normalizeScoreMatrixLines(EMPLEADO_PENSIONADO_MATRIX))
+
+async function fetchScoreMatrices(): Promise<void> {
+  try {
+    const res = await $api('/score-template-matrices') as ScoreMatricesApiResponse
+    const d = res.data
+    if (d.independiente?.lines?.length) {
+      const normalized = normalizeScoreMatrixLines(d.independiente.lines)
+      if (isScoreMatrixLinesRenderable(normalized)) {
+        scoreLinesIndep.value = normalized
+      }
+    }
+    if (d.empleado_pensionado?.lines?.length) {
+      const normalized = normalizeScoreMatrixLines(d.empleado_pensionado.lines)
+      if (isScoreMatrixLinesRenderable(normalized)) {
+        scoreLinesEmp.value = normalized
+      }
+    }
+  } catch {
+    // Se mantienen los valores normalizados por defecto (misma base que score-template).
+  }
+}
+
+onMounted(() => {
+  fetchScoreMatrices()
+})
+
+function formatFechaRadicacion(createdAt: unknown): string {
+  if (createdAt == null || createdAt === '') {
+    return new Date().toLocaleDateString('es-CO')
+  }
+  const d = new Date(String(createdAt))
+  if (Number.isNaN(d.getTime())) {
+    return new Date().toLocaleDateString('es-CO')
+  }
+  return d.toLocaleDateString('es-CO')
+}
+
+function debtorDisplayName(debtor: Record<string, unknown>): string {
+  const parts = [
+    debtor.first_name,
+    debtor.second_name,
+    debtor.first_last_name,
+    debtor.second_last_name,
+  ].filter((p) => typeof p === 'string' && p.trim())
+  return parts.join(' ').trim()
+}
+
+async function loadSolicitudCabecera(id: string): Promise<void> {
+  loadingSolicitud.value = true
+  try {
+    const res = await $api<{ data?: Record<string, unknown> } & Record<string, unknown>>(`/credit-applications/${id}`)
+    const data = (res?.data ?? res) as Record<string, unknown>
+    const debtor = data.debtor as Record<string, unknown> | null | undefined
+    if (debtor && typeof debtor === 'object') {
+      const docType = typeof debtor.document_type === 'string' ? debtor.document_type.trim() : ''
+      const docNum = debtor.document_number != null ? String(debtor.document_number).trim() : ''
+      const cedula = [docType, docNum].filter(Boolean).join(' ').trim()
+      scoreCabecera.value = {
+        fecha: formatFechaRadicacion(data.created_at),
+        cedula,
+        nombre: debtorDisplayName(debtor),
+      }
+    } else {
+      scoreCabecera.value = { fecha: formatFechaRadicacion(data.created_at), cedula: '', nombre: '' }
+    }
+  } catch (e) {
+    console.error('Error cargando solicitud para SCORE:', e)
+    scoreCabecera.value = { fecha: '', cedula: '', nombre: '' }
+  } finally {
+    loadingSolicitud.value = false
+  }
+}
+
+watch(
+  solicitudId,
+  (id) => {
+    if (!id) {
+      scoreCabecera.value = { fecha: '', cedula: '', nombre: '' }
+      return
+    }
+    loadSolicitudCabecera(id)
+  },
+  { immediate: true },
+)
+
+/** Un solo perfil: define qué hoja de impresión SCORE se muestra. */
+const perfilDeudor = ref<AnalisisScorePerfilValue | undefined>(undefined)
+const perfilPopoverOpen = ref(false)
+
+const perfilTriggerLabel = computed(() => {
+  if (perfilDeudor.value == null) {
+    return 'Selecciona un perfil…'
+  }
+  return ANALISIS_SCORE_PERFIL_OPTIONS.find((o) => o.value === perfilDeudor.value)?.label ?? perfilDeudor.value
+})
+
+/** Vista de impresión según perfil: empleado y pensionado comparten la misma plantilla. */
+const vistaImprimirScore = computed<'independiente' | 'empleado' | null>(() => {
+  const p = perfilDeudor.value
+  if (p == null) {
+    return null
+  }
+  if (p === 'independiente') {
+    return 'independiente'
+  }
+  return 'empleado'
+})
+
+function cerrarSelectorPerfil(): void {
+  perfilPopoverOpen.value = false
+}
+
 </script>
 
 <template>
@@ -90,6 +195,7 @@ const defaultTab = ANALISIS_SCORE_IMPRIMIR_TABS[0]?.value ?? 'imprimir-independi
         <p v-if="solicitudId" class="text-sm">
           <span class="text-muted-foreground">Solicitud vinculada:</span>
           <span class="ml-1 font-mono font-medium">#{{ solicitudId }}</span>
+          <span v-if="loadingSolicitud" class="ml-2 text-muted-foreground">Cargando datos del deudor…</span>
         </p>
         <p v-else class="text-sm text-muted-foreground">
           Sin borrador vinculado. Puedes usar esta vista para pruebas o abrir SCORE desde una radicación guardada.
@@ -107,11 +213,11 @@ const defaultTab = ANALISIS_SCORE_IMPRIMIR_TABS[0]?.value ?? 'imprimir-independi
           Perfil del deudor
         </CardTitle>
         <CardDescription>
-          Selección múltiple: independiente, empleado y/o pensionado (según aplique al análisis).
+          Elige un perfil para cargar la hoja de SCORE que corresponde (independiente, o empleado / pensionado).
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-2">
-        <Label class="text-sm font-medium">Perfiles</Label>
+        <Label class="text-sm font-medium">Perfil</Label>
         <Popover v-model:open="perfilPopoverOpen">
           <PopoverTrigger as-child>
             <Button
@@ -125,20 +231,20 @@ const defaultTab = ANALISIS_SCORE_IMPRIMIR_TABS[0]?.value ?? 'imprimir-independi
             </Button>
           </PopoverTrigger>
           <PopoverContent class="w-80 p-3 sm:w-96" align="start">
-            <p class="mb-2 text-xs font-medium text-muted-foreground">
-              Marca todos los que apliquen
+            <p class="mb-3 text-xs font-medium text-muted-foreground">
+              Selecciona una opción
             </p>
-            <div class="space-y-3">
+            <RadioGroup
+              v-model="perfilDeudor"
+              class="grid gap-2"
+              @update:model-value="cerrarSelectorPerfil"
+            >
               <div
                 v-for="opt in ANALISIS_SCORE_PERFIL_OPTIONS"
                 :key="opt.value"
                 class="flex items-center gap-2"
               >
-                <Checkbox
-                  :id="`perfil-${opt.value}`"
-                  :model-value="isPerfilChecked(opt.value)"
-                  @update:model-value="(v) => togglePerfil(opt.value, v === true)"
-                />
+                <RadioGroupItem :id="`perfil-${opt.value}`" :value="opt.value" />
                 <Label
                   :for="`perfil-${opt.value}`"
                   class="cursor-pointer text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
@@ -146,69 +252,56 @@ const defaultTab = ANALISIS_SCORE_IMPRIMIR_TABS[0]?.value ?? 'imprimir-independi
                   {{ opt.label }}
                 </Label>
               </div>
-            </div>
+            </RadioGroup>
           </PopoverContent>
         </Popover>
       </CardContent>
     </Card>
 
-    <Tabs :default-value="defaultTab" class="w-full" :unmount-on-hide="false">
-      <div class="overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0">
-        <TabsList
-          class="inline-flex h-auto min-h-10 w-max flex-wrap justify-start gap-1 bg-muted p-1"
-        >
-          <TabsTrigger
-            v-for="tab in ANALISIS_SCORE_IMPRIMIR_TABS"
-            :key="tab.value"
-            :value="tab.value"
-            class="whitespace-nowrap px-3 py-2 text-xs sm:text-sm"
-          >
-            {{ tab.label }}
-          </TabsTrigger>
-        </TabsList>
-      </div>
+    <div v-if="vistaImprimirScore === 'independiente'" class="w-full">
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">
+            IMPRIMIR INDEPENDIENTE
+          </CardTitle>
+          <CardDescription>
+            Hoja Excel: <span class="font-mono">IMPRIMIR INDEPENDIENTE</span>
+            — Formato AIR-SARC-FO-02 con leyenda de referencia.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AnalisisScoreImprimirPanel
+            v-model:cabecera="scoreCabecera"
+            variant="independiente"
+            :meta="IMPRIMIR_INDEPENDIENTE_META"
+            :variable-rows="IMPRIMIR_INDEPENDIENTE_VARIABLES"
+            :matrix-lines="scoreLinesIndep"
+          />
+        </CardContent>
+      </Card>
+    </div>
 
-      <TabsContent value="imprimir-independiente" class="mt-4 w-full flex-none focus-visible:outline-none">
-        <Card>
-          <CardHeader>
-            <CardTitle class="text-base">
-              IMPRIMIR INDEPENDIENTE
-            </CardTitle>
-            <CardDescription>
-              Hoja Excel: <span class="font-mono">IMPRIMIR INDEPENDIENTE</span>
-              — Formato AIR-SARC-FO-02 con leyenda de referencia.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AnalisisScoreImprimirPanel
-              variant="independiente"
-              :meta="IMPRIMIR_INDEPENDIENTE_META"
-              :variable-rows="IMPRIMIR_INDEPENDIENTE_VARIABLES"
-            />
-          </CardContent>
-        </Card>
-      </TabsContent>
-
-      <TabsContent value="imprimir-empleado-pensionado" class="mt-4 w-full flex-none focus-visible:outline-none">
-        <Card>
-          <CardHeader>
-            <CardTitle class="text-base">
-              IMPRIMIR EMPLEADO - PENSIONADO
-            </CardTitle>
-            <CardDescription>
-              Hoja Excel: <span class="font-mono">IMPRIMIR EMPLEADO -PENSIONADO</span>
-              — Formato AIR-SARC-FO-03 con leyenda de referencia.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AnalisisScoreImprimirPanel
-              variant="empleado"
-              :meta="IMPRIMIR_EMPLEADO_META"
-              :variable-rows="IMPRIMIR_EMPLEADO_VARIABLES"
-            />
-          </CardContent>
-        </Card>
-      </TabsContent>
-    </Tabs>
+    <div v-else-if="vistaImprimirScore === 'empleado'" class="w-full">
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">
+            IMPRIMIR EMPLEADO - PENSIONADO
+          </CardTitle>
+          <CardDescription>
+            Hoja Excel: <span class="font-mono">IMPRIMIR EMPLEADO -PENSIONADO</span>
+            — Formato AIR-SARC-FO-03 con leyenda de referencia.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <AnalisisScoreImprimirPanel
+            v-model:cabecera="scoreCabecera"
+            variant="empleado"
+            :meta="IMPRIMIR_EMPLEADO_META"
+            :variable-rows="IMPRIMIR_EMPLEADO_VARIABLES"
+            :matrix-lines="scoreLinesEmp"
+          />
+        </CardContent>
+      </Card>
+    </div>
   </div>
 </template>

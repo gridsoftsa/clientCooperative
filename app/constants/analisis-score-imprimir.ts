@@ -127,6 +127,9 @@ export const IMPRIMIR_LEYENDA_INDEPENDIENTE: string[] = [
   'Firma personal',
   'CDAT',
   'APORTES',
+  '0% a 35%',
+  '36% a 70%',
+  '> 70%',
 ]
 
 export const IMPRIMIR_LEYENDA_EMPLEADO: string[] = [
@@ -171,4 +174,7 @@ export const IMPRIMIR_LEYENDA_EMPLEADO: string[] = [
   'Firma personal',
   'CDAT',
   'APORTES',
+  '0% a 35%',
+  '36% a 70%',
+  '> 70%',
 ]

@@ -1,0 +1,18 @@
+---
+description: Plantilla SCORE — rangos mostrados como porcentaje en matrices y leyendas
+globs: app/constants/analisis-score*.ts,app/components/radicacion/AnalisisScore*.vue,app/pages/settings/score-template.vue,app/pages/radicacion/analisis-score.vue
+---
+
+# Matrices de análisis y SCORE (porcentajes en UI)
+
+En `analisis-score-matrix.ts`, las celdas **Desde** / **Hasta** que representan **ratios o porcentajes** para el usuario (p. ej. endeudamiento, solvencia, umbrales 0–1 del Excel) deben mostrarse **siempre con el símbolo `%`**, no como decimales (`0.35` → `35%`).
+
+- **Peso** (`p`) puede seguir en decimal interno (0–1); el componente `AnalisisScoreMatrixTable` ya formatea peso como porcentaje en la columna «Peso».
+- **Rangos** de variables cuya etiqueta indica `%` o que en negocio son porcentaje: usar `0%`, `40%`, `41%`, `36%`, `70%`, `> 60%` / `> 70%`, etc., coherentes entre INDEPENDIENTE y EMPLEADO_PENSIONADO.
+- La leyenda en `analisis-score-imprimir.ts` debe alinearse con los mismos textos cuando describa esos tramos.
+
+No mezclar en la misma fila de rango decimal y porcentaje; mantener un solo estilo legible para pantalla e impresión.
+
+## Persistencia (Laravel)
+
+Los **pesos** (columna y cabeceras CUALITATIVAS/CUANTITATIVAS) y **puntajes** editables en `/settings/score-template` se guardan en la tabla `score_template_matrices` (`sheet_key`: `independiente` | `empleado_pensionado`, `lines` JSON). Valores iniciales: `database/data/score_template_matrices.json` + `ScoreTemplateMatrixSeeder`. Si cambias la matriz por defecto en TypeScript, regenera el JSON (misma estructura que el array exportado) antes de sembrar en producción.

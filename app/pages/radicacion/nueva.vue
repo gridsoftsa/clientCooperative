@@ -526,15 +526,6 @@ const {
   enabled: autoSaveEnabled,
 })
 
-/** Navega al análisis y SCORE; enlaza borrador si existe (validación de habilitado pendiente). */
-function goToAnalisisScore() {
-  const query: Record<string, string> = {}
-  if (draftId.value) {
-    query.solicitud = String(draftId.value)
-  }
-  navigateTo({ path: '/radicacion/analisis-score', query })
-}
-
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024 // 10 MB
 
 function validateAllDocumentsBeforeUpload(): string | null {
@@ -913,26 +904,15 @@ onMounted(() => {
         <Label for="numero_radicado_externo" class="text-sm font-semibold">
           {{ mode === 'codeudor' ? 'Código o radicado externo *' : 'Número de radicado externo' }}
         </Label>
-        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <Input
-            id="numero_radicado_externo"
-            v-model="form.numero_radicado_externo"
-            type="text"
-            maxlength="100"
-            :placeholder="mode === 'codeudor' ? 'Ej: RAD-2026-000001 o RAD-EXT-2025-001234' : 'Ej: RAD-EXT-2025-001234 (se asigna al pasar a análisis)'"
-            :required="mode === 'codeudor'"
-            class="min-w-0 flex-1 font-mono"
-          />
-          <Button
-            v-if="mode === 'deudor'"
-            type="button"
-            variant="secondary"
-            class="shrink-0 font-semibold tracking-wide"
-            @click="goToAnalisisScore"
-          >
-            SCORE
-          </Button>
-        </div>
+        <Input
+          id="numero_radicado_externo"
+          v-model="form.numero_radicado_externo"
+          type="text"
+          maxlength="100"
+          :placeholder="mode === 'codeudor' ? 'Ej: RAD-2026-000001 o RAD-EXT-2025-001234' : 'Ej: RAD-EXT-2025-001234 (se asigna al pasar a análisis)'"
+          :required="mode === 'codeudor'"
+          class="max-w-2xl font-mono"
+        />
         <p class="text-xs text-muted-foreground">
           {{ mode === 'codeudor'
             ? 'Código interno (RAD-XXX) o radicado externo para vincular este codeudor a la solicitud.'

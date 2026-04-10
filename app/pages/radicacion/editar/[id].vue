@@ -548,13 +548,6 @@ function hasDocumentsWithoutTitle(): boolean {
   return false
 }
 
-function goToAnalisisScore() {
-  navigateTo({
-    path: '/radicacion/analisis-score',
-    query: { solicitud: String(route.params.id) },
-  })
-}
-
 function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
   const { debtor, co_debtors, ...rest } = form.value
   const { documents: _d, ...debtorWithoutDocs } = debtor
@@ -745,24 +738,14 @@ onMounted(() => {
           <Label for="numero_radicado_externo" class="text-sm font-semibold">
             Número de radicado externo
           </Label>
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-            <Input
-              id="numero_radicado_externo"
-              v-model="form.numero_radicado_externo"
-              type="text"
-              maxlength="100"
-              placeholder="Ej: RAD-EXT-2025-001234 (se asigna al pasar a análisis)"
-              class="min-w-0 flex-1 font-mono"
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              class="shrink-0 font-semibold tracking-wide"
-              @click="goToAnalisisScore"
-            >
-              SCORE
-            </Button>
-          </div>
+          <Input
+            id="numero_radicado_externo"
+            v-model="form.numero_radicado_externo"
+            type="text"
+            maxlength="100"
+            placeholder="Ej: RAD-EXT-2025-001234 (se asigna al pasar a análisis)"
+            class="max-w-2xl font-mono"
+          />
         </div>
       </div>
 

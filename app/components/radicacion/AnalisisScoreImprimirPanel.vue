@@ -5,22 +5,36 @@ import {
   IMPRIMIR_LEYENDA_INDEPENDIENTE,
   IMPRIMIR_NIVEL_RIESGO_TABLA,
 } from '~/constants/analisis-score-imprimir'
+import type { ScoreMatrixLine } from '~/constants/analisis-score-matrix'
+import type { ScoreMatrixOption } from '~/utils/analisis-score-matrix-options'
+import {
+  buildVariableOptionsFromMatrix,
+  EMPLEADO_IMPRIMIR_MATRIX_ALIASES,
+  INDEPENDIENTE_IMPRIMIR_MATRIX_ALIASES,
+  resolveMatrixVariableKey,
+} from '~/utils/analisis-score-matrix-options'
 
 const props = defineProps<{
   variant: 'independiente' | 'empleado'
   meta: ImprimirMeta
   variableRows: ImprimirVariableRow[]
+  /** Líneas de la misma fuente que `/settings/score-template` (GET /score-template-matrices). */
+  matrixLines: ScoreMatrixLine[]
 }>()
+
+const cabecera = defineModel<{ fecha: string; cedula: string; nombre: string }>('cabecera', {
+  default: () => ({ fecha: '', cedula: '', nombre: '' }),
+})
 
 const leyenda = computed(() =>
   props.variant === 'empleado' ? IMPRIMIR_LEYENDA_EMPLEADO : IMPRIMIR_LEYENDA_INDEPENDIENTE,
 )
 
-const cabecera = ref({
-  fecha: '',
-  cedula: '',
-  nombre: '',
-})
+const optionsMap = computed(() => buildVariableOptionsFromMatrix(props.matrixLines))
+
+const imprimirAliases = computed(() =>
+  props.variant === 'empleado' ? EMPLEADO_IMPRIMIR_MATRIX_ALIASES : INDEPENDIENTE_IMPRIMIR_MATRIX_ALIASES,
+)
 
 const filasEditables = ref<ImprimirVariableRow[]>([])
 
@@ -39,6 +53,50 @@ function isSectionRow(row: ImprimirVariableRow): boolean {
 
 function isHeaderVariables(row: ImprimirVariableRow): boolean {
   return row.variable === 'VARIABLES' && row.caracteristica === 'CARACTERÍSTICA'
+}
+
+function matrixOptionsForRow(row: ImprimirVariableRow): ScoreMatrixOption[] {
+  const key = resolveMatrixVariableKey(row.variable, optionsMap.value, imprimirAliases.value)
+  if (!key) {
+    return []
+  }
+  return optionsMap.value.get(key) ?? []
+}
+
+function isMatrixDataRow(row: ImprimirVariableRow): boolean {
+  if (isHeaderVariables(row) || isSectionRow(row)) {
+    return false
+  }
+  return matrixOptionsForRow(row).length > 0
+}
+
+function selectedMatrixOptionValue(row: ImprimirVariableRow): string {
+  const opts = matrixOptionsForRow(row)
+  const c = row.caracteristica.trim()
+  const p = row.puntaje.trim()
+  const exact = opts.findIndex(o => o.label === c && o.pt === p)
+  if (exact >= 0) {
+    return String(exact)
+  }
+  const byLabel = opts.findIndex(o => o.label === c)
+  if (byLabel >= 0) {
+    return String(byLabel)
+  }
+  return '__none__'
+}
+
+function onMatrixOptionChange(row: ImprimirVariableRow, value: string): void {
+  if (value === '__none__') {
+    row.caracteristica = ''
+    row.puntaje = ''
+    return
+  }
+  const opts = matrixOptionsForRow(row)
+  const opt = opts[Number(value)]
+  if (opt) {
+    row.caracteristica = opt.label
+    row.puntaje = opt.pt
+  }
 }
 </script>
 
@@ -105,8 +163,32 @@ function isHeaderVariables(row: ImprimirVariableRow): boolean {
                   {{ row.variable }}
                 </TableCell>
                 <TableCell class="align-top">
-                  <template v-if="!isSectionRow(row) || isHeaderVariables(row)">
-                    <span v-if="isHeaderVariables(row)">{{ row.caracteristica }}</span>
+                  <template v-if="isHeaderVariables(row)">
+                    <span>{{ row.caracteristica }}</span>
+                  </template>
+                  <template v-else-if="!isSectionRow(row)">
+                    <Select
+                      v-if="isMatrixDataRow(row)"
+                      :model-value="selectedMatrixOptionValue(row)"
+                      @update:model-value="(v) => onMatrixOptionChange(row, v ?? '__none__')"
+                    >
+                      <SelectTrigger :id="`imp-car-${idx}`" class="h-auto min-h-8 w-full whitespace-normal py-1 text-left font-mono text-sm">
+                        <SelectValue placeholder="Seleccionar…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">
+                          Seleccionar…
+                        </SelectItem>
+                        <SelectItem
+                          v-for="(opt, oi) in matrixOptionsForRow(row)"
+                          :key="oi"
+                          :value="String(oi)"
+                          class="whitespace-normal font-mono text-sm"
+                        >
+                          {{ opt.label }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Input
                       v-else
                       v-model="row.caracteristica"
@@ -116,8 +198,18 @@ function isHeaderVariables(row: ImprimirVariableRow): boolean {
                   </template>
                 </TableCell>
                 <TableCell class="align-top text-right">
-                  <template v-if="!isSectionRow(row) || isHeaderVariables(row)">
-                    <span v-if="isHeaderVariables(row)">{{ row.puntaje }}</span>
+                  <template v-if="isHeaderVariables(row)">
+                    <span>{{ row.puntaje }}</span>
+                  </template>
+                  <template v-else-if="!isSectionRow(row)">
+                    <Input
+                      v-if="isMatrixDataRow(row)"
+                      v-model="row.puntaje"
+                      readonly
+                      tabindex="-1"
+                      class="h-8 cursor-default border-transparent bg-muted/40 font-mono text-sm text-right shadow-none focus-visible:ring-0"
+                      placeholder="—"
+                    />
                     <Input
                       v-else
                       v-model="row.puntaje"

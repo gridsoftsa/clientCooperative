@@ -104,6 +104,13 @@ function clearFilters() {
   fetchApplications()
 }
 
+function goToAnalisisScore(applicationId: number) {
+  navigateTo({
+    path: '/radicacion/analisis-score',
+    query: { solicitud: String(applicationId) },
+  })
+}
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
@@ -354,6 +361,19 @@ onMounted(() => {
                 <TableCell>{{ new Date(app.created_at).toLocaleDateString('es-CO') }}</TableCell>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-1">
+                    <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar', 'radicacion_ver']">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-8 gap-1.5 border-primary/35 bg-primary/[0.06] px-2 text-xs font-semibold tracking-wide text-primary shadow-sm hover:bg-primary/12 hover:text-primary"
+                        title="Análisis y perfil de riesgo SCORE (plantilla de crédito)"
+                        aria-label="Análisis y SCORE"
+                        @click="goToAnalisisScore(app.id)"
+                      >
+                        <Icon name="i-lucide-chart-column-increasing" class="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>SCORE</span>
+                      </Button>
+                    </PermissionGate>
                     <PermissionGate permission="radicacion_enviar_analisis">
                       <Button
                         v-if="app.status === 'Draft'"
