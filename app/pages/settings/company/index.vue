@@ -114,7 +114,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="w-full max-w-2xl flex flex-col gap-4">
+  <SettingsLayout>
+    <div class="w-full max-w-2xl flex flex-col gap-4">
     <div>
       <h2 class="text-2xl font-bold tracking-tight">
         Empresa principal
@@ -219,5 +220,6 @@ onMounted(() => {
         </form>
       </CardContent>
     </Card>
-  </div>
+    </div>
+  </SettingsLayout>
 </template>

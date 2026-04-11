@@ -1,6 +1,6 @@
 ---
 description: Integración con API Laravel
-globs: "**/plugins/api**,**/composables/**,**/pages/admin/**"
+globs: "**/plugins/api**,**/composables/**,**/pages/settings/**"
 alwaysApply: false
 ---
 

@@ -110,13 +110,14 @@ watch([searchQuery, showInactive], () => {
 </script>
 
 <template>
-  <div class="w-full flex flex-col gap-4">
+  <SettingsLayout :wide="true">
+    <div class="w-full flex flex-col gap-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-2xl font-bold tracking-tight">
         Gestión de Permisos
       </h2>
       <PermissionGate permission="permisos_crear">
-        <Button @click="$router.push('/admin/permissions/create')">
+        <Button @click="$router.push('/settings/permissions/create')">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Nuevo Permiso
         </Button>
@@ -204,7 +205,7 @@ watch([searchQuery, showInactive], () => {
                     </div>
                     <div class="flex shrink-0 gap-1">
                       <PermissionGate permission="permisos_editar">
-                        <Button variant="ghost" size="icon" class="h-8 w-8" @click="$router.push(`/admin/permissions/${p.id}/edit`)">
+                        <Button variant="ghost" size="icon" class="h-8 w-8" @click="$router.push(`/settings/permissions/${p.id}/edit`)">
                           <Icon name="i-lucide-edit" class="h-4 w-4" />
                         </Button>
                       </PermissionGate>
@@ -222,5 +223,6 @@ watch([searchQuery, showInactive], () => {
         </div>
       </CardContent>
     </Card>
-  </div>
+    </div>
+  </SettingsLayout>
 </template>

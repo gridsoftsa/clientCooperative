@@ -8,37 +8,37 @@ import * as z from 'zod'
 const items = [
   {
     id: 'recents',
-    label: 'Recents',
+    label: 'Recientes',
   },
   {
     id: 'home',
-    label: 'Home',
+    label: 'Inicio',
   },
   {
     id: 'applications',
-    label: 'Applications',
+    label: 'Aplicaciones',
 
   },
   {
     id: 'desktop',
-    label: 'Desktop',
+    label: 'Escritorio',
 
   },
   {
     id: 'downloads',
-    label: 'Downloads',
+    label: 'Descargas',
 
   },
   {
     id: 'documents',
-    label: 'Documents',
+    label: 'Documentos',
 
   },
 ] as const
 
 const displayFormSchema = toTypedSchema(z.object({
   items: z.array(z.string()).refine(value => value.some(item => item), {
-    message: 'You have to select at least one item.',
+    message: 'Debes seleccionar al menos un elemento.',
   }),
 }))
 
@@ -50,7 +50,7 @@ const { handleSubmit } = useForm({
 })
 
 const onSubmit = handleSubmit((values) => {
-  toast('You submitted the following values:', {
+  toast('Valores enviados:', {
     description: h('pre', { class: 'mt-2 w-[340px] rounded-md bg-slate-950 p-4' }, h('code', { class: 'text-white' }, JSON.stringify(values, null, 2))),
   })
 })
@@ -59,10 +59,10 @@ const onSubmit = handleSubmit((values) => {
 <template>
   <div>
     <h3 class="text-lg font-medium">
-      Display
+      Pantalla
     </h3>
     <p class="text-sm text-muted-foreground">
-      Turn items on or off to control what's displayed in the app.
+      Activa o desactiva elementos para controlar qué se muestra en la aplicación.
     </p>
   </div>
   <Separator />
@@ -71,10 +71,10 @@ const onSubmit = handleSubmit((values) => {
       <FormItem>
         <div class="mb-4">
           <FormLabel class="text-base">
-            Sidebar
+            Barra lateral
           </FormLabel>
           <FormDescription>
-            Select the items you want to display in the sidebar.
+            Elige los elementos que quieres ver en la barra lateral.
           </FormDescription>
         </div>
 
@@ -101,7 +101,7 @@ const onSubmit = handleSubmit((values) => {
 
     <div class="mt-4 flex justify-start">
       <Button type="submit">
-        Update display
+        Guardar pantalla
       </Button>
     </div>
   </form>

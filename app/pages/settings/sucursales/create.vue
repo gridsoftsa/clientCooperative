@@ -1,21 +1,14 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { Sucursal } from '~/types/sucursal'
 
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'sucursales_editar',
+  permissions: 'sucursales_crear',
 })
 
 const { $api } = useNuxtApp()
-const route = useRoute()
 const router = useRouter()
-
-const id = route.params.id as string
-const sucursal = ref<Sucursal | null>(null)
-const loading = ref(false)
-const saving = ref(false)
 
 const form = ref({
   name: '',
@@ -27,27 +20,7 @@ const form = ref({
   is_active: true,
 })
 
-async function fetchSucursal() {
-  loading.value = true
-  try {
-    const res = await $api<{ data: Sucursal }>(`/sucursales/${id}`)
-    sucursal.value = res.data
-    form.value = {
-      name: res.data.name,
-      code: res.data.code ?? '',
-      address: res.data.address ?? '',
-      phone: res.data.phone ?? '',
-      city: res.data.city ?? '',
-      is_main: res.data.is_main,
-      is_active: res.data.is_active,
-    }
-  } catch {
-    toast.error('Error al cargar la sucursal')
-    router.push('/admin/sucursales')
-  } finally {
-    loading.value = false
-  }
-}
+const saving = ref(false)
 
 async function handleSubmit() {
   if (!form.value.name.trim()) {
@@ -56,41 +29,38 @@ async function handleSubmit() {
   }
   saving.value = true
   try {
-    await $api(`/sucursales/${id}`, {
-      method: 'PUT',
+    await $api('/sucursales', {
+      method: 'POST',
       body: {
         name: form.value.name,
-        code: form.value.code || null,
-        address: form.value.address || null,
-        phone: form.value.phone || null,
-        city: form.value.city || null,
+        code: form.value.code || undefined,
+        address: form.value.address || undefined,
+        phone: form.value.phone || undefined,
+        city: form.value.city || undefined,
         is_main: form.value.is_main,
         is_active: form.value.is_active,
       },
     })
-    toast.success('Sucursal actualizada')
-    router.push('/admin/sucursales')
+    toast.success('Sucursal creada')
+    router.push('/settings/sucursales')
   } catch (e: any) {
-    toast.error(e?.data?.message || 'Error al actualizar')
+    toast.error(e?.data?.message || e?.data?.errors?.name?.[0] || 'Error al crear')
   } finally {
     saving.value = false
   }
 }
-
-onMounted(() => {
-  fetchSucursal()
-})
 </script>
 
 <template>
-  <div class="w-full max-w-2xl flex flex-col gap-4">
+  <SettingsLayout>
+    <div class="w-full flex flex-col gap-4">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-2xl font-bold tracking-tight">
-          Editar Sucursal
+          Nueva Sucursal
         </h2>
-        <p v-if="sucursal" class="text-muted-foreground">
-          {{ sucursal.name }}
+        <p class="text-muted-foreground">
+          Registra una sede de la cooperativa
         </p>
       </div>
       <Button variant="outline" @click="router.back()">
@@ -99,38 +69,30 @@ onMounted(() => {
       </Button>
     </div>
 
-    <Card v-if="loading">
-      <CardContent class="p-6">
-        <div class="flex justify-center">
-          <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin" />
-        </div>
-      </CardContent>
-    </Card>
-
-    <Card v-else-if="sucursal">
+    <Card>
       <CardContent class="pt-6">
         <form class="grid gap-4" @submit.prevent="handleSubmit">
           <div>
             <Label for="name">Nombre *</Label>
-            <Input id="name" v-model="form.name" required />
+            <Input id="name" v-model="form.name" placeholder="Ej: Sede Principal" required />
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
               <Label for="code">Código</Label>
-              <Input id="code" v-model="form.code" />
+              <Input id="code" v-model="form.code" placeholder="Ej: MATRIZ" />
             </div>
             <div>
               <Label for="city">Ciudad</Label>
-              <Input id="city" v-model="form.city" />
+              <Input id="city" v-model="form.city" placeholder="Ej: Bogotá D.C." />
             </div>
           </div>
           <div>
             <Label for="address">Dirección</Label>
-            <Input id="address" v-model="form.address" />
+            <Input id="address" v-model="form.address" placeholder="Dirección completa" />
           </div>
           <div>
             <Label for="phone">Teléfono</Label>
-            <Input id="phone" v-model="form.phone" />
+            <Input id="phone" v-model="form.phone" placeholder="Teléfono" />
           </div>
           <div class="flex items-center gap-4">
             <div class="flex items-center space-x-2">
@@ -148,11 +110,12 @@ onMounted(() => {
             </Button>
             <Button type="submit" :disabled="saving">
               <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              Guardar
+              Crear Sucursal
             </Button>
           </div>
         </form>
       </CardContent>
     </Card>
-  </div>
+    </div>
+  </SettingsLayout>
 </template>

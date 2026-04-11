@@ -133,3 +133,85 @@ export function validateSectionVariableWeightsNotOver100(lines: ScoreMatrixLine[
   }
   return null
 }
+
+const PEAK_PT_EPS = 0.01
+
+function parseScoreMatrixPt(value: string | undefined | null): number {
+  const t = String(value ?? '').trim().replace(/\s/g, '').replace(',', '.')
+  if (t === '') {
+    return 0
+  }
+  const n = Number(t)
+  return Number.isNaN(n) ? 0 : n
+}
+
+function parseScoreMatrixSectionMax(value: string | undefined | null): number | null {
+  const t = String(value ?? '').trim().replace(/\s/g, '').replace(',', '.')
+  if (t === '') {
+    return null
+  }
+  const n = Number(t)
+  if (Number.isNaN(n) || n < 0) {
+    return null
+  }
+  return n
+}
+
+/**
+ * Por cada sección (cabecera `s` con tope `max`, p. ej. 300 / 700 sobre 1000 puntos),
+ * la suma de los puntajes máximos alcanzables por variable (el mayor `pt` en cada bloque de filas `r`)
+ * no puede superar ese tope. El agrupamiento de filas coincide con `AnalisisScoreMatrixTable` (continuación: `v` y `p` vacíos).
+ */
+export function validateSectionPeakPointsSumVsCap(lines: ScoreMatrixLine[]): string | null {
+  let sectionLabel = ''
+  let sectionCap: number | null = null
+  let sumPeakByVariable = 0
+  let currentGroupPeak = 0
+
+  const finishSection = (): string | null => {
+    sumPeakByVariable += currentGroupPeak
+    currentGroupPeak = 0
+    if (sectionLabel === '' || sectionCap === null) {
+      return null
+    }
+    if (sumPeakByVariable > sectionCap + PEAK_PT_EPS) {
+      return `En «${sectionLabel}» la suma de los puntajes máximos por variable (${Math.round(sumPeakByVariable * 100) / 100}) supera el tope de la sección (${Math.round(sectionCap * 100) / 100} puntos). Ajuste los puntajes o el máximo de la sección.`
+    }
+    return null
+  }
+
+  for (const line of lines) {
+    if (line.k === 's') {
+      const err = finishSection()
+      if (err) {
+        return err
+      }
+      sectionLabel = String(line.label ?? '').trim()
+      sectionCap = parseScoreMatrixSectionMax(line.max)
+      sumPeakByVariable = 0
+      currentGroupPeak = 0
+      continue
+    }
+    if (line.k !== 'r') {
+      continue
+    }
+    const vTrim = String(line.v ?? '').trim()
+    const pTrim = String(line.p ?? '').trim()
+    const isContinuation = vTrim === '' && pTrim === ''
+    const ptVal = parseScoreMatrixPt(line.pt)
+    if (!isContinuation) {
+      sumPeakByVariable += currentGroupPeak
+      currentGroupPeak = ptVal
+    } else {
+      currentGroupPeak = Math.max(currentGroupPeak, ptVal)
+    }
+  }
+
+  sumPeakByVariable += currentGroupPeak
+  currentGroupPeak = 0
+  if (sectionLabel !== '' && sectionCap !== null && sumPeakByVariable > sectionCap + PEAK_PT_EPS) {
+    return `En «${sectionLabel}» la suma de los puntajes máximos por variable (${Math.round(sumPeakByVariable * 100) / 100}) supera el tope de la sección (${Math.round(sectionCap * 100) / 100} puntos). Ajuste los puntajes o el máximo de la sección.`
+  }
+
+  return null
+}

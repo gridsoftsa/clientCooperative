@@ -1,23 +1,18 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
-import type { User } from '~/types/user'
-import { normalizeRoleNames } from '~/utils/userRoles'
 import type { Permission, Role } from '~/types/role'
 import { PERMISSION_CATEGORY_LABELS, formatPermissionDisplayName } from '~/constants/permission-labels'
+import { normalizeRoleNames } from '~/utils/userRoles'
 
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'usuarios_editar'
+  permissions: 'usuarios_crear'
 })
 
 const { $api } = useNuxtApp()
-const route = useRoute()
 const router = useRouter()
-const { user: authUser } = useAuth()
-
-const userId = route.params.id as string
 
 const form = ref({
   name: '',
@@ -33,7 +28,6 @@ const form = ref({
   permissions: [] as string[],
 })
 
-const user = ref<User | null>(null)
 const roles = ref<Role[]>([])
 const permissions = ref<Permission[]>([])
 const groupedPermissions = computed(() => {
@@ -47,6 +41,7 @@ const groupedPermissions = computed(() => {
 })
 const getCategoryLabel = (key: string) => PERMISSION_CATEGORY_LABELS[key] ?? key
 
+/** Opciones para multiselect de roles (value = nombre del rol en API) */
 const roleSelectOptions = computed(() =>
   roles.value.map((r) => ({
     value: r.name,
@@ -78,46 +73,8 @@ const setCategoryOpen = (category: string, open: boolean) => {
 const sucursales = ref<Array<{ id: number; name: string; code: string | null; is_main?: boolean }>>([])
 const loading = ref(false)
 const saving = ref(false)
-const changePassword = ref(false)
 
 const showAllowedSucursales = computed(() => form.value.roles.includes('admin') && !form.value.roles.includes('super_admin'))
-
-const isOwnUser = computed(() => authUser.value?.id === parseInt(userId))
-
-function normalizePermissionNames(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return []
-  return raw
-    .map((p) => (typeof p === 'string' ? p : (p as { name?: string })?.name))
-    .filter((name): name is string => typeof name === 'string' && name.length > 0)
-}
-
-const fetchUser = async () => {
-  loading.value = true
-  try {
-    const response = await $api<{ data: User }>(`/users/${userId}`)
-    user.value = response.data
-    const permissionNames = normalizePermissionNames(response.data.permissions)
-    form.value = {
-      name: response.data.name,
-      full_name: response.data.full_name ?? '',
-      phone: response.data.phone ?? '',
-      is_active: response.data.is_active !== false,
-      email: response.data.email,
-      password: '',
-      password_confirmation: '',
-      sucursal_id: response.data.sucursal_id ?? null,
-      allowed_sucursal_ids: response.data.allowed_sucursal_ids ?? [],
-      roles: normalizeRoleNames(response.data.roles),
-      permissions: permissionNames,
-    }
-  } catch (error) {
-    console.error('Error fetching user:', error)
-    toast.error('Error al cargar el usuario')
-    router.push('/admin/users')
-  } finally {
-    loading.value = false
-  }
-}
 
 const fetchSucursales = async () => {
   try {
@@ -129,12 +86,15 @@ const fetchSucursales = async () => {
 }
 
 const fetchRoles = async () => {
+  loading.value = true
   try {
     const res = await $api<{ data: Role[] }>('/roles', { query: { per_page: 100 } })
     roles.value = res.data
   } catch (error) {
     console.error('Error al cargar roles:', error)
     toast.error('Error al cargar roles')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -156,78 +116,66 @@ const togglePermission = (name: string, checked: boolean) => {
 }
 
 const handleSubmit = async () => {
-  if (!form.value.name.trim() || !form.value.email.trim()) {
+  if (!form.value.name.trim() || !form.value.email.trim() || !form.value.password) {
     toast.error('Completa todos los campos requeridos')
     return
   }
 
-  if (changePassword.value) {
-    if (!form.value.password) {
-      toast.error('La contraseña es requerida')
-      return
-    }
+  if (form.value.password !== form.value.password_confirmation) {
+    toast.error('Las contraseñas no coinciden')
+    return
+  }
 
-    if (form.value.password !== form.value.password_confirmation) {
-      toast.error('Las contraseñas no coinciden')
-      return
-    }
-
-    if (form.value.password.length < 8) {
-      toast.error('La contraseña debe tener al menos 8 caracteres')
-      return
-    }
+  if (form.value.password.length < 8) {
+    toast.error('La contraseña debe tener al menos 8 caracteres')
+    return
   }
 
   saving.value = true
   try {
-    const body: any = {
-      name: form.value.name,
-      full_name: form.value.full_name?.trim() || undefined,
-      phone: form.value.phone?.trim() || undefined,
-      is_active: form.value.is_active,
-      email: form.value.email,
-      sucursal_id: form.value.sucursal_id || undefined,
-      allowed_sucursal_ids: form.value.allowed_sucursal_ids,
-      roles: form.value.roles,
-      permissions: form.value.permissions,
-    }
-
-    if (changePassword.value && form.value.password) {
-      body.password = form.value.password
-      body.password_confirmation = form.value.password_confirmation
-    }
-
-    await $api(`/users/${userId}`, {
-      method: 'PUT',
-      body,
+    await $api('/users', {
+      method: 'POST',
+      body: {
+        name: form.value.name,
+        full_name: form.value.full_name?.trim() || undefined,
+        phone: form.value.phone?.trim() || undefined,
+        is_active: form.value.is_active,
+        email: form.value.email,
+        password: form.value.password,
+        password_confirmation: form.value.password_confirmation,
+        sucursal_id: form.value.sucursal_id || undefined,
+        allowed_sucursal_ids: form.value.allowed_sucursal_ids,
+        roles: form.value.roles,
+        permissions: form.value.permissions,
+      },
     })
     
-    toast.success('Usuario actualizado correctamente')
-    router.push('/admin/users')
+    toast.success('Usuario creado correctamente')
+    router.push('/settings/users')
   } catch (error: any) {
     console.error('Error saving user:', error)
-    const message = error?.data?.message || error?.data?.errors?.email?.[0] || 'Error al actualizar el usuario'
+    const message = error?.data?.message || error?.data?.errors?.email?.[0] || 'Error al crear el usuario'
     toast.error(message)
   } finally {
     saving.value = false
   }
 }
 
-onMounted(async () => {
-  await Promise.all([fetchRoles(), fetchSucursales(), fetchPermissions()])
-  await fetchUser()
+onMounted(() => {
+  Promise.all([fetchRoles(), fetchSucursales(), fetchPermissions()])
 })
 </script>
 
 <template>
-  <div class="w-full flex flex-col gap-4">
+  <SettingsLayout :wide="true">
+    <div class="w-full flex flex-col gap-4">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-2xl font-bold tracking-tight">
-          Editar Usuario
+          Crear Nuevo Usuario
         </h2>
-        <p class="text-muted-foreground" v-if="user">
-          Modifica el usuario: {{ user.name }}
+        <p class="text-muted-foreground">
+          Crea un nuevo usuario y asigna sus roles
         </p>
       </div>
       <Button variant="outline" @click="router.back()">
@@ -236,21 +184,13 @@ onMounted(async () => {
       </Button>
     </div>
 
-    <Card v-if="loading">
-      <CardContent class="p-6">
-        <div class="flex items-center justify-center">
-          <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
-        </div>
-      </CardContent>
-    </Card>
-
-    <form v-else-if="user" @submit.prevent="handleSubmit">
+    <form @submit.prevent="handleSubmit">
       <div class="grid gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Información del Usuario</CardTitle>
             <CardDescription>
-              Información básica del usuario
+              Nombre de usuario para el acceso, datos de contacto opcionales y estado de la cuenta.
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">
@@ -315,53 +255,33 @@ onMounted(async () => {
 
             <div class="flex items-center justify-between gap-4 rounded-lg border p-4">
               <div class="space-y-1.5">
-                <Label for="is_active_edit" class="text-base leading-snug">Usuario activo</Label>
+                <Label for="is_active" class="text-base leading-snug">Usuario activo</Label>
                 <p class="text-sm text-muted-foreground leading-relaxed">
                   Los usuarios inactivos no pueden iniciar sesión.
                 </p>
               </div>
-              <Switch
-                id="is_active_edit"
-                v-model:checked="form.is_active"
-                :disabled="isOwnUser"
-                class="shrink-0"
-              />
+              <Switch id="is_active" v-model:checked="form.is_active" class="shrink-0" />
             </div>
-            <p v-if="isOwnUser" class="text-xs text-muted-foreground">
-              No puedes desactivar tu propia cuenta desde aquí.
-            </p>
 
-            <div class="space-y-5">
-              <div class="flex items-center gap-3">
-                <Switch
-                  id="changePassword"
-                  v-model:checked="changePassword"
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div class="space-y-3">
+                <Label for="password" class="leading-snug">Contraseña *</Label>
+                <PasswordInput
+                  id="password"
+                  v-model="form.password"
+                  required
+                  placeholder="Mínimo 8 caracteres"
                 />
-                <Label for="changePassword" class="font-normal leading-snug">
-                  Cambiar contraseña
-                </Label>
               </div>
 
-              <div v-if="changePassword" class="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div class="space-y-3">
-                  <Label for="password" class="leading-snug">Nueva Contraseña *</Label>
-                  <PasswordInput
-                    id="password"
-                    v-model="form.password"
-                    required
-                    placeholder="Mínimo 8 caracteres"
-                  />
-                </div>
-
-                <div class="space-y-3">
-                  <Label for="password_confirmation" class="leading-snug">Confirmar Contraseña *</Label>
-                  <PasswordInput
-                    id="password_confirmation"
-                    v-model="form.password_confirmation"
-                    required
-                    placeholder="Repite la contraseña"
-                  />
-                </div>
+              <div class="space-y-3">
+                <Label for="password_confirmation" class="leading-snug">Confirmar Contraseña *</Label>
+                <PasswordInput
+                  id="password_confirmation"
+                  v-model="form.password_confirmation"
+                  required
+                  placeholder="Repite la contraseña"
+                />
               </div>
             </div>
           </CardContent>
@@ -376,7 +296,11 @@ onMounted(async () => {
           </CardHeader>
           <CardContent>
             <div class="space-y-2">
-              <div v-for="s in sucursales" :key="s.id" class="flex items-center space-x-2">
+              <div
+                v-for="s in sucursales"
+                :key="s.id"
+                class="flex items-center space-x-2"
+              >
                 <Checkbox
                   :id="`suc-${s.id}`"
                   :checked="form.allowed_sucursal_ids.includes(s.id)"
@@ -401,7 +325,11 @@ onMounted(async () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div class="space-y-2">
+            <div v-if="loading" class="flex items-center justify-center py-8">
+              <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
+            </div>
+
+            <div v-else class="space-y-2">
               <Label class="leading-snug">Roles asignados</Label>
               <Multiselect
                 v-model="form.roles"
@@ -480,12 +408,13 @@ onMounted(async () => {
           </Button>
           <Button type="submit" :disabled="saving">
             <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-            {{ saving ? 'Guardando...' : 'Actualizar Usuario' }}
+            {{ saving ? 'Guardando...' : 'Crear Usuario' }}
           </Button>
         </div>
       </div>
     </form>
-  </div>
+    </div>
+  </SettingsLayout>
 </template>
 
 <style src="@vueform/multiselect/themes/default.css"></style>

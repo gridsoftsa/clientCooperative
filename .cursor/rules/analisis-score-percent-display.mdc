@@ -1,6 +1,6 @@
 ---
 description: Plantilla SCORE — rangos mostrados como porcentaje en matrices y leyendas
-globs: app/constants/analisis-score*.ts,app/components/radicacion/AnalisisScore*.vue,app/pages/settings/score-template.vue,app/pages/radicacion/analisis-score.vue
+globs: app/constants/analisis-score*.ts,app/components/radicacion/AnalisisScore*.vue,app/pages/parametrizacion/plantilla-score.vue,app/pages/radicacion/analisis-score.vue
 ---
 
 # Matrices de análisis y SCORE (porcentajes en UI)
@@ -15,4 +15,4 @@ No mezclar en la misma fila de rango decimal y porcentaje; mantener un solo esti
 
 ## Persistencia (Laravel)
 
-Los **pesos** (columna y cabeceras CUALITATIVAS/CUANTITATIVAS) y **puntajes** editables en `/settings/score-template` se guardan en la tabla `score_template_matrices` (`sheet_key`: `independiente` | `empleado_pensionado`, `lines` JSON). Valores iniciales: `database/data/score_template_matrices.json` + `ScoreTemplateMatrixSeeder`. Si cambias la matriz por defecto en TypeScript, regenera el JSON (misma estructura que el array exportado) antes de sembrar en producción.
+Los **pesos** (columna y cabeceras CUALITATIVAS/CUANTITATIVAS) y **puntajes** editables en `/parametrizacion/plantilla-score` se guardan en la tabla `score_template_matrices` (`sheet_key`: `independiente` | `empleado_pensionado`, `lines` JSON). Valores iniciales: `database/data/score_template_matrices.json` + `ScoreTemplateMatrixSeeder`. Si cambias la matriz por defecto en TypeScript, regenera el JSON (misma estructura que el array exportado) antes de sembrar en producción.

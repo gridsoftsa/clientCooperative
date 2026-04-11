@@ -34,7 +34,7 @@ const handleSubmit = async () => {
       },
     })
     toast.success('Permiso creado correctamente')
-    router.push('/admin/permissions')
+    router.push('/settings/permissions')
   } catch (error: any) {
     const msg = error?.data?.message || error?.data?.errors?.name?.[0] || 'Error al crear'
     toast.error(msg)
@@ -45,7 +45,8 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="w-full flex flex-col gap-4">
+  <SettingsLayout>
+    <div class="w-full flex flex-col gap-4">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-2xl font-bold tracking-tight">Crear Permiso</h2>
@@ -93,5 +94,6 @@ const handleSubmit = async () => {
         </Button>
       </div>
     </form>
-  </div>
+    </div>
+  </SettingsLayout>
 </template>

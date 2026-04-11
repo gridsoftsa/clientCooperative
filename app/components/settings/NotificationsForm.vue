@@ -7,7 +7,7 @@ import * as z from 'zod'
 
 const notificationsFormSchema = toTypedSchema(z.object({
   type: z.enum(['all', 'mentions', 'none'], {
-    required_error: 'You need to select a notification type.',
+    required_error: 'Debes seleccionar un tipo de notificación.',
   }),
   mobile: z.boolean().default(false).optional(),
   communication_emails: z.boolean().default(false).optional(),
@@ -27,7 +27,7 @@ const { handleSubmit } = useForm({
 })
 
 const onSubmit = handleSubmit((values) => {
-  toast('You submitted the following values:', {
+  toast('Valores enviados:', {
     description: h('pre', { class: 'mt-2 w-[340px] rounded-md bg-slate-950 p-4' }, h('code', { class: 'text-white' }, JSON.stringify(values, null, 2))),
   })
 })
@@ -36,17 +36,17 @@ const onSubmit = handleSubmit((values) => {
 <template>
   <div>
     <h3 class="text-lg font-medium">
-      Notifications
+      Notificaciones
     </h3>
     <p class="text-sm text-muted-foreground">
-      Configure how you receive notifications.
+      Configura cómo recibes las notificaciones.
     </p>
   </div>
   <Separator />
   <form class="space-y-8" @submit="onSubmit">
     <FormField v-slot="{ componentField }" type="radio" name="type">
       <FormItem class="space-y-3">
-        <FormLabel>Notify me about...</FormLabel>
+        <FormLabel>Avísame sobre…</FormLabel>
         <FormControl>
           <RadioGroup
             class="flex flex-col space-y-1"
@@ -57,7 +57,7 @@ const onSubmit = handleSubmit((values) => {
                 <RadioGroupItem value="all" />
               </FormControl>
               <FormLabel class="font-normal">
-                All new messages
+                Todos los mensajes nuevos
               </FormLabel>
             </FormItem>
             <FormItem class="flex items-center space-x-3 space-y-0">
@@ -65,7 +65,7 @@ const onSubmit = handleSubmit((values) => {
                 <RadioGroupItem value="mentions" />
               </FormControl>
               <FormLabel class="font-normal">
-                Direct messages and mentions
+                Mensajes directos y menciones
               </FormLabel>
             </FormItem>
             <FormItem class="flex items-center space-x-3 space-y-0">
@@ -73,7 +73,7 @@ const onSubmit = handleSubmit((values) => {
                 <RadioGroupItem value="none" />
               </FormControl>
               <FormLabel class="font-normal">
-                Nothing
+                Nada
               </FormLabel>
             </FormItem>
           </RadioGroup>
@@ -84,17 +84,17 @@ const onSubmit = handleSubmit((values) => {
 
     <div>
       <h3 class="mb-4 text-lg font-medium">
-        Email Notifications
+        Notificaciones por correo
       </h3>
       <div class="space-y-4">
         <FormField v-slot="{ handleChange, value }" type="checkbox" name="communication_emails">
           <FormItem class="flex flex-row items-center justify-between border rounded-lg p-4">
             <div class="space-y-0.5">
               <FormLabel class="text-base">
-                Communication emails
+                Correos de comunicación
               </FormLabel>
               <FormDescription>
-                Receive emails about your account activity.
+                Recibe correos sobre la actividad de tu cuenta.
               </FormDescription>
             </div>
             <FormControl>
@@ -110,10 +110,10 @@ const onSubmit = handleSubmit((values) => {
           <FormItem class="flex flex-row items-center justify-between border rounded-lg p-4">
             <div class="space-y-0.5">
               <FormLabel class="text-base">
-                Marketing emails
+                Correos de marketing
               </FormLabel>
               <FormDescription>
-                Receive emails about new products, features, and more.
+                Recibe correos sobre novedades, funciones y más.
               </FormDescription>
             </div>
             <FormControl>
@@ -129,10 +129,10 @@ const onSubmit = handleSubmit((values) => {
           <FormItem class="flex flex-row items-center justify-between border rounded-lg p-4">
             <div class="space-y-0.5">
               <FormLabel class="text-base">
-                Social emails
+                Correos sociales
               </FormLabel>
               <FormDescription>
-                Receive emails for friend requests, follows, and more.
+                Recibe correos por solicitudes de contacto, seguimientos y similares.
               </FormDescription>
             </div>
             <FormControl>
@@ -148,10 +148,10 @@ const onSubmit = handleSubmit((values) => {
           <FormItem class="flex flex-row items-center justify-between border rounded-lg p-4">
             <div class="space-y-0.5">
               <FormLabel class="text-base">
-                Security emails
+                Correos de seguridad
               </FormLabel>
               <FormDescription>
-                Receive emails about your account activity and security.
+                Recibe correos sobre actividad y seguridad de la cuenta.
               </FormDescription>
             </div>
             <FormControl>
@@ -175,13 +175,13 @@ const onSubmit = handleSubmit((values) => {
         </FormControl>
         <div class="leading-none space-y-1">
           <FormLabel>
-            Use different settings for my mobile devices
+            Usar ajustes distintos en dispositivos móviles
           </FormLabel>
           <FormDescription>
-            You can manage your mobile notifications in the
+            Puedes gestionar las notificaciones móviles en la página de
             <a href="/examples/forms">
-              mobile settings
-            </a> page.
+              ajustes móviles
+            </a>.
           </FormDescription>
         </div>
       </FormItem>
@@ -189,7 +189,7 @@ const onSubmit = handleSubmit((values) => {
 
     <div class="flex justify-start">
       <Button type="submit">
-        Update notifications
+        Actualizar notificaciones
       </Button>
     </div>
   </form>

@@ -75,7 +75,7 @@ definePageMeta({
 {
   title: 'Usuarios',
   icon: 'i-lucide-users',
-  link: '/admin/users',
+  link: '/settings/users',
   permission: 'users.view' // Solo visible si tiene permiso
 }
 ```

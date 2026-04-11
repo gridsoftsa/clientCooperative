@@ -1,71 +1,77 @@
 <script setup lang="ts">
 import { cn } from '@/lib/utils'
 
-interface Item {
-  title: string
-  href: string
-  /** Si se define, el enlace solo se muestra con este permiso (además de acceder a /settings con `settings_ver`). */
-  permission?: string
-}
+type NavItem = { label: string; href: string; permission: string }
+
+const sections: { heading: string; items: NavItem[] }[] = [
+  {
+    heading: 'Tu cuenta',
+    items: [
+      { label: 'Perfil', href: '/settings/profile', permission: 'settings_ver' },
+      { label: 'Cuenta', href: '/settings/account', permission: 'settings_ver' },
+      { label: 'Apariencia', href: '/settings/appearance', permission: 'settings_ver' },
+      { label: 'Notificaciones', href: '/settings/notifications', permission: 'settings_ver' },
+      { label: 'Pantalla', href: '/settings/display', permission: 'settings_ver' },
+    ],
+  },
+  {
+    heading: 'Organización',
+    items: [
+      { label: 'Empresa principal', href: '/settings/company', permission: 'empresa_ver' },
+      { label: 'Usuarios', href: '/settings/users', permission: 'usuarios_ver' },
+      { label: 'Sucursales', href: '/settings/sucursales', permission: 'sucursales_ver' },
+      { label: 'Roles', href: '/settings/roles', permission: 'roles_ver' },
+      { label: 'Permisos', href: '/settings/permissions', permission: 'permisos_ver' },
+      { label: 'Auditoría', href: '/settings/audit', permission: 'admin_acceso' },
+    ],
+  },
+]
 
 const route = useRoute()
 const { hasPermission } = usePermissions()
 
-const allNavItems: Item[] = [
-  {
-    title: 'Profile',
-    href: '/settings/profile',
-  },
-  {
-    title: 'Account',
-    href: '/settings/account',
-  },
-  {
-    title: 'Appearance',
-    href: '/settings/appearance',
-  },
-  {
-    title: 'Notifications',
-    href: '/settings/notifications',
-  },
-  {
-    title: 'Display',
-    href: '/settings/display',
-  },
-  {
-    title: 'Configurar plantillas',
-    href: '/settings/template-config',
-    permission: 'plantillas_ver',
-  },
-  {
-    title: 'Configurar plantilla Score',
-    href: '/settings/score-template',
-    permission: 'plantillas_ver',
-  },
-]
-
-const sidebarNavItems = computed(() =>
-  allNavItems.filter(item => !item.permission || hasPermission(item.permission)),
+const visibleSections = computed(() =>
+  sections
+    .map(section => ({
+      ...section,
+      items: section.items.filter(
+        item => import.meta.server || hasPermission(item.permission),
+      ),
+    }))
+    .filter(section => section.items.length > 0),
 )
+
+function isActive(href: string): boolean {
+  return route.path === href || route.path.startsWith(`${href}/`)
+}
 </script>
 
 <template>
-  <nav class="flex lg:flex-col space-x-2 lg:space-x-0 lg:space-y-1">
-    <Button
-      v-for="item in sidebarNavItems"
-      :key="item.title"
-      variant="ghost"
-      :class="cn(
-        'w-full text-left justify-start items-start',
-        route.path === item.href && 'bg-muted hover:bg-muted',
-      )"
-      as-child
+  <nav class="flex flex-col gap-6 lg:space-y-0">
+    <div
+      v-for="(section, sIdx) in visibleSections"
+      :key="section.heading"
+      :class="cn(sIdx > 0 && 'border-t border-border pt-4 lg:pt-6')"
     >
-      <NuxtLink
-        :to="item.href"
-      >
-        {{ item.title }}
-      </NuxtLink>
-    </Button>
+      <p class="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {{ section.heading }}
+      </p>
+      <div class="flex space-x-2 lg:flex-col lg:space-x-0 lg:space-y-1">
+        <Button
+          v-for="item in section.items"
+          :key="item.href"
+          variant="ghost"
+          :class="cn(
+            'w-full items-start justify-start text-left',
+            isActive(item.href) && 'bg-muted hover:bg-muted',
+          )"
+          as-child
+        >
+          <NuxtLink :to="item.href">
+            {{ item.label }}
+          </NuxtLink>
+        </Button>
+      </div>
+    </div>
   </nav>
 </template>

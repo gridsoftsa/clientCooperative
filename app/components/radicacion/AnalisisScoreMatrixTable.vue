@@ -5,6 +5,7 @@ import type { ScoreMatrixLine } from '~/constants/analisis-score-matrix'
 import {
   normalizeScoreMatrixLines,
   percentInputToWeightDecimal,
+  validateSectionPeakPointsSumVsCap,
   validateSectionVariableWeightsNotOver100,
   weightDecimalToPercentInput,
 } from '~/utils/score-matrix-weights'
@@ -36,8 +37,15 @@ watch(
   { immediate: true },
 )
 
+function scoreMatrixValidationError(): string | null {
+  return (
+    validateSectionVariableWeightsNotOver100(localLines.value)
+    ?? validateSectionPeakPointsSumVsCap(localLines.value)
+  )
+}
+
 function emitLines(): void {
-  const err = validateSectionVariableWeightsNotOver100(localLines.value)
+  const err = scoreMatrixValidationError()
   if (err) {
     toast.error(err)
     return
@@ -50,12 +58,21 @@ function setSectionField(lineIndex: number, field: 'peso' | 'max', value: string
   if (!line || matrixLineKind(line) !== 's') {
     return
   }
+  const previousPeso = line.peso
+  const previousMax = line.max
   if (field === 'peso') {
     line.peso = percentInputToWeightDecimal(value)
   } else {
     line.max = value
   }
-  emitLines()
+  const err = scoreMatrixValidationError()
+  if (err) {
+    line.peso = previousPeso
+    line.max = previousMax
+    toast.error(err)
+    return
+  }
+  emit('update:lines', normalizeScoreMatrixLines(localLines.value))
 }
 
 function setVariablePeso(firstLineIndex: number, value: string): void {
@@ -65,7 +82,7 @@ function setVariablePeso(firstLineIndex: number, value: string): void {
   }
   const previousP = line.p
   line.p = percentInputToWeightDecimal(value)
-  const err = validateSectionVariableWeightsNotOver100(localLines.value)
+  const err = scoreMatrixValidationError()
   if (err) {
     line.p = previousP
     toast.error(err)
@@ -79,8 +96,15 @@ function setRowPt(lineIndex: number, value: string): void {
   if (!line || matrixLineKind(line) !== 'r') {
     return
   }
+  const previousPt = line.pt
   line.pt = value
-  emitLines()
+  const err = scoreMatrixValidationError()
+  if (err) {
+    line.pt = previousPt
+    toast.error(err)
+    return
+  }
+  emit('update:lines', normalizeScoreMatrixLines(localLines.value))
 }
 
 type MatrixSectionBlock = { type: 'section'; line: Extract<ScoreMatrixLine, { k: 's' }>; lineIndex: number }
@@ -308,7 +332,8 @@ function casillaRowspan(extra?: string): string {
           Puntaje total referencia: <span class="font-mono font-medium text-foreground">{{ totalPuntos }}</span>
         </p>
         <p v-if="editable" class="mt-1 max-w-xl text-xs text-muted-foreground">
-          Columna <span class="font-medium text-foreground">Peso</span>: ingrese porcentaje entre 0 y 100 (ej. 20 equivale a 20 %). Por sección (Cualitativas / Cuantitativas), la suma de esos pesos no puede superar el 100 %.
+          Columna <span class="font-medium text-foreground">Peso</span>: porcentaje 0–100 (ej. 20 = 20 %); por sección la suma de pesos no puede superar el 100 %.
+          Columna <span class="font-medium text-foreground">Puntaje</span>: por variable se toma el máximo entre sus filas; la suma de esos máximos en cada sección no puede superar el tope <span class="font-medium text-foreground">Máx</span> de la cabecera (p. ej. 300 / 700 sobre 1000 puntos).
         </p>
       </div>
     </div>

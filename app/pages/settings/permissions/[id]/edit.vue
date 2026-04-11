@@ -33,7 +33,7 @@ async function fetchPermission() {
     }
   } catch {
     toast.error('Error al cargar el permiso')
-    router.push('/admin/permissions')
+    router.push('/settings/permissions')
   } finally {
     loading.value = false
   }
@@ -56,7 +56,7 @@ const handleSubmit = async () => {
       },
     })
     toast.success('Permiso actualizado correctamente')
-    router.push('/admin/permissions')
+    router.push('/settings/permissions')
   } catch (error: any) {
     const msg = error?.data?.message || error?.data?.errors?.name?.[0] || 'Error al actualizar'
     toast.error(msg)
@@ -69,7 +69,8 @@ onMounted(() => fetchPermission())
 </script>
 
 <template>
-  <div class="w-full flex flex-col gap-4">
+  <SettingsLayout>
+    <div class="w-full flex flex-col gap-4">
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-2xl font-bold tracking-tight">Editar Permiso</h2>
@@ -115,5 +116,6 @@ onMounted(() => fetchPermission())
         </Button>
       </div>
     </form>
-  </div>
+    </div>
+  </SettingsLayout>
 </template>

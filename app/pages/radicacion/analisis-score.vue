@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { toast } from 'vue-sonner'
 import AnalisisScoreImprimirPanel from '~/components/radicacion/AnalisisScoreImprimirPanel.vue'
 import {
   IMPRIMIR_EMPLEADO_META,
@@ -12,10 +12,7 @@ import {
   INDEPENDIENTE_MATRIX,
   type ScoreMatrixLine,
 } from '~/constants/analisis-score-matrix'
-import {
-  ANALISIS_SCORE_PERFIL_OPTIONS,
-  type AnalisisScorePerfilValue,
-} from '~/constants/analisis-score'
+import type { AnalisisScorePerfilValue } from '~/constants/analisis-score'
 import { isScoreMatrixLinesRenderable, normalizeScoreMatrixLines } from '~/utils/score-matrix-weights'
 
 type ScoreMatricesApiResponse = {
@@ -134,16 +131,8 @@ watch(
   { immediate: true },
 )
 
-/** Un solo perfil: define qué hoja de impresión SCORE se muestra. */
+/** Un solo perfil: define qué hoja de impresión SCORE se muestra (solo en paso 2). */
 const perfilDeudor = ref<AnalisisScorePerfilValue | undefined>(undefined)
-const perfilPopoverOpen = ref(false)
-
-const perfilTriggerLabel = computed(() => {
-  if (perfilDeudor.value == null) {
-    return 'Selecciona un perfil…'
-  }
-  return ANALISIS_SCORE_PERFIL_OPTIONS.find((o) => o.value === perfilDeudor.value)?.label ?? perfilDeudor.value
-})
 
 /** Vista de impresión según perfil: empleado y pensionado comparten la misma plantilla. */
 const vistaImprimirScore = computed<'independiente' | 'empleado' | null>(() => {
@@ -157,17 +146,80 @@ const vistaImprimirScore = computed<'independiente' | 'empleado' | null>(() => {
   return 'empleado'
 })
 
-function cerrarSelectorPerfil(): void {
-  perfilPopoverOpen.value = false
+const currentStep = ref(1)
+const maxStep = 2
+
+const stepsScore = [
+  { num: 1, title: 'Perfil del deudor' },
+  { num: 2, title: 'Hoja SCORE' },
+] as const
+
+const activeStepMeta = computed(() => {
+  if (currentStep.value === 1) {
+    return {
+      title: 'Perfil del deudor',
+      description:
+        'Elige el perfil del deudor (independiente, empleado o pensionado). La hoja SCORE se abre en el siguiente paso. Para corregir el perfil, pulsa Anterior. Las matrices se configuran en Configuración → Plantilla Score.',
+    }
+  }
+  if (vistaImprimirScore.value === 'independiente') {
+    return {
+      title: 'IMPRIMIR INDEPENDIENTE',
+      description:
+        'Hoja Excel IMPRIMIR INDEPENDIENTE — Formato AIR-SARC-FO-02.',
+    }
+  }
+  if (vistaImprimirScore.value === 'empleado') {
+    return {
+      title: 'IMPRIMIR EMPLEADO - PENSIONADO',
+      description:
+        'Hoja Excel IMPRIMIR EMPLEADO -PENSIONADO — Formato AIR-SARC-FO-03.',
+    }
+  }
+  return {
+    title: 'Hoja SCORE',
+    description: 'Selecciona un perfil en el paso 1 para ver el formulario de puntajes.',
+  }
+})
+
+function goToStep(num: number): void {
+  if (num === 2 && perfilDeudor.value == null) {
+    toast.error('Primero elige un perfil del deudor en el paso 1.')
+    return
+  }
+  currentStep.value = num
 }
+
+function nextStep(): void {
+  if (currentStep.value === 1) {
+    if (perfilDeudor.value == null) {
+      toast.error('Selecciona un perfil del deudor para continuar.')
+      return
+    }
+    currentStep.value = 2
+    return
+  }
+}
+
+function prevStep(): void {
+  if (currentStep.value > 1) {
+    currentStep.value = 1
+  }
+}
+
+watch(perfilDeudor, (p) => {
+  if (p == null && currentStep.value === 2) {
+    currentStep.value = 1
+  }
+})
 
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-6xl space-y-6 px-4 pb-10 pt-4 md:px-6">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div class="space-y-1">
-        <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+  <div class="mx-auto flex w-full max-w-6xl flex-col gap-4 px-0 pb-10 pt-4">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <div class="mb-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <NuxtLink
             to="/radicacion"
             class="font-medium text-primary underline-offset-4 hover:underline"
@@ -177,131 +229,145 @@ function cerrarSelectorPerfil(): void {
           <Icon name="i-lucide-chevron-right" class="h-4 w-4 shrink-0 opacity-60" />
           <span class="text-foreground">Análisis y SCORE</span>
         </div>
-        <h1 class="text-2xl font-bold tracking-tight">
+        <h2 class="text-2xl font-bold tracking-tight">
           Análisis y SCORE
-        </h1>
-        <p class="max-w-2xl text-muted-foreground text-sm">
-          Formulario alineado a la plantilla de análisis de crédito. Las matrices de configuración (INDEPENDIENTE y EMPLEADO y PENSIONADO) se gestionan en
-          <NuxtLink
-            v-if="hasPermission('plantillas_ver')"
-            to="/settings/score-template"
-            class="font-medium text-primary underline-offset-4 hover:underline"
-          >
-            Configuración → Configurar plantilla Score
-          </NuxtLink>
-          <span v-else class="font-medium text-foreground">Configuración → Configurar plantilla Score</span>.
-          No incluye las hojas «DATOS», «CORRIENTE», «EMERGENCIA» ni «HOJA LIQU».
-        </p>
-        <p v-if="solicitudId" class="text-sm">
-          <span class="text-muted-foreground">Solicitud vinculada:</span>
-          <span class="ml-1 font-mono font-medium">#{{ solicitudId }}</span>
-          <span v-if="loadingSolicitud" class="ml-2 text-muted-foreground">Cargando datos del deudor…</span>
-        </p>
-        <p v-else class="text-sm text-muted-foreground">
-          Sin borrador vinculado. Puedes usar esta vista para pruebas o abrir SCORE desde una radicación guardada.
+        </h2>
+        <p class="text-muted-foreground">
+          Radicación — Análisis de riesgo
         </p>
       </div>
       <Button variant="outline" class="shrink-0" @click="router.push('/radicacion')">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
-        Volver a radicación
+        Volver
       </Button>
+    </div>
+
+    <div
+      v-if="solicitudId"
+      class="rounded-xl border bg-card p-4"
+    >
+      <p class="text-sm">
+        <span class="text-muted-foreground">Solicitud vinculada:</span>
+        <span class="ml-1 font-mono font-medium text-foreground">#{{ solicitudId }}</span>
+        <span v-if="loadingSolicitud" class="ml-2 text-muted-foreground">Cargando datos del deudor…</span>
+      </p>
+    </div>
+    <div
+      v-else
+      class="rounded-xl border border-dashed border-muted-foreground/25 bg-muted/20 p-4 text-sm text-muted-foreground"
+    >
+      Sin solicitud vinculada en la URL. Puedes usar esta vista en modo prueba o abrir SCORE desde el listado de radicación.
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <template v-for="(step, idx) in stepsScore" :key="step.num">
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          :class="[
+            currentStep === step.num
+              ? 'cursor-default bg-primary text-primary-foreground'
+              : 'cursor-pointer hover:bg-muted',
+          ]"
+          :aria-current="currentStep === step.num ? 'step' : undefined"
+          @click="goToStep(step.num)"
+        >
+          <div
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ring-border/50"
+            :class="currentStep === step.num
+              ? 'bg-primary text-primary-foreground ring-primary'
+              : currentStep > step.num
+                ? 'bg-primary/30 text-primary ring-primary/30'
+                : 'bg-background text-foreground ring-muted-foreground/40'"
+          >
+            {{ step.num }}
+          </div>
+          <span
+            class="hidden text-sm font-semibold sm:inline"
+            :class="currentStep === step.num ? 'text-primary-foreground' : 'text-foreground'"
+          >
+            {{ step.title }}
+          </span>
+        </button>
+        <Icon
+          v-if="idx < stepsScore.length - 1"
+          name="i-lucide-chevron-right"
+          class="h-4 w-4 shrink-0 text-muted-foreground"
+        />
+      </template>
     </div>
 
     <Card>
       <CardHeader>
-        <CardTitle class="text-lg">
-          Perfil del deudor
+        <CardTitle>
+          {{ activeStepMeta.title }}
         </CardTitle>
-        <CardDescription>
-          Elige un perfil para cargar la hoja de SCORE que corresponde (independiente, o empleado / pensionado).
+        <CardDescription class="max-w-3xl space-y-2">
+          <span>{{ activeStepMeta.description }}</span>
+          <span
+            v-if="currentStep === 1"
+            class="mt-2 block text-muted-foreground"
+          >
+            <NuxtLink
+              v-if="hasPermission('plantillas_ver')"
+              to="/parametrizacion/plantilla-score"
+              class="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              Plantilla Score
+            </NuxtLink>
+            <template v-else>
+              <span class="font-medium text-foreground">Plantilla Score</span> (requiere permiso).
+            </template>
+          </span>
         </CardDescription>
       </CardHeader>
-      <CardContent class="space-y-2">
-        <Label class="text-sm font-medium">Perfil</Label>
-        <Popover v-model:open="perfilPopoverOpen">
-          <PopoverTrigger as-child>
-            <Button
-              variant="outline"
-              role="combobox"
-              :aria-expanded="perfilPopoverOpen"
-              class="h-auto min-h-10 w-full max-w-md justify-between py-2 text-left font-normal"
-            >
-              <span class="line-clamp-2">{{ perfilTriggerLabel }}</span>
-              <Icon name="i-lucide-chevrons-up-down" class="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent class="w-80 p-3 sm:w-96" align="start">
-            <p class="mb-3 text-xs font-medium text-muted-foreground">
-              Selecciona una opción
-            </p>
-            <RadioGroup
-              v-model="perfilDeudor"
-              class="grid gap-2"
-              @update:model-value="cerrarSelectorPerfil"
-            >
-              <div
-                v-for="opt in ANALISIS_SCORE_PERFIL_OPTIONS"
-                :key="opt.value"
-                class="flex items-center gap-2"
-              >
-                <RadioGroupItem :id="`perfil-${opt.value}`" :value="opt.value" />
-                <Label
-                  :for="`perfil-${opt.value}`"
-                  class="cursor-pointer text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  {{ opt.label }}
-                </Label>
-              </div>
-            </RadioGroup>
-          </PopoverContent>
-        </Popover>
-      </CardContent>
-    </Card>
+      <CardContent class="space-y-6">
+        <div v-if="currentStep === 1" class="space-y-4">
+          <RadicacionAnalisisScorePerfilPicker v-model="perfilDeudor" />
+        </div>
 
-    <div v-if="vistaImprimirScore === 'independiente'" class="w-full">
-      <Card>
-        <CardHeader>
-          <CardTitle class="text-base">
-            IMPRIMIR INDEPENDIENTE
-          </CardTitle>
-          <CardDescription>
-            Hoja Excel: <span class="font-mono">IMPRIMIR INDEPENDIENTE</span>
-            — Formato AIR-SARC-FO-02 con leyenda de referencia.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <div v-else-if="currentStep === 2" class="space-y-4">
           <AnalisisScoreImprimirPanel
+            v-if="vistaImprimirScore === 'independiente'"
             v-model:cabecera="scoreCabecera"
             variant="independiente"
             :meta="IMPRIMIR_INDEPENDIENTE_META"
             :variable-rows="IMPRIMIR_INDEPENDIENTE_VARIABLES"
             :matrix-lines="scoreLinesIndep"
           />
-        </CardContent>
-      </Card>
-    </div>
-
-    <div v-else-if="vistaImprimirScore === 'empleado'" class="w-full">
-      <Card>
-        <CardHeader>
-          <CardTitle class="text-base">
-            IMPRIMIR EMPLEADO - PENSIONADO
-          </CardTitle>
-          <CardDescription>
-            Hoja Excel: <span class="font-mono">IMPRIMIR EMPLEADO -PENSIONADO</span>
-            — Formato AIR-SARC-FO-03 con leyenda de referencia.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
           <AnalisisScoreImprimirPanel
+            v-else-if="vistaImprimirScore === 'empleado'"
             v-model:cabecera="scoreCabecera"
             variant="empleado"
             :meta="IMPRIMIR_EMPLEADO_META"
             :variable-rows="IMPRIMIR_EMPLEADO_VARIABLES"
             :matrix-lines="scoreLinesEmp"
           />
-        </CardContent>
-      </Card>
-    </div>
+          <p v-else class="text-sm text-muted-foreground">
+            Selecciona un perfil en el paso 1 para cargar la hoja de score.
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
+          <div class="flex flex-wrap gap-2">
+            <Button
+              v-if="currentStep > 1"
+              type="button"
+              variant="outline"
+              @click="prevStep"
+            >
+              Anterior
+            </Button>
+            <Button
+              v-if="currentStep < maxStep"
+              type="button"
+              @click="nextStep"
+            >
+              Siguiente
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   </div>
 </template>

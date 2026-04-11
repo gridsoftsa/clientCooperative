@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import type { ImprimirMeta, ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
-import {
-  IMPRIMIR_LEYENDA_EMPLEADO,
-  IMPRIMIR_LEYENDA_INDEPENDIENTE,
-  IMPRIMIR_NIVEL_RIESGO_TABLA,
-} from '~/constants/analisis-score-imprimir'
+import { IMPRIMIR_NIVEL_RIESGO_TABLA } from '~/constants/analisis-score-imprimir'
 import type { ScoreMatrixLine } from '~/constants/analisis-score-matrix'
 import type { ScoreMatrixOption } from '~/utils/analisis-score-matrix-options'
 import {
@@ -18,17 +14,13 @@ const props = defineProps<{
   variant: 'independiente' | 'empleado'
   meta: ImprimirMeta
   variableRows: ImprimirVariableRow[]
-  /** Líneas de la misma fuente que `/settings/score-template` (GET /score-template-matrices). */
+  /** Líneas de la misma fuente que `/parametrizacion/plantilla-score` (GET /score-template-matrices). */
   matrixLines: ScoreMatrixLine[]
 }>()
 
 const cabecera = defineModel<{ fecha: string; cedula: string; nombre: string }>('cabecera', {
   default: () => ({ fecha: '', cedula: '', nombre: '' }),
 })
-
-const leyenda = computed(() =>
-  props.variant === 'empleado' ? IMPRIMIR_LEYENDA_EMPLEADO : IMPRIMIR_LEYENDA_INDEPENDIENTE,
-)
 
 const optionsMap = computed(() => buildVariableOptionsFromMatrix(props.matrixLines))
 
@@ -118,8 +110,7 @@ function onMatrixOptionChange(row: ImprimirVariableRow, value: string): void {
       </p>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-3">
-      <div class="space-y-4 lg:col-span-2">
+    <div class="space-y-4">
         <div class="grid gap-3 sm:grid-cols-3">
           <div class="space-y-1.5">
             <Label for="imp-fecha">FECHA</Label>
@@ -252,20 +243,6 @@ function onMatrixOptionChange(row: ImprimirVariableRow, value: string): void {
             Espacio reservado según plantilla impresa.
           </p>
         </div>
-      </div>
-
-      <div class="rounded-lg border bg-muted/20 p-3 lg:sticky lg:top-4 lg:self-start">
-        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Leyenda / valores de referencia
-        </p>
-        <div class="max-h-[min(70vh,520px)] overflow-y-auto overscroll-y-contain pr-1">
-          <ul class="space-y-1 text-xs text-muted-foreground">
-            <li v-for="(item, i) in leyenda" :key="i" class="border-b border-border/40 py-1 last:border-0">
-              {{ item }}
-            </li>
-          </ul>
-        </div>
-      </div>
     </div>
   </div>
 </template>

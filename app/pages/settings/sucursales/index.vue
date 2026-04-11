@@ -54,13 +54,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="w-full flex flex-col gap-4">
+  <SettingsLayout :wide="true">
+    <div class="w-full flex flex-col gap-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-2xl font-bold tracking-tight">
         Sucursales
       </h2>
       <PermissionGate permission="sucursales_crear">
-        <Button @click="router.push('/admin/sucursales/create')">
+        <Button @click="router.push('/settings/sucursales/create')">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Nueva Sucursal
         </Button>
@@ -109,7 +110,7 @@ onMounted(() => {
                 </TableCell>
                 <TableCell class="text-right">
                   <PermissionGate permission="sucursales_editar">
-                    <Button variant="ghost" size="sm" @click="router.push(`/admin/sucursales/${s.id}/edit`)">
+                    <Button variant="ghost" size="sm" @click="router.push(`/settings/sucursales/${s.id}/edit`)">
                       <Icon name="i-lucide-edit" class="h-4 w-4" />
                     </Button>
                   </PermissionGate>
@@ -131,5 +132,6 @@ onMounted(() => {
         </div>
       </CardContent>
     </Card>
-  </div>
+    </div>
+  </SettingsLayout>
 </template>

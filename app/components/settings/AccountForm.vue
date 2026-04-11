@@ -13,41 +13,41 @@ const dateValue = ref()
 const placeholder = ref()
 
 const languages = [
-  { label: 'English', value: 'en' },
-  { label: 'French', value: 'fr' },
-  { label: 'German', value: 'de' },
-  { label: 'Indonesia', value: 'id' },
-  { label: 'Spanish', value: 'es' },
-  { label: 'Portuguese', value: 'pt' },
-  { label: 'Russian', value: 'ru' },
-  { label: 'Japanese', value: 'ja' },
-  { label: 'Korean', value: 'ko' },
-  { label: 'Chinese', value: 'zh' },
+  { label: 'Inglés', value: 'en' },
+  { label: 'Francés', value: 'fr' },
+  { label: 'Alemán', value: 'de' },
+  { label: 'Indonesio', value: 'id' },
+  { label: 'Español', value: 'es' },
+  { label: 'Portugués', value: 'pt' },
+  { label: 'Ruso', value: 'ru' },
+  { label: 'Japonés', value: 'ja' },
+  { label: 'Coreano', value: 'ko' },
+  { label: 'Chino', value: 'zh' },
 ] as const
 
-const df = new DateFormatter('en-US', {
+const df = new DateFormatter('es', {
   dateStyle: 'long',
 })
 
 const accountFormSchema = toTypedSchema(z.object({
   name: z
     .string({
-      required_error: 'Required.',
+      required_error: 'Obligatorio.',
     })
     .min(2, {
-      message: 'Name must be at least 2 characters.',
+      message: 'El nombre debe tener al menos 2 caracteres.',
     })
     .max(30, {
-      message: 'Name must not be longer than 30 characters.',
+      message: 'El nombre no puede superar los 30 caracteres.',
     }),
-  dob: z.string().datetime().optional().refine(date => date !== undefined, 'Please select a valid date.'),
-  language: z.string().min(1, 'Please select a language.'),
+  dob: z.string().datetime().optional().refine(date => date !== undefined, 'Selecciona una fecha válida.'),
+  language: z.string().min(1, 'Selecciona un idioma.'),
 }))
 
 // https://github.com/logaretm/vee-validate/issues/3521
 // https://github.com/logaretm/vee-validate/discussions/3571
 async function onSubmit(values: any) {
-  toast('You submitted the following values:', {
+  toast('Valores enviados:', {
     description: h('pre', { class: 'mt-2 w-[340px] rounded-md bg-slate-950 p-4' }, h('code', { class: 'text-white' }, JSON.stringify(values, null, 2))),
   })
 }
@@ -56,22 +56,22 @@ async function onSubmit(values: any) {
 <template>
   <div>
     <h3 class="text-lg font-medium">
-      Account
+      Cuenta
     </h3>
     <p class="text-sm text-muted-foreground">
-      Update your account settings. Set your preferred language and timezone.
+      Actualiza los datos de tu cuenta. Define tu idioma preferido y zona horaria.
     </p>
   </div>
   <Separator />
   <Form v-slot="{ setFieldValue }" :validation-schema="accountFormSchema" class="space-y-8" @submit="onSubmit">
     <FormField v-slot="{ componentField }" name="name">
       <FormItem>
-        <FormLabel>Name</FormLabel>
+        <FormLabel>Nombre</FormLabel>
         <FormControl>
-          <Input type="text" placeholder="Your name" v-bind="componentField" />
+          <Input type="text" placeholder="Tu nombre" v-bind="componentField" />
         </FormControl>
         <FormDescription>
-          This is the name that will be displayed on your profile and in emails.
+          Es el nombre que se mostrará en tu perfil y en los correos.
         </FormDescription>
         <FormMessage />
       </FormItem>
@@ -79,7 +79,7 @@ async function onSubmit(values: any) {
 
     <FormField v-slot="{ field, value }" name="dob">
       <FormItem class="flex flex-col">
-        <FormLabel>Date of birth</FormLabel>
+        <FormLabel>Fecha de nacimiento</FormLabel>
         <Popover>
           <PopoverTrigger as-child>
             <FormControl>
@@ -90,7 +90,7 @@ async function onSubmit(values: any) {
                 )"
               >
                 <Icon name="i-radix-icons-calendar" class="mr-2 h-4 w-4 opacity-50" />
-                <span>{{ value ? df.format(toDate(dateValue, getLocalTimeZone())) : "Pick a date" }}</span>
+                <span>{{ value ? df.format(toDate(dateValue, getLocalTimeZone())) : 'Elige una fecha' }}</span>
               </Button>
             </FormControl>
           </PopoverTrigger>
@@ -98,7 +98,7 @@ async function onSubmit(values: any) {
             <Calendar
               v-model:placeholder="placeholder"
               v-model="dateValue"
-              calendar-label="Date of birth"
+              calendar-label="Fecha de nacimiento"
               initial-focus
               :min-value="new CalendarDate(1900, 1, 1)"
               :max-value="today(getLocalTimeZone())"
@@ -116,7 +116,7 @@ async function onSubmit(values: any) {
           </PopoverContent>
         </Popover>
         <FormDescription>
-          Your date of birth is used to calculate your age.
+          Se usa para calcular tu edad.
         </FormDescription>
         <FormMessage />
       </FormItem>
@@ -125,7 +125,7 @@ async function onSubmit(values: any) {
 
     <FormField v-slot="{ value }" name="language">
       <FormItem class="flex flex-col">
-        <FormLabel>Language</FormLabel>
+        <FormLabel>Idioma</FormLabel>
 
         <Popover v-model:open="open">
           <PopoverTrigger as-child>
@@ -138,7 +138,7 @@ async function onSubmit(values: any) {
               >
                 {{ value ? languages.find(
                   (language) => language.value === value,
-                )?.label : 'Select language...' }}
+                )?.label : 'Seleccionar idioma…' }}
 
                 <ChevronsUpDown class="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
@@ -146,8 +146,8 @@ async function onSubmit(values: any) {
           </PopoverTrigger>
           <PopoverContent class="w-[200px] p-0">
             <Command>
-              <CommandInput placeholder="Search language..." />
-              <CommandEmpty>No language found.</CommandEmpty>
+              <CommandInput placeholder="Buscar idioma…" />
+              <CommandEmpty>No se encontró ningún idioma.</CommandEmpty>
               <CommandList>
                 <CommandGroup>
                   <CommandItem
@@ -172,7 +172,7 @@ async function onSubmit(values: any) {
         </Popover>
 
         <FormDescription>
-          This is the language that will be used in the dashboard.
+          Idioma que se usará en el panel.
         </FormDescription>
         <FormMessage />
       </FormItem>
@@ -180,7 +180,7 @@ async function onSubmit(values: any) {
 
     <div class="flex justify-start">
       <Button type="submit">
-        Update account
+        Actualizar cuenta
       </Button>
     </div>
   </Form>

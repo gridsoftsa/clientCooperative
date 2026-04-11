@@ -5,7 +5,7 @@ export const navMenu: NavMenu[] = [
     heading: 'General',
     items: [
       {
-        title: 'Dashboard',
+        title: 'Inicio',
         icon: 'i-lucide-home',
         link: '/',
         permission: 'dashboard_ver',
@@ -34,7 +34,7 @@ export const navMenu: NavMenu[] = [
       {
         title: 'Solicitantes',
         icon: 'i-lucide-user-check',
-        link: '/admin/applicants',
+        link: '/settings/applicants',
         permission: 'solicitantes_ver',
       },
     ],
@@ -43,43 +43,100 @@ export const navMenu: NavMenu[] = [
     heading: 'Sistema',
     items: [
       {
-        title: 'Administración',
-        icon: 'i-lucide-sliders-horizontal',
+        title: 'Parametrización',
+        icon: 'i-lucide-settings-2',
         children: [
+          {
+            title: 'Plantillas',
+            icon: 'i-lucide-layout-template',
+            link: '/parametrizacion/plantillas',
+            permission: 'plantillas_ver',
+          },
+          {
+            title: 'Plantilla Score',
+            icon: 'i-lucide-file-spreadsheet',
+            link: '/parametrizacion/plantilla-score',
+            permission: 'plantillas_ver',
+          },
+        ],
+      },
+      {
+        title: 'Configuración',
+        icon: 'i-lucide-settings',
+        anyPermission: [
+          'settings_ver',
+          'empresa_ver',
+          'usuarios_ver',
+          'sucursales_ver',
+          'roles_ver',
+          'permisos_ver',
+          'admin_acceso',
+        ],
+        children: [
+          {
+            title: 'Perfil',
+            icon: 'i-lucide-user',
+            link: '/settings/profile',
+            permission: 'settings_ver',
+          },
+          {
+            title: 'Cuenta',
+            icon: 'i-lucide-id-card',
+            link: '/settings/account',
+            permission: 'settings_ver',
+          },
+          {
+            title: 'Apariencia',
+            icon: 'i-lucide-palette',
+            link: '/settings/appearance',
+            permission: 'settings_ver',
+          },
+          {
+            title: 'Notificaciones',
+            icon: 'i-lucide-bell',
+            link: '/settings/notifications',
+            permission: 'settings_ver',
+          },
+          {
+            title: 'Pantalla',
+            icon: 'i-lucide-monitor',
+            link: '/settings/display',
+            permission: 'settings_ver',
+          },
           {
             title: 'Empresa principal',
             icon: 'i-lucide-building',
-            link: '/admin/company',
+            link: '/settings/company',
             permission: 'empresa_ver',
           },
           {
             title: 'Usuarios',
             icon: 'i-lucide-users',
-            link: '/admin/users',
+            link: '/settings/users',
             permission: 'usuarios_ver',
           },
           {
             title: 'Sucursales',
             icon: 'i-lucide-building-2',
-            link: '/admin/sucursales',
+            link: '/settings/sucursales',
             permission: 'sucursales_ver',
           },
           {
             title: 'Roles',
             icon: 'i-lucide-shield-check',
-            link: '/admin/roles',
+            link: '/settings/roles',
             permission: 'roles_ver',
           },
           {
             title: 'Permisos',
             icon: 'i-lucide-key',
-            link: '/admin/permissions',
+            link: '/settings/permissions',
             permission: 'permisos_ver',
           },
           {
             title: 'Auditoría',
             icon: 'i-lucide-clipboard-list',
-            link: '/admin/audit',
+            link: '/settings/audit',
             permission: 'admin_acceso',
           },
         ],
@@ -97,128 +154,6 @@ export const navMenu: NavMenu[] = [
       },
     ],
   }, */
-  {
-    heading: 'Pages',
-    items: [
-      /* {
-        title: 'Authentication',
-        icon: 'i-lucide-lock-keyhole-open',
-        children: [
-          {
-            title: 'Login',
-            icon: 'i-lucide-circle',
-            link: '/login',
-          },
-          {
-            title: 'Login Basic',
-            icon: 'i-lucide-circle',
-            link: '/login-basic',
-          },
-          {
-            title: 'Register',
-            icon: 'i-lucide-circle',
-            link: '/register',
-          },
-          {
-            title: 'Forgot Password',
-            icon: 'i-lucide-circle',
-            link: '/forgot-password',
-          },
-          {
-            title: 'OTP',
-            icon: 'i-lucide-circle',
-            link: '/otp',
-          },
-          {
-            title: 'OTP 1',
-            icon: 'i-lucide-circle',
-            link: '/otp-1',
-          },
-          {
-            title: 'OTP 2',
-            icon: 'i-lucide-circle',
-            link: '/otp-2',
-          },
-        ],
-      },
-      {
-        title: 'Errors',
-        icon: 'i-lucide-triangle-alert',
-        children: [
-          {
-            title: '401 - Unauthorized',
-            icon: 'i-lucide-circle',
-            link: '/401',
-          },
-          {
-            title: '403 - Forbidden',
-            icon: 'i-lucide-circle',
-            link: '/403',
-          },
-          {
-            title: '404 - Not Found',
-            icon: 'i-lucide-circle',
-            link: '/404',
-          },
-          {
-            title: '500 - Internal Server Error',
-            icon: 'i-lucide-circle',
-            link: '/500',
-          },
-          {
-            title: '503 - Service Unavailable',
-            icon: 'i-lucide-circle',
-            link: '/503',
-          },
-        ],
-      }, */
-      {
-        title: 'Configuración',
-        icon: 'i-lucide-settings',
-        new: true,
-        permission: 'settings_ver',
-        children: [
-          {
-            title: 'Profile',
-            icon: 'i-lucide-circle',
-            link: '/settings/profile',
-          },
-          {
-            title: 'Account',
-            icon: 'i-lucide-circle',
-            link: '/settings/account',
-          },
-          {
-            title: 'Appearance',
-            icon: 'i-lucide-circle',
-            link: '/settings/appearance',
-          },
-          {
-            title: 'Notifications',
-            icon: 'i-lucide-circle',
-            link: '/settings/notifications',
-          },
-          {
-            title: 'Display',
-            icon: 'i-lucide-circle',
-            link: '/settings/display',
-          },
-          {
-            title: 'Configurar plantillas',
-            icon: 'i-lucide-circle',
-            link: '/settings/template-config',
-            permission: 'plantillas_ver',
-          },
-          {
-            title: 'Configurar plantilla Score',
-            icon: 'i-lucide-circle',
-            link: '/settings/score-template',
-            permission: 'plantillas_ver',
-          },
-        ],
-      },
-    ],
-  },
   /* {
     heading: 'Components',
     items: [

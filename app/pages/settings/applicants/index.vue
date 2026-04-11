@@ -74,7 +74,8 @@ watch(searchQuery, () => {
 </script>
 
 <template>
-  <div class="w-full flex flex-col gap-4">
+  <SettingsLayout :wide="true">
+    <div class="w-full flex flex-col gap-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-2xl font-bold tracking-tight">
         Deudores y Codeudores
@@ -155,7 +156,7 @@ watch(searchQuery, () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        @click="router.push(`/admin/applicants/${a.id}/edit`)"
+                        @click="router.push(`/settings/applicants/${a.id}/edit`)"
                       >
                         <Icon name="i-lucide-edit" class="h-4 w-4" />
                       </Button>
@@ -194,5 +195,6 @@ watch(searchQuery, () => {
         </div>
       </CardContent>
     </Card>
-  </div>
+    </div>
+  </SettingsLayout>
 </template>

@@ -35,6 +35,32 @@ function backgroundColor(color: ThemeColor) {
 }
 
 const colorMode = useColorMode()
+
+const themeColorLabelEs: Record<string, string> = {
+  default: 'Predeterminado',
+  blue: 'Azul',
+  green: 'Verde',
+  red: 'Rojo',
+  rose: 'Rosa',
+  violet: 'Violeta',
+  orange: 'Naranja',
+  yellow: 'Amarillo',
+  teal: 'Verde azulado',
+}
+
+const themeTypeLabelEs: Record<string, string> = {
+  default: 'Predeterminado',
+  scaled: 'Escalado',
+  mono: 'Monocromático',
+}
+
+function colorLabel(name: string): string {
+  return themeColorLabelEs[name] ?? name
+}
+
+function typeLabel(name: string): string {
+  return themeTypeLabelEs[name] ?? name
+}
 </script>
 
 <template>
@@ -52,13 +78,13 @@ const colorMode = useColorMode()
             <span class="h-5 w-5 flex items-center justify-center rounded-full border border-white" :style="{ backgroundColor: backgroundColor(col) }">
               <Icon v-if="col === theme?.color" name="i-radix-icons-check" size="16" class="text-white" />
             </span>
-            <span class="text-xs capitalize">{{ col }}</span>
+            <span class="text-xs">{{ colorLabel(col) }}</span>
           </Button>
         </template>
       </div>
     </div>
     <div class="space-y-1.5">
-      <Label>Type</Label>
+      <Label>Estilo</Label>
       <div class="grid grid-cols-3 gap-2">
         <template v-for="themeType in allTypes" :key="themeType">
           <Button
@@ -67,13 +93,13 @@ const colorMode = useColorMode()
             :class="{ '!border-primary border-2 !bg-primary/10': theme?.type === themeType }"
             @click="updateAppSettings({ theme: { type: themeType } })"
           >
-            <span class="text-xs capitalize">{{ themeType }}</span>
+            <span class="text-xs">{{ typeLabel(themeType) }}</span>
           </Button>
         </template>
       </div>
     </div>
     <div class="space-y-1.5">
-      <Label>Theme</Label>
+      <Label>Tema</Label>
       <div class="grid grid-cols-3 gap-2">
         <Button
           class="justify-center gap-2"
@@ -82,7 +108,7 @@ const colorMode = useColorMode()
           @click="colorMode.preference = 'light'"
         >
           <Icon name="i-ph-sun-dim-duotone" size="16" />
-          <span class="text-xs capitalize">Light</span>
+          <span class="text-xs">Claro</span>
         </Button>
         <Button
           class="justify-center gap-2"
@@ -91,7 +117,7 @@ const colorMode = useColorMode()
           @click="colorMode.preference = 'dark'"
         >
           <Icon name="i-ph-moon-stars-duotone" size="16" />
-          <span class="text-xs capitalize">Dark</span>
+          <span class="text-xs">Oscuro</span>
         </Button>
         <Button
           class="justify-center gap-2"
@@ -100,7 +126,7 @@ const colorMode = useColorMode()
           @click="colorMode.preference = 'system'"
         >
           <Icon name="i-lucide-monitor" size="16" />
-          <span class="text-xs capitalize">System</span>
+          <span class="text-xs">Sistema</span>
         </Button>
       </div>
     </div>

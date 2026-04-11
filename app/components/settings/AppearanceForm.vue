@@ -9,11 +9,11 @@ import { buttonVariants } from '~/components/ui/button'
 
 const appearanceFormSchema = toTypedSchema(z.object({
   theme: z.enum(['light', 'dark'], {
-    required_error: 'Please select a theme.',
+    required_error: 'Selecciona un tema.',
   }),
   font: z.enum(['inter', 'manrope', 'system'], {
-    invalid_type_error: 'Select a font',
-    required_error: 'Please select a font.',
+    invalid_type_error: 'Selecciona una fuente',
+    required_error: 'Selecciona una fuente.',
   }),
 }))
 
@@ -28,7 +28,7 @@ const { handleSubmit } = useForm({
 const color = useColorMode()
 
 const onSubmit = handleSubmit((values) => {
-  toast('You submitted the following values:', {
+  toast('Valores enviados:', {
     description: h('pre', { class: 'mt-2 w-[340px] rounded-md bg-slate-950 p-4' }, h('code', { class: 'text-white' }, JSON.stringify(values, null, 2))),
   })
   if (values.theme === 'dark') {
@@ -43,17 +43,17 @@ const onSubmit = handleSubmit((values) => {
 <template>
   <div>
     <h3 class="text-lg font-medium">
-      Appearance
+      Apariencia
     </h3>
     <p class="text-sm text-muted-foreground">
-      Customize the appearance of the app. Automatically switch between day and night themes.
+      Personaliza la apariencia de la aplicación. Cambia entre tema claro y oscuro.
     </p>
   </div>
   <Separator />
   <form class="space-y-8" @submit="onSubmit">
     <FormField v-slot="{ field }" name="font">
       <FormItem>
-        <FormLabel>Font</FormLabel>
+        <FormLabel>Fuente</FormLabel>
         <div class="relative w-[200px]">
           <FormControl>
             <select
@@ -70,14 +70,14 @@ const onSubmit = handleSubmit((values) => {
                 Manrope
               </option>
               <option value="system">
-                System
+                Sistema
               </option>
             </select>
           </FormControl>
           <Icon name="i-radix-icons-chevron-down" class="pointer-events-none absolute right-3 top-2.5 h-4 w-4 opacity-50" />
         </div>
         <FormDescription>
-          Set the font you want to use in the dashboard.
+          Fuente que se usará en el panel.
         </FormDescription>
         <FormMessage />
       </FormItem>
@@ -85,9 +85,9 @@ const onSubmit = handleSubmit((values) => {
 
     <FormField v-slot="{ componentField }" type="radio" name="theme">
       <FormItem class="space-y-1">
-        <FormLabel>Theme</FormLabel>
+        <FormLabel>Tema</FormLabel>
         <FormDescription>
-          Select the theme for the dashboard.
+          Elige el tema del panel.
         </FormDescription>
         <FormMessage />
 
@@ -117,7 +117,7 @@ const onSubmit = handleSubmit((values) => {
                 </div>
               </div>
               <span class="block w-full p-2 text-center font-normal">
-                Light
+                Claro
               </span>
             </FormLabel>
           </FormItem>
@@ -143,7 +143,7 @@ const onSubmit = handleSubmit((values) => {
                 </div>
               </div>
               <span class="block w-full p-2 text-center font-normal">
-                Dark
+                Oscuro
               </span>
             </FormLabel>
           </FormItem>
@@ -153,7 +153,7 @@ const onSubmit = handleSubmit((values) => {
 
     <div class="flex justify-start">
       <Button type="submit">
-        Update preferences
+        Guardar preferencias
       </Button>
     </div>
   </form>

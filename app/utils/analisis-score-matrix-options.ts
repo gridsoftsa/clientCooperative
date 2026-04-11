@@ -18,7 +18,7 @@ function optionLabelFromRow(line: Extract<ScoreMatrixLine, { k: 'r' }>): string 
 }
 
 /**
- * Agrupa filas `r` de la matriz (mismo criterio que la tabla en settings/score-template)
+ * Agrupa filas `r` de la matriz (mismo criterio que la tabla en parametrización / plantilla Score)
  * y devuelve opciones por nombre de variable (`v` en la primera fila del grupo).
  */
 export function buildVariableOptionsFromMatrix(lines: ScoreMatrixLine[]): Map<string, ScoreMatrixOption[]> {

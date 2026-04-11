@@ -17,36 +17,36 @@ function handleChangeDirection(dir: 'ltr' | 'rtl') {
 <template>
   <DefineTemplate>
     <div class="space-y-3">
-      <Badge>Layout</Badge>
+      <Badge>Diseño</Badge>
       <div class="grid gap-6">
         <div class="space-y-1.5">
-          <Label>Navbar Type</Label>
+          <Label>Tipo de barra</Label>
           <div class="grid grid-cols-3 gap-2">
             <Button
               variant="outline"
               :class="{ 'border-primary! border-2 bg-primary/10!': sidebar?.variant === 'sidebar' }"
               @click="updateAppSettings({ sidebar: { variant: 'sidebar' } })"
             >
-              Sidebar
+              Lateral
             </Button>
             <Button
               variant="outline"
               :class="{ 'border-primary! border-2 bg-primary/10!': sidebar?.variant === 'floating' }"
               @click="updateAppSettings({ sidebar: { variant: 'floating' } })"
             >
-              Floating
+              Flotante
             </Button>
             <Button
               variant="outline"
               :class="{ 'border-primary! border-2 bg-primary/10!': sidebar?.variant === 'inset' }"
               @click="updateAppSettings({ sidebar: { variant: 'inset' } })"
             >
-              Inset
+              Incrustada
             </Button>
           </div>
         </div>
         <div class="space-y-1.5">
-          <Label>Direction</Label>
+          <Label>Dirección</Label>
           <div class="grid grid-cols-2 gap-2">
             <Button
               variant="outline"
@@ -76,13 +76,13 @@ function handleChangeDirection(dir: 'ltr' | 'rtl') {
     </SheetTrigger>
     <SheetContent :side="direction === 'rtl' ? 'left' : 'right'">
       <SheetHeader class="p-6 pb-0">
-        <SheetTitle>Template Customizer</SheetTitle>
-        <SheetDescription>Customize & Preview in Real Time</SheetDescription>
+        <SheetTitle>Personalizar plantilla</SheetTitle>
+        <SheetDescription>Vista previa en tiempo real</SheetDescription>
       </SheetHeader>
       <ScrollArea class="h-[calc(100vh-100px)]">
         <div class="flex flex-col gap-6 px-6">
           <div class="space-y-3">
-            <Badge>Theming</Badge>
+            <Badge>Tema</Badge>
             <ThemeCustomize />
           </div>
           <Separator />
@@ -100,12 +100,12 @@ function handleChangeDirection(dir: 'ltr' | 'rtl') {
     </DrawerTrigger>
     <DrawerContent class="max-h-[97%]">
       <DrawerHeader class="text-center sm:text-center">
-        <DrawerTitle>Template Customizer</DrawerTitle>
-        <DrawerDescription>Customize & Preview in Real Time</DrawerDescription>
+        <DrawerTitle>Personalizar plantilla</DrawerTitle>
+        <DrawerDescription>Vista previa en tiempo real</DrawerDescription>
       </DrawerHeader>
       <div class="mx-auto max-w-md w-full overflow-auto overflow-y-auto px-4 pb-6 space-y-6">
         <div class="space-y-3">
-          <Badge>Theming</Badge>
+          <Badge>Tema</Badge>
           <ThemeCustomize />
         </div>
         <Separator />

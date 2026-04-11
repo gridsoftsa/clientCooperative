@@ -102,7 +102,7 @@ async function fetchApplicant() {
   } catch (error) {
     console.error('Error al cargar solicitante:', error)
     toast.error('Error al cargar el solicitante')
-    router.push('/admin/applicants')
+    router.push('/settings/applicants')
   } finally {
     loading.value = false
   }
@@ -141,12 +141,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="w-full flex flex-col gap-4">
+  <SettingsLayout :wide="true">
+    <div class="w-full flex flex-col gap-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-2xl font-bold tracking-tight">
         Editar Solicitante
       </h2>
-      <Button variant="outline" @click="router.push('/admin/applicants')">
+      <Button variant="outline" @click="router.push('/settings/applicants')">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>
@@ -171,7 +172,7 @@ onMounted(() => {
             :readonly="false"
           />
           <div class="flex justify-end gap-2">
-            <Button type="button" variant="outline" @click="router.push('/admin/applicants')">
+            <Button type="button" variant="outline" @click="router.push('/settings/applicants')">
               Cancelar
             </Button>
             <Button type="submit" :disabled="saving">
@@ -182,5 +183,6 @@ onMounted(() => {
         </form>
       </CardContent>
     </Card>
-  </div>
+    </div>
+  </SettingsLayout>
 </template>

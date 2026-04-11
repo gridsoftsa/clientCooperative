@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { Role, Permission } from '~/types/role'
+import type { Permission } from '~/types/role'
 import {
   PERMISSION_CATEGORY_LABELS,
   formatPermissionDisplayName,
@@ -10,20 +10,17 @@ import {
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'roles_editar'
+  permissions: 'roles_crear'
 })
 
 const { $api } = useNuxtApp()
-const route = useRoute()
 const router = useRouter()
-const roleId = route.params.id as string
 
 const formData = ref({
   name: '',
   permissions: [] as string[],
 })
 
-const role = ref<Role | null>(null)
 const permissions = ref<Permission[]>([])
 const loading = ref(false)
 const saving = ref(false)
@@ -79,39 +76,16 @@ const toggleCategory = (category: string) => {
   }
 }
 
-function normalizePermissionNames(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return []
-  return raw
-    .map((p) => (typeof p === 'string' ? p : (p as { name?: string })?.name))
-    .filter((name): name is string => typeof name === 'string' && name.length > 0)
-}
-
-const fetchRole = async () => {
-  loading.value = true
-  try {
-    const response = await $api<{ data: Role }>(`/roles/${roleId}`)
-    role.value = response.data
-    const permissionNames = normalizePermissionNames(response.data.permissions)
-    formData.value = {
-      name: response.data.name,
-      permissions: permissionNames,
-    }
-  } catch (error) {
-    console.error('Error fetching role:', error)
-    toast.error('Error al cargar el rol')
-    router.push('/admin/roles')
-  } finally {
-    loading.value = false
-  }
-}
-
 const fetchPermissions = async () => {
+  loading.value = true
   try {
     const res = await $api<{ data: Permission[] }>('/roles/permissions')
     permissions.value = res.data
   } catch (error) {
     console.error('Error al cargar permisos:', error)
     toast.error('Error al cargar permisos')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -122,31 +96,30 @@ const handleSubmit = async () => {
   }
   saving.value = true
   try {
-    await $api(`/roles/${roleId}`, {
-      method: 'PUT',
+    await $api('/roles', {
+      method: 'POST',
       body: { name: formData.value.name, permissions: formData.value.permissions },
     })
-    toast.success('Rol actualizado correctamente')
-    router.push('/admin/roles')
+    toast.success('Rol creado correctamente')
+    router.push('/settings/roles')
   } catch (error: any) {
-    const message = error?.data?.message || error?.data?.errors?.name?.[0] || 'Error al actualizar el rol'
+    const message = error?.data?.message || error?.data?.errors?.name?.[0] || 'Error al crear el rol'
     toast.error(message)
   } finally {
     saving.value = false
   }
 }
 
-onMounted(async () => {
-  await Promise.all([fetchRole(), fetchPermissions()])
-})
+onMounted(() => fetchPermissions())
 </script>
 
 <template>
-  <div class="w-full flex flex-col gap-4">
+  <SettingsLayout :wide="true">
+    <div class="w-full flex flex-col gap-4">
     <div class="flex items-center justify-between">
       <div>
-        <h2 class="text-2xl font-bold tracking-tight">Editar Rol</h2>
-        <p v-if="role" class="text-muted-foreground">Modifica el rol: {{ role.name }}</p>
+        <h2 class="text-2xl font-bold tracking-tight">Crear Nuevo Rol</h2>
+        <p class="text-muted-foreground">Define un nuevo rol y asigna sus permisos</p>
       </div>
       <Button variant="outline" @click="router.back()">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
@@ -154,15 +127,7 @@ onMounted(async () => {
       </Button>
     </div>
 
-    <Card v-if="loading">
-      <CardContent class="p-6">
-        <div class="flex items-center justify-center">
-          <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
-        </div>
-      </CardContent>
-    </Card>
-
-    <form v-else-if="role" @submit.prevent="handleSubmit">
+    <form @submit.prevent="handleSubmit">
       <div class="grid gap-6">
         <Card>
           <CardHeader>
@@ -176,11 +141,10 @@ onMounted(async () => {
                 id="name"
                 v-model="formData.name"
                 required
-                placeholder="Ej: moderador, editor..."
-                :disabled="['admin', 'user'].includes(role.name)"
+                placeholder="Ej: moderador, editor, supervisor..."
               />
-              <p v-if="['admin', 'user'].includes(role.name)" class="text-sm text-muted-foreground mt-1">
-                Este es un rol del sistema y no se puede modificar su nombre
+              <p class="text-sm text-muted-foreground mt-1">
+                El nombre debe ser único y en minúsculas (ej: moderador, editor)
               </p>
             </div>
           </CardContent>
@@ -198,7 +162,11 @@ onMounted(async () => {
             </Button>
           </CardHeader>
           <CardContent>
-            <div class="space-y-2">
+            <div v-if="loading" class="flex items-center justify-center py-8">
+              <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
+            </div>
+
+            <div v-else class="space-y-2">
               <Collapsible
                 v-for="category in orderedCategoryKeys"
                 :key="category"
@@ -262,10 +230,11 @@ onMounted(async () => {
           <Button type="button" variant="outline" @click="router.back()">Cancelar</Button>
           <Button type="submit" :disabled="saving">
             <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-            {{ saving ? 'Guardando...' : 'Actualizar Rol' }}
+            {{ saving ? 'Guardando...' : 'Crear Rol' }}
           </Button>
         </div>
       </div>
     </form>
-  </div>
+    </div>
+  </SettingsLayout>
 </template>

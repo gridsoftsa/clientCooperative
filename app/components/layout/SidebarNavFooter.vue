@@ -73,35 +73,35 @@ const showModalTheme = ref(false)
           <DropdownMenuGroup>
             <DropdownMenuItem>
               <Icon name="i-lucide-sparkles" />
-              Upgrade to Pro
+              Mejorar plan
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem>
               <Icon name="i-lucide-badge-check" />
-              Account
+              Cuenta
             </DropdownMenuItem>
             <DropdownMenuItem as-child>
               <NuxtLink to="/settings" @click="setOpenMobile(false)">
                 <Icon name="i-lucide-settings" />
-                Settings
+                Configuración
               </NuxtLink>
             </DropdownMenuItem>
             <DropdownMenuItem>
               <Icon name="i-lucide-bell" />
-              Notifications
+              Notificaciones
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem as-child>
               <NuxtLink to="https://github.com/dianprata/nuxt-shadcn-dashboard" external target="_blank">
                 <Icon name="i-lucide-github" />
-                Github Repository
+                Repositorio en GitHub
               </NuxtLink>
             </DropdownMenuItem>
             <DropdownMenuItem @click="showModalTheme = true">
               <Icon name="i-lucide-paintbrush" />
-              Theme
+              Tema
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
@@ -117,9 +117,9 @@ const showModalTheme = ref(false)
   <Dialog v-model:open="showModalTheme">
     <DialogContent>
       <DialogHeader>
-        <DialogTitle>Customize</DialogTitle>
+        <DialogTitle>Personalizar</DialogTitle>
         <DialogDescription class="text-xs text-muted-foreground">
-          Customize & Preview in Real Time
+          Vista previa en tiempo real
         </DialogDescription>
       </DialogHeader>
       <ThemeCustomize />

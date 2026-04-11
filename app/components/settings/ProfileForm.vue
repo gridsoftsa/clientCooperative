@@ -12,21 +12,21 @@ const profileFormSchema = toTypedSchema(z.object({
   username: z
     .string()
     .min(2, {
-      message: 'Username must be at least 2 characters.',
+      message: 'El nombre de usuario debe tener al menos 2 caracteres.',
     })
     .max(30, {
-      message: 'Username must not be longer than 30 characters.',
+      message: 'El nombre de usuario no puede superar los 30 caracteres.',
     }),
   email: z
     .string({
-      required_error: 'Please select an email to display.',
+      required_error: 'Selecciona un correo para mostrar.',
     })
     .email(),
-  bio: z.string().max(160, { message: 'Bio must not be longer than 160 characters.' }).min(4, { message: 'Bio must be at least 2 characters.' }),
+  bio: z.string().max(160, { message: 'La biografía no puede superar los 160 caracteres.' }).min(4, { message: 'La biografía debe tener al menos 4 caracteres.' }),
   urls: z
     .array(
       z.object({
-        value: z.string().url({ message: 'Please enter a valid URL.' }),
+        value: z.string().url({ message: 'Introduce una URL válida.' }),
       }),
     )
     .optional(),
@@ -35,7 +35,7 @@ const profileFormSchema = toTypedSchema(z.object({
 const { handleSubmit, resetForm } = useForm({
   validationSchema: profileFormSchema,
   initialValues: {
-    bio: 'I own a computer.',
+    bio: 'Trabajo con tecnología y cooperativas.',
     urls: [
       { value: 'https://shadcn.com' },
       { value: 'http://twitter.com/shadcn' },
@@ -44,7 +44,7 @@ const { handleSubmit, resetForm } = useForm({
 })
 
 const onSubmit = handleSubmit((values) => {
-  toast('You submitted the following values:', {
+  toast('Valores enviados:', {
     description: h('pre', { class: 'mt-2 w-[340px] rounded-md bg-slate-950 p-4' }, h('code', { class: 'text-white' }, JSON.stringify(values, null, 2))),
   })
 })
@@ -53,22 +53,22 @@ const onSubmit = handleSubmit((values) => {
 <template>
   <div>
     <h3 class="text-lg font-medium">
-      Profile
+      Perfil
     </h3>
     <p class="text-sm text-muted-foreground">
-      This is how others will see you on the site.
+      Así te verán otras personas en el sitio.
     </p>
   </div>
   <Separator />
   <form class="space-y-8" @submit="onSubmit">
     <FormField v-slot="{ componentField }" name="username">
       <FormItem>
-        <FormLabel>Username</FormLabel>
+        <FormLabel>Nombre de usuario</FormLabel>
         <FormControl>
-          <Input type="text" placeholder="shadcn" v-bind="componentField" />
+          <Input type="text" placeholder="usuario" v-bind="componentField" />
         </FormControl>
         <FormDescription>
-          This is your public display name. It can be your real name or a pseudonym. You can only change this once every 30 days.
+          Es tu nombre público. Puede ser tu nombre real o un seudónimo. Solo puedes cambiarlo una vez cada 30 días.
         </FormDescription>
         <FormMessage />
       </FormItem>
@@ -76,12 +76,12 @@ const onSubmit = handleSubmit((values) => {
 
     <FormField v-slot="{ componentField }" name="email">
       <FormItem>
-        <FormLabel>Email</FormLabel>
+        <FormLabel>Correo electrónico</FormLabel>
 
         <Select v-bind="componentField">
           <FormControl>
             <SelectTrigger>
-              <SelectValue placeholder="Select an email" />
+              <SelectValue placeholder="Selecciona un correo" />
             </SelectTrigger>
           </FormControl>
           <SelectContent>
@@ -93,7 +93,7 @@ const onSubmit = handleSubmit((values) => {
           </SelectContent>
         </Select>
         <FormDescription>
-          You can manage verified email addresses in your email settings.
+          Puedes gestionar los correos verificados en la configuración de correo.
         </FormDescription>
         <FormMessage />
       </FormItem>
@@ -101,12 +101,12 @@ const onSubmit = handleSubmit((values) => {
 
     <FormField v-slot="{ componentField }" name="bio">
       <FormItem>
-        <FormLabel>Bio</FormLabel>
+        <FormLabel>Biografía</FormLabel>
         <FormControl>
-          <Textarea placeholder="Tell us a little bit about yourself" v-bind="componentField" />
+          <Textarea placeholder="Cuéntanos un poco sobre ti" v-bind="componentField" />
         </FormControl>
         <FormDescription>
-          You can <span>@mention</span> other users and organizations to link to them.
+          Puedes usar <span>@menciones</span> para enlazar a otros usuarios u organizaciones.
         </FormDescription>
         <FormMessage />
       </FormItem>
@@ -118,10 +118,10 @@ const onSubmit = handleSubmit((values) => {
           <FormField v-slot="{ componentField }" :name="`urls[${index}].value`">
             <FormItem>
               <FormLabel :class="cn(index !== 0 && 'sr-only')">
-                URLs
+                Enlaces
               </FormLabel>
               <FormDescription :class="cn(index !== 0 && 'sr-only')">
-                Add links to your website, blog, or social media profiles.
+                Añade enlaces a tu web, blog o redes sociales.
               </FormDescription>
               <div class="relative flex items-center">
                 <FormControl>
@@ -143,14 +143,14 @@ const onSubmit = handleSubmit((values) => {
           class="mt-2 w-20 text-xs"
           @click="push({ value: '' })"
         >
-          Add URL
+          Añadir URL
         </Button>
       </FieldArray>
     </div>
 
     <div class="flex justify-start gap-2">
       <Button type="submit">
-        Update profile
+        Actualizar perfil
       </Button>
 
       <Button
@@ -158,7 +158,7 @@ const onSubmit = handleSubmit((values) => {
         variant="outline"
         @click="resetForm"
       >
-        Reset form
+        Restablecer
       </Button>
     </div>
   </form>

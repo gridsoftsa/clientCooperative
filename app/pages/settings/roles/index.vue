@@ -1,18 +1,16 @@
 <script setup lang="ts">
-import { toast } from 'vue-sonner'
-import type { User, PaginatedUsers } from '~/types/user'
+import type { Role, PaginatedRoles } from '~/types/role'
 
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'usuarios_ver'
+  permissions: 'roles_ver'
 })
 
 const { $api } = useNuxtApp()
-const router = useRouter()
-const { user: authUser } = useAuth()
+const { hasPermission } = usePermissions()
 
-const users = ref<User[]>([])
+const roles = ref<Role[]>([])
 const loading = ref(false)
 const searchQuery = ref('')
 const pagination = ref({
@@ -22,7 +20,11 @@ const pagination = ref({
   total: 0
 })
 
-async function fetchUsers() {
+const canCreate = computed(() => hasPermission('roles_crear'))
+const canEdit = computed(() => hasPermission('roles_editar'))
+const canDelete = computed(() => hasPermission('roles_eliminar'))
+
+async function fetchRoles() {
   loading.value = true
   try {
     const params: any = {
@@ -33,11 +35,11 @@ async function fetchUsers() {
       params.search = searchQuery.value
     }
     
-    const res = await $api<PaginatedUsers>('/users', { query: params })
-    users.value = res.data
+    const res = await $api<PaginatedRoles>('/roles', { query: params })
+    roles.value = res.data
     pagination.value = res.meta
   } catch (error) {
-    console.error('Error al cargar usuarios:', error)
+    console.error('Error al cargar roles:', error)
   } finally {
     loading.value = false
   }
@@ -45,32 +47,36 @@ async function fetchUsers() {
 
 function handleSearch() {
   pagination.value.current_page = 1
-  fetchUsers()
+  fetchRoles()
 }
 
 function handlePageChange(page: number) {
   pagination.value.current_page = page
-  fetchUsers()
+  fetchRoles()
 }
 
-async function handleDelete(id: number) {
-  if (!confirm('¿Estás seguro de que deseas eliminar este usuario?')) {
+async function handleDelete(id: number, name: string) {
+  if (['admin', 'user'].includes(name)) {
+    alert('No se puede eliminar este rol del sistema')
+    return
+  }
+  
+  if (!confirm(`¿Estás seguro de que deseas eliminar el rol "${name}"?`)) {
     return
   }
   
   try {
-    await $api(`/users/${id}`, { method: 'DELETE' })
-    toast.success('Usuario eliminado correctamente')
-    await fetchUsers()
+    await $api(`/roles/${id}`, { method: 'DELETE' })
+    await fetchRoles()
   } catch (error: any) {
-    console.error('Error al eliminar usuario:', error)
-    const message = error?.data?.message || 'Error al eliminar el usuario'
-    toast.error(message)
+    console.error('Error al eliminar rol:', error)
+    const message = error?.data?.message || error?.message || 'Error al eliminar el rol'
+    alert(message)
   }
 }
 
 onMounted(() => {
-  fetchUsers()
+  fetchRoles()
 })
 
 watch(searchQuery, () => {
@@ -83,24 +89,25 @@ watch(searchQuery, () => {
 </script>
 
 <template>
-  <div class="w-full flex flex-col gap-4">
+  <SettingsLayout :wide="true">
+    <div class="w-full flex flex-col gap-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-2xl font-bold tracking-tight">
-        Gestión de Usuarios
+        Gestión de Roles y Permisos
       </h2>
-      <PermissionGate permission="usuarios_crear">
-        <Button @click="router.push('/admin/users/create')">
+      <PermissionGate permission="roles_crear">
+        <Button @click="$router.push('/settings/roles/create')">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-          Nuevo Usuario
+          Nuevo Rol
         </Button>
       </PermissionGate>
     </div>
 
     <Card>
       <CardHeader>
-        <CardTitle>Lista de Usuarios</CardTitle>
+        <CardTitle>Roles del Sistema</CardTitle>
         <CardDescription>
-          Gestiona los usuarios del sistema
+          Gestiona los roles y sus permisos asociados
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -111,7 +118,7 @@ watch(searchQuery, () => {
               <Icon name="i-lucide-search" class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 v-model="searchQuery"
-                placeholder="Buscar por nombre o email..."
+                placeholder="Buscar por nombre..."
                 class="pl-9"
               />
             </div>
@@ -122,8 +129,8 @@ watch(searchQuery, () => {
             <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
           </div>
           
-          <div v-else-if="users.length === 0" class="text-center py-8 text-muted-foreground">
-            No hay usuarios registrados
+          <div v-else-if="roles.length === 0" class="text-center py-8 text-muted-foreground">
+            No hay roles registrados
           </div>
 
           <div v-else class="border rounded-lg overflow-hidden">
@@ -131,64 +138,61 @@ watch(searchQuery, () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>ID</TableHead>
-                  <TableHead>Nombre de usuario</TableHead>
-                  <TableHead>Nombre completo</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Teléfono</TableHead>
-                  <TableHead>Sucursal</TableHead>
-                  <TableHead>Roles</TableHead>
-                  <TableHead>Estado</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Permisos</TableHead>
                   <TableHead>Fecha de Creación</TableHead>
                   <TableHead class="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow v-for="user in users" :key="user.id">
-                  <TableCell class="font-medium">{{ user.id }}</TableCell>
-                  <TableCell>{{ user.name }}</TableCell>
+                <TableRow v-for="role in roles" :key="role.id">
+                  <TableCell class="font-medium">{{ role.id }}</TableCell>
                   <TableCell>
-                    <span class="text-muted-foreground text-sm">{{ user.full_name?.trim() || '—' }}</span>
-                  </TableCell>
-                  <TableCell>{{ user.email }}</TableCell>
-                  <TableCell>
-                    <span class="text-muted-foreground text-sm font-mono">{{ user.phone?.trim() || '—' }}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span class="text-muted-foreground text-sm">{{ user.sucursal?.name ?? '—' }}</span>
-                  </TableCell>
-                  <TableCell>
-                    <div class="flex gap-1 flex-wrap">
-                      <Badge v-for="role in (user.roles || [])" :key="role" variant="secondary">
-                        {{ role }}
-                      </Badge>
-                      <span v-if="(user.roles || []).length === 0" class="text-muted-foreground text-sm">Sin roles</span>
+                    <div class="flex items-center gap-2">
+                      <span class="font-medium">{{ role.name }}</span>
+                      <Badge v-if="role.name === 'admin'" variant="default">Sistema</Badge>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge :variant="user.is_active !== false ? 'default' : 'secondary'">
-                      {{ user.is_active !== false ? 'Activo' : 'Inactivo' }}
-                    </Badge>
+                    <div class="flex gap-1 flex-wrap max-w-md">
+                      <Badge 
+                        v-for="permission in (role.permissions || []).slice(0, 3)" 
+                        :key="permission" 
+                        variant="outline"
+                        class="text-xs"
+                      >
+                        {{ permission }}
+                      </Badge>
+                      <Badge 
+                        v-if="(role.permissions || []).length > 3" 
+                        variant="secondary"
+                        class="text-xs"
+                      >
+                        +{{ (role.permissions || []).length - 3 }} más
+                      </Badge>
+                      <span v-if="(role.permissions || []).length === 0" class="text-muted-foreground text-sm">Sin permisos</span>
+                    </div>
                   </TableCell>
                   <TableCell>
-                    {{ new Date(user.created_at).toLocaleDateString() }}
+                    {{ new Date(role.created_at).toLocaleDateString() }}
                   </TableCell>
                   <TableCell class="text-right">
                     <div class="flex justify-end gap-2">
-                      <PermissionGate permission="usuarios_editar">
+                      <PermissionGate permission="roles_editar">
                         <Button 
                           variant="outline" 
                           size="sm" 
-                          @click="router.push(`/admin/users/${user.id}/edit`)"
+                          @click="$router.push(`/settings/roles/${role.id}/edit`)"
                         >
                           <Icon name="i-lucide-edit" class="h-4 w-4" />
                         </Button>
                       </PermissionGate>
-                      <PermissionGate permission="usuarios_eliminar">
+                      <PermissionGate permission="roles_eliminar">
                         <Button 
                           variant="destructive" 
                           size="sm" 
-                          @click="() => handleDelete(user.id)"
-                          :disabled="user.id === authUser?.id"
+                          @click="() => handleDelete(role.id, role.name)"
+                          :disabled="['admin', 'user'].includes(role.name)"
                         >
                           <Icon name="i-lucide-trash" class="h-4 w-4" />
                         </Button>
@@ -205,7 +209,7 @@ watch(searchQuery, () => {
             <div class="text-sm text-muted-foreground">
               Mostrando {{ ((pagination.current_page - 1) * pagination.per_page) + 1 }} a 
               {{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} de 
-              {{ pagination.total }} usuarios
+              {{ pagination.total }} roles
             </div>
             <div class="flex gap-2">
               <Button 
@@ -229,5 +233,6 @@ watch(searchQuery, () => {
         </div>
       </CardContent>
     </Card>
-  </div>
+    </div>
+  </SettingsLayout>
 </template>
