@@ -84,7 +84,19 @@ export function useDocumentDownload() {
     })
 
     if (!res.ok) {
-      throw new Error(`Error ${res.status}: No se pudo descargar el PDF`)
+      let msg = `Error ${res.status}: No se pudo descargar el PDF`
+      try {
+        const ct = res.headers.get('Content-Type') ?? ''
+        if (ct.includes('application/json')) {
+          const body = await res.json() as { message?: string }
+          if (body?.message) {
+            msg = body.message
+          }
+        }
+      } catch {
+        // mantener mensaje por defecto
+      }
+      throw new Error(msg)
     }
 
     const blob = await res.blob()
@@ -108,5 +120,56 @@ export function useDocumentDownload() {
     URL.revokeObjectURL(objectUrl)
   }
 
-  return { downloadDocument, downloadApplicationPdf }
+  async function downloadAnalisisScorePdf(applicationId: string | number, filename?: string): Promise<void> {
+    const xsrf = await ensureCsrfCookie()
+    const url = `${apiBase}/api/credit-applications/${applicationId}/analisis-score/pdf`
+
+    const res = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/pdf',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}),
+      },
+    })
+
+    if (!res.ok) {
+      let msg = `Error ${res.status}: No se pudo descargar el PDF del SCORE`
+      try {
+        const ct = res.headers.get('Content-Type') ?? ''
+        if (ct.includes('application/json')) {
+          const body = await res.json() as { message?: string }
+          if (body?.message) {
+            msg = body.message
+          }
+        }
+      } catch {
+        // mantener mensaje por defecto
+      }
+      throw new Error(msg)
+    }
+
+    const blob = await res.blob()
+    const disposition = res.headers.get('Content-Disposition')
+    let finalFilename = filename
+    if (!finalFilename && disposition) {
+      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+      if (match) {
+        finalFilename = match[1].replace(/['"]/g, '').trim()
+      }
+    }
+    finalFilename = finalFilename || `analisis-score-${applicationId}.pdf`
+
+    const objectUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.download = finalFilename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(objectUrl)
+  }
+
+  return { downloadDocument, downloadApplicationPdf, downloadAnalisisScorePdf }
 }

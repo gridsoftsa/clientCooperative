@@ -1,246 +1,336 @@
 <script setup lang="ts">
-import NumberFlow from '@number-flow/vue'
-import { TrendingDown, TrendingUp, TrendingUpIcon } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
+import {
+  creditApplicationStatusOrder,
+  getCreditApplicationStatusBadgeVariant,
+  getCreditApplicationStatusLabel,
+} from '~/constants/credit-application-status'
 
 definePageMeta({
   middleware: 'permission',
   permissions: 'dashboard_ver',
 })
 
-const { user } = useAuth()
-const { roles, permissions, isAdmin } = usePermissions()
+interface CreditSummaryRow {
+  id: number
+  code: string | null
+  status: string
+  amount_requested: string
+  created_at: string | null
+  sucursal: { id: number; name: string; code: string | null } | null
+}
 
-const dataCard = ref({
-  totalRevenue: 0,
-  newCustomers: 0,
-  activeAccount: 0,
-  growthRate: 0,
+interface CreditSummaryData {
+  filters: {
+    created_from: string | null
+    created_to: string | null
+    sucursal_id: number | null
+  }
+  total: number
+  amount_requested_sum: string
+  by_status: Record<string, number>
+  recent: CreditSummaryRow[]
+}
+
+const { $api } = useNuxtApp()
+const { hasPermission } = usePermissions()
+
+const summaryLoading = ref(false)
+const summary = ref<CreditSummaryData | null>(null)
+
+const filterDateFrom = ref('')
+const filterDateTo = ref('')
+
+const applicantsTotal = ref<number | null>(null)
+
+const hasActiveDateFilters = computed(() => {
+  return Boolean(filterDateFrom.value?.trim()) || Boolean(filterDateTo.value?.trim())
 })
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    minimumFractionDigits: 0,
+  }).format(value)
+}
+
+function formatShortDate(iso: string | null) {
+  if (!iso) {
+    return '—'
+  }
+  try {
+    return new Intl.DateTimeFormat('es-CO', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(new Date(iso))
+  } catch {
+    return iso
+  }
+}
+
+function buildSummaryQuery(): Record<string, string> {
+  const q: Record<string, string> = {}
+  const from = filterDateFrom.value?.trim()
+  const to = filterDateTo.value?.trim()
+  if (from) {
+    q.created_from = from
+  }
+  if (to) {
+    q.created_to = to
+  }
+  return q
+}
+
+async function fetchSummary() {
+  const from = filterDateFrom.value?.trim()
+  const to = filterDateTo.value?.trim()
+  if (from && to && from > to) {
+    toast.error('La fecha inicial no puede ser posterior a la fecha final')
+    return
+  }
+
+  summaryLoading.value = true
+  try {
+    const res = await $api<{ data: CreditSummaryData }>('/dashboard/credit-summary', {
+      query: buildSummaryQuery(),
+    })
+    summary.value = res.data
+  } catch (e: any) {
+    console.error('Error cargando resumen:', e)
+    toast.error(e?.data?.message ?? 'No se pudo cargar el resumen de radicación')
+    summary.value = null
+  } finally {
+    summaryLoading.value = false
+  }
+}
+
+function applyDateFilters() {
+  fetchSummary()
+}
+
+function clearDateFilters() {
+  filterDateFrom.value = ''
+  filterDateTo.value = ''
+  fetchSummary()
+}
+
+async function fetchApplicantsCount() {
+  if (!hasPermission('solicitantes_ver')) {
+    return
+  }
+  try {
+    const res = await $api<{ meta: { total: number } }>('/applicants', { query: { per_page: 1 } })
+    applicantsTotal.value = res.meta?.total ?? 0
+  } catch {
+    applicantsTotal.value = null
+  }
+}
 
 onMounted(() => {
-  dataCard.value = {
-    totalRevenue: 1250.44,
-    newCustomers: 1234,
-    activeAccount: 45678,
-    growthRate: 4.5,
-  }
+  fetchSummary()
+  fetchApplicantsCount()
 })
-
-const timeRange = ref('30d')
-
-const isDesktop = useMediaQuery('(min-width: 768px)')
-watch(isDesktop, () => {
-  if (isDesktop.value) {
-    timeRange.value = '30d'
-  }
-  else {
-    timeRange.value = '7d'
-  }
-}, { immediate: true })
 </script>
 
 <template>
   <div class="w-full flex flex-col gap-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-2xl font-bold tracking-tight">
-        Dashboard
+        Inicio
       </h2>
-      <div class="flex items-center space-x-2">
-        <BaseDateRangePicker />
-        <Button>Download</Button>
-      </div>
     </div>
+
     <main class="@container/main flex flex-1 flex-col gap-4 md:gap-8">
-      <div class="grid grid-cols-1 gap-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
-        <Card class="@container/card">
-          <CardHeader>
-            <CardDescription>Total Revenue</CardDescription>
-            <CardTitle class="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-              <NumberFlow
-                :value="dataCard.totalRevenue"
-                :format="{ style: 'currency', currency: 'USD', trailingZeroDisplay: 'stripIfInteger' }"
-              />
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline">
-                <TrendingUpIcon />
-                +12.5%
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardFooter class="flex-col items-start gap-1.5 text-sm">
-            <div class="line-clamp-1 flex gap-2 font-medium">
-              Trending up this month <TrendingUp class="size-4" />
-            </div>
-            <div class="text-muted-foreground">
-              Visitors for the last 6 months
-            </div>
-          </CardFooter>
-        </Card>
-        <Card class="@container/card">
-          <CardHeader>
-            <CardDescription>New Customers</CardDescription>
-            <CardTitle class="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-              <NumberFlow
-                :value="dataCard.newCustomers"
-              />
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline">
-                <TrendingDown />
-                -20%
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardFooter class="flex-col items-start gap-1.5 text-sm">
-            <div class="line-clamp-1 flex gap-2 font-medium">
-              Down 20% this period <TrendingDown class="size-4" />
-            </div>
-            <div class="text-muted-foreground">
-              Acquisition needs attention
-            </div>
-          </CardFooter>
-        </Card>
-        <Card class="@container/card">
-          <CardHeader>
-            <CardDescription>Active Accounts</CardDescription>
-            <CardTitle class="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-              <NumberFlow
-                :value="dataCard.activeAccount"
-              />
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline">
-                <TrendingUp />
-                +12.5%
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardFooter class="flex-col items-start gap-1.5 text-sm">
-            <div class="line-clamp-1 flex gap-2 font-medium">
-              Strong user retention <TrendingUp class="size-4" />
-            </div>
-            <div class="text-muted-foreground">
-              Engagement exceed targets
-            </div>
-          </CardFooter>
-        </Card>
-        <Card class="@container/card">
-          <CardHeader>
-            <CardDescription>Growth Rate</CardDescription>
-            <CardTitle class="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-              <NumberFlow
-                :value="dataCard.growthRate"
-                suffix="%"
-              />
-            </CardTitle>
-            <CardAction>
-              <Badge variant="outline">
-                <TrendingUp />
-                +4.5%
-              </Badge>
-            </CardAction>
-          </CardHeader>
-          <CardFooter class="flex-col items-start gap-1.5 text-sm">
-            <div class="line-clamp-1 flex gap-2 font-medium">
-              Steady performance increase <TrendingUp class="size-4" />
-            </div>
-            <div class="text-muted-foreground">
-              Meets growth projections
-            </div>
-          </CardFooter>
-        </Card>
-      </div>
-      <Card class="@container/card">
+      <Card>
         <CardHeader>
-          <CardTitle>Total Visitors</CardTitle>
+          <CardTitle>Resumen de radicación</CardTitle>
           <CardDescription>
-            <span className="hidden @[540px]/card:block">
-              Total for the last 3 months
-            </span>
-            <span className="@[540px]/card:hidden">Last 3 months</span>
+            Totales según tu perfil (asesor u oficina). Filtra por fechas de creación como en el listado de solicitudes.
           </CardDescription>
-          <CardAction>
-            <ToggleGroup
-              v-model="timeRange"
-              type="single"
-              variant="outline"
-              class="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
-            >
-              <ToggleGroupItem value="90d">
-                Last 3 months
-              </ToggleGroupItem>
-              <ToggleGroupItem value="30d">
-                Last 30 days
-              </ToggleGroupItem>
-              <ToggleGroupItem value="7d">
-                Last 7 days
-              </ToggleGroupItem>
-            </ToggleGroup>
-            <Select v-model="timeRange">
-              <SelectTrigger
-                class="flex w-40 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden"
-                size="sm"
-                aria-label="Select a value"
-              >
-                <SelectValue placeholder="Last 3 months" />
-              </SelectTrigger>
-              <SelectContent class="rounded-xl">
-                <SelectItem value="90d" class="rounded-lg">
-                  Last 3 months
-                </SelectItem>
-                <SelectItem value="30d" class="rounded-lg">
-                  Last 30 days
-                </SelectItem>
-                <SelectItem value="7d" class="rounded-lg">
-                  Last 7 days
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </CardAction>
         </CardHeader>
-        <CardContent>
-          <DashboardTotalVisitors :time-range="timeRange" />
+        <CardContent class="space-y-6">
+          <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <div class="grid w-full gap-2 sm:max-w-[160px]">
+              <Label for="dash-from" class="text-xs text-muted-foreground">Creada desde</Label>
+              <Input
+                id="dash-from"
+                v-model="filterDateFrom"
+                type="date"
+                class="font-mono"
+              />
+            </div>
+            <div class="grid w-full gap-2 sm:max-w-[160px]">
+              <Label for="dash-to" class="text-xs text-muted-foreground">Creada hasta</Label>
+              <Input
+                id="dash-to"
+                v-model="filterDateTo"
+                type="date"
+                class="font-mono"
+              />
+            </div>
+            <div class="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
+              <Button type="button" variant="default" :disabled="summaryLoading" @click="applyDateFilters">
+                <Icon name="i-lucide-filter" class="mr-2 h-4 w-4" />
+                Aplicar
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                :disabled="summaryLoading || !hasActiveDateFilters"
+                @click="clearDateFilters"
+              >
+                Limpiar fechas
+              </Button>
+            </div>
+          </div>
+
+          <div v-if="summaryLoading" class="flex justify-center py-10">
+            <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+
+          <template v-else-if="summary">
+            <div class="grid grid-cols-1 gap-4 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+              <Card class="shadow-xs">
+                <CardHeader class="pb-2">
+                  <CardDescription>Radicaciones</CardDescription>
+                  <CardTitle class="text-3xl font-semibold tabular-nums">
+                    {{ summary.total }}
+                  </CardTitle>
+                </CardHeader>
+                <CardFooter class="text-sm text-muted-foreground">
+                  En el período seleccionado (sin filtro: todas las visibles).
+                </CardFooter>
+              </Card>
+              <Card class="shadow-xs">
+                <CardHeader class="pb-2">
+                  <CardDescription>Monto solicitado</CardDescription>
+                  <CardTitle class="text-2xl font-semibold tabular-nums sm:text-3xl">
+                    {{ formatCurrency(Number(summary.amount_requested_sum)) }}
+                  </CardTitle>
+                </CardHeader>
+                <CardFooter class="text-sm text-muted-foreground">
+                  Suma de montos solicitados en el mismo alcance y fechas.
+                </CardFooter>
+              </Card>
+              <Card v-if="applicantsTotal !== null" class="shadow-xs">
+                <CardHeader class="pb-2">
+                  <CardDescription>Solicitantes</CardDescription>
+                  <CardTitle class="text-3xl font-semibold tabular-nums">
+                    {{ applicantsTotal }}
+                  </CardTitle>
+                </CardHeader>
+                <CardFooter class="text-sm text-muted-foreground">
+                  Registros en el catálogo de solicitantes.
+                </CardFooter>
+              </Card>
+            </div>
+
+            <div>
+              <h3 class="mb-3 text-sm font-medium">
+                Por estado
+              </h3>
+              <div class="flex flex-wrap gap-2">
+                <Badge
+                  v-for="st in creditApplicationStatusOrder"
+                  :key="st"
+                  variant="outline"
+                  class="tabular-nums"
+                >
+                  {{ getCreditApplicationStatusLabel(st) }}:
+                  {{ summary.by_status[st] ?? 0 }}
+                </Badge>
+              </div>
+            </div>
+
+            <div>
+              <h3 class="mb-3 text-sm font-medium">
+                Últimas solicitudes
+              </h3>
+              <div v-if="summary.recent.length === 0" class="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
+                No hay solicitudes en este alcance.
+              </div>
+              <div v-else class="overflow-hidden rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Sucursal</TableHead>
+                      <TableHead>Monto</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Creada</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow v-for="row in summary.recent" :key="row.id">
+                      <TableCell class="font-mono text-sm">
+                        {{ row.code ?? '—' }}
+                      </TableCell>
+                      <TableCell class="text-sm">
+                        {{ row.sucursal?.name ?? '—' }}
+                      </TableCell>
+                      <TableCell class="tabular-nums">
+                        {{ formatCurrency(Number(row.amount_requested)) }}
+                      </TableCell>
+                      <TableCell>
+                        <Badge :variant="getCreditApplicationStatusBadgeVariant(row.status)">
+                          {{ getCreditApplicationStatusLabel(row.status) }}
+                        </Badge>
+                      </TableCell>
+                      <TableCell class="text-sm text-muted-foreground">
+                        {{ formatShortDate(row.created_at) }}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </template>
         </CardContent>
       </Card>
 
-      <!-- Información de Roles y Permisos (solo para admin) -->
-      <PermissionGate admin-only>
-        <Card>
-          <CardHeader>
-            <CardTitle>Información de Acceso</CardTitle>
-            <CardDescription>
-              Roles y permisos del usuario actual
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div class="space-y-4">
-              <div>
-                <div class="text-sm font-medium mb-2">Roles:</div>
-                <div class="flex flex-wrap gap-2">
-                  <Badge v-for="role in roles" :key="role" variant="default">
-                    {{ role }}
-                  </Badge>
-                  <Badge v-if="roles.length === 0" variant="outline">
-                    Sin roles asignados
-                  </Badge>
-                </div>
-              </div>
-              <div>
-                <div class="text-sm font-medium mb-2">Permisos ({{ permissions.length }}):</div>
-                <div class="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
-                  <Badge v-for="permission in permissions" :key="permission" variant="outline" class="text-xs">
-                    {{ permission }}
-                  </Badge>
-                  <Badge v-if="permissions.length === 0" variant="outline">
-                    Sin permisos asignados
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </PermissionGate>
+      <Card>
+        <CardHeader>
+          <CardTitle>Accesos rápidos</CardTitle>
+          <CardDescription>
+            Ir a las secciones más usadas
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="flex flex-wrap gap-2">
+          <PermissionGate permission="radicacion_ver">
+            <Button variant="outline" as-child>
+              <NuxtLink to="/radicacion">
+                <Icon name="i-lucide-file-text" class="mr-2 h-4 w-4" />
+                Radicación
+              </NuxtLink>
+            </Button>
+          </PermissionGate>
+          <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
+            <Button variant="outline" as-child>
+              <NuxtLink to="/radicacion/nueva">
+                <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                Nueva solicitud
+              </NuxtLink>
+            </Button>
+          </PermissionGate>
+          <PermissionGate permission="solicitantes_ver">
+            <Button variant="outline" as-child>
+              <NuxtLink to="/settings/applicants">
+                <Icon name="i-lucide-user-check" class="mr-2 h-4 w-4" />
+                Solicitantes
+              </NuxtLink>
+            </Button>
+          </PermissionGate>
+          <PermissionGate permission="plantillas_ver">
+            <Button variant="outline" as-child>
+              <NuxtLink to="/parametrizacion/plantillas">
+                <Icon name="i-lucide-layout-template" class="mr-2 h-4 w-4" />
+                Plantillas
+              </NuxtLink>
+            </Button>
+          </PermissionGate>
+        </CardContent>
+      </Card>
     </main>
   </div>
 </template>

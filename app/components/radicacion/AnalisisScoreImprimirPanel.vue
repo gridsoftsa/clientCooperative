@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
 import type { ImprimirMeta, ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
 import { IMPRIMIR_NIVEL_RIESGO_TABLA } from '~/constants/analisis-score-imprimir'
+import type { AnalisisScorePerfilValue } from '~/constants/analisis-score'
 import type { ScoreMatrixLine } from '~/constants/analisis-score-matrix'
 import type { ScoreMatrixOption } from '~/utils/analisis-score-matrix-options'
 import {
@@ -9,6 +11,11 @@ import {
   INDEPENDIENTE_IMPRIMIR_MATRIX_ALIASES,
   resolveMatrixVariableKey,
 } from '~/utils/analisis-score-matrix-options'
+import {
+  classifyPuntajeTotalIFS,
+  nivelIFSTailwindClasses,
+  sumImprimirPuntajesPorSeccion,
+} from '~/utils/analisis-score-imprimir-totals'
 
 const props = defineProps<{
   variant: 'independiente' | 'empleado'
@@ -16,6 +23,13 @@ const props = defineProps<{
   variableRows: ImprimirVariableRow[]
   /** Líneas de la misma fuente que `/parametrizacion/plantilla-score` (GET /score-template-matrices). */
   matrixLines: ScoreMatrixLine[]
+  /** ID solicitud en la URL; sin él no se puede guardar en servidor. */
+  creditApplicationId?: string | null
+  perfilDeudor?: AnalisisScorePerfilValue
+}>()
+
+const emit = defineEmits<{
+  saved: [snapshot: Record<string, unknown> | null]
 }>()
 
 const cabecera = defineModel<{ fecha: string; cedula: string; nombre: string }>('cabecera', {
@@ -90,6 +104,129 @@ function onMatrixOptionChange(row: ImprimirVariableRow, value: string): void {
     row.puntaje = opt.pt
   }
 }
+
+const scoreSums = computed(() => sumImprimirPuntajesPorSeccion(filasEditables.value))
+
+const nivelIFS = computed(() => classifyPuntajeTotalIFS(scoreSums.value.total))
+
+const resumenIFSClass = computed(() => nivelIFSTailwindClasses(nivelIFS.value))
+
+function fmtPuntajeSum(n: number): string {
+  if (Number.isInteger(n)) {
+    return String(n)
+  }
+
+  return (Math.round(n * 100) / 100).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+}
+
+function isCualitativasEncabezado(row: ImprimirVariableRow): boolean {
+  return row.variable.trim() === 'CUALITATIVAS'
+}
+
+function isCuantitativasEncabezado(row: ImprimirVariableRow): boolean {
+  return row.variable.trim() === 'CUANTITATIVAS'
+}
+
+function filaRequierePuntaje(row: ImprimirVariableRow): boolean {
+  return !isSectionRow(row)
+}
+
+function filaPuntajeCompleta(row: ImprimirVariableRow): boolean {
+  if (isSectionRow(row)) {
+    return true
+  }
+  if (isMatrixDataRow(row)) {
+    if (selectedMatrixOptionValue(row) === '__none__') {
+      return false
+    }
+
+    return row.puntaje.trim() !== ''
+  }
+  const raw = row.puntaje.trim().replace(',', '.')
+  if (raw === '') {
+    return false
+  }
+
+  return Number.isFinite(Number(raw))
+}
+
+function isFilaPuntajeIncompleta(row: ImprimirVariableRow): boolean {
+  return filaRequierePuntaje(row) && !filaPuntajeCompleta(row)
+}
+
+const puntajesFormularioValido = computed(() =>
+  !filasEditables.value.some(row => isFilaPuntajeIncompleta(row)),
+)
+
+const nombresVariablesPendientes = computed(() =>
+  filasEditables.value.filter(row => isFilaPuntajeIncompleta(row)).map(row => row.variable.trim()),
+)
+
+/** Solo tras intentar guardar con errores, o hasta que el formulario quede válido. */
+const erroresValidacionVisibles = ref(false)
+
+watch(puntajesFormularioValido, (ok) => {
+  if (ok) {
+    erroresValidacionVisibles.value = false
+  }
+})
+
+const { hasAnyPermission } = usePermissions()
+const puedeGuardarScore = computed(() =>
+  hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
+)
+
+const guardandoScore = ref(false)
+
+async function guardarAnalisisScore(): Promise<void> {
+  const id = props.creditApplicationId?.trim()
+  if (!id) {
+    toast.error('Abre el análisis SCORE desde el listado de radicación para vincular una solicitud.')
+    return
+  }
+  if (!props.perfilDeudor) {
+    toast.error('Selecciona el perfil del deudor en el paso 1.')
+    return
+  }
+  if (!puntajesFormularioValido.value) {
+    erroresValidacionVisibles.value = true
+    toast.error('Completa el puntaje en todas las variables antes de guardar.')
+    return
+  }
+
+  guardandoScore.value = true
+  erroresValidacionVisibles.value = false
+  try {
+    const { $api, $csrf } = useNuxtApp()
+    await $csrf()
+    const res = await $api<{
+      data?: { analisis_score_snapshot?: Record<string, unknown> | null }
+      message?: string
+    }>(`/credit-applications/${id}/analisis-score`, {
+      method: 'PUT',
+      body: {
+        perfil_deudor: props.perfilDeudor,
+        variant: props.variant,
+        cabecera: { ...cabecera.value },
+        variable_rows: filasEditables.value.map(r => ({ ...r })),
+        sums: { ...scoreSums.value },
+        nivel_ifs: nivelIFS.value,
+      },
+    })
+    toast.success(res?.message ?? 'Análisis y SCORE guardado correctamente.')
+    emit('saved', res?.data?.analisis_score_snapshot ?? null)
+  } catch (e: any) {
+    toast.error(e?.data?.message ?? 'No se pudo guardar el análisis SCORE.')
+  } finally {
+    guardandoScore.value = false
+  }
+}
+
+defineExpose({
+  guardarAnalisisScore,
+  guardandoScore,
+  puedeGuardarScore,
+})
 </script>
 
 <template>
@@ -111,138 +248,226 @@ function onMatrixOptionChange(row: ImprimirVariableRow, value: string): void {
     </div>
 
     <div class="space-y-4">
-        <div class="grid gap-3 sm:grid-cols-3">
-          <div class="space-y-1.5">
-            <Label for="imp-fecha">FECHA</Label>
-            <Input id="imp-fecha" v-model="cabecera.fecha" placeholder="DD/MM/AAAA" class="font-mono" />
+      <div class="grid gap-3 sm:grid-cols-3">
+        <div class="space-y-1.5">
+          <Label for="imp-fecha">FECHA</Label>
+          <Input id="imp-fecha" v-model="cabecera.fecha" placeholder="DD/MM/AAAA" class="font-mono" />
+        </div>
+        <div class="space-y-1.5">
+          <Label for="imp-cedula">CÉDULA</Label>
+          <Input id="imp-cedula" v-model="cabecera.cedula" placeholder="" class="font-mono" />
+        </div>
+        <div class="space-y-1.5">
+          <Label for="imp-nombre">NOMBRE</Label>
+          <Input id="imp-nombre" v-model="cabecera.nombre" placeholder="" />
+        </div>
+      </div>
+
+      <Alert v-if="erroresValidacionVisibles && !puntajesFormularioValido" variant="destructive">
+        <Icon name="i-lucide-alert-circle" class="h-4 w-4" />
+        <AlertTitle>Faltan puntajes por asignar</AlertTitle>
+        <AlertDescription>
+          <p class="mb-2">
+            Debes elegir una opción en <span class="font-medium">Característica</span> para cada variable (el puntaje se asigna automáticamente). Revisa las filas resaltadas.
+          </p>
+          <p v-if="nombresVariablesPendientes.length" class="text-sm">
+            Pendientes ({{ nombresVariablesPendientes.length }}):
+          </p>
+          <ul
+            v-if="nombresVariablesPendientes.length"
+            class="mt-1 max-h-32 list-inside list-disc overflow-y-auto text-sm"
+          >
+            <li v-for="(nombre, i) in nombresVariablesPendientes" :key="i">
+              {{ nombre }}
+            </li>
+          </ul>
+        </AlertDescription>
+      </Alert>
+
+      <div class="overflow-x-auto rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow class="bg-muted/60">
+              <TableHead class="min-w-[220px]">
+                Variable
+              </TableHead>
+              <TableHead class="min-w-[180px]">
+                Característica
+              </TableHead>
+              <TableHead class="w-28 text-right">
+                Puntaje
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow
+              v-for="(row, idx) in filasEditables"
+              :key="idx"
+              :class="{
+                'bg-primary/10 font-semibold': isSectionRow(row) && !isHeaderVariables(row),
+                'bg-muted/50 text-xs font-medium': isHeaderVariables(row),
+                'bg-destructive/5 ring-1 ring-destructive/40': erroresValidacionVisibles && isFilaPuntajeIncompleta(row),
+              }"
+            >
+              <TableCell class="whitespace-pre-wrap align-top">
+                {{ row.variable }}
+              </TableCell>
+              <TableCell class="align-top">
+                <template v-if="isHeaderVariables(row)">
+                  <span>{{ row.caracteristica }}</span>
+                </template>
+                <template v-else-if="isCualitativasEncabezado(row) || isCuantitativasEncabezado(row)" />
+                <template v-else-if="!isSectionRow(row)">
+                  <Select
+                    v-if="isMatrixDataRow(row)"
+                    :model-value="selectedMatrixOptionValue(row)"
+                    @update:model-value="(v) => onMatrixOptionChange(row, v ?? '__none__')"
+                  >
+                    <SelectTrigger
+                      :id="`imp-car-${idx}`"
+                      :aria-invalid="erroresValidacionVisibles && isFilaPuntajeIncompleta(row)"
+                      class="h-auto min-h-8 w-full whitespace-normal py-1 text-left font-mono text-sm"
+                      :class="erroresValidacionVisibles && isFilaPuntajeIncompleta(row) ? 'ring-2 ring-destructive' : ''"
+                    >
+                      <SelectValue placeholder="Seleccionar…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        Seleccionar…
+                      </SelectItem>
+                      <SelectItem
+                        v-for="(opt, oi) in matrixOptionsForRow(row)"
+                        :key="oi"
+                        :value="String(oi)"
+                        class="whitespace-normal font-mono text-sm"
+                      >
+                        {{ opt.label }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    v-else
+                    v-model="row.caracteristica"
+                    class="h-8 font-mono text-sm"
+                    placeholder="—"
+                  />
+                </template>
+              </TableCell>
+              <TableCell class="align-top text-right">
+                <template v-if="isHeaderVariables(row)">
+                  <span>{{ row.puntaje }}</span>
+                </template>
+                <template v-else-if="isCualitativasEncabezado(row)">
+                  <span class="inline-flex min-h-8 items-center justify-end font-mono text-base font-semibold tabular-nums text-foreground">
+                    {{ fmtPuntajeSum(scoreSums.cualitativo) }}
+                  </span>
+                </template>
+                <template v-else-if="isCuantitativasEncabezado(row)">
+                  <span class="inline-flex min-h-8 items-center justify-end font-mono text-base font-semibold tabular-nums text-foreground">
+                    {{ fmtPuntajeSum(scoreSums.cuantitativo) }}
+                  </span>
+                </template>
+                <template v-else-if="!isSectionRow(row)">
+                  <Input
+                    v-if="isMatrixDataRow(row)"
+                    v-model="row.puntaje"
+                    readonly
+                    tabindex="-1"
+                    class="h-8 cursor-default border-transparent bg-muted/40 font-mono text-sm text-right shadow-none focus-visible:ring-0"
+                    placeholder="—"
+                  />
+                  <Input
+                    v-else
+                    v-model="row.puntaje"
+                    :aria-invalid="erroresValidacionVisibles && isFilaPuntajeIncompleta(row)"
+                    class="h-8 font-mono text-sm text-right"
+                    :class="erroresValidacionVisibles && isFilaPuntajeIncompleta(row) ? 'ring-2 ring-destructive' : ''"
+                    placeholder="—"
+                  />
+                </template>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+
+      <div
+        class="rounded-lg border-2 p-4 transition-colors"
+        :class="resumenIFSClass"
+      >
+        <p class="text-sm font-semibold">
+          Resumen de puntajes (fórmula IFS)
+        </p>
+        <p class="mt-1 text-xs opacity-90">
+          Total = suma cualitativas + suma cuantitativas.
+          Clasificación:
+          si total &lt; 400 → Bajo; si total ≤ 700 → Medio; si total ≥ 701 → Alto.
+        </p>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="rounded-md border border-border/60 bg-background/60 px-3 py-2">
+            <p class="text-xs font-medium text-muted-foreground">
+              Suma cualitativas
+            </p>
+            <p class="mt-1 font-mono text-xl font-semibold tabular-nums text-foreground">
+              {{ fmtPuntajeSum(scoreSums.cualitativo) }}
+            </p>
           </div>
-          <div class="space-y-1.5">
-            <Label for="imp-cedula">CÉDULA</Label>
-            <Input id="imp-cedula" v-model="cabecera.cedula" placeholder="" class="font-mono" />
+          <div class="rounded-md border border-border/60 bg-background/60 px-3 py-2">
+            <p class="text-xs font-medium text-muted-foreground">
+              Suma cuantitativas
+            </p>
+            <p class="mt-1 font-mono text-xl font-semibold tabular-nums text-foreground">
+              {{ fmtPuntajeSum(scoreSums.cuantitativo) }}
+            </p>
           </div>
-          <div class="space-y-1.5">
-            <Label for="imp-nombre">NOMBRE</Label>
-            <Input id="imp-nombre" v-model="cabecera.nombre" placeholder="" />
+          <div class="rounded-md border border-border/60 bg-background/60 px-3 py-2">
+            <p class="text-xs font-medium text-muted-foreground">
+              Total
+            </p>
+            <p class="mt-1 font-mono text-xl font-semibold tabular-nums text-foreground">
+              {{ fmtPuntajeSum(scoreSums.total) }}
+            </p>
+          </div>
+          <div class="rounded-md border border-border/60 bg-background/80 px-3 py-2">
+            <p class="text-xs font-medium opacity-80">
+              Clasificación IFS
+            </p>
+            <p class="mt-1 text-xl font-bold tracking-tight">
+              {{ nivelIFS }}
+            </p>
           </div>
         </div>
+      </div>
 
-        <div class="overflow-x-auto rounded-md border">
+      <div class="space-y-2">
+        <p class="text-sm font-semibold">
+          Nivel de riesgo (tabla referencia)
+        </p>
+        <div class="max-w-md overflow-x-auto rounded-md border">
           <Table>
-            <TableHeader>
-              <TableRow class="bg-muted/60">
-                <TableHead class="min-w-[220px]">
-                  Variable
-                </TableHead>
-                <TableHead class="min-w-[180px]">
-                  Característica
-                </TableHead>
-                <TableHead class="w-28 text-right">
-                  Puntaje
-                </TableHead>
-              </TableRow>
-            </TableHeader>
             <TableBody>
               <TableRow
-                v-for="(row, idx) in filasEditables"
-                :key="idx"
-                :class="{
-                  'bg-primary/10 font-semibold': isSectionRow(row) && !isHeaderVariables(row),
-                  'bg-muted/50 text-xs font-medium': isHeaderVariables(row),
-                }"
+                v-for="(r, i) in IMPRIMIR_NIVEL_RIESGO_TABLA"
+                :key="i"
+                :class="i === 0 ? 'bg-muted/70 font-medium' : ''"
               >
-                <TableCell class="whitespace-pre-wrap align-top">
-                  {{ row.variable }}
-                </TableCell>
-                <TableCell class="align-top">
-                  <template v-if="isHeaderVariables(row)">
-                    <span>{{ row.caracteristica }}</span>
-                  </template>
-                  <template v-else-if="!isSectionRow(row)">
-                    <Select
-                      v-if="isMatrixDataRow(row)"
-                      :model-value="selectedMatrixOptionValue(row)"
-                      @update:model-value="(v) => onMatrixOptionChange(row, v ?? '__none__')"
-                    >
-                      <SelectTrigger :id="`imp-car-${idx}`" class="h-auto min-h-8 w-full whitespace-normal py-1 text-left font-mono text-sm">
-                        <SelectValue placeholder="Seleccionar…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">
-                          Seleccionar…
-                        </SelectItem>
-                        <SelectItem
-                          v-for="(opt, oi) in matrixOptionsForRow(row)"
-                          :key="oi"
-                          :value="String(oi)"
-                          class="whitespace-normal font-mono text-sm"
-                        >
-                          {{ opt.label }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      v-else
-                      v-model="row.caracteristica"
-                      class="h-8 font-mono text-sm"
-                      placeholder="—"
-                    />
-                  </template>
-                </TableCell>
-                <TableCell class="align-top text-right">
-                  <template v-if="isHeaderVariables(row)">
-                    <span>{{ row.puntaje }}</span>
-                  </template>
-                  <template v-else-if="!isSectionRow(row)">
-                    <Input
-                      v-if="isMatrixDataRow(row)"
-                      v-model="row.puntaje"
-                      readonly
-                      tabindex="-1"
-                      class="h-8 cursor-default border-transparent bg-muted/40 font-mono text-sm text-right shadow-none focus-visible:ring-0"
-                      placeholder="—"
-                    />
-                    <Input
-                      v-else
-                      v-model="row.puntaje"
-                      class="h-8 font-mono text-sm text-right"
-                      placeholder="—"
-                    />
-                  </template>
+                <TableCell v-for="(cell, j) in r" :key="j" class="font-mono text-sm">
+                  {{ cell }}
                 </TableCell>
               </TableRow>
             </TableBody>
           </Table>
         </div>
+      </div>
 
-        <div class="space-y-2">
-          <p class="text-sm font-semibold">
-            Nivel de riesgo (tabla referencia)
-          </p>
-          <div class="max-w-md overflow-x-auto rounded-md border">
-            <Table>
-              <TableBody>
-                <TableRow
-                  v-for="(r, i) in IMPRIMIR_NIVEL_RIESGO_TABLA"
-                  :key="i"
-                  :class="i === 0 ? 'bg-muted/70 font-medium' : ''"
-                >
-                  <TableCell v-for="(cell, j) in r" :key="j" class="font-mono text-sm">
-                    {{ cell }}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-
-        <div class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-          <p class="font-medium text-foreground">
-            Firma de analista
-          </p>
-          <p class="mt-2 text-xs">
-            Espacio reservado según plantilla impresa.
-          </p>
-        </div>
+      <div class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+        <p class="font-medium text-foreground">
+          Firma de analista
+        </p>
+        <p class="mt-2 text-xs">
+          Espacio reservado según plantilla impresa.
+        </p>
+      </div>
     </div>
   </div>
 </template>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import AnalisisScoreImprimirPanel from '~/components/radicacion/AnalisisScoreImprimirPanel.vue'
+import type { ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
 import {
   IMPRIMIR_EMPLEADO_META,
   IMPRIMIR_EMPLEADO_VARIABLES,
@@ -27,8 +28,9 @@ definePageMeta({
 
 const route = useRoute()
 const router = useRouter()
-const { hasPermission } = usePermissions()
+const { hasPermission, hasAnyPermission } = usePermissions()
 const { $api } = useNuxtApp()
+const { downloadAnalisisScorePdf } = useDocumentDownload()
 
 const solicitudId = computed(() => {
   const q = route.query.solicitud
@@ -43,6 +45,9 @@ const scoreCabecera = ref({
 })
 
 const loadingSolicitud = ref(false)
+/** Hay filas guardadas en servidor (`analisis_score_snapshot`) para generar PDF. */
+const tieneAnalisisScoreGuardado = ref(false)
+const descargandoScorePdf = ref(false)
 
 const scoreLinesIndep = ref<ScoreMatrixLine[]>(normalizeScoreMatrixLines(INDEPENDIENTE_MATRIX))
 const scoreLinesEmp = ref<ScoreMatrixLine[]>(normalizeScoreMatrixLines(EMPLEADO_PENSIONADO_MATRIX))
@@ -93,27 +98,108 @@ function debtorDisplayName(debtor: Record<string, unknown>): string {
   return parts.join(' ').trim()
 }
 
-async function loadSolicitudCabecera(id: string): Promise<void> {
+function cloneImprimirRows(rows: ImprimirVariableRow[]): ImprimirVariableRow[] {
+  return rows.map(r => ({ ...r }))
+}
+
+function mergeRowsFromSnapshot(
+  defaults: ImprimirVariableRow[],
+  saved: unknown,
+): ImprimirVariableRow[] {
+  if (!Array.isArray(saved) || saved.length === 0) {
+    return cloneImprimirRows(defaults)
+  }
+  const byVar = new Map(
+    saved
+      .filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object')
+      .map(r => [String(r.variable ?? '').trim(), r]),
+  )
+  return defaults.map((def) => {
+    const s = byVar.get(def.variable.trim())
+    if (!s) {
+      return { ...def }
+    }
+
+    return {
+      variable: def.variable,
+      caracteristica: typeof s.caracteristica === 'string' ? s.caracteristica : '',
+      puntaje: typeof s.puntaje === 'string' ? s.puntaje : '',
+    }
+  })
+}
+
+function isPerfilDeudor(v: unknown): v is AnalisisScorePerfilValue {
+  return v === 'independiente' || v === 'empleado' || v === 'pensionado'
+}
+
+/** Un solo perfil: define qué hoja de impresión SCORE se muestra (solo en paso 2). */
+const perfilDeudor = ref<AnalisisScorePerfilValue | undefined>(undefined)
+
+const currentStep = ref(1)
+const maxStep = 2
+
+const variableRowsForIndep = ref<ImprimirVariableRow[]>(cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES))
+const variableRowsForEmp = ref<ImprimirVariableRow[]>(cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES))
+
+async function loadSolicitudParaAnalisis(id: string): Promise<void> {
   loadingSolicitud.value = true
   try {
     const res = await $api<{ data?: Record<string, unknown> } & Record<string, unknown>>(`/credit-applications/${id}`)
     const data = (res?.data ?? res) as Record<string, unknown>
-    const debtor = data.debtor as Record<string, unknown> | null | undefined
-    if (debtor && typeof debtor === 'object') {
-      const docType = typeof debtor.document_type === 'string' ? debtor.document_type.trim() : ''
-      const docNum = debtor.document_number != null ? String(debtor.document_number).trim() : ''
-      const cedula = [docType, docNum].filter(Boolean).join(' ').trim()
+    const snap = data.analisis_score_snapshot as Record<string, unknown> | null | undefined
+
+    let cabeceraDesdeSnap = false
+    if (snap && typeof snap === 'object' && snap.cabecera && typeof snap.cabecera === 'object') {
+      const c = snap.cabecera as Record<string, unknown>
       scoreCabecera.value = {
-        fecha: formatFechaRadicacion(data.created_at),
-        cedula,
-        nombre: debtorDisplayName(debtor),
+        fecha: String(c.fecha ?? ''),
+        cedula: String(c.cedula ?? ''),
+        nombre: String(c.nombre ?? ''),
       }
-    } else {
-      scoreCabecera.value = { fecha: formatFechaRadicacion(data.created_at), cedula: '', nombre: '' }
+      cabeceraDesdeSnap = true
     }
+
+    if (!cabeceraDesdeSnap) {
+      const debtor = data.debtor as Record<string, unknown> | null | undefined
+      if (debtor && typeof debtor === 'object') {
+        const docType = typeof debtor.document_type === 'string' ? debtor.document_type.trim() : ''
+        const docNum = debtor.document_number != null ? String(debtor.document_number).trim() : ''
+        const cedula = [docType, docNum].filter(Boolean).join(' ').trim()
+        scoreCabecera.value = {
+          fecha: formatFechaRadicacion(data.created_at),
+          cedula,
+          nombre: debtorDisplayName(debtor),
+        }
+      } else {
+        scoreCabecera.value = { fecha: formatFechaRadicacion(data.created_at), cedula: '', nombre: '' }
+      }
+    }
+
+    if (snap && typeof snap === 'object' && isPerfilDeudor(snap.perfil_deudor)) {
+      perfilDeudor.value = snap.perfil_deudor
+    }
+
+    variableRowsForIndep.value = mergeRowsFromSnapshot(
+      IMPRIMIR_INDEPENDIENTE_VARIABLES,
+      snap?.variant === 'independiente' ? snap.variable_rows : null,
+    )
+    variableRowsForEmp.value = mergeRowsFromSnapshot(
+      IMPRIMIR_EMPLEADO_VARIABLES,
+      snap?.variant === 'empleado' ? snap.variable_rows : null,
+    )
+
+    tieneAnalisisScoreGuardado.value = Boolean(
+      snap
+      && typeof snap === 'object'
+      && Array.isArray(snap.variable_rows)
+      && snap.variable_rows.length > 0,
+    )
   } catch (e) {
     console.error('Error cargando solicitud para SCORE:', e)
     scoreCabecera.value = { fecha: '', cedula: '', nombre: '' }
+    variableRowsForIndep.value = cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES)
+    variableRowsForEmp.value = cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES)
+    tieneAnalisisScoreGuardado.value = false
   } finally {
     loadingSolicitud.value = false
   }
@@ -124,15 +210,17 @@ watch(
   (id) => {
     if (!id) {
       scoreCabecera.value = { fecha: '', cedula: '', nombre: '' }
+      variableRowsForIndep.value = cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES)
+      variableRowsForEmp.value = cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES)
+      perfilDeudor.value = undefined
+      currentStep.value = 1
+      tieneAnalisisScoreGuardado.value = false
       return
     }
-    loadSolicitudCabecera(id)
+    loadSolicitudParaAnalisis(id)
   },
   { immediate: true },
 )
-
-/** Un solo perfil: define qué hoja de impresión SCORE se muestra (solo en paso 2). */
-const perfilDeudor = ref<AnalisisScorePerfilValue | undefined>(undefined)
 
 /** Vista de impresión según perfil: empleado y pensionado comparten la misma plantilla. */
 const vistaImprimirScore = computed<'independiente' | 'empleado' | null>(() => {
@@ -145,9 +233,6 @@ const vistaImprimirScore = computed<'independiente' | 'empleado' | null>(() => {
   }
   return 'empleado'
 })
-
-const currentStep = ref(1)
-const maxStep = 2
 
 const stepsScore = [
   { num: 1, title: 'Perfil del deudor' },
@@ -212,6 +297,55 @@ watch(perfilDeudor, (p) => {
     currentStep.value = 1
   }
 })
+
+async function onScoreGuardado(): Promise<void> {
+  const id = solicitudId.value
+  if (id) {
+    await loadSolicitudParaAnalisis(id)
+  }
+}
+
+type ScorePanelExpose = {
+  guardarAnalisisScore: () => Promise<void>
+  guardandoScore: boolean
+  puedeGuardarScore: boolean
+}
+
+const scorePanelRef = ref<ScorePanelExpose | null>(null)
+
+const mostrarBotonGuardarScore = computed(
+  () =>
+    currentStep.value === 2
+    && vistaImprimirScore.value != null
+    && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
+)
+
+const mostrarBotonDescargarPdfScore = computed(
+  () =>
+    currentStep.value === 2
+    && vistaImprimirScore.value != null
+    && hasPermission('radicacion_descargar_pdf'),
+)
+
+async function ejecutarGuardarScore(): Promise<void> {
+  await scorePanelRef.value?.guardarAnalisisScore()
+}
+
+async function ejecutarDescargaScorePdf(): Promise<void> {
+  const id = solicitudId.value
+  if (!id) {
+    return
+  }
+  descargandoScorePdf.value = true
+  try {
+    await downloadAnalisisScorePdf(id)
+    toast.success('PDF del SCORE descargado.')
+  } catch (e) {
+    toast.error(e instanceof Error ? e.message : 'No se pudo generar el PDF del SCORE.')
+  } finally {
+    descargandoScorePdf.value = false
+  }
+}
 
 </script>
 
@@ -329,19 +463,27 @@ watch(perfilDeudor, (p) => {
         <div v-else-if="currentStep === 2" class="space-y-4">
           <AnalisisScoreImprimirPanel
             v-if="vistaImprimirScore === 'independiente'"
+            ref="scorePanelRef"
             v-model:cabecera="scoreCabecera"
             variant="independiente"
             :meta="IMPRIMIR_INDEPENDIENTE_META"
-            :variable-rows="IMPRIMIR_INDEPENDIENTE_VARIABLES"
+            :variable-rows="variableRowsForIndep"
             :matrix-lines="scoreLinesIndep"
+            :credit-application-id="solicitudId"
+            :perfil-deudor="perfilDeudor"
+            @saved="onScoreGuardado"
           />
           <AnalisisScoreImprimirPanel
             v-else-if="vistaImprimirScore === 'empleado'"
+            ref="scorePanelRef"
             v-model:cabecera="scoreCabecera"
             variant="empleado"
             :meta="IMPRIMIR_EMPLEADO_META"
-            :variable-rows="IMPRIMIR_EMPLEADO_VARIABLES"
+            :variable-rows="variableRowsForEmp"
             :matrix-lines="scoreLinesEmp"
+            :credit-application-id="solicitudId"
+            :perfil-deudor="perfilDeudor"
+            @saved="onScoreGuardado"
           />
           <p v-else class="text-sm text-muted-foreground">
             Selecciona un perfil en el paso 1 para cargar la hoja de score.
@@ -365,6 +507,70 @@ watch(perfilDeudor, (p) => {
             >
               Siguiente
             </Button>
+          </div>
+          <div
+            v-if="mostrarBotonGuardarScore || mostrarBotonDescargarPdfScore"
+            class="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end"
+          >
+            <p
+              v-if="!solicitudId"
+              class="text-right text-xs text-amber-700 dark:text-amber-400"
+            >
+              Sin solicitud en la URL: abre esta pantalla desde Radicación para poder guardar.
+            </p>
+            <p
+              v-else-if="mostrarBotonGuardarScore"
+              class="text-right text-xs text-muted-foreground"
+            >
+              Se guarda en la solicitud vinculada (borrador o en análisis).
+            </p>
+            <p
+              v-if="mostrarBotonDescargarPdfScore && solicitudId"
+              class="text-right text-xs text-muted-foreground"
+            >
+              El PDF usa el último SCORE guardado en el servidor.
+            </p>
+            <div class="flex flex-wrap justify-end gap-2">
+              <Button
+                v-if="mostrarBotonDescargarPdfScore"
+                type="button"
+                variant="outline"
+                class="shrink-0"
+                :disabled="!solicitudId || !tieneAnalisisScoreGuardado || descargandoScorePdf"
+                @click="ejecutarDescargaScorePdf"
+              >
+                <Icon
+                  v-if="descargandoScorePdf"
+                  name="i-lucide-loader-2"
+                  class="mr-2 h-4 w-4 animate-spin"
+                />
+                <Icon
+                  v-else
+                  name="i-lucide-file-down"
+                  class="mr-2 h-4 w-4"
+                />
+                {{ descargandoScorePdf ? 'Generando PDF…' : 'Descargar PDF SCORE' }}
+              </Button>
+              <Button
+                v-if="mostrarBotonGuardarScore"
+                type="button"
+                class="shrink-0"
+                :disabled="!solicitudId || scorePanelRef?.guardandoScore"
+                @click="ejecutarGuardarScore"
+              >
+                <Icon
+                  v-if="scorePanelRef?.guardandoScore"
+                  name="i-lucide-loader-2"
+                  class="mr-2 h-4 w-4 animate-spin"
+                />
+                <Icon
+                  v-else
+                  name="i-lucide-save"
+                  class="mr-2 h-4 w-4"
+                />
+                {{ scorePanelRef?.guardandoScore ? 'Guardando…' : 'Guardar análisis SCORE' }}
+              </Button>
+            </div>
           </div>
         </div>
       </CardContent>

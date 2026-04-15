@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import {
+  creditApplicationStatusFilterOptions as statusFilterOptions,
+  getCreditApplicationStatusBadgeVariant as getStatusBadgeVariant,
+  getCreditApplicationStatusLabel as getStatusLabel,
+} from '~/constants/credit-application-status'
 import { toast } from 'vue-sonner'
 
 definePageMeta({
@@ -33,15 +38,6 @@ const pagination = ref({
 const filterStatus = ref<string>('all')
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
-
-const statusFilterOptions = [
-  { value: 'all', label: 'Todos los estados' },
-  { value: 'Draft', label: 'Borrador' },
-  { value: 'Submitted', label: 'Enviada' },
-  { value: 'In_Analysis', label: 'En análisis' },
-  { value: 'Approved', label: 'Aprobada' },
-  { value: 'Rejected', label: 'Rechazada' },
-] as const
 
 const hasActiveFilters = computed(() => {
   return filterStatus.value !== 'all'
@@ -117,28 +113,6 @@ function formatCurrency(value: number) {
     currency: 'COP',
     minimumFractionDigits: 0,
   }).format(value)
-}
-
-function getStatusBadgeVariant(status: string) {
-  const map: Record<string, string> = {
-    Draft: 'secondary',
-    Submitted: 'default',
-    In_Analysis: 'outline',
-    Approved: 'default',
-    Rejected: 'destructive',
-  }
-  return map[status] || 'outline'
-}
-
-function getStatusLabel(status: string): string {
-  const map: Record<string, string> = {
-    Draft: 'Borrador',
-    Submitted: 'Enviada',
-    In_Analysis: 'En análisis',
-    Approved: 'Aprobada',
-    Rejected: 'Rechazada',
-  }
-  return map[status] ?? status
 }
 
 const deactivateSuccess = ref(false)

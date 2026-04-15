@@ -47,8 +47,6 @@ export const IMPRIMIR_INDEPENDIENTE_VARIABLES: ImprimirVariableRow[] = [
   { variable: 'Comportamiento en Coopservivelez', caracteristica: '', puntaje: '' },
   { variable: 'Garantía', caracteristica: '', puntaje: '' },
   { variable: 'Solvencia del deudor (total pasivos / total activos)', caracteristica: '', puntaje: '' },
-  { variable: 'TOTAL', caracteristica: '', puntaje: '' },
-  { variable: 'NIVEL DE RIESGO', caracteristica: '', puntaje: '' },
 ]
 
 /** Filas principales — impresión empleado / pensionado. */
@@ -68,8 +66,6 @@ export const IMPRIMIR_EMPLEADO_VARIABLES: ImprimirVariableRow[] = [
   { variable: 'Comportamiento en Coopservivelez', caracteristica: '', puntaje: '' },
   { variable: 'Garantía', caracteristica: '', puntaje: '' },
   { variable: 'Solvencia del deudor (total pasivos / total activos)', caracteristica: '', puntaje: '' },
-  { variable: 'TOTAL', caracteristica: '', puntaje: '' },
-  { variable: 'NIVEL DE RIESGO', caracteristica: '', puntaje: '' },
 ]
 
 /** Tabla MÍNIMO / MÁXIMO / RANGO (común a ambas hojas de imprimir). */
