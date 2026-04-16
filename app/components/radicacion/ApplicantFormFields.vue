@@ -16,9 +16,13 @@ const props = withDefaults(
     showOnlyFinancial?: boolean
     /** Modo solo lectura (sin edición) */
     readonly?: boolean
+    /**
+     * Si true, «Ingreso cultivos/negocio» no se edita a mano: lo calculan las plantillas de actividad económica.
+     */
+    incomeBusinessReadonly?: boolean
     onSearch?: () => void
   }>(),
-  { readonly: false },
+  { readonly: false, incomeBusinessReadonly: true },
 )
 
 const emit = defineEmits<{
@@ -107,6 +111,11 @@ function onKeydownPesosOnly(e: KeyboardEvent) {
   if (key == null || key === '' || ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return
   if (key.length === 1 && !/[\d.,]/.test(key)) e.preventDefault()
 }
+
+/** Cultivos/negocio: solo lectura si el formulario es readonly o si viene fijado por plantillas. */
+const incomeBusinessInputReadonly = computed(
+  () => props.readonly || props.incomeBusinessReadonly,
+)
 
 /** Total ingresos = salario + pensión + cultivos/negocio + arriendos + otros (para mostrar en input readonly). */
 const incomeTotalDisplay = computed(() => {
@@ -684,16 +693,39 @@ function formatFileSize(bytes: number): string {
               </td>
             </tr>
             <tr>
-              <td class="px-3 py-2.5 text-muted-foreground">Ingreso cultivos/negocio</td>
+              <td class="px-3 py-2.5 text-muted-foreground">
+                Ingreso cultivos/negocio
+                <span
+                  v-if="incomeBusinessInputReadonly && !readonly"
+                  class="mt-0.5 block text-[10px] font-normal leading-tight text-muted-foreground/90"
+                >
+                  Calculado desde actividad económica
+                </span>
+              </td>
               <td class="px-3 py-2 text-right">
                 <Input
                   :model-value="formatPesos(financial.income?.business)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
-                  class="h-8 w-full text-right"
-                  @keydown="onKeydownPesosOnly"
-                  @update:model-value="(v) => { const inc = financial.income || {}; const n = parsePesosInput(String(v)); const next = { ...inc, business: n, total: (inc.salary ?? 0) + (inc.pension ?? 0) + (n ?? 0) + (inc.rental ?? 0) + (inc.other ?? 0) }; setFinancial('income', next); }"
+                  title="Valor calculado a partir de las plantillas de actividad económica"
+                  :readonly="incomeBusinessInputReadonly"
+                  :class="[
+                    'h-8 w-full text-right',
+                    incomeBusinessInputReadonly ? 'cursor-default bg-muted/50' : '',
+                  ]"
+                  @keydown="(e) => { if (!incomeBusinessInputReadonly) onKeydownPesosOnly(e) }"
+                  @update:model-value="(v) => {
+                    if (incomeBusinessInputReadonly) return
+                    const inc = financial.income || {}
+                    const n = parsePesosInput(String(v))
+                    const next = {
+                      ...inc,
+                      business: n,
+                      total: (inc.salary ?? 0) + (inc.pension ?? 0) + (n ?? 0) + (inc.rental ?? 0) + (inc.other ?? 0),
+                    }
+                    setFinancial('income', next)
+                  }"
                 />
               </td>
             </tr>

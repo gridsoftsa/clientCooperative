@@ -26,6 +26,22 @@ export function useDocumentDownload() {
     return readXsrfCookie()
   }
 
+  /**
+   * Muestra el PDF en una nueva pestaña (el asesor puede descargar desde el visor del navegador).
+   */
+  function openPdfBlobInNewTab(blob: Blob): void {
+    if (import.meta.server) return
+    const objectUrl = URL.createObjectURL(blob)
+    const opened = window.open(objectUrl, '_blank', 'noopener,noreferrer')
+    if (!opened) {
+      URL.revokeObjectURL(objectUrl)
+      throw new Error(
+        'No se pudo abrir el PDF. Permita ventanas emergentes para este sitio.',
+      )
+    }
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000)
+  }
+
   async function downloadDocument(
     applicationId: string | number,
     documentId: number,
@@ -69,7 +85,7 @@ export function useDocumentDownload() {
     URL.revokeObjectURL(objectUrl)
   }
 
-  async function downloadApplicationPdf(applicationId: string | number, filename?: string): Promise<void> {
+  async function downloadApplicationPdf(applicationId: string | number, _filename?: string): Promise<void> {
     const xsrf = await ensureCsrfCookie()
     const url = `${apiBase}/api/credit-applications/${applicationId}/pdf`
 
@@ -84,7 +100,7 @@ export function useDocumentDownload() {
     })
 
     if (!res.ok) {
-      let msg = `Error ${res.status}: No se pudo descargar el PDF`
+      let msg = `Error ${res.status}: No se pudo abrir el PDF`
       try {
         const ct = res.headers.get('Content-Type') ?? ''
         if (ct.includes('application/json')) {
@@ -100,27 +116,10 @@ export function useDocumentDownload() {
     }
 
     const blob = await res.blob()
-    const disposition = res.headers.get('Content-Disposition')
-    let finalFilename = filename
-    if (!finalFilename && disposition) {
-      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-      if (match) {
-        finalFilename = match[1].replace(/['"]/g, '').trim()
-      }
-    }
-    finalFilename = finalFilename || `solicitud-${applicationId}.pdf`
-
-    const objectUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = objectUrl
-    a.download = finalFilename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(objectUrl)
+    openPdfBlobInNewTab(blob)
   }
 
-  async function downloadAnalisisScorePdf(applicationId: string | number, filename?: string): Promise<void> {
+  async function downloadAnalisisScorePdf(applicationId: string | number, _filename?: string): Promise<void> {
     const xsrf = await ensureCsrfCookie()
     const url = `${apiBase}/api/credit-applications/${applicationId}/analisis-score/pdf`
 
@@ -135,7 +134,7 @@ export function useDocumentDownload() {
     })
 
     if (!res.ok) {
-      let msg = `Error ${res.status}: No se pudo descargar el PDF del SCORE`
+      let msg = `Error ${res.status}: No se pudo abrir el PDF del SCORE`
       try {
         const ct = res.headers.get('Content-Type') ?? ''
         if (ct.includes('application/json')) {
@@ -151,24 +150,7 @@ export function useDocumentDownload() {
     }
 
     const blob = await res.blob()
-    const disposition = res.headers.get('Content-Disposition')
-    let finalFilename = filename
-    if (!finalFilename && disposition) {
-      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-      if (match) {
-        finalFilename = match[1].replace(/['"]/g, '').trim()
-      }
-    }
-    finalFilename = finalFilename || `analisis-score-${applicationId}.pdf`
-
-    const objectUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = objectUrl
-    a.download = finalFilename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(objectUrl)
+    openPdfBlobInNewTab(blob)
   }
 
   return { downloadDocument, downloadApplicationPdf, downloadAnalisisScorePdf }

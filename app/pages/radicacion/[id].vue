@@ -276,11 +276,11 @@ async function handleDownloadPdf() {
   try {
     await downloadApplicationPdf(application.value.id, `solicitud-${application.value.code ?? application.value.id}.pdf`)
     const { toast } = await import('vue-sonner')
-    toast.success('PDF descargado')
+    toast.success('PDF abierto en una nueva pestaña. Puede guardarlo desde el visor si lo desea.')
   } catch (e) {
-    console.error('Error descargando PDF:', e)
+    console.error('Error abriendo PDF:', e)
     const { toast } = await import('vue-sonner')
-    toast.error('No se pudo descargar el PDF')
+    toast.error('No se pudo abrir el PDF')
   } finally {
     downloadingPdf.value = false
   }
@@ -413,8 +413,8 @@ watch([application, debtor, coDebtors], () => {
             :disabled="downloadingPdf"
             @click="handleDownloadPdf"
           >
-            <Icon :name="downloadingPdf ? 'i-lucide-loader-2' : 'i-lucide-file-down'" class="mr-2 h-4 w-4" :class="{ 'animate-spin': downloadingPdf }" />
-            {{ downloadingPdf ? 'Descargando...' : 'Descargar PDF' }}
+            <Icon :name="downloadingPdf ? 'i-lucide-loader-2' : 'i-lucide-external-link'" class="mr-2 h-4 w-4" :class="{ 'animate-spin': downloadingPdf }" />
+            {{ downloadingPdf ? 'Abriendo…' : 'Ver PDF' }}
           </Button>
         </PermissionGate>
         <PermissionGate permission="radicacion_desactivar">

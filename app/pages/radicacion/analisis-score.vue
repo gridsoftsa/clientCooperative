@@ -339,7 +339,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
   descargandoScorePdf.value = true
   try {
     await downloadAnalisisScorePdf(id)
-    toast.success('PDF del SCORE descargado.')
+    toast.success('PDF del SCORE abierto en una nueva pestaña. Puede guardarlo desde el visor si lo desea.')
   } catch (e) {
     toast.error(e instanceof Error ? e.message : 'No se pudo generar el PDF del SCORE.')
   } finally {
@@ -528,7 +528,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
               v-if="mostrarBotonDescargarPdfScore && solicitudId"
               class="text-right text-xs text-muted-foreground"
             >
-              El PDF usa el último SCORE guardado en el servidor.
+              Se abre en una nueva pestaña; el contenido es el último SCORE guardado en el servidor.
             </p>
             <div class="flex flex-wrap justify-end gap-2">
               <Button
@@ -546,10 +546,10 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
                 />
                 <Icon
                   v-else
-                  name="i-lucide-file-down"
+                  name="i-lucide-external-link"
                   class="mr-2 h-4 w-4"
                 />
-                {{ descargandoScorePdf ? 'Generando PDF…' : 'Descargar PDF SCORE' }}
+                {{ descargandoScorePdf ? 'Abriendo…' : 'Ver PDF SCORE' }}
               </Button>
               <Button
                 v-if="mostrarBotonGuardarScore"

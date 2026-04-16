@@ -182,11 +182,11 @@ async function handleDownloadPdf(app: { id: number; code?: string }) {
   try {
     const { toast } = await import('vue-sonner')
     await downloadApplicationPdf(app.id, `solicitud-${app.code ?? app.id}.pdf`)
-    toast.success('PDF descargado')
+    toast.success('PDF abierto en una nueva pestaña. Puede guardarlo desde el visor si lo desea.')
   } catch (e) {
-    console.error('Error descargando PDF:', e)
+    console.error('Error abriendo PDF:', e)
     const { toast } = await import('vue-sonner')
-    toast.error('No se pudo descargar el PDF')
+    toast.error('No se pudo abrir el PDF')
   } finally {
     downloadingPdfId.value = null
   }
@@ -363,11 +363,11 @@ onMounted(() => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        title="Descargar PDF"
+                        title="Ver PDF (nueva pestaña)"
                         :disabled="downloadingPdfId === app.id"
                         @click="handleDownloadPdf(app)"
                       >
-                        <Icon :name="downloadingPdfId === app.id ? 'i-lucide-loader-2' : 'i-lucide-file-down'" class="h-4 w-4" :class="{ 'animate-spin': downloadingPdfId === app.id }" />
+                        <Icon :name="downloadingPdfId === app.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'" class="h-4 w-4" :class="{ 'animate-spin': downloadingPdfId === app.id }" />
                       </Button>
                     </PermissionGate>
                     <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
