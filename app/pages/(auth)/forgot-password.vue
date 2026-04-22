@@ -16,22 +16,22 @@ definePageMeta({
       <Card>
         <CardHeader class="text-center">
           <CardTitle class="text-xl">
-            Forgot Password
+            Recuperar contraseña
           </CardTitle>
           <CardDescription>
-            Enter your email below to reset your password
+            Escribe el correo con el que te registraste. Si hay una cuenta, te indicaremos cómo restablecer la contraseña.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div class="grid mx-auto max-w-sm gap-6">
             <AuthForgotPassword />
             <p class="text-center text-sm text-muted-foreground">
-              Already have an account?
+              ¿Ya tienes una cuenta?
               <NuxtLink
                 to="/login"
                 class="underline underline-offset-4 hover:text-primary"
               >
-                Login
+                Iniciar sesión
               </NuxtLink>
             </p>
           </div>

@@ -16,18 +16,6 @@ defineProps<{
         class="absolute inset-0 h-full w-full rounded-r-2xl object-cover object-center"
       />
       <div class="absolute inset-0 rounded-r-2xl bg-zinc-900/40" aria-hidden="true" />
-      <div class="relative z-20 mt-auto">
-        <blockquote class="space-y-2">
-          <p class="text-lg">
-            &ldquo;This library has saved me countless hours of work and
-            helped me deliver stunning designs to my clients faster than
-            ever before.&rdquo;
-          </p>
-          <footer class="text-sm">
-            Sofia Davis
-          </footer>
-        </blockquote>
-      </div>
     </div>
     <div class="mx-auto flex-1 lg:p-8">
       <slot />

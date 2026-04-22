@@ -94,7 +94,7 @@ export default defineI18nConfig(() => ({
         password: 'Password',
         remember: 'Remember me',
         forgotPassword: 'Forgot your password?',
-        resetPassword: 'Reset Password',
+        resetPassword: 'Reset password',
         welcomeBack: 'Welcome back',
         loginWithCredentials: 'Enter your credentials to continue',
       },

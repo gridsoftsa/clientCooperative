@@ -46,13 +46,13 @@ async function onSubmit(event: Event) {
     </div>
     <div class="grid gap-2">
       <Label for="email">
-        Email
+        Correo electrónico
       </Label>
       <Input
         id="email"
         v-model="email"
         type="email"
-        placeholder="name@example.com"
+        placeholder="correo@ejemplo.com"
         :disabled="isLoading"
         auto-capitalize="none"
         auto-complete="email"
@@ -63,13 +63,13 @@ async function onSubmit(event: Event) {
     <div class="grid gap-2">
       <div class="flex items-center">
         <Label for="password">
-          Password
+          Contraseña
         </Label>
         <NuxtLink
           to="/forgot-password"
           class="ml-auto inline-block text-sm underline"
         >
-          Forgot your password?
+          ¿Olvidaste tu contraseña?
         </NuxtLink>
       </div>
       <PasswordInput id="password" v-model="password" autocomplete="current-password" :disabled="isLoading" required />
