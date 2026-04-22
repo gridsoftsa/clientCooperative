@@ -1032,13 +1032,14 @@ function formatFileSize(bytes: number): string {
               <Button
                 v-if="!readonly"
                 type="button"
-                variant="ghost"
-                size="icon"
-                class="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                variant="destructive"
+                size="sm"
+                class="h-9 shrink-0 gap-1.5 px-2.5"
                 title="Eliminar activo"
                 @click="removeAsset(idx)"
               >
-                <Icon name="i-lucide-trash" class="h-4 w-4" />
+                <Icon name="i-lucide-trash" class="h-4 w-4 shrink-0" />
+                Eliminar
               </Button>
             </div>
           </div>
@@ -1104,12 +1105,13 @@ function formatFileSize(bytes: number): string {
           <Button
             v-if="!readonly"
             type="button"
-            variant="ghost"
-            size="icon"
-            class="shrink-0 text-destructive hover:text-destructive"
+            variant="destructive"
+            size="sm"
+            class="h-9 shrink-0 gap-1.5 px-2.5"
             @click="removeDocument(idx)"
           >
-            <Icon name="i-lucide-trash" class="h-4 w-4" />
+            <Icon name="i-lucide-trash" class="h-4 w-4 shrink-0" />
+            Quitar
           </Button>
         </div>
         <Button v-if="!readonly" type="button" variant="outline" size="sm" @click="addDocument">

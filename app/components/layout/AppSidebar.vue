@@ -17,7 +17,7 @@ const teams: {
   {
     name: 'Coopservivelez',
     logo: '/Logo-coop-1.ico',
-    plan: 'cooperative',
+    plan: 'Empresarial',
   },
 ]
 
@@ -119,7 +119,6 @@ const filteredNavMenu = computed(() => {
   <Sidebar :collapsible="sidebar?.collapsible" :side="sidebar?.side" :variant="sidebar?.variant">
     <SidebarHeader>
       <LayoutSidebarNavHeader :teams="teams" />
-      <Search />
     </SidebarHeader>
     <SidebarContent>
       <SidebarGroup v-for="(nav, indexGroup) in filteredNavMenu" :key="indexGroup">

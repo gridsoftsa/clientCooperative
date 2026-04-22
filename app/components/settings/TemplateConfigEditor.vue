@@ -185,9 +185,8 @@ function handleCancel() {
       <div v-if="canEdit || canDelete" class="flex gap-2">
         <Button
           v-if="categoryId && canDelete"
-          variant="ghost"
+          variant="destructive"
           size="sm"
-          class="text-destructive hover:text-destructive"
           @click="emit('delete')"
         >
           <Icon name="i-lucide-trash-2" class="mr-1 h-4 w-4" />
@@ -195,7 +194,7 @@ function handleCancel() {
         </Button>
         <Button
           v-if="!editing"
-          variant="outline"
+          variant="warning"
           size="sm"
           @click="editing = true"
         >
@@ -203,10 +202,10 @@ function handleCancel() {
           Editar
         </Button>
         <template v-else>
-          <Button variant="ghost" size="sm" :disabled="saving" @click="handleCancel">
+          <Button variant="outline" size="sm" :disabled="saving" @click="handleCancel">
             Cancelar
           </Button>
-          <Button size="sm" :disabled="saving || !pctSumValidation.ok" @click="handleSave">
+          <Button variant="default" size="sm" :disabled="saving || !pctSumValidation.ok" @click="handleSave">
             <Icon v-if="saving" name="i-lucide-loader-2" class="mr-1 h-4 w-4 animate-spin" />
             Guardar
           </Button>

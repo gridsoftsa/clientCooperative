@@ -1028,13 +1028,14 @@ onMounted(() => {
               >
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  class="absolute right-2 top-3 h-8 w-8 text-muted-foreground hover:text-destructive"
+                  variant="destructive"
+                  size="sm"
+                  class="absolute right-2 top-2.5 h-8 gap-1.5 px-2 text-xs"
                   title="Eliminar codeudor"
                   @click="removeCoDebtor(idx)"
                 >
-                  <Icon name="i-lucide-trash" class="h-4 w-4" />
+                  <Icon name="i-lucide-trash" class="h-3.5 w-3.5 shrink-0" />
+                  Eliminar
                 </Button>
                 <AccordionTrigger class="py-3 pr-8 hover:no-underline">
                   <span class="font-medium">

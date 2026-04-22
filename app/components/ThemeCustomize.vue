@@ -37,7 +37,8 @@ function backgroundColor(color: ThemeColor) {
 const colorMode = useColorMode()
 
 const themeColorLabelEs: Record<string, string> = {
-  default: 'Predeterminado',
+  default: 'Por defecto',
+  cooperative: 'Empresarial',
   blue: 'Azul',
   green: 'Verde',
   red: 'Rojo',
@@ -45,7 +46,7 @@ const themeColorLabelEs: Record<string, string> = {
   violet: 'Violeta',
   orange: 'Naranja',
   yellow: 'Amarillo',
-  teal: 'Verde azulado',
+  teal: 'Turquesa',
 }
 
 const themeTypeLabelEs: Record<string, string> = {
@@ -58,6 +59,24 @@ function colorLabel(name: string): string {
   return themeColorLabelEs[name] ?? name
 }
 
+/** Nombre descriptivo largo (tooltip) cuando la etiqueta visible está acortada. */
+const themeColorLabelFull: Record<string, string> = {
+  default: 'Predeterminado (gris)',
+  cooperative: 'Empresarial (identidad cooperativa)',
+  blue: 'Azul',
+  green: 'Verde',
+  red: 'Rojo',
+  rose: 'Rosa',
+  violet: 'Violeta',
+  orange: 'Naranja',
+  yellow: 'Amarillo',
+  teal: 'Verde azulado (teal)',
+}
+
+function colorLabelFull(name: string): string {
+  return themeColorLabelFull[name] ?? colorLabel(name)
+}
+
 function typeLabel(name: string): string {
   return themeTypeLabelEs[name] ?? name
 }
@@ -67,66 +86,69 @@ function typeLabel(name: string): string {
   <div class="grid gap-6">
     <div class="space-y-1.5">
       <Label>Color</Label>
-      <div class="grid grid-cols-3 gap-2">
+      <div class="grid grid-cols-2 gap-2 min-[500px]:grid-cols-3">
         <template v-for="col in allColors" :key="col">
           <Button
-            class="justify-start gap-2"
+            class="!h-auto min-h-0 w-full min-w-0 max-w-full flex-col items-stretch justify-center gap-1.5 overflow-hidden !whitespace-normal py-2.5 px-1.5 sm:px-2"
             variant="outline"
             :class="{ '!border-primary border-2 !bg-primary/10': theme?.color === col }"
+            :title="colorLabelFull(col)"
             @click="updateAppSettings({ theme: { color: col } })"
           >
-            <span class="h-5 w-5 flex items-center justify-center rounded-full border border-white" :style="{ backgroundColor: backgroundColor(col) }">
-              <Icon v-if="col === theme?.color" name="i-radix-icons-check" size="16" class="text-white" />
+            <span class="mx-auto flex h-6 w-6 shrink-0 items-center justify-center self-center rounded-full border border-white shadow-sm" :style="{ backgroundColor: backgroundColor(col) }">
+              <Icon v-if="col === theme?.color" name="i-radix-icons-check" size="14" class="text-white drop-shadow" />
             </span>
-            <span class="text-xs">{{ colorLabel(col) }}</span>
+            <span class="w-full min-w-0 text-center text-[10px] leading-tight sm:text-xs text-balance [overflow-wrap:anywhere]">
+              {{ colorLabel(col) }}
+            </span>
           </Button>
         </template>
       </div>
     </div>
     <div class="space-y-1.5">
       <Label>Estilo</Label>
-      <div class="grid grid-cols-3 gap-2">
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <template v-for="themeType in allTypes" :key="themeType">
           <Button
-            class="justify-center gap-2"
+            class="!h-auto min-h-9 w-full min-w-0 items-center justify-center gap-1.5 overflow-hidden !whitespace-normal px-2 py-1.5"
             variant="outline"
             :class="{ '!border-primary border-2 !bg-primary/10': theme?.type === themeType }"
             @click="updateAppSettings({ theme: { type: themeType } })"
           >
-            <span class="text-xs">{{ typeLabel(themeType) }}</span>
+            <span class="w-full min-w-0 text-center text-[10px] leading-tight sm:text-xs [overflow-wrap:anywhere] sm:text-balance">{{ typeLabel(themeType) }}</span>
           </Button>
         </template>
       </div>
     </div>
     <div class="space-y-1.5">
       <Label>Tema</Label>
-      <div class="grid grid-cols-3 gap-2">
+      <div class="grid grid-cols-1 gap-2 min-[400px]:grid-cols-3">
         <Button
-          class="justify-center gap-2"
+          class="!h-auto min-h-9 w-full min-w-0 items-center justify-center gap-1.5 !whitespace-normal px-2 py-1.5"
           variant="outline"
           :class="{ '!border-primary border-2 !bg-primary/10': colorMode.preference === 'light' }"
           @click="colorMode.preference = 'light'"
         >
-          <Icon name="i-ph-sun-dim-duotone" size="16" />
-          <span class="text-xs">Claro</span>
+          <Icon name="i-ph-sun-dim-duotone" size="16" class="shrink-0" />
+          <span class="min-w-0 text-center text-xs leading-tight">Claro</span>
         </Button>
         <Button
-          class="justify-center gap-2"
+          class="!h-auto min-h-9 w-full min-w-0 items-center justify-center gap-1.5 !whitespace-normal px-2 py-1.5"
           variant="outline"
           :class="{ '!border-primary border-2 !bg-primary/10': colorMode.preference === 'dark' }"
           @click="colorMode.preference = 'dark'"
         >
-          <Icon name="i-ph-moon-stars-duotone" size="16" />
-          <span class="text-xs">Oscuro</span>
+          <Icon name="i-ph-moon-stars-duotone" size="16" class="shrink-0" />
+          <span class="min-w-0 text-center text-xs leading-tight">Oscuro</span>
         </Button>
         <Button
-          class="justify-center gap-2"
+          class="!h-auto min-h-9 w-full min-w-0 items-center justify-center gap-1.5 !whitespace-normal px-2 py-1.5"
           variant="outline"
           :class="{ '!border-primary border-2 !bg-primary/10': colorMode.preference === 'system' }"
           @click="colorMode.preference = 'system'"
         >
-          <Icon name="i-lucide-monitor" size="16" />
-          <span class="text-xs">Sistema</span>
+          <Icon name="i-lucide-monitor" size="16" class="shrink-0" />
+          <span class="min-w-0 text-center text-xs leading-tight">Sistema</span>
         </Button>
       </div>
     </div>

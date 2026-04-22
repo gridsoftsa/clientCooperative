@@ -203,15 +203,17 @@ watch([searchQuery, showInactive], () => {
                         {{ formatPermissionDisplayName(p.name) }}
                       </Label>
                     </div>
-                    <div class="flex shrink-0 gap-1">
+                    <div class="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                       <PermissionGate permission="permisos_editar">
-                        <Button variant="ghost" size="icon" class="h-8 w-8" @click="$router.push(`/settings/permissions/${p.id}/edit`)">
-                          <Icon name="i-lucide-edit" class="h-4 w-4" />
+                        <Button variant="warning" size="sm" class="h-8 gap-1.5" @click="$router.push(`/settings/permissions/${p.id}/edit`)">
+                          <Icon name="i-lucide-edit" class="h-3.5 w-3.5 shrink-0" />
+                          Editar
                         </Button>
                       </PermissionGate>
                       <PermissionGate permission="permisos_eliminar">
-                        <Button variant="ghost" size="icon" class="h-8 w-8 text-destructive hover:text-destructive" @click="() => handleDelete(p.id, p.name)">
-                          <Icon name="i-lucide-trash" class="h-4 w-4" />
+                        <Button variant="destructive" size="sm" class="h-8 gap-1.5" @click="() => handleDelete(p.id, p.name)">
+                          <Icon name="i-lucide-trash" class="h-3.5 w-3.5 shrink-0" />
+                          Eliminar
                         </Button>
                       </PermissionGate>
                     </div>

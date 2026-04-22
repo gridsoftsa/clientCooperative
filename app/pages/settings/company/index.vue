@@ -163,7 +163,7 @@ onMounted(() => {
                   <p class="text-xs text-muted-foreground">
                     PNG, JPG, WebP (máx. 2 MB)
                   </p>
-                  <Button v-if="logoPreview" type="button" variant="ghost" size="sm" @click="clearLogo">
+                  <Button v-if="logoPreview" type="button" variant="destructive" size="sm" @click="clearLogo">
                     Quitar imagen
                   </Button>
                 </div>

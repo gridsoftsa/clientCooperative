@@ -154,11 +154,13 @@ watch(searchQuery, () => {
                   <TableCell class="text-right">
                     <PermissionGate permission="solicitantes_editar">
                       <Button
-                        variant="outline"
+                        variant="warning"
                         size="sm"
+                        class="gap-1.5"
                         @click="router.push(`/settings/applicants/${a.id}/edit`)"
                       >
-                        <Icon name="i-lucide-edit" class="h-4 w-4" />
+                        <Icon name="i-lucide-edit" class="h-4 w-4 shrink-0" />
+                        Editar
                       </Button>
                     </PermissionGate>
                   </TableCell>

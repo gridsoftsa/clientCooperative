@@ -109,22 +109,26 @@ onMounted(() => {
                   </Badge>
                 </TableCell>
                 <TableCell class="text-right">
-                  <PermissionGate permission="sucursales_editar">
-                    <Button variant="ghost" size="sm" @click="router.push(`/settings/sucursales/${s.id}/edit`)">
-                      <Icon name="i-lucide-edit" class="h-4 w-4" />
-                    </Button>
-                  </PermissionGate>
-                  <PermissionGate permission="sucursales_eliminar">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      class="text-destructive"
-                      :disabled="s.is_main"
-                      @click="handleDelete(s.id)"
-                    >
-                      <Icon name="i-lucide-trash" class="h-4 w-4" />
-                    </Button>
-                  </PermissionGate>
+                  <div class="flex flex-wrap items-center justify-end gap-2">
+                    <PermissionGate permission="sucursales_editar">
+                      <Button variant="warning" size="sm" class="gap-1.5" @click="router.push(`/settings/sucursales/${s.id}/edit`)">
+                        <Icon name="i-lucide-edit" class="h-4 w-4 shrink-0" />
+                        Editar
+                      </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="sucursales_eliminar">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        class="gap-1.5"
+                        :disabled="s.is_main"
+                        @click="handleDelete(s.id)"
+                      >
+                        <Icon name="i-lucide-trash" class="h-4 w-4 shrink-0" />
+                        Eliminar
+                      </Button>
+                    </PermissionGate>
+                  </div>
                 </TableCell>
               </TableRow>
             </TableBody>

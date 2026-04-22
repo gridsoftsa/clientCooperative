@@ -45,6 +45,7 @@ function formatLabel(row: FinagroRange): string {
             name="i-lucide-chevron-down"
             class="h-4 w-4 transition-transform duration-200 group-data-[state=open]/finagro:rotate-180"
           />
+          <span class="sr-only">Expandir o contraer tabla FINAGRO</span>
         </Button>
       </CollapsibleTrigger>
     </div>

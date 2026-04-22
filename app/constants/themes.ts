@@ -4,6 +4,10 @@ export const THEME_COLORS = [
     value: 'oklch(0.205 0 0)',
   },
   {
+    name: 'cooperative',
+    value: '#125ead',
+  },
+  {
     name: 'blue',
     value: 'oklch(0.623 0.214 259.815)',
   },
@@ -39,5 +43,5 @@ export const THEME_COLORS = [
 
 export const THEME_TYPE = ['default', 'scaled', 'mono']
 
-export type ThemeColor = (typeof THEME_COLORS)[number]['value']
+export type ThemeColor = (typeof THEME_COLORS)[number]['name']
 export type ThemeType = (typeof THEME_TYPE)[number]

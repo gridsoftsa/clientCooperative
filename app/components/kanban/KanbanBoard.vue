@@ -212,8 +212,8 @@ const OPTIONS: UseTimeAgoOptions<false, UseTimeAgoUnitNamesDefault> = {
                     <Icon name="lucide:ellipsis-vertical" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent class="w-20" align="start">
-                  <DropdownMenuItem @click="renameColumn(col.id)">
+                <DropdownMenuContent class="min-w-[9rem]" align="start">
+                  <DropdownMenuItem variant="warning" @click="renameColumn(col.id)">
                     <Icon name="lucide:edit-2" class="size-4" />
                     Rename
                   </DropdownMenuItem>
@@ -249,8 +249,8 @@ const OPTIONS: UseTimeAgoOptions<false, UseTimeAgoUnitNamesDefault> = {
                           <Icon name="lucide:ellipsis-vertical" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent class="w-20" align="start">
-                        <DropdownMenuItem @click="showEditTask(col.id, t.id)">
+                      <DropdownMenuContent class="min-w-[9rem]" align="start">
+                        <DropdownMenuItem variant="warning" @click="showEditTask(col.id, t.id)">
                           <Icon name="lucide:edit-2" class="size-4" />
                           Edit
                         </DropdownMenuItem>

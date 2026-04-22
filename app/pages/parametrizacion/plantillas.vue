@@ -431,12 +431,13 @@ onMounted(() => {
                         <span class="font-mono text-xs text-muted-foreground">{{ cat.code }}</span>
                         <Button
                           v-if="hasPermission('plantillas_eliminar')"
-                          variant="ghost"
-                          size="icon"
-                          class="h-7 w-7 text-destructive hover:text-destructive"
+                          variant="destructive"
+                          size="sm"
+                          class="h-7 gap-1.5 px-2 text-xs"
                           @click="deleteCategory(cat.id)"
                         >
-                          <Icon name="i-lucide-trash-2" class="h-4 w-4" />
+                          <Icon name="i-lucide-trash-2" class="h-3.5 w-3.5 shrink-0" />
+                          Eliminar
                         </Button>
                       </div>
                     </li>
@@ -474,12 +475,13 @@ onMounted(() => {
                         <span class="font-mono text-xs text-muted-foreground">{{ cat.code }}</span>
                         <Button
                           v-if="hasPermission('plantillas_eliminar')"
-                          variant="ghost"
-                          size="icon"
-                          class="h-7 w-7 text-destructive hover:text-destructive"
+                          variant="destructive"
+                          size="sm"
+                          class="h-7 gap-1.5 px-2 text-xs"
                           @click="deleteCategory(cat.id)"
                         >
-                          <Icon name="i-lucide-trash-2" class="h-4 w-4" />
+                          <Icon name="i-lucide-trash-2" class="h-3.5 w-3.5 shrink-0" />
+                          Eliminar
                         </Button>
                       </div>
                     </li>
@@ -517,12 +519,13 @@ onMounted(() => {
                         <span class="font-mono text-xs text-muted-foreground">{{ cat.code }}</span>
                         <Button
                           v-if="hasPermission('plantillas_eliminar')"
-                          variant="ghost"
-                          size="icon"
-                          class="h-7 w-7 text-destructive hover:text-destructive"
+                          variant="destructive"
+                          size="sm"
+                          class="h-7 gap-1.5 px-2 text-xs"
                           @click="deleteCategory(cat.id)"
                         >
-                          <Icon name="i-lucide-trash-2" class="h-4 w-4" />
+                          <Icon name="i-lucide-trash-2" class="h-3.5 w-3.5 shrink-0" />
+                          Eliminar
                         </Button>
                       </div>
                     </li>

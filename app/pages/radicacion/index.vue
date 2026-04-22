@@ -351,57 +351,71 @@ onMounted(() => {
                     <PermissionGate permission="radicacion_enviar_analisis">
                       <Button
                         v-if="app.status === 'Draft'"
-                        variant="ghost"
+                        variant="default"
                         size="sm"
+                        class="gap-1.5"
                         title="Pasar a análisis"
                         @click="openToAnalysisDialog(app)"
                       >
-                        <Icon name="i-lucide-send" class="h-4 w-4" />
+                        <Icon name="i-lucide-send" class="h-3.5 w-3.5 shrink-0" />
+                        Enviar
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_descargar_pdf">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
+                        class="gap-1.5 !border-red-200/90 !bg-red-50 text-red-900 hover:!border-red-300 hover:!bg-red-100 dark:!border-red-800/50 dark:!bg-red-950/45 dark:text-red-100 dark:hover:!border-red-700 dark:hover:!bg-red-950/70"
                         title="Ver PDF (nueva pestaña)"
                         :disabled="downloadingPdfId === app.id"
                         @click="handleDownloadPdf(app)"
                       >
-                        <Icon :name="downloadingPdfId === app.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'" class="h-4 w-4" :class="{ 'animate-spin': downloadingPdfId === app.id }" />
+                        <Icon
+                          :name="downloadingPdfId === app.id ? 'i-lucide-loader-2' : 'i-simple-icons-adobeacrobatreader'"
+                          class="h-3.5 w-3.5 shrink-0 text-red-600 dark:text-red-300"
+                          :class="{ 'animate-spin': downloadingPdfId === app.id }"
+                        />
+                        PDF
                       </Button>
                     </PermissionGate>
                     <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
                       <Button
                         v-if="app.status === 'Draft'"
-                        variant="ghost"
+                        variant="warning"
                         size="sm"
+                        class="gap-1.5"
                         title="Editar borrador (formulario completo)"
                         as-child
                       >
-                        <NuxtLink :to="`/radicacion/editar/${app.id}`">
-                          <Icon name="i-lucide-pencil" class="h-4 w-4" />
+                        <NuxtLink :to="`/radicacion/editar/${app.id}`" class="inline-flex items-center gap-1.5">
+                          <Icon name="i-lucide-pencil" class="h-3.5 w-3.5 shrink-0" />
+                          Editar
                         </NuxtLink>
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_ver">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
+                        class="gap-1.5"
                         title="Ver solo lectura (no permite cambiar datos)"
                         @click="router.push(`/radicacion/${app.id}`)"
                       >
-                        <Icon name="i-lucide-eye" class="h-4 w-4" />
+                        <Icon name="i-lucide-eye" class="h-3.5 w-3.5 shrink-0" />
+                        Ver
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_desactivar">
                       <Button
-                        variant="ghost"
+                        variant="destructive"
                         size="sm"
+                        class="gap-1.5"
                         title="Desactivar"
                         :disabled="deactivatingId === app.id"
                         @click="handleDeactivate(app)"
                       >
-                        <Icon :name="deactivatingId === app.id ? 'i-lucide-loader-2' : 'i-lucide-ban'" class="h-4 w-4" :class="{ 'animate-spin': deactivatingId === app.id }" />
+                        <Icon :name="deactivatingId === app.id ? 'i-lucide-loader-2' : 'i-lucide-ban'" class="h-3.5 w-3.5 shrink-0" :class="{ 'animate-spin': deactivatingId === app.id }" />
+                        Desactivar
                       </Button>
                     </PermissionGate>
                   </div>

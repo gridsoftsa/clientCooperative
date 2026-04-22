@@ -158,13 +158,14 @@ const groupedRows = computed(() => {
               <td v-if="editing && canEdit" class="border border-border p-1">
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  class="h-7 w-7 text-destructive hover:text-destructive"
+                  variant="destructive"
+                  size="sm"
+                  class="h-7 min-w-0 gap-1 px-1.5 text-[11px] leading-tight"
                   :disabled="rows.length <= 1"
                   @click="removeRow(flatIndex)"
                 >
-                  <Icon name="i-lucide-trash-2" class="h-4 w-4" />
+                  <Icon name="i-lucide-trash-2" class="h-3.5 w-3.5 shrink-0" />
+                  Quitar
                 </Button>
               </td>
             </tr>
@@ -211,13 +212,14 @@ const groupedRows = computed(() => {
               <td v-if="editing && canEdit" class="border border-border p-1">
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="icon"
-                  class="h-7 w-7 text-destructive hover:text-destructive"
+                  variant="destructive"
+                  size="sm"
+                  class="h-7 min-w-0 gap-1 px-1.5 text-[11px] leading-tight"
                   :disabled="rows.length <= 1"
                   @click="removeRow(flatIndex)"
                 >
-                  <Icon name="i-lucide-trash-2" class="h-4 w-4" />
+                  <Icon name="i-lucide-trash-2" class="h-3.5 w-3.5 shrink-0" />
+                  Quitar
                 </Button>
               </td>
             </tr>

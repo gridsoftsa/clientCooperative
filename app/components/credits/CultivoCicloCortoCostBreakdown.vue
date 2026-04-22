@@ -100,6 +100,7 @@ function headerClass(section: string): string {
             name="i-lucide-chevron-down"
             class="h-4 w-4 transition-transform duration-200 group-data-[state=open]/cost:rotate-180"
           />
+          <span class="sr-only">Expandir o contraer desglose de costos</span>
         </Button>
       </CollapsibleTrigger>
     </div>

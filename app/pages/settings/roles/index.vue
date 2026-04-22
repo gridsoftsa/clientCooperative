@@ -179,22 +179,26 @@ watch(searchQuery, () => {
                   <TableCell class="text-right">
                     <div class="flex justify-end gap-2">
                       <PermissionGate permission="roles_editar">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="warning"
+                          size="sm"
+                          class="gap-1.5"
                           @click="$router.push(`/settings/roles/${role.id}/edit`)"
                         >
-                          <Icon name="i-lucide-edit" class="h-4 w-4" />
+                          <Icon name="i-lucide-edit" class="h-4 w-4 shrink-0" />
+                          Editar
                         </Button>
                       </PermissionGate>
                       <PermissionGate permission="roles_eliminar">
-                        <Button 
-                          variant="destructive" 
-                          size="sm" 
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          class="gap-1.5"
                           @click="() => handleDelete(role.id, role.name)"
                           :disabled="['admin', 'user'].includes(role.name)"
                         >
-                          <Icon name="i-lucide-trash" class="h-4 w-4" />
+                          <Icon name="i-lucide-trash" class="h-4 w-4 shrink-0" />
+                          Eliminar
                         </Button>
                       </PermissionGate>
                     </div>

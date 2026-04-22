@@ -251,7 +251,7 @@ onMounted(() => {
               </div>
               <div v-if="canEdit" class="flex flex-wrap items-center gap-2">
                 <template v-if="!isEditingIndep">
-                  <Button type="button" size="sm" variant="default" @click="startEditIndep">
+                  <Button type="button" size="sm" variant="warning" @click="startEditIndep">
                     <Icon name="i-lucide-pencil-line" class="mr-1.5 size-4" />
                     Editar plantilla
                   </Button>
@@ -301,7 +301,7 @@ onMounted(() => {
               </div>
               <div v-if="canEdit" class="flex flex-wrap items-center gap-2">
                 <template v-if="!isEditingEmp">
-                  <Button type="button" size="sm" variant="default" @click="startEditEmp">
+                  <Button type="button" size="sm" variant="warning" @click="startEditEmp">
                     <Icon name="i-lucide-pencil-line" class="mr-1.5 size-4" />
                     Editar plantilla
                   </Button>

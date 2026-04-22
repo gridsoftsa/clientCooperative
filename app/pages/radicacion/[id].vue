@@ -398,7 +398,7 @@ watch([application, debtor, coDebtors], () => {
         <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
           <Button
             v-if="application?.status === 'Draft' && application?.id"
-            variant="default"
+            variant="warning"
             as-child
           >
             <NuxtLink :to="`/radicacion/editar/${application.id}`">
@@ -409,11 +409,16 @@ watch([application, debtor, coDebtors], () => {
         </PermissionGate>
         <PermissionGate permission="radicacion_descargar_pdf">
           <Button
-            variant="default"
+            variant="outline"
             :disabled="downloadingPdf"
+            class="!border-red-200/90 !bg-red-50 text-red-900 hover:!border-red-300 hover:!bg-red-100 dark:!border-red-800/50 dark:!bg-red-950/45 dark:text-red-100 dark:hover:!border-red-700 dark:hover:!bg-red-950/70"
             @click="handleDownloadPdf"
           >
-            <Icon :name="downloadingPdf ? 'i-lucide-loader-2' : 'i-lucide-external-link'" class="mr-2 h-4 w-4" :class="{ 'animate-spin': downloadingPdf }" />
+            <Icon
+              :name="downloadingPdf ? 'i-lucide-loader-2' : 'i-simple-icons-adobeacrobatreader'"
+              class="mr-2 h-4 w-4 text-red-600 dark:text-red-300"
+              :class="{ 'animate-spin': downloadingPdf }"
+            />
             {{ downloadingPdf ? 'Abriendo…' : 'Ver PDF' }}
           </Button>
         </PermissionGate>

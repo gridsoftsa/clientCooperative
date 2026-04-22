@@ -132,6 +132,104 @@
   --font-sans: var(--font-figtree);
 }
 
+/**
+ * Tema Cooperative: azul institucional (#125EAD) en cabecera / primario;
+ * dorado (#FBAC18) para botones tipo volver, editar, outline y secondary.
+ */
+.color-cooperative {
+  --header: #125ead;
+  --header-foreground: #ffffff;
+  --header-border: color-mix(in srgb, #ffffff 22%, #125ead);
+
+  --primary: #125ead;
+  --primary-foreground: #ffffff;
+  --ring: #3d7dc8;
+  --vis-primary-color: var(--primary);
+  --chart-1: #7eb3e8;
+  --chart-2: #125ead;
+  --chart-3: #0d4a8c;
+  --chart-4: #4a9ee8;
+  --chart-5: #0a3d75;
+  --sidebar-primary: #125ead;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: #3d7dc8;
+
+  /* Botones volver / editar / anterior (outline y secondary) */
+  --secondary: #fbac18;
+  --secondary-foreground: #1c1917;
+  --accent: color-mix(in srgb, #fbac18 24%, #ffffff);
+  --accent-foreground: #292524;
+
+  --destructive: var(--color-red-600);
+  --border: oklch(0.9 0 0);
+  --input: oklch(0.92 0 0);
+  --warning: var(--color-amber-500);
+  --warning-foreground: var(--color-amber-950);
+  --muted: oklch(0.96 0.02 250);
+  --muted-foreground: oklch(0.45 0.02 250);
+
+  @variant dark {
+    --header: #0e4f8a;
+    --header-foreground: #f8fafc;
+    --header-border: color-mix(in srgb, #ffffff 16%, #0e4f8a);
+
+    --primary: #2b7fd4;
+    --primary-foreground: #ffffff;
+    --ring: #5aa3f0;
+    --sidebar-primary: #2b7fd4;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-ring: #5aa3f0;
+
+    --secondary: #fbac18;
+    --secondary-foreground: #1c1917;
+    --accent: color-mix(in srgb, #fbac18 22%, #1c1917);
+    --accent-foreground: #fafaf9;
+
+    --destructive: var(--color-red-500);
+    --border: oklch(0.32 0.02 250);
+    --input: oklch(0.32 0.02 250);
+    --warning: var(--color-amber-500);
+    --warning-foreground: var(--color-amber-950);
+    --muted: oklch(0.28 0.02 250);
+    --muted-foreground: oklch(0.72 0.02 250);
+  }
+}
+
+/* Outline: borde dorado (#FBAC18) */
+body.color-cooperative [data-slot="button"][data-variant="outline"] {
+  border-color: #fbac18;
+}
+
+body.color-cooperative [data-slot="button"][data-variant="outline"]:hover {
+  background-color: color-mix(in srgb, #fbac18 20%, var(--background));
+}
+
+html.dark body.color-cooperative [data-slot="button"][data-variant="outline"]:hover {
+  background-color: color-mix(in srgb, #fbac18 22%, var(--background));
+}
+
+/* Cabecera con ruta: contraste sobre azul #125EAD (solo Cooperative) */
+body.color-cooperative .app-header [data-slot="breadcrumb-list"] {
+  color: color-mix(in srgb, var(--header-foreground) 78%, var(--header));
+}
+
+body.color-cooperative .app-header [data-slot="breadcrumb-page"] {
+  color: var(--header-foreground);
+}
+
+body.color-cooperative .app-header [data-slot="breadcrumb-link"],
+body.color-cooperative .app-header [data-slot="breadcrumb-link"] a {
+  color: color-mix(in srgb, var(--header-foreground) 90%, var(--header));
+}
+
+body.color-cooperative .app-header [data-slot="breadcrumb-link"] a:hover {
+  color: var(--header-foreground);
+}
+
+body.color-cooperative .app-header [data-slot="sidebar-trigger"] {
+  color: var(--header-foreground);
+}
+
 .color-blue {
   --primary: var(--color-blue-700);
   --primary-foreground: var(--color-blue-50);

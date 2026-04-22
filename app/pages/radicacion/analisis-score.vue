@@ -535,7 +535,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
                 v-if="mostrarBotonDescargarPdfScore"
                 type="button"
                 variant="outline"
-                class="shrink-0"
+                class="shrink-0 !border-red-200/90 !bg-red-50 text-red-900 hover:!border-red-300 hover:!bg-red-100 dark:!border-red-800/50 dark:!bg-red-950/45 dark:text-red-100 dark:hover:!border-red-700 dark:hover:!bg-red-950/70"
                 :disabled="!solicitudId || !tieneAnalisisScoreGuardado || descargandoScorePdf"
                 @click="ejecutarDescargaScorePdf"
               >
@@ -546,8 +546,8 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
                 />
                 <Icon
                   v-else
-                  name="i-lucide-external-link"
-                  class="mr-2 h-4 w-4"
+                  name="i-simple-icons-adobeacrobatreader"
+                  class="mr-2 h-4 w-4 text-red-600 dark:text-red-300"
                 />
                 {{ descargandoScorePdf ? 'Abriendo…' : 'Ver PDF SCORE' }}
               </Button>

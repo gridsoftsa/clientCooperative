@@ -25,12 +25,13 @@ onUnmounted(() => {
       v-show="showButton"
       type="button"
       variant="secondary"
-      size="icon"
-      class="fixed bottom-6 right-6 z-50 h-11 w-11 rounded-full shadow-lg ring-1 ring-border hover:ring-primary/50 transition-all"
+      size="sm"
+      class="fixed bottom-6 right-6 z-50 gap-1.5 rounded-full px-3.5 py-2.5 shadow-lg ring-1 ring-border hover:ring-primary/50 transition-all"
       aria-label="Ir arriba"
       @click="scrollToTop"
     >
-      <Icon name="i-lucide-arrow-up" class="h-5 w-5" />
+      <Icon name="i-lucide-arrow-up" class="h-4 w-4 shrink-0" />
+      <span>Subir</span>
     </Button>
   </Transition>
 </template>
