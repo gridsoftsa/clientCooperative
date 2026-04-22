@@ -1,0 +1,43 @@
+---
+description: Filtros de listado o dashboard por rango de fechas (desde / hasta) en el front Nuxt
+globs: app/**/*.vue
+alwaysApply: false
+---
+
+# Filtro por rango de fechas (UI)
+
+## Cuándo aplica
+
+Cada vez que haga falta **filtrar por un intervalo de fechas** (fechas de creación, período, `created_from` / `created_to`, o equivalente en la API) en **listados, dashboards o barras de filtros**.
+
+## Qué componente usar
+
+- Usar **`DateRangeStringPicker`**: `app/components/DateRangeStringPicker.vue` (auto-import en Nuxt).
+- **No** usar dos `<Input type="date">` separados ni dos datepickers independientes para el mismo criterio.
+
+## Contrato
+
+- `v-model:from` y `v-model:to` con strings **`YYYY-MM-DD`** (vacío = sin filtro en ese extremo).
+- El componente unifica el rango en un solo control (calendario de rango + idioma `es-CO`).
+
+## Patrón de datos y UX recomendado
+
+- Enviar a la API las mismas claves de siempre (p. ej. `created_from`, `created_to`) a partir de `from` / `to`.
+- Para **aplicar el listado o resumen al cambiar fechas** (sin botón "Aplicar"), usar un **debounce** (p. ej. ~400 ms) sobre los refs de fecha y, al **limpiar** filtros, anular el timeout pendiente y refrescar con un único `fetch` para no duplicar peticiones.
+- Comprobar que `from <= to` antes de consultar; si el rango es inválido, avisar (p. ej. con toast) y no llamar a la API.
+
+## Ejemplo mínimo
+
+```vue
+<DateRangeStringPicker
+  id="mi-filtro-fechas"
+  v-model:from="filterDateFrom"
+  v-model:to="filterDateTo"
+/>
+```
+
+Props opcionales: `label`, `placeholderText` (ver el componente).
+
+## Nota de nomenclatura (Nuxt)
+
+El archivo vive en `app/components/DateRangeStringPicker.vue`, por el auto-import se usa el nombre **`DateRangeStringPicker`**. Si en el futuro se colocara bajo un subcarpeta con prefijo (p. ej. `base/`), Nuxt añade prefijo al nombre; preferir el archivo en la **raíz de `components/`** con este nombre para mantener el import estable.

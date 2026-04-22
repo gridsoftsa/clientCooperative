@@ -71,32 +71,10 @@ const showModalTheme = ref(false)
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
-            <DropdownMenuItem>
-              <Icon name="i-lucide-sparkles" />
-              Mejorar plan
-            </DropdownMenuItem>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuGroup>
-            <DropdownMenuItem>
-              <Icon name="i-lucide-badge-check" />
-              Cuenta
-            </DropdownMenuItem>
             <DropdownMenuItem as-child>
               <NuxtLink to="/settings" @click="setOpenMobile(false)">
                 <Icon name="i-lucide-settings" />
                 Configuración
-              </NuxtLink>
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Icon name="i-lucide-bell" />
-              Notificaciones
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem as-child>
-              <NuxtLink to="https://github.com/dianprata/nuxt-shadcn-dashboard" external target="_blank">
-                <Icon name="i-lucide-github" />
-                Repositorio en GitHub
               </NuxtLink>
             </DropdownMenuItem>
             <DropdownMenuItem @click="showModalTheme = true">

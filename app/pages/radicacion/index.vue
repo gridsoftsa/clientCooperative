@@ -45,6 +45,9 @@ const hasActiveFilters = computed(() => {
     || Boolean(filterDateTo.value?.trim())
 })
 
+const skipFilterWatch = ref(false)
+let listFilterDebounce: ReturnType<typeof setTimeout> | null = null
+
 function buildListQuery(): Record<string, string | number> {
   const q: Record<string, string | number> = {
     per_page: pagination.value.per_page,
@@ -87,17 +90,32 @@ async function fetchApplications() {
   }
 }
 
-function applyFilters() {
-  pagination.value.current_page = 1
-  fetchApplications()
-}
+watch([filterStatus, filterDateFrom, filterDateTo], () => {
+  if (skipFilterWatch.value)
+    return
+  if (listFilterDebounce)
+    clearTimeout(listFilterDebounce)
+  listFilterDebounce = setTimeout(() => {
+    listFilterDebounce = null
+    pagination.value.current_page = 1
+    fetchApplications()
+  }, 400)
+})
 
 function clearFilters() {
+  if (listFilterDebounce) {
+    clearTimeout(listFilterDebounce)
+    listFilterDebounce = null
+  }
+  skipFilterWatch.value = true
   filterStatus.value = 'all'
   filterDateFrom.value = ''
   filterDateTo.value = ''
   pagination.value.current_page = 1
-  fetchApplications()
+  nextTick(() => {
+    skipFilterWatch.value = false
+    fetchApplications()
+  })
 }
 
 function goToAnalisisScore(applicationId: number) {
@@ -195,6 +213,13 @@ async function handleDownloadPdf(app: { id: number; code?: string }) {
 onMounted(() => {
   fetchApplications()
 })
+
+onUnmounted(() => {
+  if (listFilterDebounce) {
+    clearTimeout(listFilterDebounce)
+    listFilterDebounce = null
+  }
+})
 </script>
 
 <template>
@@ -245,36 +270,21 @@ onMounted(() => {
               </SelectContent>
             </Select>
           </div>
-          <div class="grid w-full gap-2 sm:max-w-[160px]">
-            <Label for="filter-from" class="text-xs text-muted-foreground">Creada desde</Label>
-            <Input
-              id="filter-from"
-              v-model="filterDateFrom"
-              type="date"
-              class="font-mono"
+          <div class="w-full min-w-0 sm:max-w-md sm:shrink-0">
+            <DateRangeStringPicker
+              id="filter-created-range"
+              v-model:from="filterDateFrom"
+              v-model:to="filterDateTo"
             />
           </div>
-          <div class="grid w-full gap-2 sm:max-w-[160px]">
-            <Label for="filter-to" class="text-xs text-muted-foreground">Creada hasta</Label>
-            <Input
-              id="filter-to"
-              v-model="filterDateTo"
-              type="date"
-              class="font-mono"
-            />
-          </div>
-          <div class="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
-            <Button type="button" variant="default" @click="applyFilters">
-              <Icon name="i-lucide-filter" class="mr-2 h-4 w-4" />
-              Aplicar filtros
-            </Button>
+          <div class="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto sm:shrink-0 sm:items-end sm:pb-0.5">
             <Button
               type="button"
               variant="outline"
               :disabled="!hasActiveFilters"
               @click="clearFilters"
             >
-              Limpiar
+              Limpiar filtros
             </Button>
           </div>
         </div>

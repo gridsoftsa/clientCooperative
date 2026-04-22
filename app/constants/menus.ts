@@ -5,7 +5,7 @@ export const navMenu: NavMenu[] = [
     heading: 'General',
     items: [
       {
-        title: 'Inicio',
+        title: 'Dashboard',
         icon: 'i-lucide-home',
         link: '/',
         permission: 'dashboard_ver',
@@ -34,7 +34,7 @@ export const navMenu: NavMenu[] = [
       {
         title: 'Solicitantes',
         icon: 'i-lucide-user-check',
-        link: '/settings/applicants',
+        link: '/solicitantes',
         permission: 'solicitantes_ver',
       },
     ],

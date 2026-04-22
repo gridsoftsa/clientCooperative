@@ -47,6 +47,9 @@ const hasActiveDateFilters = computed(() => {
   return Boolean(filterDateFrom.value?.trim()) || Boolean(filterDateTo.value?.trim())
 })
 
+const skipDateFilterWatch = ref(false)
+let summaryDateDebounce: ReturnType<typeof setTimeout> | null = null
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('es-CO', {
     style: 'currency',
@@ -105,14 +108,29 @@ async function fetchSummary() {
   }
 }
 
-function applyDateFilters() {
-  fetchSummary()
-}
+watch([filterDateFrom, filterDateTo], () => {
+  if (skipDateFilterWatch.value)
+    return
+  if (summaryDateDebounce)
+    clearTimeout(summaryDateDebounce)
+  summaryDateDebounce = setTimeout(() => {
+    summaryDateDebounce = null
+    fetchSummary()
+  }, 400)
+})
 
 function clearDateFilters() {
+  if (summaryDateDebounce) {
+    clearTimeout(summaryDateDebounce)
+    summaryDateDebounce = null
+  }
+  skipDateFilterWatch.value = true
   filterDateFrom.value = ''
   filterDateTo.value = ''
-  fetchSummary()
+  nextTick(() => {
+    skipDateFilterWatch.value = false
+    fetchSummary()
+  })
 }
 
 async function fetchApplicantsCount() {
@@ -131,13 +149,20 @@ onMounted(() => {
   fetchSummary()
   fetchApplicantsCount()
 })
+
+onUnmounted(() => {
+  if (summaryDateDebounce) {
+    clearTimeout(summaryDateDebounce)
+    summaryDateDebounce = null
+  }
+})
 </script>
 
 <template>
   <div class="w-full flex flex-col gap-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-2xl font-bold tracking-tight">
-        Inicio
+        Dashboard
       </h2>
     </div>
 
@@ -150,38 +175,27 @@ onMounted(() => {
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-6">
-          <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:flex-wrap sm:items-end">
-            <div class="grid w-full gap-2 sm:max-w-[160px]">
-              <Label for="dash-from" class="text-xs text-muted-foreground">Creada desde</Label>
-              <Input
-                id="dash-from"
-                v-model="filterDateFrom"
-                type="date"
-                class="font-mono"
-              />
-            </div>
-            <div class="grid w-full gap-2 sm:max-w-[160px]">
-              <Label for="dash-to" class="text-xs text-muted-foreground">Creada hasta</Label>
-              <Input
-                id="dash-to"
-                v-model="filterDateTo"
-                type="date"
-                class="font-mono"
-              />
-            </div>
-            <div class="flex w-full flex-wrap gap-2 sm:ml-auto sm:w-auto">
-              <Button type="button" variant="default" :disabled="summaryLoading" @click="applyDateFilters">
-                <Icon name="i-lucide-filter" class="mr-2 h-4 w-4" />
-                Aplicar
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                :disabled="summaryLoading || !hasActiveDateFilters"
-                @click="clearDateFilters"
-              >
-                Limpiar fechas
-              </Button>
+          <div class="rounded-lg border bg-muted/30 p-4">
+            <div
+              class="mx-auto flex w-full max-w-3xl flex-col items-stretch justify-center gap-3 sm:flex-row sm:items-end sm:justify-center sm:gap-4"
+            >
+              <div class="w-full min-w-0 sm:max-w-md">
+                <DateRangeStringPicker
+                  id="dash-credit-dates"
+                  v-model:from="filterDateFrom"
+                  v-model:to="filterDateTo"
+                />
+              </div>
+              <div class="flex justify-center sm:shrink-0 sm:pb-0.5 sm:pt-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  :disabled="!hasActiveDateFilters"
+                  @click="clearDateFilters"
+                >
+                  Limpiar fechas
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -315,7 +329,7 @@ onMounted(() => {
           </PermissionGate>
           <PermissionGate permission="solicitantes_ver">
             <Button variant="outline" as-child>
-              <NuxtLink to="/settings/applicants">
+              <NuxtLink to="/solicitantes">
                 <Icon name="i-lucide-user-check" class="mr-2 h-4 w-4" />
                 Solicitantes
               </NuxtLink>
