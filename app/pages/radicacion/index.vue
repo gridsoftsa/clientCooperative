@@ -134,14 +134,27 @@ function formatCurrency(value: number) {
 }
 
 const deactivateSuccess = ref(false)
+const deactivateDialogOpen = ref(false)
+const pendingDeactivateApp = ref<{ id: number } | null>(null)
+const deleteWithReason = useApiDeleteWithReason()
 
-async function handleDeactivate(app: { id: number }) {
-  if (deactivatingId.value) return
-  if (!confirm('¿Desactivar esta solicitud? No se mostrará en el listado.')) return
+function openDeactivateDialog(app: { id: number }) {
+  if (deactivatingId.value)
+    return
+  pendingDeactivateApp.value = app
+  deactivateDialogOpen.value = true
+}
+
+async function onDeactivateConfirm(reason: string) {
+  const app = pendingDeactivateApp.value
+  if (!app || deactivatingId.value)
+    return
   deactivatingId.value = app.id
   deactivateSuccess.value = false
   try {
-    await $api(`/credit-applications/${app.id}`, { method: 'DELETE' })
+    await deleteWithReason(`/credit-applications/${app.id}`, reason)
+    deactivateDialogOpen.value = false
+    pendingDeactivateApp.value = null
     deactivateSuccess.value = true
     toast.success('Solicitud desactivada', {
       description: 'La solicitud ya no aparecerá en el listado.',
@@ -219,6 +232,11 @@ onUnmounted(() => {
     clearTimeout(listFilterDebounce)
     listFilterDebounce = null
   }
+})
+
+watch(deactivateDialogOpen, (v) => {
+  if (!v)
+    pendingDeactivateApp.value = null
 })
 </script>
 
@@ -422,7 +440,7 @@ onUnmounted(() => {
                         class="gap-1.5"
                         title="Desactivar"
                         :disabled="deactivatingId === app.id"
-                        @click="handleDeactivate(app)"
+                        @click="openDeactivateDialog(app)"
                       >
                         <Icon :name="deactivatingId === app.id ? 'i-lucide-loader-2' : 'i-lucide-ban'" class="h-3.5 w-3.5 shrink-0" :class="{ 'animate-spin': deactivatingId === app.id }" />
                         Desactivar
@@ -460,6 +478,16 @@ onUnmounted(() => {
         </div>
       </CardContent>
     </Card>
+
+    <ConfirmWithReasonDialog
+      v-model:open="deactivateDialogOpen"
+      title="Desactivar solicitud"
+      description="La solicitud dejará de mostrarse en el listado. Indica el motivo de la desactivación."
+      confirm-text="Aceptar"
+      cancel-text="Cancelar"
+      :loading="deactivatingId !== null"
+      @confirm="onDeactivateConfirm"
+    />
 
     <Dialog :open="toAnalysisDialogOpen" @update:open="(v) => { if (!v) closeToAnalysisDialog() }">
       <DialogContent class="sm:max-w-md">

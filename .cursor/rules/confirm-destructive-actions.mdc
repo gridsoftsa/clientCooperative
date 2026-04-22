@@ -1,0 +1,19 @@
+---
+description: Eliminación o desactivación (DELETE): modal con motivo y API con body
+globs: app/**/*.vue
+alwaysApply: false
+---
+
+# Acciones destructivas (eliminar / desactivar)
+
+- No usar `confirm()` del navegador para borrar o desactivar recursos en el servidor.
+- Usar **`ConfirmWithReasonDialog`** (`app/components/ConfirmWithReasonDialog.vue`):
+  - Campo de motivo (textarea) con mínimo 3 caracteres.
+  - **Cancelar** → botón `variant="destructive"`.
+  - **Aceptar** → estilo éxito (verde) en el propio diálogo.
+- Enviar en la petición: `useApiDeleteWithReason()` → `DELETE` con JSON `{ "reason": "..." }` (requisito en el backend).
+- Añadir estado `loading` mientras dura el `await` a la API (botón aceptar deshabilitado, spinner en el diálogo).
+
+## No entra en este patrón
+
+- Quitar filas locales en un formulario (codeudor, filas de tabla de configuración, etc.): no es DELETE al API; puede seguir otra confirmación o ninguna, según el caso.

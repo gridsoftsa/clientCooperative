@@ -11,6 +11,10 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const router = useRouter()
 const { user: authUser } = useAuth()
+const deleteWithReason = useApiDeleteWithReason()
+const deleteUserDialogOpen = ref(false)
+const userIdPendingDelete = ref<number | null>(null)
+const deletingUser = ref(false)
 
 const users = ref<User[]>([])
 const loading = ref(false)
@@ -53,24 +57,38 @@ function handlePageChange(page: number) {
   fetchUsers()
 }
 
-async function handleDelete(id: number) {
-  if (!confirm('¿Estás seguro de que deseas eliminar este usuario?')) {
+function openDeleteUserDialog(id: number) {
+  userIdPendingDelete.value = id
+  deleteUserDialogOpen.value = true
+}
+
+async function onDeleteUserConfirm(reason: string) {
+  const id = userIdPendingDelete.value
+  if (id == null || deletingUser.value)
     return
-  }
-  
+  deletingUser.value = true
   try {
-    await $api(`/users/${id}`, { method: 'DELETE' })
+    await deleteWithReason(`/users/${id}`, reason)
+    deleteUserDialogOpen.value = false
+    userIdPendingDelete.value = null
     toast.success('Usuario eliminado correctamente')
     await fetchUsers()
   } catch (error: any) {
     console.error('Error al eliminar usuario:', error)
     const message = error?.data?.message || 'Error al eliminar el usuario'
     toast.error(message)
+  } finally {
+    deletingUser.value = false
   }
 }
 
 onMounted(() => {
   fetchUsers()
+})
+
+watch(deleteUserDialogOpen, (v) => {
+  if (!v)
+    userIdPendingDelete.value = null
 })
 
 watch(searchQuery, () => {
@@ -191,7 +209,7 @@ watch(searchQuery, () => {
                           variant="destructive"
                           size="sm"
                           class="gap-1.5"
-                          @click="() => handleDelete(user.id)"
+                          @click="() => openDeleteUserDialog(user.id)"
                           :disabled="user.id === authUser?.id"
                         >
                           <Icon name="i-lucide-trash" class="h-4 w-4 shrink-0" />
@@ -235,5 +253,15 @@ watch(searchQuery, () => {
       </CardContent>
     </Card>
     </div>
+
+    <ConfirmWithReasonDialog
+      v-model:open="deleteUserDialogOpen"
+      title="Eliminar usuario"
+      description="Esta acción no se puede deshacer. Indica el motivo de la eliminación."
+      confirm-text="Aceptar"
+      cancel-text="Cancelar"
+      :loading="deletingUser"
+      @confirm="onDeleteUserConfirm"
+    />
   </SettingsLayout>
 </template>

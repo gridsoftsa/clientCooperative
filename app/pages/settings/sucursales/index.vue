@@ -11,6 +11,10 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const router = useRouter()
 const { hasPermission } = usePermissions()
+const deleteWithReason = useApiDeleteWithReason()
+const deleteSucursalDialogOpen = ref(false)
+const sucursalIdPendingDelete = ref<number | null>(null)
+const deletingSucursal = ref(false)
 
 const sucursales = ref<Sucursal[]>([])
 const loading = ref(false)
@@ -37,19 +41,36 @@ async function fetchSucursales() {
   }
 }
 
-async function handleDelete(id: number) {
-  if (!confirm('¿Eliminar esta sucursal? Se desvincularán usuarios y agencias.')) return
+function openDeleteSucursalDialog(id: number) {
+  sucursalIdPendingDelete.value = id
+  deleteSucursalDialogOpen.value = true
+}
+
+async function onDeleteSucursalConfirm(reason: string) {
+  const id = sucursalIdPendingDelete.value
+  if (id == null || deletingSucursal.value)
+    return
+  deletingSucursal.value = true
   try {
-    await $api(`/sucursales/${id}`, { method: 'DELETE' })
+    await deleteWithReason(`/sucursales/${id}`, reason)
+    deleteSucursalDialogOpen.value = false
+    sucursalIdPendingDelete.value = null
     toast.success('Sucursal eliminada')
     await fetchSucursales()
   } catch (e: any) {
     toast.error(e?.data?.message || 'Error al eliminar')
+  } finally {
+    deletingSucursal.value = false
   }
 }
 
 onMounted(() => {
   fetchSucursales()
+})
+
+watch(deleteSucursalDialogOpen, (v) => {
+  if (!v)
+    sucursalIdPendingDelete.value = null
 })
 </script>
 
@@ -122,7 +143,7 @@ onMounted(() => {
                         size="sm"
                         class="gap-1.5"
                         :disabled="s.is_main"
-                        @click="handleDelete(s.id)"
+                        @click="openDeleteSucursalDialog(s.id)"
                       >
                         <Icon name="i-lucide-trash" class="h-4 w-4 shrink-0" />
                         Eliminar
@@ -137,5 +158,15 @@ onMounted(() => {
       </CardContent>
     </Card>
     </div>
+
+    <ConfirmWithReasonDialog
+      v-model:open="deleteSucursalDialogOpen"
+      title="Eliminar sucursal"
+      description="Se desvincularán usuarios y agencias vinculados. Indica el motivo de la eliminación."
+      confirm-text="Aceptar"
+      cancel-text="Cancelar"
+      :loading="deletingSucursal"
+      @confirm="onDeleteSucursalConfirm"
+    />
   </SettingsLayout>
 </template>

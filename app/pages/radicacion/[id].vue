@@ -68,6 +68,8 @@ const { downloadDocument, downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdf = ref(false)
 const downloadingId = ref<number | null>(null)
 const deactivating = ref(false)
+const deactivateDialogOpen = ref(false)
+const deleteWithReason = useApiDeleteWithReason()
 
 function parseJsonField(val: unknown): Record<string, unknown> {
   if (val == null) return {}
@@ -286,12 +288,19 @@ async function handleDownloadPdf() {
   }
 }
 
-async function handleDeactivate() {
-  if (!application.value?.id || deactivating.value) return
-  if (!confirm('¿Desactivar esta solicitud? No se mostrará en el listado.')) return
+function openDeactivateDialog() {
+  if (!application.value?.id || deactivating.value)
+    return
+  deactivateDialogOpen.value = true
+}
+
+async function onDeactivateConfirm(reason: string) {
+  if (!application.value?.id || deactivating.value)
+    return
   deactivating.value = true
   try {
-    await $api(`/credit-applications/${application.value.id}`, { method: 'DELETE' })
+    await deleteWithReason(`/credit-applications/${application.value.id}`, reason)
+    deactivateDialogOpen.value = false
     toast.success('Solicitud desactivada', {
       description: 'La solicitud ya no aparecerá en el listado.',
       duration: 4000,
@@ -426,7 +435,7 @@ watch([application, debtor, coDebtors], () => {
           <Button
             variant="destructive"
             :disabled="deactivating"
-            @click="handleDeactivate"
+            @click="openDeactivateDialog"
           >
             <Icon :name="deactivating ? 'i-lucide-loader-2' : 'i-lucide-ban'" class="mr-2 h-4 w-4" :class="{ 'animate-spin': deactivating }" />
             {{ deactivating ? 'Desactivando...' : 'Desactivar' }}
@@ -706,5 +715,15 @@ watch([application, debtor, coDebtors], () => {
         </CardContent>
       </Card>
     </template>
+
+    <ConfirmWithReasonDialog
+      v-model:open="deactivateDialogOpen"
+      title="Desactivar solicitud"
+      description="La solicitud dejará de mostrarse en el listado. Indica el motivo de la desactivación."
+      confirm-text="Aceptar"
+      cancel-text="Cancelar"
+      :loading="deactivating"
+      @confirm="onDeactivateConfirm"
+    />
   </div>
 </template>

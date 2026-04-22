@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
 import type { Permission, PaginatedPermissions } from '~/types/role'
 import { PERMISSION_CATEGORY_LABELS, formatPermissionDisplayName } from '~/constants/permission-labels'
 
@@ -10,6 +11,10 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const { hasPermission } = usePermissions()
+const deleteWithReason = useApiDeleteWithReason()
+const deletePermissionDialogOpen = ref(false)
+const permissionPendingDelete = ref<{ id: number; name: string } | null>(null)
+const deletingPermission = ref(false)
 
 const permissions = ref<Permission[]>([])
 const loading = ref(false)
@@ -88,20 +93,36 @@ async function handleToggleActive(permission: Permission) {
   }
 }
 
-async function handleDelete(id: number, name: string) {
-  if (!confirm(`¿Eliminar el permiso "${name}"? Se quitará de todos los roles y usuarios.`))
-    return
+function openDeletePermissionDialog(id: number, name: string) {
+  permissionPendingDelete.value = { id, name }
+  deletePermissionDialogOpen.value = true
+}
 
+async function onDeletePermissionConfirm(reason: string) {
+  const p = permissionPendingDelete.value
+  if (!p || deletingPermission.value)
+    return
+  deletingPermission.value = true
   try {
-    await $api(`/permissions/${id}`, { method: 'DELETE' })
+    await deleteWithReason(`/permissions/${p.id}`, reason)
+    deletePermissionDialogOpen.value = false
+    permissionPendingDelete.value = null
+    toast.success('Permiso eliminado')
     await fetchPermissions()
   } catch (error: any) {
     const message = error?.data?.message || 'Error al eliminar'
-    alert(message)
+    toast.error(message)
+  } finally {
+    deletingPermission.value = false
   }
 }
 
 onMounted(() => fetchPermissions())
+
+watch(deletePermissionDialogOpen, (v) => {
+  if (!v)
+    permissionPendingDelete.value = null
+})
 
 watch([searchQuery, showInactive], () => {
   const t = setTimeout(() => fetchPermissions(), 400)
@@ -211,7 +232,7 @@ watch([searchQuery, showInactive], () => {
                         </Button>
                       </PermissionGate>
                       <PermissionGate permission="permisos_eliminar">
-                        <Button variant="destructive" size="sm" class="h-8 gap-1.5" @click="() => handleDelete(p.id, p.name)">
+                        <Button variant="destructive" size="sm" class="h-8 gap-1.5" @click="() => openDeletePermissionDialog(p.id, p.name)">
                           <Icon name="i-lucide-trash" class="h-3.5 w-3.5 shrink-0" />
                           Eliminar
                         </Button>
@@ -226,5 +247,17 @@ watch([searchQuery, showInactive], () => {
       </CardContent>
     </Card>
     </div>
+
+    <ConfirmWithReasonDialog
+      v-model:open="deletePermissionDialogOpen"
+      title="Eliminar permiso"
+      :description="permissionPendingDelete
+        ? `Se eliminará “${formatPermissionDisplayName(permissionPendingDelete.name)}” de todos los roles y usuarios. Indica el motivo.`
+        : ''"
+      confirm-text="Aceptar"
+      cancel-text="Cancelar"
+      :loading="deletingPermission"
+      @confirm="onDeletePermissionConfirm"
+    />
   </SettingsLayout>
 </template>

@@ -13,6 +13,10 @@ definePageMeta({
 const { $api, $csrf } = useNuxtApp()
 const { hasPermission } = usePermissions()
 const router = useRouter()
+const deleteWithReason = useApiDeleteWithReason()
+const deleteCategoryDialogOpen = ref(false)
+const categoryIdPendingDelete = ref<number | null>(null)
+const deletingCategory = ref(false)
 
 interface FlatDataRecord {
   id: number
@@ -146,15 +150,27 @@ async function saveConfig(templateKey: string, productKey: string | null, config
   }
 }
 
-async function deleteCategory(categoryId: number) {
-  if (!confirm('¿Eliminar esta categoría? Se eliminará también su configuración.')) return
+function openDeleteCategoryDialog(categoryId: number) {
+  categoryIdPendingDelete.value = categoryId
+  deleteCategoryDialogOpen.value = true
+}
+
+async function onDeleteCategoryConfirm(reason: string) {
+  const id = categoryIdPendingDelete.value
+  if (id == null || deletingCategory.value)
+    return
+  deletingCategory.value = true
   try {
     await $csrf()
-    await $api(`/template-categories/${categoryId}`, { method: 'DELETE' })
+    await deleteWithReason(`/template-categories/${id}`, reason)
+    deleteCategoryDialogOpen.value = false
+    categoryIdPendingDelete.value = null
     toast.success('Categoría eliminada')
     await fetchData()
   } catch (e: any) {
     toast.error(e?.data?.message ?? 'Error al eliminar')
+  } finally {
+    deletingCategory.value = false
   }
 }
 
@@ -216,6 +232,11 @@ watch(
 
 onMounted(() => {
   fetchData()
+})
+
+watch(deleteCategoryDialogOpen, (v) => {
+  if (!v)
+    categoryIdPendingDelete.value = null
 })
 </script>
 
@@ -354,7 +375,7 @@ onMounted(() => {
                           :can-delete="hasPermission('plantillas_eliminar')"
                           :category-id="getCategoryId(record.template_key, productKey)"
                           @save="(data) => saveConfig(record.template_key, productKey, data)"
-                          @delete="() => { const id = getCategoryId(record.template_key, productKey); id && deleteCategory(id) }"
+                          @delete="() => { const id = getCategoryId(record.template_key, productKey); id && openDeleteCategoryDialog(id) }"
                         />
                       </template>
                       <template v-else-if="!templateHasCategories(selectedTemplateKey)">
@@ -369,7 +390,7 @@ onMounted(() => {
                           :can-delete="hasPermission('plantillas_eliminar')"
                           :category-id="getCategoryId(record.template_key, productKey)"
                           @save="(data) => saveConfig(record.template_key, productKey, data)"
-                          @delete="() => { const id = getCategoryId(record.template_key, productKey); id && deleteCategory(id) }"
+                          @delete="() => { const id = getCategoryId(record.template_key, productKey); id && openDeleteCategoryDialog(id) }"
                         />
                       </template>
                       <p
@@ -434,7 +455,7 @@ onMounted(() => {
                           variant="destructive"
                           size="sm"
                           class="h-7 gap-1.5 px-2 text-xs"
-                          @click="deleteCategory(cat.id)"
+                          @click="openDeleteCategoryDialog(cat.id)"
                         >
                           <Icon name="i-lucide-trash-2" class="h-3.5 w-3.5 shrink-0" />
                           Eliminar
@@ -478,7 +499,7 @@ onMounted(() => {
                           variant="destructive"
                           size="sm"
                           class="h-7 gap-1.5 px-2 text-xs"
-                          @click="deleteCategory(cat.id)"
+                          @click="openDeleteCategoryDialog(cat.id)"
                         >
                           <Icon name="i-lucide-trash-2" class="h-3.5 w-3.5 shrink-0" />
                           Eliminar
@@ -522,7 +543,7 @@ onMounted(() => {
                           variant="destructive"
                           size="sm"
                           class="h-7 gap-1.5 px-2 text-xs"
-                          @click="deleteCategory(cat.id)"
+                          @click="openDeleteCategoryDialog(cat.id)"
                         >
                           <Icon name="i-lucide-trash-2" class="h-3.5 w-3.5 shrink-0" />
                           Eliminar
@@ -545,6 +566,16 @@ onMounted(() => {
         :template-key="newCategoryTemplate"
         @created="closeCreateCategoryDialog(); fetchData()"
         @cancel="closeCreateCategoryDialog()"
+      />
+
+      <ConfirmWithReasonDialog
+        v-model:open="deleteCategoryDialogOpen"
+        title="Eliminar categoría de plantilla"
+        description="Se eliminará la categoría y su configuración asociada. Indica el motivo."
+        confirm-text="Aceptar"
+        cancel-text="Cancelar"
+        :loading="deletingCategory"
+        @confirm="onDeleteCategoryConfirm"
       />
     </div>
   </div>

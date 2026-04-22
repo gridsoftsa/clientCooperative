@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
 import type { Role, PaginatedRoles } from '~/types/role'
 
 definePageMeta({
@@ -9,6 +10,10 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const { hasPermission } = usePermissions()
+const deleteWithReason = useApiDeleteWithReason()
+const deleteRoleDialogOpen = ref(false)
+const rolePendingDelete = ref<{ id: number; name: string } | null>(null)
+const deletingRole = ref(false)
 
 const roles = ref<Role[]>([])
 const loading = ref(false)
@@ -55,28 +60,42 @@ function handlePageChange(page: number) {
   fetchRoles()
 }
 
-async function handleDelete(id: number, name: string) {
+function openDeleteRoleDialog(id: number, name: string) {
   if (['admin', 'user'].includes(name)) {
-    alert('No se puede eliminar este rol del sistema')
+    toast.error('No se puede eliminar este rol del sistema')
     return
   }
-  
-  if (!confirm(`¿Estás seguro de que deseas eliminar el rol "${name}"?`)) {
+  rolePendingDelete.value = { id, name }
+  deleteRoleDialogOpen.value = true
+}
+
+async function onDeleteRoleConfirm(reason: string) {
+  const role = rolePendingDelete.value
+  if (!role || deletingRole.value)
     return
-  }
-  
+  deletingRole.value = true
   try {
-    await $api(`/roles/${id}`, { method: 'DELETE' })
+    await deleteWithReason(`/roles/${role.id}`, reason)
+    deleteRoleDialogOpen.value = false
+    rolePendingDelete.value = null
+    toast.success('Rol eliminado')
     await fetchRoles()
   } catch (error: any) {
     console.error('Error al eliminar rol:', error)
     const message = error?.data?.message || error?.message || 'Error al eliminar el rol'
-    alert(message)
+    toast.error(message)
+  } finally {
+    deletingRole.value = false
   }
 }
 
 onMounted(() => {
   fetchRoles()
+})
+
+watch(deleteRoleDialogOpen, (v) => {
+  if (!v)
+    rolePendingDelete.value = null
 })
 
 watch(searchQuery, () => {
@@ -194,7 +213,7 @@ watch(searchQuery, () => {
                           variant="destructive"
                           size="sm"
                           class="gap-1.5"
-                          @click="() => handleDelete(role.id, role.name)"
+                          @click="() => openDeleteRoleDialog(role.id, role.name)"
                           :disabled="['admin', 'user'].includes(role.name)"
                         >
                           <Icon name="i-lucide-trash" class="h-4 w-4 shrink-0" />
@@ -238,5 +257,17 @@ watch(searchQuery, () => {
       </CardContent>
     </Card>
     </div>
+
+    <ConfirmWithReasonDialog
+      v-model:open="deleteRoleDialogOpen"
+      title="Eliminar rol"
+      :description="rolePendingDelete
+        ? `Se eliminará el rol “${rolePendingDelete.name}”. Indica el motivo.`
+        : ''"
+      confirm-text="Aceptar"
+      cancel-text="Cancelar"
+      :loading="deletingRole"
+      @confirm="onDeleteRoleConfirm"
+    />
   </SettingsLayout>
 </template>
