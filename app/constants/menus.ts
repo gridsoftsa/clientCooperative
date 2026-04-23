@@ -69,7 +69,6 @@ export const navMenu: NavMenu[] = [
           'usuarios_ver',
           'sucursales_ver',
           'roles_ver',
-          'permisos_ver',
           'admin_acceso',
         ],
         children: [
@@ -126,12 +125,6 @@ export const navMenu: NavMenu[] = [
             icon: 'i-lucide-shield-check',
             link: '/settings/roles',
             permission: 'roles_ver',
-          },
-          {
-            title: 'Permisos',
-            icon: 'i-lucide-key',
-            link: '/settings/permissions',
-            permission: 'permisos_ver',
           },
           {
             title: 'Auditoría',

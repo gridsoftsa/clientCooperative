@@ -44,6 +44,8 @@ const scoreCabecera = ref({
   nombre: '',
 })
 
+const observacionesScore = ref('')
+
 const loadingSolicitud = ref(false)
 /** Hay filas guardadas en servidor (`analisis_score_snapshot`) para generar PDF. */
 const tieneAnalisisScoreGuardado = ref(false)
@@ -188,6 +190,11 @@ async function loadSolicitudParaAnalisis(id: string): Promise<void> {
       snap?.variant === 'empleado' ? snap.variable_rows : null,
     )
 
+    observacionesScore.value
+      = snap && typeof snap === 'object' && typeof snap.observaciones === 'string'
+        ? snap.observaciones
+        : ''
+
     tieneAnalisisScoreGuardado.value = Boolean(
       snap
       && typeof snap === 'object'
@@ -199,6 +206,7 @@ async function loadSolicitudParaAnalisis(id: string): Promise<void> {
     scoreCabecera.value = { fecha: '', cedula: '', nombre: '' }
     variableRowsForIndep.value = cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES)
     variableRowsForEmp.value = cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES)
+    observacionesScore.value = ''
     tieneAnalisisScoreGuardado.value = false
   } finally {
     loadingSolicitud.value = false
@@ -210,6 +218,7 @@ watch(
   (id) => {
     if (!id) {
       scoreCabecera.value = { fecha: '', cedula: '', nombre: '' }
+      observacionesScore.value = ''
       variableRowsForIndep.value = cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES)
       variableRowsForEmp.value = cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES)
       perfilDeudor.value = undefined
@@ -465,6 +474,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
             v-if="vistaImprimirScore === 'independiente'"
             ref="scorePanelRef"
             v-model:cabecera="scoreCabecera"
+            v-model:observaciones="observacionesScore"
             variant="independiente"
             :meta="IMPRIMIR_INDEPENDIENTE_META"
             :variable-rows="variableRowsForIndep"
@@ -477,6 +487,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
             v-else-if="vistaImprimirScore === 'empleado'"
             ref="scorePanelRef"
             v-model:cabecera="scoreCabecera"
+            v-model:observaciones="observacionesScore"
             variant="empleado"
             :meta="IMPRIMIR_EMPLEADO_META"
             :variable-rows="variableRowsForEmp"

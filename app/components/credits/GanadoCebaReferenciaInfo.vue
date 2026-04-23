@@ -11,9 +11,17 @@ defineProps<{
 <template>
   <div class="overflow-hidden rounded-lg border border-border">
     <div class="border-b border-border bg-muted/50 px-4 py-2">
-      <h4 class="text-sm font-bold uppercase text-red-600 dark:text-red-500">
-        Información de referencia
-      </h4>
+      <div class="flex flex-wrap items-center gap-2">
+        <h4 class="text-sm font-bold uppercase text-red-600 dark:text-red-500">
+          Información de referencia
+        </h4>
+        <span
+          class="inline-flex items-center gap-0.5 rounded-md border border-amber-600/40 bg-amber-100/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:border-amber-500/45 dark:bg-amber-950/55 dark:text-amber-100"
+        >
+          <Icon name="i-lucide-lock" class="size-3 shrink-0 opacity-90" aria-hidden="true" />
+          Solo lectura
+        </span>
+      </div>
     </div>
     <table class="w-full border-collapse text-sm">
       <tbody>

@@ -30,10 +30,13 @@ const props = withDefaults(
   defineProps<{
     modelValue?: ActivityTemplateData | null
     readonly?: boolean
+    /** Tras guardar la plantilla en el listado: deshabilita sector y plantilla */
+    lockSectorAndTemplate?: boolean
   }>(),
   {
     modelValue: () => null,
     readonly: false,
+    lockSectorAndTemplate: false,
   },
 )
 
@@ -294,6 +297,10 @@ watch(
   { immediate: true },
 )
 
+const sectorTemplateDisabled = computed(
+  () => props.readonly || props.lockSectorAndTemplate,
+)
+
 onMounted(() => {
   fetchCategories()
 })
@@ -311,8 +318,8 @@ onMounted(() => {
             <select
               id="sector"
               v-model="sectorSelected"
-              :disabled="readonly"
-              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :disabled="sectorTemplateDisabled"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="">
                 Seleccionar sector
@@ -332,8 +339,8 @@ onMounted(() => {
               :id="`template-${sectorSelected || 'none'}`"
               :key="sectorSelected"
               v-model="templateSelected"
-              :disabled="readonly"
-              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :disabled="sectorTemplateDisabled"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
             >
               <option value="">
                 Seleccionar plantilla

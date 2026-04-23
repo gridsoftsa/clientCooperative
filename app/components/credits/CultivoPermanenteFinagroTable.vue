@@ -35,10 +35,18 @@ function formatLabel(row: FinagroRange): string {
 
 <template>
   <Collapsible :default-open="false" class="group/finagro">
-    <div class="flex items-center justify-between rounded-t-lg border border-border border-b-0 bg-muted/50 px-4 py-2">
-      <h4 class="text-sm font-semibold">
-        % Costos promedio anuales por 1 HA – Informes FINAGRO para Santander
-      </h4>
+    <div class="flex flex-col gap-2 rounded-t-lg border border-border border-b-0 bg-muted/50 px-4 py-2 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex min-w-0 flex-wrap items-center gap-2">
+        <h4 class="text-sm font-semibold">
+          % Costos promedio anuales por 1 HA – Informes FINAGRO para Santander
+        </h4>
+        <span
+          class="inline-flex w-fit items-center gap-0.5 rounded-md border border-amber-600/40 bg-amber-100/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:border-amber-500/45 dark:bg-amber-950/55 dark:text-amber-100"
+        >
+          <Icon name="i-lucide-lock" class="size-3 shrink-0 opacity-90" aria-hidden="true" />
+          Solo lectura
+        </span>
+      </div>
       <CollapsibleTrigger as-child>
         <Button variant="ghost" size="icon" class="h-8 w-8">
           <Icon

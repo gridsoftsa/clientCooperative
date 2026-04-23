@@ -1,9 +1,11 @@
 <script setup>
+import { DEFAULT_THEME_COLOR } from '@/constants/themes'
+
 const { theme } = useAppSettings()
 
 useHead({
   bodyAttrs: {
-    class: computed(() => `color-${theme.value?.color || 'default'} theme-${theme.value?.type || 'default'}`),
+    class: computed(() => `color-${theme.value?.color || DEFAULT_THEME_COLOR} theme-${theme.value?.type || 'default'}`),
   },
 })
 

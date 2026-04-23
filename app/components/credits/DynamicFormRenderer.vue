@@ -4,7 +4,7 @@
  * Soporta: money, select, date, number, text, textarea, computed, municipality.
  * Layout especial: eggsTable para clasificación de huevos (aves ponedoras).
  */
-import type { FormSchemaInput } from '~/types/credits'
+import type { FormFieldSchema, FormSchemaInput } from '~/types/credits'
 import {
   computeFormula,
   AVES_COST_PCT_DEFAULTS,
@@ -51,10 +51,58 @@ const props = withDefaults(
 const readOnlySet = computed(() => new Set(props.readOnlyFieldKeys))
 const { multiselectOptionsByLabel } = useMunicipalities()
 
+/** Cultivos permanentes: no forzar Cacao/1.ª opción; el asesor debe elegir el cultivo */
+function shouldNotAutoSelectFirstOption(field: FormFieldSchema): boolean {
+  return props.templateKey === 'cultivo-permanente' && field.key === 'tipo_producto'
+}
+
+function selectFieldPlaceholder(field: FormFieldSchema): string {
+  if (shouldNotAutoSelectFirstOption(field)) {
+    return 'Seleccione'
+  }
+  return field.label ? `Seleccionar ${field.label.toLowerCase()}` : 'Seleccionar'
+}
+
 function isFieldReadOnly(fieldKey: string): boolean {
   if (props.readonly) return true
   return readOnlySet.value.has(fieldKey)
 }
+
+const readOnlyFieldShellClass =
+  'rounded-md border-l-4 border-amber-500/90 bg-amber-50/50 pl-3 pr-2 py-2 dark:border-amber-500/70 dark:bg-amber-950/25'
+
+const readOnlyValueBoxClass =
+  'border-amber-200/90 !bg-amber-50/60 dark:border-amber-800/60 dark:!bg-amber-950/30'
+
+const readOnlyInputRingClass =
+  'border-amber-300/70 !bg-amber-50/40 focus-visible:ring-amber-500/30 dark:border-amber-800/60 dark:!bg-amber-950/20 dark:focus-visible:ring-amber-500/20'
+
+function showReadOnlyBadge(field: FormFieldSchema): boolean {
+  if (props.readonly) {
+    return false
+  }
+  if (field.type === 'computed') {
+    return true
+  }
+  return isFieldReadOnly(field.key)
+}
+
+function readOnlyFieldGroupClass(field: FormFieldSchema): string {
+  if (!showReadOnlyBadge(field)) {
+    return ''
+  }
+  return readOnlyFieldShellClass
+}
+
+const hasReadOnlyGuidance = computed(() => {
+  if (props.readonly) {
+    return false
+  }
+  if (props.readOnlyFieldKeys.length > 0) {
+    return true
+  }
+  return (props.schema.sections ?? []).some((s) => (s.fields ?? []).some((f) => f.type === 'computed'))
+})
 
 const emit = defineEmits<{
   'update:formData': [data: Record<string, unknown>]
@@ -186,7 +234,7 @@ function buildInitialFormData(): Record<string, unknown> {
       if (field.type === 'number' || field.type === 'money') {
         data[field.key] = null as unknown
       } else if (field.type === 'select' && field.options?.length) {
-        data[field.key] = field.options[0].value
+        data[field.key] = shouldNotAutoSelectFirstOption(field) ? null : field.options[0].value
       } else {
         data[field.key] = ''
       }
@@ -209,6 +257,12 @@ function formatComputedValue(field: { formulaKey?: string; formulaFormat?: strin
 }
 
 const formData = reactive<Record<string, unknown>>(buildInitialFormData())
+
+function selectModelValue(key: string): string | number | undefined {
+  const v = formData[key]
+  if (v === null || v === undefined || v === '') return undefined
+  return v as string | number
+}
 
 function isGanadoCebaCantidadCalculadaField(field: { key: string; type?: string }): boolean {
   return props.templateKey === 'ganado-ceba'
@@ -268,6 +322,27 @@ const inputBaseClass =
 
 <template>
   <form class="space-y-6">
+    <div
+      v-if="readonly"
+      class="flex gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200"
+      role="status"
+    >
+      <Icon name="i-lucide-eye" class="mt-0.5 size-4 shrink-0 text-slate-600 dark:text-slate-400" />
+      <p class="m-0 leading-relaxed">
+        <span class="font-semibold">Solo consulta.</span> Este formulario no se puede editar.
+      </p>
+    </div>
+    <div
+      v-else-if="hasReadOnlyGuidance"
+      class="flex gap-2 rounded-lg border border-amber-200/90 bg-amber-50/70 px-3 py-2.5 text-xs text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/35 dark:text-amber-100"
+      role="note"
+    >
+      <Icon name="i-lucide-lightbulb" class="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+      <p class="m-0 leading-relaxed">
+        <span class="font-semibold">Solo lectura:</span> los bloques con franja ámbar y la etiqueta «Solo lectura» vienen de la plantilla o se calculan solos; no los modifique.
+        <span class="font-semibold"> Edite</span> los demás campos (sin franja) según el caso.
+      </p>
+    </div>
     <template v-for="(section, idx) in schema.sections" :key="section.key ?? idx">
       <!-- Tabla FINAGRO (cultivos permanentes) -->
       <fieldset
@@ -356,14 +431,15 @@ const inputBaseClass =
             class="grid grid-cols-1 gap-6 md:grid-cols-2"
           >
             <template v-for="field in section.fields" :key="field.key">
-              <div :class="['grid gap-2', gridColClass(field.cols)]">
-                <Label :for="`field-${field.key}`" class="text-sm font-medium">
-                  {{ field.label }}
-                  <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
-                </Label>
+              <div :class="['grid gap-2', gridColClass(field.cols), readOnlyFieldGroupClass(field as FormFieldSchema)]">
+                <CreditsFormFieldLabel
+                  :field="(field as FormFieldSchema)"
+                  :for-id="`field-${field.key}`"
+                  :show-read-only-badge="showReadOnlyBadge(field as FormFieldSchema)"
+                />
                 <div
                   :id="`field-${field.key}`"
-                  class="flex h-9 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-foreground select-none cursor-default"
+                  :class="['flex h-9 w-full select-none items-center rounded-md border px-3 py-2 text-sm text-foreground cursor-default', readOnlyValueBoxClass]"
                   tabindex="-1"
                   aria-readonly="true"
                 >
@@ -408,14 +484,15 @@ const inputBaseClass =
             class="grid grid-cols-1 gap-6 md:grid-cols-2"
           >
             <template v-for="field in section.fields" :key="field.key">
-              <div :class="['grid gap-2', gridColClass(field.cols)]">
-                <Label :for="`field-${field.key}`" class="text-sm font-medium">
-                  {{ field.label }}
-                  <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
-                </Label>
+              <div :class="['grid gap-2', gridColClass(field.cols), readOnlyFieldGroupClass(field as FormFieldSchema)]">
+                <CreditsFormFieldLabel
+                  :field="(field as FormFieldSchema)"
+                  :for-id="`field-${field.key}`"
+                  :show-read-only-badge="showReadOnlyBadge(field as FormFieldSchema)"
+                />
                 <div
                   :id="`field-${field.key}`"
-                  class="flex h-9 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-foreground select-none cursor-default"
+                  :class="['flex h-9 w-full select-none items-center rounded-md border px-3 py-2 text-sm text-foreground cursor-default', readOnlyValueBoxClass]"
                   tabindex="-1"
                   aria-readonly="true"
                 >
@@ -503,12 +580,13 @@ const inputBaseClass =
         <div class="mt-4 grid grid-cols-1 items-end gap-6 md:grid-cols-2">
         <template v-for="field in (section.fields ?? [])" :key="field.key">
           <template v-if="isFieldVisible(field)">
-          <div :class="['grid w-full min-w-0 gap-2', gridColClass(field.cols)]">
+          <div :class="['grid w-full min-w-0 gap-2', gridColClass(field.cols), readOnlyFieldGroupClass(field)]">
             <!-- money -->
             <template v-if="field.type === 'money'">
               <CreditsBaseMoneyInput
                 :model-value="(formData[field.key] as number | null) ?? null"
                 :label="field.label"
+                :show-solo-lectura-hint="showReadOnlyBadge(field)"
                 :disabled="isFieldReadOnly(field.key)"
                 @update:model-value="(v) => (formData[field.key] = v)"
               />
@@ -516,16 +594,21 @@ const inputBaseClass =
             <!-- select -->
             <template v-else-if="field.type === 'select'">
               <div class="space-y-1.5">
-                <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
-                  {{ field.label }}
-                </Label>
+                <CreditsFormFieldLabel
+                  :field="field"
+                  :for-id="`field-${field.key}`"
+                  :show-read-only-badge="showReadOnlyBadge(field)"
+                />
                 <Select
-                  :model-value="formData[field.key]"
+                  :model-value="selectModelValue(field.key)"
                   :disabled="isFieldReadOnly(field.key)"
-                  @update:model-value="(v) => (formData[field.key] = v)"
+                  @update:model-value="(v) => (formData[field.key] = v as string | number | null | undefined)"
                 >
-                  <SelectTrigger :id="`field-${field.key}`" class="w-full">
-                    <SelectValue :placeholder="field.label ? `Seleccionar ${field.label.toLowerCase()}` : 'Seleccionar'" />
+                  <SelectTrigger
+                    :id="`field-${field.key}`"
+                    :class="['w-full', showReadOnlyBadge(field) ? readOnlyInputRingClass : '']"
+                  >
+                    <SelectValue :placeholder="selectFieldPlaceholder(field)" />
                   </SelectTrigger>
                   <SelectContent class="bg-popover text-popover-foreground">
                     <SelectItem
@@ -542,9 +625,11 @@ const inputBaseClass =
             <!-- municipality (selector de municipios como lugar de expedición) -->
             <template v-else-if="field.type === 'municipality'">
               <div class="space-y-1.5">
-                <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
-                  {{ field.label }}
-                </Label>
+                <CreditsFormFieldLabel
+                  :field="field"
+                  :for-id="`field-${field.key}`"
+                  :show-read-only-badge="showReadOnlyBadge(field)"
+                />
                 <Multiselect
                   :model-value="(formData[field.key] as string) ?? null"
                   :options="multiselectOptionsByLabel"
@@ -563,14 +648,18 @@ const inputBaseClass =
             <!-- computed (solo lectura, no modificable) -->
             <template v-else-if="field.type === 'computed'">
               <div v-if="isGanadoCebaCantidadCalculadaField(field)" class="space-y-1.5">
-                <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
-                  {{ field.label }}
-                  <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
-                </Label>
+                <CreditsFormFieldLabel
+                  :field="field"
+                  :for-id="`field-${field.key}`"
+                  :show-read-only-badge="showReadOnlyBadge(field)"
+                />
                 <div
                   :id="`field-${field.key}`"
-                  class="flex h-9 w-full items-center rounded-md border bg-muted/50 px-3 py-2 text-sm text-foreground select-none cursor-default"
-                  :class="showGanadoCebaCantidadCalculadaAlert(field) ? 'border-destructive ring-1 ring-destructive/30' : 'border-input'"
+                  class="flex h-9 w-full select-none items-center rounded-md border px-3 py-2 text-sm text-foreground cursor-default"
+                  :class="[
+                    readOnlyValueBoxClass,
+                    showGanadoCebaCantidadCalculadaAlert(field) ? 'border-destructive ring-1 ring-destructive/30' : '',
+                  ]"
                   tabindex="-1"
                   aria-readonly="true"
                 >
@@ -578,13 +667,14 @@ const inputBaseClass =
                 </div>
               </div>
               <div v-else class="space-y-1.5">
-                <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
-                  {{ field.label }}
-                  <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
-                </Label>
+                <CreditsFormFieldLabel
+                  :field="field"
+                  :for-id="`field-${field.key}`"
+                  :show-read-only-badge="showReadOnlyBadge(field)"
+                />
                 <div
                   :id="`field-${field.key}`"
-                  class="flex h-9 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-foreground select-none cursor-default"
+                  :class="['flex h-9 w-full select-none items-center rounded-md border px-3 py-2 text-sm text-foreground cursor-default', readOnlyValueBoxClass]"
                   tabindex="-1"
                   aria-readonly="true"
                 >
@@ -594,23 +684,26 @@ const inputBaseClass =
             </template>
             <!-- date -->
             <template v-else-if="field.type === 'date'">
-              <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
-                {{ field.label }}
-              </Label>
+              <CreditsFormFieldLabel
+                :field="field"
+                :for-id="`field-${field.key}`"
+                :show-read-only-badge="showReadOnlyBadge(field)"
+              />
               <input
                 :id="`field-${field.key}`"
                 v-model="formData[field.key]"
                 type="date"
                 :disabled="isFieldReadOnly(field.key)"
-                :class="inputBaseClass"
+                :class="[inputBaseClass, showReadOnlyBadge(field) ? readOnlyInputRingClass : '']"
               >
             </template>
             <!-- number -->
             <template v-else-if="field.type === 'number'">
-              <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
-                {{ field.label }}
-                <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
-              </Label>
+              <CreditsFormFieldLabel
+                :field="field"
+                :for-id="`field-${field.key}`"
+                :show-read-only-badge="showReadOnlyBadge(field)"
+              />
               <input
                 :id="`field-${field.key}`"
                 v-model.number="formData[field.key]"
@@ -619,6 +712,7 @@ const inputBaseClass =
                 :disabled="isFieldReadOnly(field.key)"
                 :class="[
                   inputBaseClass,
+                  showReadOnlyBadge(field) ? readOnlyInputRingClass : '',
                   ganadoDobleCriasExceedsVacasCria && (field.key === 'numero_crias' || field.key === 'vacas_cria')
                     ? 'border-destructive ring-1 ring-destructive/30'
                     : '',
@@ -635,32 +729,35 @@ const inputBaseClass =
             <!-- textarea -->
             <template v-else-if="field.type === 'textarea'">
               <div class="space-y-1.5">
-                <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
-                  {{ field.label }}
-                  <span v-if="field.meta" class="text-muted-foreground font-normal">({{ field.meta }})</span>
-                </Label>
+                <CreditsFormFieldLabel
+                  :field="field"
+                  :for-id="`field-${field.key}`"
+                  :show-read-only-badge="showReadOnlyBadge(field)"
+                />
                 <Textarea
                   :id="`field-${field.key}`"
                   :model-value="(formData[field.key] as string) ?? ''"
                   :placeholder="field.meta"
                   rows="6"
                   :disabled="isFieldReadOnly(field.key)"
-                  class="min-h-36 resize-y"
+                  :class="['min-h-36 resize-y', showReadOnlyBadge(field) ? readOnlyInputRingClass : '']"
                   @update:model-value="(v) => (formData[field.key] = v)"
                 />
               </div>
             </template>
             <!-- text (default) -->
             <template v-else>
-              <Label v-if="field.label" :for="`field-${field.key}`" class="text-sm font-medium">
-                {{ field.label }}
-              </Label>
+              <CreditsFormFieldLabel
+                :field="field"
+                :for-id="`field-${field.key}`"
+                :show-read-only-badge="showReadOnlyBadge(field)"
+              />
               <input
                 :id="`field-${field.key}`"
                 v-model="formData[field.key]"
                 type="text"
                 :disabled="isFieldReadOnly(field.key)"
-                :class="inputBaseClass"
+                :class="[inputBaseClass, showReadOnlyBadge(field) ? readOnlyInputRingClass : '']"
               >
             </template>
           </div>

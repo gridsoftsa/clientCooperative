@@ -472,56 +472,58 @@ watch([application, debtor, coDebtors], () => {
         </div>
       </div>
 
-      <!-- Resumen financiero del deudor -->
-      <div class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
-        <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Resumen financiero del deudor
-        </p>
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <div class="space-y-1">
-            <p class="text-sm font-bold uppercase">Solvencia</p>
-            <div
-              class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
-              :class="solvenciaColorClass(solvenciaPercentage)"
-            >
-              {{ solvenciaPercentage != null ? `${solvenciaPercentage.toFixed(2)} %` : '—' }}
+      <!-- Resumen financiero del deudor (requiere permiso; oculto p. ej. para asesor) -->
+      <PermissionGate permission="radicacion_ver_resumen_financiero" strict>
+        <div class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
+          <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Resumen financiero del deudor
+          </p>
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div class="space-y-1">
+              <p class="text-sm font-bold uppercase">Solvencia</p>
+              <div
+                class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
+                :class="solvenciaColorClass(solvenciaPercentage)"
+              >
+                {{ solvenciaPercentage != null ? `${solvenciaPercentage.toFixed(2)} %` : '—' }}
+              </div>
+              <p class="text-[10px] text-muted-foreground">
+                (Pasivos + monto solicitado) ÷ Activos
+              </p>
             </div>
-            <p class="text-[10px] text-muted-foreground">
-              (Pasivos + monto solicitado) ÷ Activos
-            </p>
-          </div>
-          <div class="space-y-1">
-            <p class="text-sm font-bold uppercase">Endeudamiento</p>
-            <div
-              class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
-              :class="solvenciaColorClass(endeudamientoPercentage)"
-            >
-              {{ endeudamientoPercentage != null ? `${endeudamientoPercentage.toFixed(2)} %` : '—' }}
+            <div class="space-y-1">
+              <p class="text-sm font-bold uppercase">Endeudamiento</p>
+              <div
+                class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
+                :class="solvenciaColorClass(endeudamientoPercentage)"
+              >
+                {{ endeudamientoPercentage != null ? `${endeudamientoPercentage.toFixed(2)} %` : '—' }}
+              </div>
+              <p class="text-[10px] text-muted-foreground">
+                (Pasivos + monto solicitado) ÷ Bien raíz
+              </p>
             </div>
-            <p class="text-[10px] text-muted-foreground">
-              (Pasivos + monto solicitado) ÷ Bien raíz
-            </p>
-          </div>
-          <div class="space-y-1">
-            <p class="text-sm font-bold uppercase">Activos</p>
-            <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-              {{ formatPesos((debtor.financial_info as any)?.solvency?.assets ?? (debtor.financial_info as any)?.assets?.reduce((s: number, a: any) => s + (a?.value ?? 0), 0) ?? 0) }}
-            </p>
-          </div>
-          <div class="space-y-1">
-            <p class="text-sm font-bold uppercase">Pasivos</p>
-            <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-              {{ formatPesos((debtor.financial_info as any)?.solvency?.liabilities) }}
-            </p>
-          </div>
-          <div class="space-y-1">
-            <p class="text-sm font-bold uppercase">Bien raíz</p>
-            <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-              {{ formatPesos((debtor.financial_info as any)?.solvency?.real_estate) }}
-            </p>
+            <div class="space-y-1">
+              <p class="text-sm font-bold uppercase">Activos</p>
+              <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+                {{ formatPesos((debtor.financial_info as any)?.solvency?.assets ?? (debtor.financial_info as any)?.assets?.reduce((s: number, a: any) => s + (a?.value ?? 0), 0) ?? 0) }}
+              </p>
+            </div>
+            <div class="space-y-1">
+              <p class="text-sm font-bold uppercase">Pasivos</p>
+              <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+                {{ formatPesos((debtor.financial_info as any)?.solvency?.liabilities) }}
+              </p>
+            </div>
+            <div class="space-y-1">
+              <p class="text-sm font-bold uppercase">Bien raíz</p>
+              <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
+                {{ formatPesos((debtor.financial_info as any)?.solvency?.real_estate) }}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      </PermissionGate>
 
       <!-- Stepper -->
       <div class="flex flex-wrap items-center gap-2">

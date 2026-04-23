@@ -2,6 +2,7 @@
 import { Analytics } from '@vercel/analytics/nuxt'
 import { ConfigProvider } from 'reka-ui'
 import { Toaster } from '@/components/ui/sonner'
+import { DEFAULT_THEME_COLOR } from '@/constants/themes'
 import 'vue-sonner/style.css'
 
 const colorMode = useColorMode()
@@ -21,7 +22,7 @@ useHead({
     lang: 'en',
   },
   bodyAttrs: {
-    class: computed(() => `color-${theme.value?.color || 'default'} theme-${theme.value?.type || 'default'}`),
+    class: computed(() => `color-${theme.value?.color || DEFAULT_THEME_COLOR} theme-${theme.value?.type || 'default'}`),
   },
 })
 

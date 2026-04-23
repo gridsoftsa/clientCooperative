@@ -10,6 +10,7 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const { hasPermission } = usePermissions()
+const { refetchUserSilently } = useAuth()
 const deleteWithReason = useApiDeleteWithReason()
 const deleteRoleDialogOpen = ref(false)
 const rolePendingDelete = ref<{ id: number; name: string } | null>(null)
@@ -80,6 +81,7 @@ async function onDeleteRoleConfirm(reason: string) {
     rolePendingDelete.value = null
     toast.success('Rol eliminado')
     await fetchRoles()
+    await refetchUserSilently()
   } catch (error: any) {
     console.error('Error al eliminar rol:', error)
     const message = error?.data?.message || error?.message || 'Error al eliminar el rol'

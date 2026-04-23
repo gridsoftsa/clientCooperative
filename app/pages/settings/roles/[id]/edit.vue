@@ -16,6 +16,7 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const route = useRoute()
 const router = useRouter()
+const { refetchUserSilently } = useAuth()
 const roleId = route.params.id as string
 
 const formData = ref({
@@ -126,6 +127,7 @@ const handleSubmit = async () => {
       method: 'PUT',
       body: { name: formData.value.name, permissions: formData.value.permissions },
     })
+    await refetchUserSilently()
     toast.success('Rol actualizado correctamente')
     router.push('/settings/roles')
   } catch (error: any) {

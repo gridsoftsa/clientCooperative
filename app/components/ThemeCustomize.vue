@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ThemeColor, ThemeType } from '@/constants/themes'
-import { THEME_COLORS, THEME_TYPE } from '@/constants/themes'
+import { DEFAULT_THEME_COLOR, THEME_COLORS, THEME_TYPE } from '@/constants/themes'
 
 const { theme, updateAppSettings } = useAppSettings()
 
@@ -15,7 +15,7 @@ function setClassColor() {
   document.body.classList.remove(
     ...allColors.map(color => `color-${color}`),
   )
-  document.body.classList.add(`color-${theme.value?.color || 'default'}`)
+  document.body.classList.add(`color-${theme.value?.color || DEFAULT_THEME_COLOR}`)
 }
 
 watch(() => theme.value?.type, () => {

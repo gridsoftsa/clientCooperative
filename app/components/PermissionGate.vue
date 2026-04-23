@@ -32,13 +32,30 @@ interface Props {
    * Contenido a mostrar si no se cumple la condición
    */
   fallback?: boolean
+  /**
+   * Si true, no aplica el bypass de `super_admin` al comprobar permisos
+   * (el usuario solo pasa si el permiso figura en su lista, igual que asesor u otros roles).
+   */
+  strict?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   fallback: false,
+  strict: false,
 })
 
-const { hasRole, hasAnyRole, hasAllRoles, hasPermission, hasAnyPermission, hasAllPermissions, isAdmin } = usePermissions()
+const {
+  hasRole,
+  hasAnyRole,
+  hasAllRoles,
+  hasPermission,
+  hasPermissionStrict,
+  hasAnyPermission,
+  hasAnyPermissionStrict,
+  hasAllPermissions,
+  hasAllPermissionsStrict,
+  isAdmin,
+} = usePermissions()
 
 const canAccess = computed(() => {
   // adminOnly: solo administradores pueden ver (admin o super_admin)
@@ -46,18 +63,19 @@ const canAccess = computed(() => {
     return isAdmin.value
   }
 
-  // Verificar permisos individuales (todos los usuarios, incluido admin, deben tener el permiso)
-  if (props.permission && !hasPermission(props.permission)) {
+  const canPerm = (name: string) => (props.strict ? hasPermissionStrict(name) : hasPermission(name))
+  const canAny = (list: string[]) => (props.strict ? hasAnyPermissionStrict(list) : hasAnyPermission(list))
+  const canAll = (list: string[]) => (props.strict ? hasAllPermissionsStrict(list) : hasAllPermissions(list))
+
+  if (props.permission && !canPerm(props.permission)) {
     return false
   }
 
-  // Verificar anyPermission
-  if (props.anyPermission && props.anyPermission.length > 0 && !hasAnyPermission(props.anyPermission)) {
+  if (props.anyPermission && props.anyPermission.length > 0 && !canAny(props.anyPermission)) {
     return false
   }
 
-  // Verificar allPermissions
-  if (props.allPermissions && props.allPermissions.length > 0 && !hasAllPermissions(props.allPermissions)) {
+  if (props.allPermissions && props.allPermissions.length > 0 && !canAll(props.allPermissions)) {
     return false
   }
 

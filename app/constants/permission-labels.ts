@@ -88,6 +88,8 @@ function capitalizeWords(str: string): string {
 /** Etiquetas fijas cuando el nombre en varias partes no basta (ej. enviar a análisis) */
 const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   radicacion_enviar_analisis: 'Enviar solicitud a análisis (Radicación)',
+  /** Bloque “Resumen financiero” (solvencia, activos, pasivos) en formulario/ detalle de radicación. Sin esto, p. ej. asesor no ve ese resumen. */
+  radicacion_ver_resumen_financiero: 'Ver resumen financiero del deudor en radicación (solvencia, activos, pasivos, etc.)',
   settings_ver: 'Ver menú Configuración (perfil, cuenta, apariencia, notificaciones, etc.)',
 }
 

@@ -57,7 +57,7 @@ export interface TemplateConfigSchema {
     layout?: 'avesCostBreakdownTable' | 'cultivoCicloCortoCostBreakdownTable' | 'cultivoPermanenteFinagroTable' | 'cultivoPermanenteReferencia'
     /**
      * Si true, en radicación los campos de esta sección no se marcan solo lectura aunque vengan de la plantilla
-     * (el deudor puede ajustarlos; p. ej. ganado-ceba — valores estandarizados).
+     * (el deudor puede ajustarlos en radicación mientras no se use esta bandera en esa sección).
      */
     excludeFromRadicacionReadonly?: boolean
   }>
@@ -69,7 +69,6 @@ const schemaGanadoCeba: TemplateConfigSchema = {
     {
       key: 'valores',
       title: 'Valores estandarizados',
-      excludeFromRadicacionReadonly: true,
       fields: [
         { key: 'precio_compra_animal', label: 'Precio compra por animal', type: 'money' },
         { key: 'precio_kg_animal', label: 'Precio por kg', type: 'money' },

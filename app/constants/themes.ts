@@ -43,5 +43,8 @@ export const THEME_COLORS = [
 
 export const THEME_TYPE = ['default', 'scaled', 'mono']
 
+/** Color de acento mostrado como «Empresarial» en la personalización. */
+export const DEFAULT_THEME_COLOR = 'cooperative' as const
+
 export type ThemeColor = (typeof THEME_COLORS)[number]['name']
 export type ThemeType = (typeof THEME_TYPE)[number]

@@ -10,7 +10,7 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
-const { user: authUser } = useAuth()
+const { user: authUser, refetchUserSilently } = useAuth()
 const deleteWithReason = useApiDeleteWithReason()
 const deleteUserDialogOpen = ref(false)
 const userIdPendingDelete = ref<number | null>(null)
@@ -73,6 +73,9 @@ async function onDeleteUserConfirm(reason: string) {
     userIdPendingDelete.value = null
     toast.success('Usuario eliminado correctamente')
     await fetchUsers()
+    if (authUser.value?.id === id) {
+      await refetchUserSilently()
+    }
   } catch (error: any) {
     console.error('Error al eliminar usuario:', error)
     const message = error?.data?.message || 'Error al eliminar el usuario'

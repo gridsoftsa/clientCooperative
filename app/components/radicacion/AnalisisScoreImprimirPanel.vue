@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { Textarea } from '~/components/ui/textarea'
+import AnalisisScoreResumenIfs from './AnalisisScoreResumenIfs.vue'
 import type { ImprimirMeta, ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
 import { IMPRIMIR_NIVEL_RIESGO_TABLA } from '~/constants/analisis-score-imprimir'
 import type { AnalisisScorePerfilValue } from '~/constants/analisis-score'
@@ -13,7 +15,6 @@ import {
 } from '~/utils/analisis-score-matrix-options'
 import {
   classifyPuntajeTotalIFS,
-  nivelIFSTailwindClasses,
   sumImprimirPuntajesPorSeccion,
 } from '~/utils/analisis-score-imprimir-totals'
 
@@ -35,6 +36,8 @@ const emit = defineEmits<{
 const cabecera = defineModel<{ fecha: string; cedula: string; nombre: string }>('cabecera', {
   default: () => ({ fecha: '', cedula: '', nombre: '' }),
 })
+
+const observaciones = defineModel<string>('observaciones', { default: () => '' })
 
 const optionsMap = computed(() => buildVariableOptionsFromMatrix(props.matrixLines))
 
@@ -108,8 +111,6 @@ function onMatrixOptionChange(row: ImprimirVariableRow, value: string): void {
 const scoreSums = computed(() => sumImprimirPuntajesPorSeccion(filasEditables.value))
 
 const nivelIFS = computed(() => classifyPuntajeTotalIFS(scoreSums.value.total))
-
-const resumenIFSClass = computed(() => nivelIFSTailwindClasses(nivelIFS.value))
 
 function fmtPuntajeSum(n: number): string {
   if (Number.isInteger(n)) {
@@ -211,6 +212,7 @@ async function guardarAnalisisScore(): Promise<void> {
         variable_rows: filasEditables.value.map(r => ({ ...r })),
         sums: { ...scoreSums.value },
         nivel_ifs: nivelIFS.value,
+        observaciones: observaciones.value.trim() === '' ? null : observaciones.value,
       },
     })
     toast.success(res?.message ?? 'Análisis y SCORE guardado correctamente.')
@@ -231,6 +233,12 @@ defineExpose({
 
 <template>
   <div class="space-y-6">
+    <AnalisisScoreResumenIfs
+      :cualitativo="scoreSums.cualitativo"
+      :cuantitativo="scoreSums.cuantitativo"
+      :total="scoreSums.total"
+    />
+
     <div class="rounded-lg border bg-card p-4 text-sm">
       <p class="text-center text-base font-semibold leading-snug">
         {{ meta.titulo }}
@@ -391,52 +399,24 @@ defineExpose({
         </Table>
       </div>
 
-      <div
-        class="rounded-lg border-2 p-4 transition-colors"
-        :class="resumenIFSClass"
-      >
-        <p class="text-sm font-semibold">
-          Resumen de puntajes (fórmula IFS)
+      <AnalisisScoreResumenIfs
+        :cualitativo="scoreSums.cualitativo"
+        :cuantitativo="scoreSums.cuantitativo"
+        :total="scoreSums.total"
+      />
+
+      <div class="space-y-1.5">
+        <Label for="imp-observaciones">Observaciones</Label>
+        <Textarea
+          id="imp-observaciones"
+          v-model="observaciones"
+          rows="4"
+          class="min-h-24 w-full resize-y"
+          placeholder="Escriba observaciones sobre este SCORE (opcional)…"
+        />
+        <p class="text-xs text-muted-foreground">
+          Visible al guardar y en el PDF del análisis SCORE si hay texto.
         </p>
-        <p class="mt-1 text-xs opacity-90">
-          Total = suma cualitativas + suma cuantitativas.
-          Clasificación:
-          si total &lt; 400 → Bajo; si total ≤ 700 → Medio; si total ≥ 701 → Alto.
-        </p>
-        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div class="rounded-md border border-border/60 bg-background/60 px-3 py-2">
-            <p class="text-xs font-medium text-muted-foreground">
-              Suma cualitativas
-            </p>
-            <p class="mt-1 font-mono text-xl font-semibold tabular-nums text-foreground">
-              {{ fmtPuntajeSum(scoreSums.cualitativo) }}
-            </p>
-          </div>
-          <div class="rounded-md border border-border/60 bg-background/60 px-3 py-2">
-            <p class="text-xs font-medium text-muted-foreground">
-              Suma cuantitativas
-            </p>
-            <p class="mt-1 font-mono text-xl font-semibold tabular-nums text-foreground">
-              {{ fmtPuntajeSum(scoreSums.cuantitativo) }}
-            </p>
-          </div>
-          <div class="rounded-md border border-border/60 bg-background/60 px-3 py-2">
-            <p class="text-xs font-medium text-muted-foreground">
-              Total
-            </p>
-            <p class="mt-1 font-mono text-xl font-semibold tabular-nums text-foreground">
-              {{ fmtPuntajeSum(scoreSums.total) }}
-            </p>
-          </div>
-          <div class="rounded-md border border-border/60 bg-background/80 px-3 py-2">
-            <p class="text-xs font-medium opacity-80">
-              Clasificación IFS
-            </p>
-            <p class="mt-1 text-xl font-bold tracking-tight">
-              {{ nivelIFS }}
-            </p>
-          </div>
-        </div>
       </div>
 
       <div class="space-y-2">

@@ -921,11 +921,12 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Resumen financiero del deudor o codeudor -->
-    <div
-      v-if="mode"
-      class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4"
-    >
+    <!-- Resumen financiero del deudor o codeudor (oculto p. ej. para rol asesor: sin permiso radicacion_ver_resumen_financiero) -->
+    <template v-if="mode">
+      <PermissionGate permission="radicacion_ver_resumen_financiero" strict>
+        <div
+          class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4"
+        >
       <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         Resumen financiero {{ mode === 'codeudor' ? 'del codeudor' : 'del deudor' }}
       </p>
@@ -1000,7 +1001,9 @@ onMounted(() => {
           </p>
         </div>
       </div>
-    </div>
+        </div>
+      </PermissionGate>
+    </template>
 
     <!-- Stepper (cada paso es clickeable para navegar) - oculto al agregar codeudor -->
     <div v-if="!addingCodeudor" class="flex flex-wrap items-center gap-2">

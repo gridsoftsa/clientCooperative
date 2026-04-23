@@ -36,6 +36,27 @@ export function useAuth() {
     }
   }
 
+  /**
+   * Vuelve a cargar roles y permisos desde el servidor (GET /api/auth/user).
+   * Tras mutaciones en Configuración que afecten permisos en sesión, para `usePermissions`, PermissionGate, menú, etc.
+   * No relanza error; devuelve el usuario o null.
+   *
+   * Llamado desde: `settings/roles/[id]/edit`, `settings/roles/index` (eliminar rol),
+   * `settings/users/[id]/edit` (si editas tu propio usuario), `settings/users/index` (eliminarse a sí mismo).
+   */
+  async function refetchUserSilently() {
+    try {
+      const res = await $api<{ user: AuthUser | null }>('/auth/user')
+      user.value = res.user
+      return user.value
+    } catch (err: any) {
+      if (err?.status === 401) {
+        user.value = null
+      }
+      return null
+    }
+  }
+
   async function login(payload: LoginPayload) {
     loading.value = true
     try {
@@ -104,6 +125,7 @@ export function useAuth() {
     user,
     loading,
     fetchUser,
+    refetchUserSilently,
     login,
     logout,
     forgotPassword,

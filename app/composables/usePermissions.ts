@@ -47,6 +47,21 @@ export function usePermissions() {
   }
 
   /**
+   * Misma lógica que `hasPermission` pero sin excepción para `super_admin`.
+   * Úsala en UI que debe ocultarse incluso para super admin si el permiso no está en el rol
+   * (p. ej. resumen financiero en radicación acordado por negocio).
+   */
+  function hasPermissionStrict(permission: string): boolean {
+    if (import.meta.server) {
+      return false
+    }
+    if (!user.value?.permissions) {
+      return false
+    }
+    return user.value.permissions.includes(permission)
+  }
+
+  /**
    * Verifica si el usuario tiene un permiso específico
    */
   function hasPermission(permission: string): boolean {
@@ -64,6 +79,16 @@ export function usePermissions() {
     }
 
     return user.value.permissions.includes(permission)
+  }
+
+  function hasAnyPermissionStrict(permissions: string[]): boolean {
+    if (import.meta.server) {
+      return false
+    }
+    if (!user.value?.permissions?.length || permissions.length === 0) {
+      return false
+    }
+    return permissions.some(permission => user.value?.permissions?.includes(permission))
   }
 
   /**
@@ -84,6 +109,16 @@ export function usePermissions() {
     }
 
     return permissions.some(permission => user.value?.permissions?.includes(permission))
+  }
+
+  function hasAllPermissionsStrict(permissions: string[]): boolean {
+    if (import.meta.server) {
+      return false
+    }
+    if (!user.value?.permissions || permissions.length === 0) {
+      return false
+    }
+    return permissions.every(permission => user.value?.permissions?.includes(permission))
   }
 
   /**
@@ -130,8 +165,11 @@ export function usePermissions() {
     hasAnyRole,
     hasAllRoles,
     hasPermission,
+    hasPermissionStrict,
     hasAnyPermission,
+    hasAnyPermissionStrict,
     hasAllPermissions,
+    hasAllPermissionsStrict,
     isSuperAdmin,
     isAdmin,
     roles,

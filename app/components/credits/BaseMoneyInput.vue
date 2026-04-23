@@ -9,12 +9,15 @@ const props = withDefaults(
   defineProps<{
     modelValue?: number | string | null
     label?: string
+    /** Indicador “Solo lectura” (campo fijado por plantilla), alineado con FormFieldLabel */
+    showSoloLecturaHint?: boolean
     disabled?: boolean
     placeholder?: string
   }>(),
   {
     modelValue: null,
     label: '',
+    showSoloLecturaHint: false,
     disabled: false,
     placeholder: '0,00',
   },
@@ -60,8 +63,15 @@ function onBlur() {
 
 <template>
   <div class="grid gap-2">
-    <Label v-if="label" :for="inputId" class="text-sm font-medium">
-      {{ label }}
+    <Label v-if="label" :for="inputId" class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium">
+      <span>{{ label }}</span>
+      <span
+        v-if="showSoloLecturaHint"
+        class="inline-flex items-center gap-0.5 rounded-md border border-amber-600/40 bg-amber-100/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:border-amber-500/45 dark:bg-amber-950/55 dark:text-amber-100"
+      >
+        <Icon name="i-lucide-lock" class="size-3 shrink-0 opacity-90" aria-hidden="true" />
+        Solo lectura
+      </span>
     </Label>
     <div class="relative">
       <span

@@ -15,7 +15,7 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const route = useRoute()
 const router = useRouter()
-const { user: authUser } = useAuth()
+const { user: authUser, refetchUserSilently } = useAuth()
 
 const userId = route.params.id as string
 
@@ -201,7 +201,9 @@ const handleSubmit = async () => {
       method: 'PUT',
       body,
     })
-    
+    if (isOwnUser.value) {
+      await refetchUserSilently()
+    }
     toast.success('Usuario actualizado correctamente')
     router.push('/settings/users')
   } catch (error: any) {

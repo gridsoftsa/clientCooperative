@@ -1,4 +1,5 @@
 import type { AppSettings } from '~/types/appSettings'
+import { DEFAULT_THEME_COLOR } from '@/constants/themes'
 
 import { createDefu } from 'defu'
 
@@ -16,7 +17,7 @@ const defaultAppSettings: AppSettings = {
     variant: 'sidebar',
   },
   theme: {
-    color: 'default',
+    color: DEFAULT_THEME_COLOR,
     type: 'default',
   },
 }

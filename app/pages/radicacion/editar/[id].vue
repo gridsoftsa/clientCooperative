@@ -749,82 +749,84 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
-        <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Resumen financiero {{ addingCodeudor ? 'del codeudor' : 'del deudor' }}
-        </p>
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <div class="space-y-1">
-            <Label for="res_solvencia" class="text-sm font-bold uppercase">Solvencia</Label>
-            <div
-              id="res_solvencia"
-              class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
-              :class="solvenciaColorClass(solvenciaPercentage)"
-            >
-              {{ solvenciaPercentage != null ? `${solvenciaPercentage.toFixed(2)} %` : '—' }}
+      <PermissionGate permission="radicacion_ver_resumen_financiero" strict>
+        <div class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
+          <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Resumen financiero {{ addingCodeudor ? 'del codeudor' : 'del deudor' }}
+          </p>
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+            <div class="space-y-1">
+              <Label for="res_solvencia" class="text-sm font-bold uppercase">Solvencia</Label>
+              <div
+                id="res_solvencia"
+                class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
+                :class="solvenciaColorClass(solvenciaPercentage)"
+              >
+                {{ solvenciaPercentage != null ? `${solvenciaPercentage.toFixed(2)} %` : '—' }}
+              </div>
+              <p class="text-[10px] text-muted-foreground">
+                (Pasivos + monto solicitado) ÷ Activos
+              </p>
             </div>
-            <p class="text-[10px] text-muted-foreground">
-              (Pasivos + monto solicitado) ÷ Activos
-            </p>
-          </div>
-          <div class="space-y-1">
-            <Label for="res_endeudamiento" class="text-sm font-bold uppercase">Endeudamiento</Label>
-            <div
-              id="res_endeudamiento"
-              class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
-              :class="solvenciaColorClass(endeudamientoPercentage)"
-            >
-              {{ endeudamientoPercentage != null ? `${endeudamientoPercentage.toFixed(2)} %` : '—' }}
+            <div class="space-y-1">
+              <Label for="res_endeudamiento" class="text-sm font-bold uppercase">Endeudamiento</Label>
+              <div
+                id="res_endeudamiento"
+                class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
+                :class="solvenciaColorClass(endeudamientoPercentage)"
+              >
+                {{ endeudamientoPercentage != null ? `${endeudamientoPercentage.toFixed(2)} %` : '—' }}
+              </div>
+              <p class="text-[10px] text-muted-foreground">
+                (Pasivos + monto solicitado) ÷ Bien raíz
+              </p>
             </div>
-            <p class="text-[10px] text-muted-foreground">
-              (Pasivos + monto solicitado) ÷ Bien raíz
-            </p>
-          </div>
-          <div class="space-y-1">
-            <Label for="res_activos" class="text-sm font-bold uppercase">Activos</Label>
-            <Input
-              id="res_activos"
-              :model-value="formatPesos(totalActivosFromAssets)"
-              type="text"
-              placeholder="0"
-              readonly
-              class="cursor-default bg-muted/50 font-semibold"
-              title="Suma total de todos los activos reportados"
-            />
-            <p class="text-[10px] text-muted-foreground">
-              Total de activos reportados
-            </p>
-          </div>
-          <div class="space-y-1">
-            <Label for="res_pasivos" class="text-sm font-bold uppercase">Pasivos</Label>
-            <Input
-              id="res_pasivos"
-              :model-value="formatPesos(getSolvencyField('liabilities'))"
-              type="text"
-              inputmode="decimal"
-              placeholder="0"
-              class="font-semibold"
-              @keydown="onKeydownPesosOnly"
-              @update:model-value="setSolvencyField('liabilities', parsePesosInput(String($event)))"
-            />
-          </div>
-          <div class="space-y-1">
-            <Label for="res_bien_raiz" class="text-sm font-bold uppercase">Bien raíz</Label>
-            <Input
-              id="res_bien_raiz"
-              :model-value="formatPesos(bienRaizFromGarantias)"
-              type="text"
-              placeholder="0"
-              readonly
-              class="cursor-default bg-muted/50 font-semibold"
-              title="Se calcula con la suma de activos marcados como garantía"
-            />
-            <p class="text-[10px] text-muted-foreground">
-              Suma de activos con Garantía
-            </p>
+            <div class="space-y-1">
+              <Label for="res_activos" class="text-sm font-bold uppercase">Activos</Label>
+              <Input
+                id="res_activos"
+                :model-value="formatPesos(totalActivosFromAssets)"
+                type="text"
+                placeholder="0"
+                readonly
+                class="cursor-default bg-muted/50 font-semibold"
+                title="Suma total de todos los activos reportados"
+              />
+              <p class="text-[10px] text-muted-foreground">
+                Total de activos reportados
+              </p>
+            </div>
+            <div class="space-y-1">
+              <Label for="res_pasivos" class="text-sm font-bold uppercase">Pasivos</Label>
+              <Input
+                id="res_pasivos"
+                :model-value="formatPesos(getSolvencyField('liabilities'))"
+                type="text"
+                inputmode="decimal"
+                placeholder="0"
+                class="font-semibold"
+                @keydown="onKeydownPesosOnly"
+                @update:model-value="setSolvencyField('liabilities', parsePesosInput(String($event)))"
+              />
+            </div>
+            <div class="space-y-1">
+              <Label for="res_bien_raiz" class="text-sm font-bold uppercase">Bien raíz</Label>
+              <Input
+                id="res_bien_raiz"
+                :model-value="formatPesos(bienRaizFromGarantias)"
+                type="text"
+                placeholder="0"
+                readonly
+                class="cursor-default bg-muted/50 font-semibold"
+                title="Se calcula con la suma de activos marcados como garantía"
+              />
+              <p class="text-[10px] text-muted-foreground">
+                Suma de activos con Garantía
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      </PermissionGate>
 
       <div v-if="!addingCodeudor" class="flex flex-wrap items-center gap-2">
         <template v-for="(step, idx) in steps" :key="step.num">
