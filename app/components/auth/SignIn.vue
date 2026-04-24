@@ -3,7 +3,6 @@ import { Loader2 } from 'lucide-vue-next'
 import PasswordInput from '~/components/PasswordInput.vue'
 
 const auth = useAuth()
-const router = useRouter()
 
 const email = ref('')
 const password = ref('')
@@ -23,12 +22,10 @@ async function onSubmit(event: Event) {
       email: email.value,
       password: password.value
     })
-    // Redirigir al dashboard si tiene permiso, si no a radicación
     const { hasPermission } = usePermissions()
     const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
     await navigateTo(target)
   } catch (e: any) {
-    // Laravel ValidationException comes as { errors: { field: [msg] } }
     const firstFieldError =
       e?.data?.errors?.email?.[0] ||
       e?.data?.errors?.password?.[0]
@@ -40,73 +37,85 @@ async function onSubmit(event: Event) {
 </script>
 
 <template>
-  <form class="grid gap-6" @submit="onSubmit">
-    <div v-if="error" class="rounded-lg border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
-      {{ error }}
+  <form class="grid gap-5" @submit="onSubmit">
+    <div
+      v-if="error"
+      class="flex gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+      role="alert"
+    >
+      <Icon name="i-lucide-circle-alert" class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+      <span>{{ error }}</span>
     </div>
+
     <div class="grid gap-2">
-      <Label for="email">
+      <Label for="email" class="text-foreground/90">
         Correo electrónico
       </Label>
-      <Input
-        id="email"
-        v-model="email"
-        type="email"
-        placeholder="correo@ejemplo.com"
-        :disabled="isLoading"
-        auto-capitalize="none"
-        auto-complete="email"
-        auto-correct="off"
-        required
-      />
+      <div class="relative">
+        <Icon
+          name="i-lucide-mail"
+          class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <Input
+          id="email"
+          v-model="email"
+          type="email"
+          placeholder="tu.correo@ejemplo.com"
+          class="h-11 rounded-xl border-border/80 pl-10 shadow-sm transition-shadow focus-visible:ring-emerald-600/20"
+          :disabled="isLoading"
+          auto-capitalize="none"
+          auto-complete="email"
+          auto-correct="off"
+          required
+        />
+      </div>
     </div>
+
     <div class="grid gap-2">
-      <div class="flex items-center">
-        <Label for="password">
+      <div class="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+        <Label for="password" class="text-foreground/90">
           Contraseña
         </Label>
         <NuxtLink
           to="/forgot-password"
-          class="ml-auto inline-block text-sm underline"
+          class="ml-auto text-sm font-medium text-primary underline-offset-4 hover:underline"
         >
           ¿Olvidaste tu contraseña?
         </NuxtLink>
       </div>
-      <PasswordInput id="password" v-model="password" autocomplete="current-password" :disabled="isLoading" required />
+      <div class="relative">
+        <Icon
+          name="i-lucide-lock"
+          class="pointer-events-none absolute left-3 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
+        <PasswordInput
+          id="password"
+          v-model="password"
+          autocomplete="current-password"
+          placeholder="Tu contraseña"
+          class="h-11 rounded-xl border-border/80 pl-10 shadow-sm transition-shadow focus-visible:ring-emerald-600/20"
+          :disabled="isLoading"
+          required
+        />
+      </div>
     </div>
-    <Button type="submit" class="w-full" :disabled="isLoading || !email || !password">
-      <Loader2 v-if="isLoading" class="mr-2 h-4 w-4 animate-spin" />
-      Iniciar Sesión
+
+    <Button
+      type="submit"
+      size="lg"
+      class="mt-1 w-full rounded-xl text-base font-semibold shadow-md shadow-emerald-900/10 transition-all hover:shadow-lg hover:shadow-emerald-900/15"
+      :disabled="isLoading || !email || !password"
+    >
+      <Loader2 v-if="isLoading" class="mr-2 size-4 animate-spin" />
+      Entrar al portal
     </Button>
-    <!--
-    <div class="relative">
-      <div class="absolute inset-0 flex items-center">
-        <span class="w-full border-t" />
-      </div>
-      <div class="relative flex justify-center text-xs uppercase">
-        <span class="bg-background px-2 text-muted-foreground">Or continue with</span>
-      </div>
-    </div>
-    <div class="grid grid-cols-2 gap-4">
-      <Button variant="outline" type="button" disabled>
-        <Icon name="lucide:apple" class="mr-2 h-4 w-4" />
-        Apple
-      </Button>
-      <Button variant="outline" type="button" disabled>
-        <Icon name="lucide:chrome" class="mr-2 h-4 w-4" />
-        Google
-      </Button>
-    </div>
-    -->
+
+    <p class="text-center text-xs text-muted-foreground">
+      Acceso exclusivo para personal autorizado. Tus datos están protegidos.
+    </p>
   </form>
-  <!--
-  <div class="mt-4 text-center text-sm text-muted-foreground">
-    Don't have an account?
-    <NuxtLink to="/register" class="underline">
-      Sign up
-    </NuxtLink>
-  </div>
-  -->
 </template>
 
 <style scoped>
