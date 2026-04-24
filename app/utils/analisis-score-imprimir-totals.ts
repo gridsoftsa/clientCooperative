@@ -82,6 +82,23 @@ export function classifyPuntajeTotalIFS(total: number): 'Bajo' | 'Medio' | 'Alto
   return 'Alto'
 }
 
+/**
+ * Nivel de riesgo (independiente de la clasificación IFS de puntaje).
+ * Tabla referencia: 0–400 → ALTO; 401–700 → MEDIO; 701–1000 → BAJO
+ * (totales &gt; 1000 se tratan como BAJO riesgo, mismo criterio que &gt; 700 en la lógica de tramos).
+ */
+export type NivelRiesgoClasificacion = 'ALTO' | 'MEDIO' | 'BAJO'
+
+export function classifyNivelRiesgo(total: number): NivelRiesgoClasificacion {
+  if (total <= 400) {
+    return 'ALTO'
+  }
+  if (total <= 700) {
+    return 'MEDIO'
+  }
+  return 'BAJO'
+}
+
 export function nivelIFSTailwindClasses(nivel: 'Bajo' | 'Medio' | 'Alto'): string {
   switch (nivel) {
     case 'Bajo':
@@ -102,5 +119,17 @@ export function nivelIFSRowHighlightClass(nivel: 'Bajo' | 'Medio' | 'Alto'): str
       return 'bg-amber-500/15 ring-1 ring-inset ring-amber-400/45 dark:bg-amber-950/25'
     case 'Alto':
       return 'bg-emerald-500/15 ring-1 ring-inset ring-emerald-400/45 dark:bg-emerald-950/25'
+  }
+}
+
+/** Resalte del bloque «Nivel de riesgo» (ALTO = peligro, MEDIO = advertencia, BAJO = acierto/verde). */
+export function nivelRiesgoTailwindClasses(nivel: NivelRiesgoClasificacion): string {
+  switch (nivel) {
+    case 'ALTO':
+      return 'border-red-300/80 bg-red-500/10 text-red-950 dark:border-red-500/40 dark:bg-red-950/30 dark:text-red-100'
+    case 'MEDIO':
+      return 'border-amber-300/80 bg-amber-500/10 text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-100'
+    case 'BAJO':
+      return 'border-emerald-300/80 bg-emerald-500/10 text-emerald-950 dark:border-emerald-500/40 dark:bg-emerald-950/30 dark:text-emerald-100'
   }
 }

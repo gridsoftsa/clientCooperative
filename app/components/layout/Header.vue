@@ -1,27 +1,22 @@
 <script setup lang="ts">
+import { getBreadcrumbSegmentTitle } from '~/constants/breadcrumb-titles'
+
 const route = useRoute()
 
 function setLinks() {
-  if (route.fullPath === '/') {
-    return [{ title: 'Home', href: '/' }]
+  const path = route.path || '/'
+  if (path === '/') {
+    return [{ title: 'Dashboard', href: '/' }]
   }
 
-  const segments = route.fullPath.split('/').filter(item => item !== '')
+  const segments = path.split('/').filter(item => item !== '')
 
-  const breadcrumbs = segments.map((item, index) => {
-    const str = item.replace(/-/g, ' ')
-    const title = str
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ')
+  const breadcrumbs = segments.map((item, index) => ({
+    title: getBreadcrumbSegmentTitle(item),
+    href: `/${segments.slice(0, index + 1).join('/')}`,
+  }))
 
-    return {
-      title,
-      href: `/${segments.slice(0, index + 1).join('/')}`,
-    }
-  })
-
-  return [{ title: 'Home', href: '/' }, ...breadcrumbs]
+  return [{ title: 'Dashboard', href: '/' }, ...breadcrumbs]
 }
 
 const links = ref<{
@@ -29,8 +24,8 @@ const links = ref<{
   href: string
 }[]>(setLinks())
 
-watch(() => route.fullPath, (val) => {
-  if (val) {
+watch(() => route.path, (val) => {
+  if (val !== undefined) {
     links.value = setLinks()
   }
 })

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import {
+  classifyNivelRiesgo,
   classifyPuntajeTotalIFS,
   nivelIFSTailwindClasses,
+  nivelRiesgoTailwindClasses,
 } from '~/utils/analisis-score-imprimir-totals'
 
 const props = defineProps<{
@@ -16,6 +18,11 @@ const resumenClass = computed(() =>
 )
 
 const nivelLabel = computed(() => classifyPuntajeTotalIFS(props.total))
+
+const nivelRiesgoLabel = computed(() => classifyNivelRiesgo(props.total))
+const riesgoResumenClass = computed(() =>
+  nivelRiesgoTailwindClasses(nivelRiesgoLabel.value),
+)
 
 function fmtPuntajeSum(n: number): string {
   if (Number.isInteger(n)) {
@@ -38,10 +45,14 @@ function fmtPuntajeSum(n: number): string {
     </p>
     <p class="mt-1 text-xs opacity-90">
       Total = suma cualitativas + suma cuantitativas.
-      Clasificación:
+      Clasificación IFS:
       si total &lt; 400 → Bajo; si total ≤ 700 → Medio; si total ≥ 701 → Alto.
     </p>
-    <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <p class="mt-1 text-xs opacity-90">
+      Nivel de riesgo (tabla referencia, según total):
+      0–400 → ALTO; 401–700 → MEDIO; 701–1000 → BAJO.
+    </p>
+    <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <div class="rounded-md border border-border/60 bg-background/60 px-3 py-2">
         <p class="text-xs font-medium text-muted-foreground">
           Suma cualitativas
@@ -72,6 +83,17 @@ function fmtPuntajeSum(n: number): string {
         </p>
         <p class="mt-1 text-xl font-bold tracking-tight">
           {{ nivelLabel }}
+        </p>
+      </div>
+      <div
+        class="rounded-md border-2 px-3 py-2 transition-colors"
+        :class="riesgoResumenClass"
+      >
+        <p class="text-xs font-medium opacity-90">
+          Nivel de riesgo
+        </p>
+        <p class="mt-1 text-xl font-bold tracking-tight">
+          {{ nivelRiesgoLabel }}
         </p>
       </div>
     </div>

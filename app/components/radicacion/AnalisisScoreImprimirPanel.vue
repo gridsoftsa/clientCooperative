@@ -1,22 +1,23 @@
 <script setup lang="ts">
-import { toast } from 'vue-sonner'
-import { Textarea } from '~/components/ui/textarea'
-import AnalisisScoreResumenIfs from './AnalisisScoreResumenIfs.vue'
-import type { ImprimirMeta, ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
-import { IMPRIMIR_NIVEL_RIESGO_TABLA } from '~/constants/analisis-score-imprimir'
 import type { AnalisisScorePerfilValue } from '~/constants/analisis-score'
+import type { ImprimirMeta, ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
 import type { ScoreMatrixLine } from '~/constants/analisis-score-matrix'
 import type { ScoreMatrixOption } from '~/utils/analisis-score-matrix-options'
+import { toast } from 'vue-sonner'
+import { Textarea } from '~/components/ui/textarea'
+import { IMPRIMIR_NIVEL_RIESGO_TABLA } from '~/constants/analisis-score-imprimir'
+import {
+  classifyNivelRiesgo,
+  classifyPuntajeTotalIFS,
+  sumImprimirPuntajesPorSeccion,
+} from '~/utils/analisis-score-imprimir-totals'
 import {
   buildVariableOptionsFromMatrix,
   EMPLEADO_IMPRIMIR_MATRIX_ALIASES,
   INDEPENDIENTE_IMPRIMIR_MATRIX_ALIASES,
   resolveMatrixVariableKey,
 } from '~/utils/analisis-score-matrix-options'
-import {
-  classifyPuntajeTotalIFS,
-  sumImprimirPuntajesPorSeccion,
-} from '~/utils/analisis-score-imprimir-totals'
+import AnalisisScoreResumenIfs from './AnalisisScoreResumenIfs.vue'
 
 const props = defineProps<{
   variant: 'independiente' | 'empleado'
@@ -33,7 +34,7 @@ const emit = defineEmits<{
   saved: [snapshot: Record<string, unknown> | null]
 }>()
 
-const cabecera = defineModel<{ fecha: string; cedula: string; nombre: string }>('cabecera', {
+const cabecera = defineModel<{ fecha: string, cedula: string, nombre: string }>('cabecera', {
   default: () => ({ fecha: '', cedula: '', nombre: '' }),
 })
 
@@ -111,6 +112,8 @@ function onMatrixOptionChange(row: ImprimirVariableRow, value: string): void {
 const scoreSums = computed(() => sumImprimirPuntajesPorSeccion(filasEditables.value))
 
 const nivelIFS = computed(() => classifyPuntajeTotalIFS(scoreSums.value.total))
+
+const nivelRiesgo = computed(() => classifyNivelRiesgo(scoreSums.value.total))
 
 function fmtPuntajeSum(n: number): string {
   if (Number.isInteger(n)) {
@@ -212,14 +215,17 @@ async function guardarAnalisisScore(): Promise<void> {
         variable_rows: filasEditables.value.map(r => ({ ...r })),
         sums: { ...scoreSums.value },
         nivel_ifs: nivelIFS.value,
+        nivel_riesgo: nivelRiesgo.value,
         observaciones: observaciones.value.trim() === '' ? null : observaciones.value,
       },
     })
     toast.success(res?.message ?? 'Análisis y SCORE guardado correctamente.')
     emit('saved', res?.data?.analisis_score_snapshot ?? null)
-  } catch (e: any) {
+  }
+  catch (e: any) {
     toast.error(e?.data?.message ?? 'No se pudo guardar el análisis SCORE.')
-  } finally {
+  }
+  finally {
     guardandoScore.value = false
   }
 }
