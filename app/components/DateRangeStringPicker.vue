@@ -12,7 +12,7 @@ const props = withDefaults(
     placeholderText?: string
   }>(),
   {
-    label: 'Creada entre fechas',
+    
     placeholderText: 'Elegir rango de fechas',
   },
 )
@@ -87,7 +87,7 @@ function clearRange() {
 
 <template>
   <div class="grid w-full min-w-0 gap-1.5">
-    <Label v-if="label" :for="id" class="text-xs text-muted-foreground">
+    <Label v-if="label" :for="id" class="text-sm text-muted-foreground">
       {{ label }}
     </Label>
     <div class="flex min-w-0 flex-wrap items-center gap-2">
@@ -98,12 +98,12 @@ function clearRange() {
             type="button"
             variant="outline"
             :class="cn(
-              'h-9 w-full min-w-0 max-w-md justify-start text-left font-normal',
+              'h-11 w-full min-w-0 max-w-md justify-start text-left text-base font-normal',
               !hasRange && 'text-muted-foreground',
             )"
             :aria-describedby="popoverId"
           >
-            <CalendarIcon class="mr-2 h-4 w-4 shrink-0" />
+            <CalendarIcon class="mr-2 h-5 w-5 shrink-0" />
             <span class="truncate">{{ buttonLabel }}</span>
           </Button>
         </PopoverTrigger>
