@@ -62,6 +62,11 @@ const templateLabels: Record<string, string> = {
   'plantilla-comercial': 'Plantilla Comercial (Productos)',
   'transporte-carga': 'Transporte de Carga',
   'transporte-pasajeros': 'Transporte de Pasajeros',
+  genero: 'Género (solicitante)',
+  'tipo-documento': 'Tipo de documento (solicitante)',
+  'tipo-vivienda': 'Tipo de vivienda (solicitante)',
+  'actividad-economica': 'Tipo de actividad económica (solicitante)',
+  'estado-civil': 'Estado civil (solicitante)',
 }
 
 function getTemplateLabel(key: string): string {

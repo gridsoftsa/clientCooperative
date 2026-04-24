@@ -119,6 +119,17 @@ export const sectorsConfig: SectorConfig[] = [
       { value: 'plantilla-comercial', label: 'Plantilla Comercial (Productos)' },
     ],
   },
+  {
+    value: 'radicacion',
+    label: 'Radicación',
+    templates: [
+      { value: 'genero', label: 'Género' },
+      { value: 'tipo-documento', label: 'Tipo de documento' },
+      { value: 'tipo-vivienda', label: 'Tipo de vivienda' },
+      { value: 'actividad-economica', label: 'Tipo de actividad económica' },
+      { value: 'estado-civil', label: 'Estado civil' },
+    ],
+  },
 ]
 
 /**

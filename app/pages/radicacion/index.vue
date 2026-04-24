@@ -133,6 +133,20 @@ function formatCurrency(value: number) {
   }).format(value)
 }
 
+function formatCreatedAt(iso: string | null | undefined): string {
+  if (!iso) {
+    return '—'
+  }
+  try {
+    return new Intl.DateTimeFormat('es-CO', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(new Date(iso))
+  } catch {
+    return '—'
+  }
+}
+
 const deactivateSuccess = ref(false)
 const deactivateDialogOpen = ref(false)
 const pendingDeactivateApp = ref<{ id: number } | null>(null)
@@ -334,7 +348,7 @@ watch(deactivateDialogOpen, (v) => {
                 <TableHead>Monto</TableHead>
                 <TableHead>Plazo</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha</TableHead>
+                <TableHead>Fecha y hora</TableHead>
                 <TableHead class="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -360,7 +374,9 @@ watch(deactivateDialogOpen, (v) => {
                     {{ getStatusLabel(app.status) }}
                   </Badge>
                 </TableCell>
-                <TableCell>{{ new Date(app.created_at).toLocaleDateString('es-CO') }}</TableCell>
+                <TableCell class="whitespace-nowrap text-sm tabular-nums">
+                  {{ formatCreatedAt(app.created_at) }}
+                </TableCell>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-1">
                     <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar', 'radicacion_ver']">

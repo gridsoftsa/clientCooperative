@@ -49,33 +49,40 @@ function setFinancial<K extends keyof FinancialInfoForm>(key: K, value: Financia
 }
 
 const { multiselectOptionsByLabel } = useMunicipalities()
-
-const documentTypes = [
+const { options: genderOptions, fetchOptions: fetchGenderOptions } = useGenderCatalogOptions()
+const { options: documentTypeOptions, fetchOptions: fetchDocumentTypeOptions } = useTemplateFlatCatalogOptions('tipo-documento', [
   { value: 'CC', label: 'Cédula de Ciudadanía' },
   { value: 'CE', label: 'Cédula de Extranjería' },
   { value: 'NIT', label: 'NIT' },
-]
-
-const residenceTypes = [
+])
+const { options: residenceTypeOptions, fetchOptions: fetchResidenceTypeOptions } = useTemplateFlatCatalogOptions('tipo-vivienda', [
   { value: 'Propia', label: 'Propia' },
   { value: 'Familiar', label: 'Familiar' },
   { value: 'Arriendo', label: 'Arriendo' },
-]
-
-const maritalStatuses = [
+])
+const { options: maritalStatusOptions, fetchOptions: fetchMaritalStatusOptions } = useTemplateFlatCatalogOptions('estado-civil', [
   { value: 'Soltero', label: 'Soltero(a)' },
   { value: 'Casado', label: 'Casado(a)' },
   { value: 'Union Libre', label: 'Unión Libre' },
   { value: 'Divorciado', label: 'Divorciado(a)' },
   { value: 'Viudo', label: 'Viudo(a)' },
-]
-
-const economicActivityTypes = [
+])
+const { options: economicActivityOptions, fetchOptions: fetchEconomicActivityOptions } = useTemplateFlatCatalogOptions('actividad-economica', [
   { value: 'Empleado formal', label: 'Empleado formal' },
   { value: 'Independiente', label: 'Independiente' },
   { value: 'Pensionado', label: 'Pensionado' },
   { value: 'Otro', label: 'Otro' },
-]
+])
+
+onMounted(() => {
+  void Promise.all([
+    fetchGenderOptions(),
+    fetchDocumentTypeOptions(),
+    fetchResidenceTypeOptions(),
+    fetchMaritalStatusOptions(),
+    fetchEconomicActivityOptions(),
+  ])
+})
 
 const coDebtorConcepts = [
   { value: 'Bien raíz', label: 'Codeudor bien raíz' },
@@ -286,20 +293,22 @@ function formatFileSize(bytes: number): string {
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div :class="fieldClass">
           <Label for="doc_type">Tipo documento *</Label>
-          <Select
-            :model-value="local.document_type"
+          <Multiselect
+            id="doc_type"
+            :model-value="local.document_type ? local.document_type : null"
+            :options="documentTypeOptions"
             :disabled="readonly"
-            @update:model-value="updateField('document_type', String($event ?? ''))"
-          >
-            <SelectTrigger id="doc_type">
-              <SelectValue placeholder="Seleccionar" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="opt in documentTypes" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+            mode="single"
+            value-prop="value"
+            label="label"
+            :searchable="true"
+            :can-clear="false"
+            placeholder="Seleccionar"
+            no-options-text="Sin opciones. Configura «Tipo de documento» en Parametrización → Plantillas."
+            no-results-text="Sin coincidencias"
+            class="multiselect-municipality"
+            @update:model-value="updateField('document_type', ($event != null && $event !== '') ? String($event) : '')"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="doc_number">Número documento *</Label>
@@ -399,30 +408,41 @@ function formatFileSize(bytes: number): string {
         </div>
         <div :class="fieldClass">
           <Label for="gender">Género</Label>
-          <Input
+          <Multiselect
             id="gender"
-            :model-value="local.gender"
-            placeholder="M/F"
+            :model-value="local.gender ? local.gender : null"
+            :options="genderOptions"
             :disabled="readonly"
-            @update:model-value="updateField('gender', String($event ?? ''))"
+            mode="single"
+            value-prop="value"
+            label="label"
+            :searchable="true"
+            :can-clear="true"
+            placeholder="Seleccionar"
+            no-options-text="Sin opciones. Configura «Género» en Parametrización → Plantillas."
+            no-results-text="Sin coincidencias"
+            class="multiselect-municipality"
+            @update:model-value="updateField('gender', ($event != null && $event !== '') ? String($event) : '')"
           />
         </div>
         <div :class="fieldClass">
           <Label for="marital">Estado civil</Label>
-          <Select
-            :model-value="local.marital_status"
+          <Multiselect
+            id="marital"
+            :model-value="local.marital_status ? local.marital_status : null"
+            :options="maritalStatusOptions"
             :disabled="readonly"
-            @update:model-value="updateField('marital_status', String($event ?? ''))"
-          >
-            <SelectTrigger id="marital">
-              <SelectValue placeholder="Seleccionar" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="opt in maritalStatuses" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+            mode="single"
+            value-prop="value"
+            label="label"
+            :searchable="true"
+            :can-clear="true"
+            placeholder="Seleccionar"
+            no-options-text="Sin opciones. Configura «Estado civil» en Parametrización → Plantillas."
+            no-results-text="Sin coincidencias"
+            class="multiselect-municipality"
+            @update:model-value="updateField('marital_status', ($event != null && $event !== '') ? String($event) : '')"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="dependents">Personas a cargo</Label>
@@ -513,20 +533,22 @@ function formatFileSize(bytes: number): string {
         </div>
         <div :class="fieldClass">
           <Label for="residence_type">Tipo vivienda</Label>
-          <Select
-            :model-value="local.residence_type"
+          <Multiselect
+            id="residence_type"
+            :model-value="local.residence_type ? local.residence_type : null"
+            :options="residenceTypeOptions"
             :disabled="readonly"
-            @update:model-value="updateField('residence_type', String($event ?? ''))"
-          >
-            <SelectTrigger id="residence_type">
-              <SelectValue placeholder="Seleccionar" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="opt in residenceTypes" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+            mode="single"
+            value-prop="value"
+            label="label"
+            :searchable="true"
+            :can-clear="true"
+            placeholder="Seleccionar"
+            no-options-text="Sin opciones. Configura «Tipo de vivienda» en Parametrización → Plantillas."
+            no-results-text="Sin coincidencias"
+            class="multiselect-municipality"
+            @update:model-value="updateField('residence_type', ($event != null && $event !== '') ? String($event) : '')"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="time_residence">Tiempo en residencia</Label>
@@ -547,24 +569,22 @@ function formatFileSize(bytes: number): string {
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div :class="fieldClass">
           <Label for="activity_type">Tipo de actividad económica</Label>
-          <Select
-            :model-value="financial.activity_type ?? null"
+          <Multiselect
+            id="activity_type"
+            :model-value="financial.activity_type ? financial.activity_type : null"
+            :options="economicActivityOptions"
             :disabled="readonly"
-            @update:model-value="setFinancial('activity_type', $event != null ? String($event) : undefined)"
-          >
-            <SelectTrigger id="activity_type">
-              <SelectValue placeholder="Seleccionar (ej. Empleado formal)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                v-for="opt in economicActivityTypes"
-                :key="opt.value"
-                :value="opt.value"
-              >
-                {{ opt.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+            mode="single"
+            value-prop="value"
+            label="label"
+            :searchable="true"
+            :can-clear="true"
+            placeholder="Seleccionar (ej. Empleado formal)"
+            no-options-text="Sin opciones. Configura «Tipo de actividad económica» en Parametrización → Plantillas."
+            no-results-text="Sin coincidencias"
+            class="multiselect-municipality"
+            @update:model-value="setFinancial('activity_type', ($event != null && $event !== '') ? String($event) : undefined)"
+          />
         </div>
         <div :class="fieldClass">
           <Label for="occupation">Ocupación</Label>
@@ -714,7 +734,7 @@ function formatFileSize(bytes: number): string {
                     'h-8 w-full text-right',
                     incomeBusinessInputReadonly ? 'cursor-default bg-muted/50' : '',
                   ]"
-                  @keydown="(e) => { if (!incomeBusinessInputReadonly) onKeydownPesosOnly(e) }"
+                  @keydown="(e: KeyboardEvent) => { if (!incomeBusinessInputReadonly) onKeydownPesosOnly(e) }"
                   @update:model-value="(v) => {
                     if (incomeBusinessInputReadonly) return
                     const inc = financial.income || {}

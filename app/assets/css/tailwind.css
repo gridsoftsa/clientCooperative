@@ -126,6 +126,40 @@
   --vis-tooltip-shadow-color: none !important;
   --vis-tooltip-backdrop-filter: none !important;
   --vis-tooltip-padding: none !important;
+
+  /**
+   * @vueform/multiselect — listado suele ir a body; variables base en :root.
+   * Foco/anillo: --primary. Opción elegida y chips: --accent (melocotón en Empresarial).
+   * Hover/pointing en lista: --muted (gris sombreado, alineado al resto de la UI).
+   */
+  --ms-ring-width: 3px;
+  --ms-ring-color: color-mix(in srgb, var(--primary) 32%, transparent);
+  --ms-border-color-active: color-mix(in srgb, var(--primary) 48%, var(--border));
+  --ms-spinner-color: var(--primary);
+  --ms-tag-bg: var(--accent);
+  --ms-tag-color: var(--accent-foreground);
+  --ms-dropdown-bg: var(--popover);
+  --ms-dropdown-border-color: var(--border);
+  --ms-group-label-bg: var(--muted);
+  --ms-group-label-color: var(--muted-foreground);
+  --ms-group-label-bg-pointed: var(--muted);
+  --ms-group-label-color-pointed: var(--foreground);
+  --ms-group-label-bg-selected: var(--accent);
+  --ms-group-label-color-selected: var(--accent-foreground);
+  --ms-group-label-bg-selected-pointed: color-mix(in srgb, var(--accent) 70%, var(--muted));
+  --ms-group-label-color-selected-pointed: var(--accent-foreground);
+  --ms-option-bg-pointed: var(--muted);
+  --ms-option-color-pointed: var(--foreground);
+  --ms-option-bg-selected: var(--accent);
+  --ms-option-color-selected: var(--accent-foreground);
+  --ms-option-bg-selected-pointed: color-mix(in srgb, var(--accent) 70%, var(--muted));
+  --ms-option-color-selected-pointed: var(--accent-foreground);
+  --ms-option-bg-selected-disabled: var(--muted);
+  --ms-option-color-selected-disabled: var(--muted-foreground);
+  --ms-placeholder-color: var(--muted-foreground);
+  --ms-clear-color: var(--muted-foreground);
+  --ms-clear-color-hover: var(--foreground);
+  --ms-caret-color: var(--muted-foreground);
 }
 
 .dark {
@@ -236,11 +270,33 @@ html.dark .multiselect-municipality,
   --ms-spinner-color: var(--primary);
   --ms-dropdown-bg: var(--popover);
   --ms-dropdown-border-color: var(--border);
-  --ms-option-bg-pointed: var(--accent);
-  --ms-option-color-pointed: var(--accent-foreground);
+  --ms-option-bg-pointed: var(--muted);
+  --ms-option-color-pointed: var(--foreground);
   --ms-empty-color: var(--muted-foreground);
-  --ms-group-label-bg: var(--accent);
-  --ms-group-label-color: var(--accent-foreground);
+  --ms-group-label-bg: var(--muted);
+  --ms-group-label-color: var(--muted-foreground);
+}
+
+/* Dropdown teleported a body: tono cálido (--accent) frente al azul (--primary) del foco */
+.multiselect-dropdown .multiselect-option.is-selected {
+  background: var(--accent) !important;
+  color: var(--accent-foreground) !important;
+}
+
+.multiselect-dropdown .multiselect-option.is-selected.is-pointed {
+  background: color-mix(in srgb, var(--accent) 70%, var(--muted)) !important;
+  color: var(--accent-foreground) !important;
+}
+
+/* Hover en lista: gris sombreado (teleport a body; refuerzo por encima del tema del paquete) */
+.multiselect-dropdown .multiselect-option.is-pointed:not(.is-selected) {
+  background: var(--muted) !important;
+  color: var(--foreground) !important;
+}
+
+/* Campo abierto: fondo acento (melocotón en Empresarial). !important gana scoped de componentes. */
+.multiselect.is-open {
+  --ms-bg: var(--accent) !important;
 }
 
 html.dark .multiselect-municipality .multiselect-single-label-text,
@@ -267,10 +323,10 @@ html.dark .multiselect-dropdown .multiselect-option,
   color: var(--popover-foreground);
 }
 
-html.dark .multiselect-dropdown .multiselect-option.is-pointed,
-.dark .multiselect-dropdown .multiselect-option.is-pointed {
-  background: var(--accent) !important;
-  color: var(--accent-foreground) !important;
+html.dark .multiselect-dropdown .multiselect-option.is-pointed:not(.is-selected),
+.dark .multiselect-dropdown .multiselect-option.is-pointed:not(.is-selected) {
+  background: var(--muted) !important;
+  color: var(--popover-foreground) !important;
 }
 
 html.dark .multiselect-dropdown .multiselect-search,

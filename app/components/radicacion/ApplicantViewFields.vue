@@ -79,6 +79,41 @@ const sectionClass = 'space-y-3'
 const sectionTitleClass = 'text-sm font-semibold text-foreground border-b pb-2'
 const fieldClass = 'space-y-1'
 const labelClass = 'text-xs font-medium text-muted-foreground'
+
+const { labelForValue: genderLabel, fetchOptions: fetchGenderOptions } = useGenderCatalogOptions()
+const { labelForValue: documentTypeLabel, fetchOptions: fetchDocumentTypeOptions } = useTemplateFlatCatalogOptions('tipo-documento', [
+  { value: 'CC', label: 'Cédula de Ciudadanía' },
+  { value: 'CE', label: 'Cédula de Extranjería' },
+  { value: 'NIT', label: 'NIT' },
+])
+const { labelForValue: residenceTypeLabel, fetchOptions: fetchResidenceTypeOptions } = useTemplateFlatCatalogOptions('tipo-vivienda', [
+  { value: 'Propia', label: 'Propia' },
+  { value: 'Familiar', label: 'Familiar' },
+  { value: 'Arriendo', label: 'Arriendo' },
+])
+const { labelForValue: maritalStatusLabel, fetchOptions: fetchMaritalStatusOptions } = useTemplateFlatCatalogOptions('estado-civil', [
+  { value: 'Soltero', label: 'Soltero(a)' },
+  { value: 'Casado', label: 'Casado(a)' },
+  { value: 'Union Libre', label: 'Unión Libre' },
+  { value: 'Divorciado', label: 'Divorciado(a)' },
+  { value: 'Viudo', label: 'Viudo(a)' },
+])
+const { labelForValue: economicActivityLabel, fetchOptions: fetchEconomicActivityOptions } = useTemplateFlatCatalogOptions('actividad-economica', [
+  { value: 'Empleado formal', label: 'Empleado formal' },
+  { value: 'Independiente', label: 'Independiente' },
+  { value: 'Pensionado', label: 'Pensionado' },
+  { value: 'Otro', label: 'Otro' },
+])
+
+onMounted(() => {
+  void Promise.all([
+    fetchGenderOptions(),
+    fetchDocumentTypeOptions(),
+    fetchResidenceTypeOptions(),
+    fetchMaritalStatusOptions(),
+    fetchEconomicActivityOptions(),
+  ])
+})
 </script>
 
 <template>
@@ -88,7 +123,7 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div :class="fieldClass">
           <p :class="labelClass">Tipo documento</p>
-          <p>{{ applicant.document_type || '-' }}</p>
+          <p>{{ documentTypeLabel(applicant.document_type) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Número documento</p>
@@ -118,11 +153,11 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Género</p>
-          <p>{{ applicant.gender || '-' }}</p>
+          <p>{{ genderLabel(applicant.gender) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Estado civil</p>
-          <p>{{ applicant.marital_status || '-' }}</p>
+          <p>{{ maritalStatusLabel(applicant.marital_status) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Personas a cargo</p>
@@ -162,7 +197,7 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Tipo vivienda</p>
-          <p>{{ applicant.residence_type || '-' }}</p>
+          <p>{{ residenceTypeLabel(applicant.residence_type) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Tiempo en residencia</p>
@@ -176,7 +211,7 @@ const labelClass = 'text-xs font-medium text-muted-foreground'
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div :class="fieldClass">
           <p :class="labelClass">Tipo actividad</p>
-          <p>{{ financial.activity_type || '-' }}</p>
+          <p>{{ economicActivityLabel(financial.activity_type) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Ocupación</p>

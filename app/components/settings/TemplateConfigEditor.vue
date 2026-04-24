@@ -23,6 +23,10 @@ import {
   CICLO_CORTO_COST_BREAKDOWN_KEY,
 } from '~/constants/cultivo-ciclo-corto-cost-breakdown'
 import { validateTemplateConfigPctSums } from '~/utils/template-config-percent-sums'
+import {
+  isRadicacionOptionCatalogTemplate,
+  RADICACION_OPTION_CATALOG_FIELD_LABELS,
+} from '~/constants/radicacion-catalog-templates'
 
 interface FlatDataRecord {
   id: number
@@ -93,6 +97,9 @@ watch(() => props.record.config_data, (newVal) => {
         : SERVICIOS_PCT_CONTRIBUCION_DEFAULT
     }
   }
+  if (isRadicacionOptionCatalogTemplate(props.record.template_key) && !Array.isArray(editedData.value.options)) {
+    editedData.value.options = []
+  }
 }, { immediate: true })
 
 const schema = computed(() => getTemplateConfigSchema(props.record.template_key))
@@ -158,9 +165,46 @@ function handleSave() {
   if (props.record.template_key === 'servicios') {
     delete data.pct_contribucion_estandar
   }
+  if (isRadicacionOptionCatalogTemplate(props.record.template_key)) {
+    const raw = Array.isArray(data.options) ? data.options : []
+    const cleaned = raw
+      .map((o) => {
+        const row = o as Record<string, unknown>
+        return {
+          value: String(row?.value ?? '').trim(),
+          label: String(row?.label ?? '').trim(),
+        }
+      })
+      .filter(o => o.value !== '' && o.label !== '')
+    if (cleaned.length === 0) {
+      toast.error('Añade al menos una opción con valor y etiqueta.')
+      return
+    }
+    data = { options: cleaned }
+  }
   emit('save', data)
   editing.value = false
 }
+
+function addRadicacionCatalogOption() {
+  if (!Array.isArray(editedData.value.options)) {
+    editedData.value.options = []
+  }
+  (editedData.value.options as Array<{ value: string; label: string }>).push({ value: '', label: '' })
+}
+
+function removeRadicacionCatalogOption(idx: number) {
+  const opts = editedData.value.options
+  if (!Array.isArray(opts)) {
+    return
+  }
+  opts.splice(idx, 1)
+}
+
+const radicacionCatalogFieldTitle = computed(() => {
+  const key = props.record.template_key
+  return isRadicacionOptionCatalogTemplate(key) ? RADICACION_OPTION_CATALOG_FIELD_LABELS[key] : ''
+})
 
 function handleCancel() {
   editedData.value = { ...props.record.config_data }
@@ -219,8 +263,61 @@ function handleCancel() {
       </AlertDescription>
     </Alert>
 
+    <!-- Catálogos listados (radicación): valor / etiqueta -->
+    <div v-if="isRadicacionOptionCatalogTemplate(record.template_key)" class="space-y-3">
+      <p class="text-sm text-muted-foreground">
+        Opciones del campo «{{ radicacionCatalogFieldTitle }}» en radicación. El <span class="font-medium text-foreground">valor</span> es el que se guarda; la <span class="font-medium text-foreground">etiqueta</span> es la que ve el usuario.
+      </p>
+      <div class="overflow-x-auto rounded-md border bg-background">
+        <div class="grid min-w-[20rem] grid-cols-[1fr_1fr_auto] gap-2 border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+          <span>Valor</span>
+          <span>Etiqueta</span>
+          <span v-if="editing && canEdit" class="w-9 shrink-0" />
+        </div>
+        <div
+          v-for="(opt, idx) in (Array.isArray(editedData.options) ? editedData.options : [])"
+          :key="idx"
+          class="grid min-w-[20rem] grid-cols-[1fr_1fr_auto] items-center gap-2 border-b px-3 py-2 last:border-b-0"
+        >
+          <Input
+            v-model="opt.value"
+            class="h-9"
+            :disabled="!editing || !canEdit"
+            placeholder="Ej: M"
+          />
+          <Input
+            v-model="opt.label"
+            class="h-9"
+            :disabled="!editing || !canEdit"
+            placeholder="Ej: Masculino"
+          />
+          <Button
+            v-if="editing && canEdit"
+            type="button"
+            variant="ghost"
+            size="icon"
+            class="shrink-0"
+            :aria-label="`Eliminar opción ${idx + 1}`"
+            @click="removeRadicacionCatalogOption(idx)"
+          >
+            <Icon name="i-lucide-trash-2" class="size-4" />
+          </Button>
+        </div>
+      </div>
+      <Button
+        v-if="editing && canEdit"
+        type="button"
+        variant="outline"
+        size="sm"
+        @click="addRadicacionCatalogOption"
+      >
+        <Icon name="i-lucide-plus" class="mr-1 size-4" />
+        Añadir opción
+      </Button>
+    </div>
+
     <!-- Con schema (ganado-ceba, etc.): orden, tipos, fórmula -->
-    <template v-if="schema">
+    <template v-else-if="schema">
       <template v-for="section in schema.sections" :key="section.key">
         <!-- Tabla desglose de costos (aves-ponedoras) -->
         <div v-if="section.layout === 'avesCostBreakdownTable'" class="space-y-3">
@@ -343,8 +440,8 @@ function handleCancel() {
       </template>
     </template>
 
-    <!-- Sin schema: fallback genérico -->
-    <div v-else class="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-end">
+    <!-- Sin schema: fallback genérico (no aplica a catálogos de opciones de radicación) -->
+    <div v-else-if="!isRadicacionOptionCatalogTemplate(record.template_key)" class="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-end">
       <div
         v-for="[key, value] in visibleConfigEntries"
         :key="key"
