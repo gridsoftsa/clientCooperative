@@ -8,6 +8,7 @@ import {
 } from '~/constants/credits-financial-templates'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 import { parseActivityTemplateList } from '~/types/credit-application'
+import { mergeApplicantFromApi } from '~/utils/merge-applicant-search'
 
 definePageMeta({
   layout: 'default',
@@ -77,6 +78,25 @@ const steps = computed(() => (addingCodeudor.value ? stepsCodeudor : stepsDeudor
 const maxStep = computed(() => steps.value.length)
 
 const canEdit = computed(() => application.value?.status === 'Draft')
+
+/** Última vez que la solicitud se guardó en el servidor (borrador abierto). */
+function formatRadicacionLastSaved(iso: string | null | undefined): string {
+  if (iso == null || iso === '') return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return new Intl.DateTimeFormat('es-CO', {
+    dateStyle: 'long',
+    timeStyle: 'short',
+    timeZone: 'America/Bogota',
+  }).format(d)
+}
+
+const radicacionLastEditedLabel = computed(() => {
+  if (!application.value || application.value.status !== 'Draft') return ''
+  const raw = application.value.updated_at ?? application.value.created_at
+  if (raw == null || raw === '') return ''
+  return formatRadicacionLastSaved(typeof raw === 'string' ? raw : String(raw))
+})
 
 const { formatPesos, parsePesosInput, onKeydownPesosOnly } = usePesosFormat()
 
@@ -308,14 +328,7 @@ async function searchApplicant() {
       { query: { document_number: doc } },
     )
     if (res.found && res.data) {
-      const d = res.data as unknown as Record<string, unknown>
-      const residenceName = (d.residence_city_name as string) || (d.residence_city as { name?: string } | null)?.name || ''
-      form.value.debtor = {
-        ...form.value.debtor,
-        ...res.data,
-        document_number: res.data.document_number,
-        residence_city_name: residenceName,
-      }
+      mergeApplicantFromApi(form.value.debtor, res.data)
       toast.success('Solicitante encontrado. Revisa y completa los datos.')
     } else {
       toast.info('No encontrado. Completa el formulario con los datos del solicitante.')
@@ -733,6 +746,19 @@ onMounted(() => {
     </div>
 
     <template v-else-if="application && canEdit">
+      <div
+        v-if="radicacionLastEditedLabel"
+        class="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/35 px-3 py-2.5 text-sm text-muted-foreground"
+        role="status"
+      >
+        <Icon name="i-lucide-history" class="h-4 w-4 shrink-0 text-foreground/70" aria-hidden="true" />
+        <span>
+          <span class="font-medium text-foreground">Última modificación guardada:</span>
+          {{ radicacionLastEditedLabel }}
+          <span class="text-xs">(hora Colombia)</span>
+        </span>
+      </div>
+
       <div class="rounded-xl border bg-card p-4">
         <div class="space-y-1.5 max-w-2xl">
           <Label for="numero_radicado_externo" class="text-sm font-semibold">

@@ -27,6 +27,11 @@ export interface Applicant {
   position?: string | null
   contract_type?: string | null
   time_in_job?: string | null
+  /**
+   * Fragmento del último `financial_info` en radicación (p. ej. activity_type).
+   * No incluye ingresos/gastos completos.
+   */
+  financial_info?: { activity_type?: string | null } | null
   created_at: string
   updated_at: string
   /** Tipo de última participación: 'deudor' | 'codeudor' | null */

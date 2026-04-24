@@ -22,6 +22,7 @@ const form = ref<ApplicantForm>({
   document_number: '',
   first_name: '',
   first_last_name: '',
+  financial_info: {},
 })
 
 const applicant = ref<Applicant | null>(null)
@@ -58,6 +59,10 @@ function applicantToForm(a: Applicant): ApplicantForm {
     position: a.position ?? '',
     contract_type: a.contract_type ?? '',
     time_in_job: a.time_in_job ?? '',
+    financial_info: {
+      ...(typeof a.financial_info === 'object' && a.financial_info ? a.financial_info : {}),
+      activity_type: a.financial_info?.activity_type ?? undefined,
+    },
   }
 }
 
@@ -90,6 +95,12 @@ function formToPayload(): Record<string, unknown> {
     position: f.position || null,
     contract_type: f.contract_type || null,
     time_in_job: f.time_in_job || null,
+    financial_info: {
+      activity_type:
+        f.financial_info?.activity_type != null && String(f.financial_info.activity_type).trim() !== ''
+          ? String(f.financial_info.activity_type).trim()
+          : null,
+    },
   }
 }
 

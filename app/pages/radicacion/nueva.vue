@@ -10,6 +10,7 @@ import {
   useAutoSaveCreditApplication,
 } from '~/composables/useAutoSaveCreditApplication'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
+import { mergeApplicantFromApi } from '~/utils/merge-applicant-search'
 
 definePageMeta({
   layout: 'default',
@@ -91,17 +92,6 @@ async function fetchCatalogs() {
   }
 }
 
-function mergeApplicantFromApi(target: ApplicantForm, data: ApplicantForm | null | undefined): void {
-  if (!data) return
-  const d = data as unknown as Record<string, unknown>
-  const residenceName = (d.residence_city_name as string) || (d.residence_city as { name?: string } | null)?.name || ''
-  Object.assign(target, {
-    ...data,
-    document_number: data.document_number,
-    residence_city_name: residenceName,
-    documents: target.documents ?? [],
-  })
-}
 
 async function searchApplicant() {
   const doc = form.value.debtor.document_number?.trim()
