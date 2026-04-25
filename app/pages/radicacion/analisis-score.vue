@@ -38,6 +38,7 @@ import {
   sumImprimirPuntajesPorSeccion,
 } from '~/utils/analisis-score-imprimir-totals'
 import { totalIngresosRadicacionFormatted } from '~/utils/radicacion-financial-totals'
+import { aplicarEgresosCapacidadBloqueDesdeFinancialInfo } from '~/utils/radicacion-financial-egresos'
 import type { Company } from '~/types/company'
 
 type ScoreMatricesApiResponse = {
@@ -236,6 +237,20 @@ function aplicarIngresosCapacidadDesdeRadicacion(data: Record<string, unknown>):
   e.capacidadBloque1.b.ingresos = co[0] ? totalIngresosRadicacionFormatted(co[0].financial_info) : ''
   e.capacidadBloque2.a.ingresos = co[1] ? totalIngresosRadicacionFormatted(co[1].financial_info) : ''
   e.capacidadBloque2.b.ingresos = co[2] ? totalIngresosRadicacionFormatted(co[2].financial_info) : ''
+}
+
+/**
+ * Egresos / descripción de gastos: mismo desglose que el paso 3 (tabla de gastos) de radicación.
+ * Prioriza la solicitud actual, no un snapshot.
+ */
+function aplicarEgresosCapacidadDesdeRadicacion(data: Record<string, unknown>): void {
+  const e = emergenciaState.value
+  const debtor = data.debtor as Record<string, unknown> | null | undefined
+  aplicarEgresosCapacidadBloqueDesdeFinancialInfo(e.capacidadBloque1.a, debtor?.financial_info ?? null)
+  const co = pickCoDebtorRowsFromSolicitudData(data)
+  aplicarEgresosCapacidadBloqueDesdeFinancialInfo(e.capacidadBloque1.b, co[0]?.financial_info ?? null)
+  aplicarEgresosCapacidadBloqueDesdeFinancialInfo(e.capacidadBloque2.a, co[1]?.financial_info ?? null)
+  aplicarEgresosCapacidadBloqueDesdeFinancialInfo(e.capacidadBloque2.b, co[2]?.financial_info ?? null)
 }
 
 function aplicarMontoYPlazoCreditoDesdeSolicitud(data: Record<string, unknown>): void {
@@ -487,6 +502,7 @@ async function loadSolicitudParaAnalisis(id: string): Promise<void> {
     }
     aplicarMontoYPlazoCreditoDesdeSolicitud(data)
     aplicarIngresosCapacidadDesdeRadicacion(data)
+    aplicarEgresosCapacidadDesdeRadicacion(data)
     aplicarCabeceraALineaEmergenciaDeudor()
     sincronizarGarantiaConPlantilla()
     sincronizarTasaEfectivaDesdeNominal()
@@ -887,6 +903,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
           <AnalisisEmergenciaForm
             v-model="emergenciaState"
             :lock-deudor-fields="true"
+            :lock-gastos-desde-radicacion="true"
             :lock-vr-cuota-var="isVrCuotaVarBloqueada"
             :company="companyPrincipal"
             :loading-company="loadingCompany"

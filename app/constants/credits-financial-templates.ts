@@ -128,9 +128,40 @@ export const sectorsConfig: SectorConfig[] = [
       { value: 'tipo-vivienda', label: 'Tipo de vivienda' },
       { value: 'actividad-economica', label: 'Tipo de actividad económica' },
       { value: 'estado-civil', label: 'Estado civil' },
+      { value: 'bancos', label: 'Bancos' },
     ],
   },
 ]
+
+const SECTOR_RADICACION_KEY = 'radicacion'
+
+/** Plantillas agrupadas bajo «Análisis y Score» en /parametrizacion/radicacion. */
+const RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES = new Set<string>(['bancos'])
+
+/** Plantillas de actividad agro/transporte/… (parametrización /plantillas), sin el bloque de catálogos de radicación. */
+export function sectorsForParametrizacionPlantillas(): SectorConfig[] {
+  return sectorsConfig.filter(s => s.value !== SECTOR_RADICACION_KEY)
+}
+
+/**
+ * Parametrización de radicación: dos bloques en el panel — solicitante y Análisis y Score (p. ej. bancos).
+ */
+export function sectorsForParametrizacionRadicacion(): SectorConfig[] {
+  const r = sectorsConfig.find(s => s.value === SECTOR_RADICACION_KEY)
+  if (!r) {
+    return []
+  }
+  const solicitanteTemplates = r.templates.filter(
+    t => !RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES.has(t.value),
+  )
+  const analisisTemplates = r.templates.filter(
+    t => RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES.has(t.value),
+  )
+  return [
+    { value: SECTOR_RADICACION_KEY, label: 'Solicitante', templates: solicitanteTemplates },
+    { value: 'radicacion-analisis-score', label: 'Análisis y Score', templates: analisisTemplates },
+  ]
+}
 
 /**
  * Ganancia mensual máxima de referencia (kg/mes) para la cantidad calculada en ganado ceba.

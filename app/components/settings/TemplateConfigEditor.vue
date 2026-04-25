@@ -170,14 +170,17 @@ function handleSave() {
     const cleaned = raw
       .map((o) => {
         const row = o as Record<string, unknown>
-        return {
-          value: String(row?.value ?? '').trim(),
-          label: String(row?.label ?? '').trim(),
-        }
+        const label = String(row?.label ?? '').trim()
+        let value = String(row?.value ?? '').trim()
+        if (label === '')
+          return null
+        if (value === '')
+          value = label
+        return { value, label }
       })
-      .filter(o => o.value !== '' && o.label !== '')
+      .filter((o): o is { value: string, label: string } => o != null)
     if (cleaned.length === 0) {
-      toast.error('Añade al menos una opción con valor y etiqueta.')
+      toast.error('Añade al menos una opción con texto.')
       return
     }
     data = { options: cleaned }
@@ -206,8 +209,47 @@ const radicacionCatalogFieldTitle = computed(() => {
   return isRadicacionOptionCatalogTemplate(key) ? RADICACION_OPTION_CATALOG_FIELD_LABELS[key] : ''
 })
 
+/** Filtro local solo en parametrización de bancos (lista larga). */
+const bancosCatalogSearch = ref('')
+
+watch(
+  () => props.record.template_key,
+  () => {
+    bancosCatalogSearch.value = ''
+  },
+)
+
+const radicacionCatalogDisplayRows = computed(() => {
+  const opts = Array.isArray(editedData.value.options)
+    ? (editedData.value.options as Array<{ value: string, label: string }>)
+    : []
+  const key = props.record.template_key
+  const rows = opts.map((opt, index) => ({ opt, index }))
+  if (key !== 'bancos') {
+    return rows
+  }
+  const q = bancosCatalogSearch.value.trim().toLowerCase()
+  if (q === '') {
+    return rows
+  }
+  return rows.filter(({ opt }) => {
+    const label = String(opt?.label ?? '').toLowerCase()
+    const value = String(opt?.value ?? '').toLowerCase()
+    return label.includes(q) || value.includes(q)
+  })
+})
+
+const bancosSearchHasNoResults = computed(() => {
+  if (props.record.template_key !== 'bancos' || bancosCatalogSearch.value.trim() === '') {
+    return false
+  }
+  const total = Array.isArray(editedData.value.options) ? editedData.value.options.length : 0
+  return total > 0 && radicacionCatalogDisplayRows.value.length === 0
+})
+
 function handleCancel() {
   editedData.value = { ...props.record.config_data }
+  bancosCatalogSearch.value = ''
   editing.value = false
 }
 </script>
@@ -263,45 +305,66 @@ function handleCancel() {
       </AlertDescription>
     </Alert>
 
-    <!-- Catálogos listados (radicación): valor / etiqueta -->
+    <!-- Catálogos (radicación): una columna, mismo texto que en el desplegable -->
     <div v-if="isRadicacionOptionCatalogTemplate(record.template_key)" class="space-y-3">
       <p class="text-sm text-muted-foreground">
-        Opciones del campo «{{ radicacionCatalogFieldTitle }}» en radicación. El <span class="font-medium text-foreground">valor</span> es el que se guarda; la <span class="font-medium text-foreground">etiqueta</span> es la que ve el usuario.
+        Mismo texto que aparece en el desplegable de «{{ radicacionCatalogFieldTitle }}» al radicar.
       </p>
+      <div
+        v-if="record.template_key === 'bancos'"
+        class="relative"
+      >
+        <Icon
+          name="i-lucide-search"
+          class="pointer-events-none absolute left-2.5 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
+          v-model="bancosCatalogSearch"
+          type="search"
+          class="h-9 pl-9"
+          placeholder="Buscar banco…"
+          autocomplete="off"
+        />
+      </div>
       <div class="overflow-x-auto rounded-md border bg-background">
-        <div class="grid min-w-[20rem] grid-cols-[1fr_1fr_auto] gap-2 border-b px-3 py-2 text-xs font-medium text-muted-foreground">
-          <span>Valor</span>
-          <span>Etiqueta</span>
+        <div
+          class="grid min-w-[12rem] grid-cols-[1fr_auto] gap-2 border-b bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground"
+        >
+          <span>Texto en el formulario de radicación</span>
           <span v-if="editing && canEdit" class="w-9 shrink-0" />
         </div>
         <div
-          v-for="(opt, idx) in (Array.isArray(editedData.options) ? editedData.options : [])"
-          :key="idx"
-          class="grid min-w-[20rem] grid-cols-[1fr_1fr_auto] items-center gap-2 border-b px-3 py-2 last:border-b-0"
+          :class="record.template_key === 'bancos' ? 'max-h-[min(24rem,70vh)] overflow-y-auto overscroll-contain' : ''"
         >
-          <Input
-            v-model="opt.value"
-            class="h-9"
-            :disabled="!editing || !canEdit"
-            placeholder="Ej: M"
-          />
-          <Input
-            v-model="opt.label"
-            class="h-9"
-            :disabled="!editing || !canEdit"
-            placeholder="Ej: Masculino"
-          />
-          <Button
-            v-if="editing && canEdit"
-            type="button"
-            variant="ghost"
-            size="icon"
-            class="shrink-0"
-            :aria-label="`Eliminar opción ${idx + 1}`"
-            @click="removeRadicacionCatalogOption(idx)"
+          <div
+            v-for="{ opt, index: idx } in radicacionCatalogDisplayRows"
+            :key="idx"
+            class="grid min-w-[12rem] grid-cols-[1fr_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
           >
-            <Icon name="i-lucide-trash-2" class="size-4" />
-          </Button>
+            <Input
+              v-model="opt.label"
+              class="h-9"
+              :disabled="!editing || !canEdit"
+              :placeholder="record.template_key === 'bancos' ? 'Nombre del banco' : 'Ej.: Masculino'"
+            />
+            <Button
+              v-if="editing && canEdit"
+              type="button"
+              variant="ghost"
+              size="icon"
+              class="shrink-0"
+              :aria-label="`Eliminar opción ${idx + 1}`"
+              @click="removeRadicacionCatalogOption(idx)"
+            >
+              <Icon name="i-lucide-trash-2" class="size-4" />
+            </Button>
+          </div>
+          <p
+            v-if="bancosSearchHasNoResults"
+            class="px-3 py-6 text-center text-sm text-muted-foreground"
+          >
+            Ningún banco coincide con la búsqueda. Borra el filtro o prueba otras letras.
+          </p>
         </div>
       </div>
       <Button

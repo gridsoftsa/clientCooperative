@@ -11,12 +11,22 @@ export type EmergenciaCapacidadBloque = {
   otrosIngresos: string
   totalIngresos: string
   cuotasFin: EmergenciaCuotaLine[]
+  /** Gastos personales / alimentación / otros — mismo criterio que paso 3 radicación (`expenses`). */
   gastoPersonal: string
+  /** `expenses.rent` — Gastos servicios/arriendo (un solo valor en radicación). */
+  gastosServiciosArriendo: string
+  /** @deprecated Legado; vaciar al sincronizar desde radicación. */
   arriendo: string
   alimentacion: string
+  /** @deprecated Legado; vaciar al sincronizar desde radicación. */
   serviciosPublicos: string
+  gastoSalud: string
+  gastoPension: string
+  gastoArl: string
   otrosGastos: string
   totalEgresos: string
+  /** `expenses.description` en radicación. */
+  egresosDescripcion: string
   ingDisponibles: string
   reservaSobreIngreso: string
   valorCuota: string
@@ -98,13 +108,18 @@ function emptyCapacidad(): EmergenciaCapacidadBloque {
     ingresos: '',
     otrosIngresos: '',
     totalIngresos: '',
-    cuotasFin: Array.from({ length: 5 }, () => ({ cuota: '', entidad: '' })),
+    cuotasFin: [{ cuota: '', entidad: '' }],
     gastoPersonal: '',
+    gastosServiciosArriendo: '',
     arriendo: '',
     alimentacion: '',
     serviciosPublicos: '',
+    gastoSalud: '',
+    gastoPension: '',
+    gastoArl: '',
     otrosGastos: '',
     totalEgresos: '',
+    egresosDescripcion: '',
     ingDisponibles: '',
     reservaSobreIngreso: '',
     valorCuota: '',
@@ -219,6 +234,17 @@ function deepMerge<T>(base: T, patch: unknown): T {
   return patch as T
 }
 
+function ensureCuotasFinMinimo(b: EmergenciaCapacidadBloque) {
+  if (!Array.isArray(b.cuotasFin) || b.cuotasFin.length === 0) {
+    b.cuotasFin = [{ cuota: '', entidad: '' }]
+  }
+}
+
 export function mergeEmergenciaFromSnapshot(saved: unknown): EmergenciaState {
-  return deepMerge(defaultEmergenciaState(), saved) as EmergenciaState
+  const merged = deepMerge(defaultEmergenciaState(), saved) as EmergenciaState
+  ensureCuotasFinMinimo(merged.capacidadBloque1.a)
+  ensureCuotasFinMinimo(merged.capacidadBloque1.b)
+  ensureCuotasFinMinimo(merged.capacidadBloque2.a)
+  ensureCuotasFinMinimo(merged.capacidadBloque2.b)
+  return merged
 }

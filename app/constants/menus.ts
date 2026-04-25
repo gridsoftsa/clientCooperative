@@ -53,6 +53,12 @@ export const navMenu: NavMenu[] = [
             permission: 'plantillas_ver',
           },
           {
+            title: 'Radicación',
+            icon: 'i-lucide-file-text',
+            link: '/parametrizacion/radicacion',
+            permission: 'plantillas_ver',
+          },
+          {
             title: 'Plantilla Score',
             icon: 'i-lucide-file-spreadsheet',
             link: '/parametrizacion/plantilla-score',

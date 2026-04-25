@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { Company } from '~/types/company'
-import type { EmergenciaCapacidadBloque, EmergenciaState } from '~/constants/analisis-score-emergencia'
+import type { EmergenciaCapacidadBloque, EmergenciaCuotaLine, EmergenciaState } from '~/constants/analisis-score-emergencia'
 import { EMERGENCIA_FORM_META } from '~/constants/analisis-score-emergencia'
 import { cn } from '@/lib/utils'
 import Multiselect from '@vueform/multiselect'
 import { filterPesosChars, formatPesos, onKeydownPesosOnly, parsePesosInput } from '~/composables/usePesosFormat'
 import { formatMontoCopVista, parseMontoCop } from '~/utils/analisis-emergencia-cuota'
+import AnalisisEmergenciaGastosRadicacionFields from '~/components/radicacion/AnalisisEmergenciaGastosRadicacionFields.vue'
 
 const state = defineModel<EmergenciaState>({ required: true })
 
@@ -58,6 +59,8 @@ const tituloSubseccionCapacidadBloque2 = computed(() => {
 const props = withDefaults(
   defineProps<{
     lockDeudorFields?: boolean
+    /** Gastos/egresos alineados al paso 3 de radicación: solo lectura (análisis-score). */
+    lockGastosDesdeRadicacion?: boolean
     /** Si el paso 1 eligió Corriente/Emergencia, Vr. cuota var. es fórmula (solo lectura). */
     lockVrCuotaVar?: boolean
     company?: Company | null
@@ -67,7 +70,7 @@ const props = withDefaults(
     /** Características Garantía (Cualitativas) desde plantilla SCORE, según perfil. */
     opcionesGarantia?: string[]
   }>(),
-  { lockDeudorFields: true, lockVrCuotaVar: false, company: null, loadingCompany: false, codeudores: () => [], opcionesGarantia: () => [] },
+  { lockDeudorFields: true, lockGastosDesdeRadicacion: false, lockVrCuotaVar: false, company: null, loadingCompany: false, codeudores: () => [], opcionesGarantia: () => [] },
 )
 
 const deudorReadonlyClass = 'cursor-default bg-muted/50 text-foreground read-only:opacity-100'
@@ -133,6 +136,17 @@ function onOtrosIngresosModelUpdate(b: EmergenciaCapacidadBloque, v: string) {
   b.otrosIngresos = n === undefined ? raw : formatPesos(n)
 }
 
+/** Mismo criterio que «Otros ingresos» (formato COP, miles/decimales). */
+function onCuotaFinPesosModelUpdate(line: EmergenciaCuotaLine, v: string) {
+  const raw = filterPesosChars(String(v))
+  if (!raw.trim()) {
+    line.cuota = ''
+    return
+  }
+  const n = parsePesosInput(raw)
+  line.cuota = n === undefined ? raw : formatPesos(n)
+}
+
 function syncTotalIngresosBloque(b: EmergenciaCapacidadBloque) {
   const sum = parsePesosFlexible(b.ingresos) + parsePesosFlexible(b.otrosIngresos)
   if (sum === 0 && !String(b.ingresos ?? '').trim() && !String(b.otrosIngresos ?? '').trim()) {
@@ -167,6 +181,36 @@ watch(
   },
   { flush: 'post', immediate: true },
 )
+
+const { options: bancosOptions, fetchOptions: fetchBancosOptions } = useBancosCatalogOptions()
+
+onMounted(() => {
+  void fetchBancosOptions()
+})
+
+/** Incluye el valor guardado aunque sea texto legado o no esté en el catálogo. */
+function bancoOptionsForLine(line: EmergenciaCuotaLine) {
+  const list = bancosOptions.value
+  const v = (line.entidad ?? '').trim()
+  if (!v) {
+    return list
+  }
+  if (list.some(o => o.value === v)) {
+    return list
+  }
+  return [{ value: v, label: v }, ...list]
+}
+
+function addCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque) {
+  b.cuotasFin.push({ cuota: '', entidad: '' })
+}
+
+function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: number) {
+  if (b.cuotasFin.length <= 1) {
+    return
+  }
+  b.cuotasFin.splice(index, 1)
+}
 </script>
 
 <template>
@@ -506,45 +550,81 @@ watch(
                 title="Suma de Ingresos y Otros ingresos. No editable."
               />
             </div>
-            <p class="pt-1 text-xs font-medium text-muted-foreground">
-              Cuota entidades financieras
-            </p>
-            <div
-              v-for="(line, i) in state.capacidadBloque1[side.key].cuotasFin"
-              :key="`c1q-${side.key}-${i}`"
-              class="grid grid-cols-2 gap-2"
-            >
-              <Input v-model="line.cuota" class="h-8 font-mono" placeholder="Cuota" />
-              <Input v-model="line.entidad" class="h-8" placeholder="Entidad" />
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <Label class="text-xs">Gasto personal</Label>
-                <Input v-model="state.capacidadBloque1[side.key].gastoPersonal" class="h-8 font-mono" />
+            <div class="space-y-2">
+              <p class="pt-1 text-xs font-medium text-muted-foreground">
+                Cuota entidades financieras
+              </p>
+              <div
+                v-for="(line, i) in state.capacidadBloque1[side.key].cuotasFin"
+                :key="`c1q-${side.key}-${i}`"
+                class="space-y-2 rounded-md border border-border/70 bg-background p-2"
+              >
+                <div class="grid grid-cols-1 items-end gap-2 sm:grid-cols-2 sm:items-end">
+                  <div class="min-w-0 space-y-1">
+                    <Label :for="`c1q-e-${side.key}-${i}`" class="text-xs font-medium">Entidad</Label>
+                    <Multiselect
+                      :id="`c1q-e-${side.key}-${i}`"
+                      :model-value="line.entidad ? line.entidad : null"
+                      :options="bancoOptionsForLine(line)"
+                      mode="single"
+                      value-prop="value"
+                      label="label"
+                      :searchable="true"
+                      :can-clear="true"
+                      :append-to-body="true"
+                      :close-on-scroll="true"
+                      placeholder="Seleccionar banco"
+                      no-options-text="Sin opciones. Configura bancos en Parametrización → Radicación."
+                      no-results-text="Sin coincidencias"
+                      class="multiselect-entidad-banco w-full"
+                      @update:model-value="line.entidad = ($event != null && $event !== '') ? String($event) : ''"
+                    />
+                  </div>
+                  <div class="min-w-0 space-y-1">
+                    <Label :for="`c1q-c-${side.key}-${i}`" class="text-xs font-medium">Cuota</Label>
+                    <Input
+                      :id="`c1q-c-${side.key}-${i}`"
+                      :model-value="displayPesosStored(line.cuota)"
+                      type="text"
+                      inputmode="decimal"
+                      class="h-8 w-full bg-background text-right font-mono"
+                      placeholder="0"
+                      @keydown="onKeydownPesosOnly"
+                      @update:model-value="onCuotaFinPesosModelUpdate(line, $event != null ? String($event) : '')"
+                    />
+                  </div>
+                </div>
+                <div
+                  v-if="state.capacidadBloque1[side.key].cuotasFin.length > 1"
+                  class="flex justify-end"
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="h-7 text-xs"
+                    @click="removeCuotaEntidadFinanciera(state.capacidadBloque1[side.key], i)"
+                  >
+                    <Icon name="i-lucide-trash-2" class="mr-1 h-3.5 w-3.5" />
+                    Quitar
+                  </Button>
+                </div>
               </div>
-              <div>
-                <Label class="text-xs">Arriendo</Label>
-                <Input v-model="state.capacidadBloque1[side.key].arriendo" class="h-8 font-mono" />
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="h-8 gap-1.5 text-xs"
+                @click="addCuotaEntidadFinanciera(state.capacidadBloque1[side.key])"
+              >
+                <Icon name="i-lucide-plus" class="h-3.5 w-3.5" />
+                Agregar
+              </Button>
             </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <Label class="text-xs">Alimentación</Label>
-                <Input v-model="state.capacidadBloque1[side.key].alimentacion" class="h-8 font-mono" />
-              </div>
-              <div>
-                <Label class="text-xs">Servicios p.</Label>
-                <Input v-model="state.capacidadBloque1[side.key].serviciosPublicos" class="h-8 font-mono" />
-              </div>
-            </div>
-            <div>
-              <Label class="text-xs">Otros gastos</Label>
-              <Input v-model="state.capacidadBloque1[side.key].otrosGastos" class="h-8 font-mono" />
-            </div>
-            <div>
-              <Label class="text-xs">Total egresos</Label>
-              <Input v-model="state.capacidadBloque1[side.key].totalEgresos" class="h-8 font-mono" />
-            </div>
+            <AnalisisEmergenciaGastosRadicacionFields
+              :bloque="state.capacidadBloque1[side.key]"
+              :lock="lockGastosDesdeRadicacion"
+            />
             <div>
               <Label class="text-xs">Ingresos disponibles</Label>
               <Input v-model="state.capacidadBloque1[side.key].ingDisponibles" class="h-8 font-mono" />
@@ -631,45 +711,81 @@ watch(
                 title="Suma de Ingresos y Otros ingresos. No editable."
               />
             </div>
-            <p class="pt-1 text-xs font-medium text-muted-foreground">
-              Cuota entidades financieras
-            </p>
-            <div
-              v-for="(line, i) in state.capacidadBloque2[side.key].cuotasFin"
-              :key="`c2q-${side.key}-${i}`"
-              class="grid grid-cols-2 gap-2"
-            >
-              <Input v-model="line.cuota" class="h-8 font-mono" placeholder="Cuota" />
-              <Input v-model="line.entidad" class="h-8" placeholder="Entidad" />
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <Label class="text-xs">Gasto personal</Label>
-                <Input v-model="state.capacidadBloque2[side.key].gastoPersonal" class="h-8 font-mono" />
+            <div class="space-y-2">
+              <p class="pt-1 text-xs font-medium text-muted-foreground">
+                Cuota entidades financieras
+              </p>
+              <div
+                v-for="(line, i) in state.capacidadBloque2[side.key].cuotasFin"
+                :key="`c2q-${side.key}-${i}`"
+                class="space-y-2 rounded-md border border-border/70 bg-background p-2"
+              >
+                <div class="grid grid-cols-1 items-end gap-2 sm:grid-cols-2 sm:items-end">
+                  <div class="min-w-0 space-y-1">
+                    <Label :for="`c2q-e-${side.key}-${i}`" class="text-xs font-medium">Entidad</Label>
+                    <Multiselect
+                      :id="`c2q-e-${side.key}-${i}`"
+                      :model-value="line.entidad ? line.entidad : null"
+                      :options="bancoOptionsForLine(line)"
+                      mode="single"
+                      value-prop="value"
+                      label="label"
+                      :searchable="true"
+                      :can-clear="true"
+                      :append-to-body="true"
+                      :close-on-scroll="true"
+                      placeholder="Seleccionar banco"
+                      no-options-text="Sin opciones. Configura bancos en Parametrización → Radicación."
+                      no-results-text="Sin coincidencias"
+                      class="multiselect-entidad-banco w-full"
+                      @update:model-value="line.entidad = ($event != null && $event !== '') ? String($event) : ''"
+                    />
+                  </div>
+                  <div class="min-w-0 space-y-1">
+                    <Label :for="`c2q-c-${side.key}-${i}`" class="text-xs font-medium">Cuota</Label>
+                    <Input
+                      :id="`c2q-c-${side.key}-${i}`"
+                      :model-value="displayPesosStored(line.cuota)"
+                      type="text"
+                      inputmode="decimal"
+                      class="h-8 w-full bg-background text-right font-mono"
+                      placeholder="0"
+                      @keydown="onKeydownPesosOnly"
+                      @update:model-value="onCuotaFinPesosModelUpdate(line, $event != null ? String($event) : '')"
+                    />
+                  </div>
+                </div>
+                <div
+                  v-if="state.capacidadBloque2[side.key].cuotasFin.length > 1"
+                  class="flex justify-end"
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="h-7 text-xs"
+                    @click="removeCuotaEntidadFinanciera(state.capacidadBloque2[side.key], i)"
+                  >
+                    <Icon name="i-lucide-trash-2" class="mr-1 h-3.5 w-3.5" />
+                    Quitar
+                  </Button>
+                </div>
               </div>
-              <div>
-                <Label class="text-xs">Arriendo</Label>
-                <Input v-model="state.capacidadBloque2[side.key].arriendo" class="h-8 font-mono" />
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="h-8 gap-1.5 text-xs"
+                @click="addCuotaEntidadFinanciera(state.capacidadBloque2[side.key])"
+              >
+                <Icon name="i-lucide-plus" class="h-3.5 w-3.5" />
+                Agregar
+              </Button>
             </div>
-            <div class="grid grid-cols-2 gap-2">
-              <div>
-                <Label class="text-xs">Alimentación</Label>
-                <Input v-model="state.capacidadBloque2[side.key].alimentacion" class="h-8 font-mono" />
-              </div>
-              <div>
-                <Label class="text-xs">Servicios p.</Label>
-                <Input v-model="state.capacidadBloque2[side.key].serviciosPublicos" class="h-8 font-mono" />
-              </div>
-            </div>
-            <div>
-              <Label class="text-xs">Otros gastos</Label>
-              <Input v-model="state.capacidadBloque2[side.key].otrosGastos" class="h-8 font-mono" />
-            </div>
-            <div>
-              <Label class="text-xs">Total egresos</Label>
-              <Input v-model="state.capacidadBloque2[side.key].totalEgresos" class="h-8 font-mono" />
-            </div>
+            <AnalisisEmergenciaGastosRadicacionFields
+              :bloque="state.capacidadBloque2[side.key]"
+              :lock="lockGastosDesdeRadicacion"
+            />
             <div>
               <Label class="text-xs">Ingresos disponibles</Label>
               <Input v-model="state.capacidadBloque2[side.key].ingDisponibles" class="h-8 font-mono" />
@@ -829,5 +945,43 @@ watch(
   white-space: nowrap;
   min-width: 0;
   max-width: 100%;
+}
+/**
+ * Alineado a `Input` h-8 (2rem) junto al campo Cuota; lista teletransportada a body (Popper) para
+ * no desconectarse al hacer scroll (append-to-body + close-on-scroll).
+ */
+.multiselect-entidad-banco {
+  --ms-font-size: 0.875rem;
+  --ms-line-height: 1.25rem;
+  --ms-radius: 0.375rem;
+  --ms-border-color: var(--border);
+  /* Mismo plano que Input editable (fondo sólido, no heredar tono muted del contenedor) */
+  --ms-bg: var(--background);
+  --ms-bg-disabled: var(--muted);
+  --ms-py: 0.25rem;
+  min-height: 2rem;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+}
+.multiselect-entidad-banco :deep(.multiselect-wrapper) {
+  min-height: 0;
+  align-items: center;
+}
+.multiselect-entidad-banco :deep(.multiselect-search) {
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+}
+.multiselect-entidad-banco :deep(.multiselect-single-label-text) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 1.25rem;
+}
+/* Teleport a body: debe quedar bajo .app-header (sticky z-10) para no tapar el breadcrumb */
+:global(.multiselect-dropdown) {
+  z-index: 9;
 }
 </style>

@@ -1,0 +1,630 @@
+<script setup lang="ts">
+import { toast } from 'vue-sonner'
+import type { SectorConfig } from '~/constants/credits-financial-templates'
+import TemplateConfigEditor from '~/components/settings/TemplateConfigEditor.vue'
+import CreateCategoryDialog from '~/components/settings/CreateCategoryDialog.vue'
+
+const props = withDefaults(
+  defineProps<{
+    /** Sectores y plantillas visibles en el panel (p. ej. solo agro o solo radicación). */
+    sectors: SectorConfig[]
+    pageTitle: string
+    pageDescription: string
+    /** Último segmento del breadcrumb bajo «Parametrización». */
+    breadcrumbLabel: string
+    /** Pestaña «Categorías de cultivos» (plantillas agro). */
+    showCategoriesTab: boolean
+    /** Enlace a la otra vista hermana (Plantillas ↔ Radicación). */
+    sisterLink?: { to: string, label: string } | null
+    /** Destino del botón Volver. */
+    backTo?: string
+  }>(),
+  {
+    showCategoriesTab: true,
+    sisterLink: null,
+    backTo: '/radicacion',
+  },
+)
+
+const { $api, $csrf } = useNuxtApp()
+const { hasPermission } = usePermissions()
+const router = useRouter()
+const deleteWithReason = useApiDeleteWithReason()
+const deleteCategoryDialogOpen = ref(false)
+const categoryIdPendingDelete = ref<number | null>(null)
+const deletingCategory = ref(false)
+
+interface FlatDataRecord {
+  id: number
+  template_key: string
+  product_key: string | null
+  config_data: Record<string, unknown>
+  updated_at: string
+}
+
+interface TemplateCategory {
+  id: number
+  template_key: string
+  name: string
+  code: string
+  sort_order: number
+}
+
+const TEMPLATES_WITH_CATEGORIES = ['cultivo-permanente', 'cultivo-ciclo-corto', 'peces-tilapia', 'servicios']
+
+const loading = ref(true)
+const saving = ref<string | null>(null)
+const templateData = ref<Record<string, FlatDataRecord[]>>({})
+const categoriesByTemplate = ref<Record<string, TemplateCategory[]>>({})
+const showCreateCategoryDialog = ref(false)
+const newCategoryTemplate = ref<string | null>(null)
+const selectedTemplateKey = ref<string | null>(null)
+const selectedProductKey = ref<string | null>(null)
+
+const templateLabels: Record<string, string> = {
+  'ganado-ceba': 'Ganado para la Ceba',
+  'ganado-doble-proposito': 'Ganado Doble Propósito',
+  'cerdos-cria': 'Cerdos de Cría',
+  'cerdos-ceba': 'Cerdos de Ceba',
+  'pollos-engorde': 'Pollos de Engorde',
+  'aves-ponedoras': 'Aves Ponedoras',
+  'peces-tilapia': 'Peces (Tilapia, Cachama, Otros)',
+  'cultivo-permanente': 'Cultivos Permanentes',
+  'cultivo-ciclo-corto': 'Cultivos Ciclo Corto',
+  'cana-panela': 'Caña de Azúcar (Panela)',
+  'servicios': 'Servicios (Moto taxi, Estilista, Mecánico, Jornales, Taxi)',
+  'plantilla-comercial': 'Plantilla Comercial (Productos)',
+  'transporte-carga': 'Transporte de Carga',
+  'transporte-pasajeros': 'Transporte de Pasajeros',
+  genero: 'Género (solicitante)',
+  'tipo-documento': 'Tipo de documento (solicitante)',
+  'tipo-vivienda': 'Tipo de vivienda (solicitante)',
+  'actividad-economica': 'Tipo de actividad económica (solicitante)',
+  'estado-civil': 'Estado civil (solicitante)',
+  bancos: 'Bancos (Análisis y Score)',
+}
+
+function getTemplateLabel(key: string): string {
+  return templateLabels[key] ?? key
+}
+
+function getProductLabel(key: string | null): string {
+  if (!key) return 'Default (plantilla)'
+  const cat = Object.values(categoriesByTemplate.value).flat().find(c => c.code === key)
+  return cat?.name ?? key
+}
+
+function templateHasCategories(templateKey: string): boolean {
+  return TEMPLATES_WITH_CATEGORIES.includes(templateKey)
+}
+
+function getRecordsForTemplate(templateKey: string, productKey: string | null): FlatDataRecord | undefined {
+  return templateData.value[templateKey]?.find(r =>
+    (r.product_key === null && productKey === null) || r.product_key === productKey,
+  )
+}
+
+function getAllConfigRecords(templateKey: string): Array<{ productKey: string | null, record: FlatDataRecord }> {
+  const records = templateData.value[templateKey] ?? []
+  const result: Array<{ productKey: string | null, record: FlatDataRecord }> = []
+
+  const defaultRecord = records.find(r => r.product_key === null)
+  if (defaultRecord) {
+    result.push({ productKey: null, record: defaultRecord })
+  }
+
+  const categories = categoriesByTemplate.value[templateKey] ?? []
+  for (const cat of categories) {
+    const rec = records.find(r => r.product_key === cat.code)
+    if (rec) result.push({ productKey: cat.code, record: rec })
+  }
+
+  return result
+}
+
+function getConfigRecordsForTemplate(templateKey: string): Array<{ productKey: string | null, record: FlatDataRecord }> {
+  if (templateHasCategories(templateKey)) {
+    return getAllConfigRecords(templateKey)
+  }
+  const records = templateData.value[templateKey] ?? []
+  return records.map(r => ({ productKey: r.product_key, record: r }))
+}
+
+async function fetchData() {
+  loading.value = true
+  try {
+    const [flatRes, catRes] = await Promise.all([
+      $api<{ data: Record<string, FlatDataRecord[]> }>('/template-flat-data'),
+      $api<{ data: Record<string, TemplateCategory[]> }>('/template-categories'),
+    ])
+    templateData.value = flatRes.data
+    categoriesByTemplate.value = catRes.data
+  } catch (e) {
+    console.error('Error al cargar configuraciones:', e)
+    toast.error('Error al cargar las configuraciones')
+  } finally {
+    loading.value = false
+  }
+}
+
+function getCategoryId(templateKey: string, productKey: string | null): number | undefined {
+  if (!productKey) return undefined
+  return categoriesByTemplate.value[templateKey]?.find(c => c.code === productKey)?.id
+}
+
+async function saveConfig(templateKey: string, productKey: string | null, configData: Record<string, unknown>) {
+  const key = `${templateKey}::${productKey ?? 'default'}`
+  saving.value = key
+  try {
+    await $csrf()
+    await $api(`/template-flat-data/${templateKey}`, {
+      method: 'PUT',
+      body: { product_key: productKey, config_data: configData },
+    })
+    toast.success('Configuración guardada correctamente')
+    await fetchData()
+  } catch (e: any) {
+    toast.error(e?.data?.message ?? 'Error al guardar')
+  } finally {
+    saving.value = null
+  }
+}
+
+function openDeleteCategoryDialog(categoryId: number) {
+  categoryIdPendingDelete.value = categoryId
+  deleteCategoryDialogOpen.value = true
+}
+
+async function onDeleteCategoryConfirm(reason: string) {
+  const id = categoryIdPendingDelete.value
+  if (id == null || deletingCategory.value)
+    return
+  deletingCategory.value = true
+  try {
+    await $csrf()
+    await deleteWithReason(`/template-categories/${id}`, reason)
+    deleteCategoryDialogOpen.value = false
+    categoryIdPendingDelete.value = null
+    toast.success('Categoría eliminada')
+    await fetchData()
+  } catch (e: any) {
+    toast.error(e?.data?.message ?? 'Error al eliminar')
+  } finally {
+    deletingCategory.value = false
+  }
+}
+
+function openCreateCategory(templateKey: string) {
+  newCategoryTemplate.value = templateKey
+  showCreateCategoryDialog.value = true
+}
+
+function closeCreateCategoryDialog() {
+  showCreateCategoryDialog.value = false
+  newCategoryTemplate.value = null
+}
+
+function allTemplateValuesInSectors(): string[] {
+  return props.sectors.flatMap(s => s.templates.map(t => t.value))
+}
+
+function selectFirstTemplateInScope() {
+  const keys = allTemplateValuesInSectors()
+  if (keys.length === 0) {
+    selectedTemplateKey.value = null
+    return
+  }
+  if (!selectedTemplateKey.value || !keys.includes(selectedTemplateKey.value)) {
+    selectedTemplateKey.value = keys[0] ?? null
+  }
+}
+
+function getProductOptions(templateKey: string): Array<{ value: string, label: string }> {
+  const records = getConfigRecordsForTemplate(templateKey)
+  return records.map(({ productKey }) => ({
+    value: productKey ?? '__default__',
+    label: getProductLabel(productKey),
+  }))
+}
+
+function syncSelectedProduct() {
+  const key = selectedTemplateKey.value
+  if (!key || !templateHasCategories(key)) {
+    selectedProductKey.value = null
+    return
+  }
+  const opts = getProductOptions(key)
+  if (opts.length === 0) {
+    selectedProductKey.value = null
+    return
+  }
+  const current = selectedProductKey.value
+  const exists = opts.some(o => o.value === current)
+  selectedProductKey.value = exists ? current : opts[0].value
+}
+
+watch(selectedTemplateKey, syncSelectedProduct)
+watch([categoriesByTemplate, templateData], syncSelectedProduct, { deep: true })
+watch(
+  () => props.sectors,
+  () => {
+    selectFirstTemplateInScope()
+    syncSelectedProduct()
+  },
+  { deep: true },
+)
+watch(
+  loading,
+  () => {
+    if (!loading.value) {
+      selectFirstTemplateInScope()
+      syncSelectedProduct()
+    }
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  fetchData()
+})
+
+watch(deleteCategoryDialogOpen, (v) => {
+  if (!v)
+    categoryIdPendingDelete.value = null
+})
+</script>
+
+<template>
+  <div class="mx-auto w-full max-w-6xl px-4 pb-10 pt-4 md:px-6">
+    <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <div class="space-y-1">
+        <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <NuxtLink to="/parametrizacion" class="hover:text-foreground">
+            Parametrización
+          </NuxtLink>
+          <Icon name="i-lucide-chevron-right" class="h-4 w-4 shrink-0 opacity-60" />
+          <span class="text-foreground">{{ breadcrumbLabel }}</span>
+        </div>
+        <h2 class="text-2xl font-bold tracking-tight">
+          {{ pageTitle }}
+        </h2>
+        <p class="max-w-2xl text-muted-foreground text-sm">
+          {{ pageDescription }}
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" as-child>
+          <NuxtLink to="/parametrizacion/plantilla-score">
+            <Icon name="i-lucide-file-spreadsheet" class="mr-2 h-4 w-4" />
+            Plantilla Score
+          </NuxtLink>
+        </Button>
+        <Button
+          v-if="sisterLink"
+          variant="outline"
+          size="sm"
+          as-child
+        >
+          <NuxtLink :to="sisterLink.to">
+            <Icon name="i-lucide-layers" class="mr-2 h-4 w-4" />
+            {{ sisterLink.label }}
+          </NuxtLink>
+        </Button>
+        <Button variant="outline" @click="router.push(backTo)">
+          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
+          Volver
+        </Button>
+      </div>
+    </div>
+
+    <div class="space-y-6">
+      <Tabs default-value="plantillas" class="w-full">
+        <TabsList
+          v-if="showCategoriesTab"
+          class="inline-flex w-auto grid-cols-2"
+        >
+          <TabsTrigger value="plantillas">
+            Plantillas
+          </TabsTrigger>
+          <TabsTrigger value="categorias">
+            Categorías de cultivos
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent
+          value="plantillas"
+          :class="showCategoriesTab ? 'mt-4' : 'mt-0'"
+        >
+          <div v-if="loading" class="flex justify-center py-12">
+            <Icon name="i-lucide-loader-2" class="h-10 w-10 animate-spin text-muted-foreground" />
+          </div>
+
+          <div v-else class="flex flex-col gap-4 lg:flex-row lg:gap-6">
+            <nav class="shrink-0 lg:w-64 xl:w-72 lg:sticky lg:top-4 lg:self-start">
+              <div class="rounded-lg border bg-muted/30 p-2">
+                <p class="mb-2 px-2 text-xs font-medium text-muted-foreground">
+                  Seleccionar plantilla
+                </p>
+                <div class="max-h-[280px] space-y-0.5 overflow-y-auto lg:max-h-[calc(100vh-12rem)]">
+                  <template v-for="sector in sectors" :key="sector.value">
+                    <p class="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      {{ sector.label }}
+                    </p>
+                    <button
+                      v-for="t in sector.templates"
+                      :key="t.value"
+                      type="button"
+                      class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
+                      :class="selectedTemplateKey === t.value ? 'bg-accent font-medium' : ''"
+                      @click="selectedTemplateKey = t.value"
+                    >
+                      <Icon
+                        name="i-lucide-file-spreadsheet"
+                        class="h-4 w-4 shrink-0 text-muted-foreground"
+                      />
+                      <span class="truncate">{{ t.label }}</span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </nav>
+
+            <div class="min-w-0 flex-1">
+              <template v-if="selectedTemplateKey">
+                <div class="rounded-lg border">
+                  <div class="flex items-center justify-between border-b bg-muted/30 px-4 py-3">
+                    <h3 class="font-semibold">
+                      {{ getTemplateLabel(selectedTemplateKey) }}
+                    </h3>
+                    <Button
+                      v-if="templateHasCategories(selectedTemplateKey) && hasPermission('plantillas_crear')"
+                      variant="outline"
+                      size="sm"
+                      @click="openCreateCategory(selectedTemplateKey)"
+                    >
+                      <Icon name="i-lucide-plus" class="mr-1 h-4 w-4" />
+                      Crear categoría
+                    </Button>
+                  </div>
+                  <div class="p-4">
+                    <div
+                      v-if="templateHasCategories(selectedTemplateKey) && getProductOptions(selectedTemplateKey).length > 0"
+                      class="mb-4"
+                    >
+                      <label class="mb-2 block text-sm font-medium">
+                        Tipo de cultivo / producto
+                      </label>
+                      <Select v-model="selectedProductKey">
+                        <SelectTrigger class="w-full max-w-xs">
+                          <SelectValue placeholder="Seleccionar tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem
+                            v-for="opt in getProductOptions(selectedTemplateKey)"
+                            :key="opt.value"
+                            :value="opt.value"
+                          >
+                            {{ opt.label }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div class="space-y-4">
+                      <template v-if="templateHasCategories(selectedTemplateKey) && selectedProductKey">
+                        <TemplateConfigEditor
+                          v-for="{ productKey, record } in getConfigRecordsForTemplate(selectedTemplateKey).filter(r =>
+                            (r.productKey ?? '__default__') === selectedProductKey
+                          )"
+                          :key="`${record.template_key}-${productKey ?? 'default'}`"
+                          :record="record"
+                          :template-label="getTemplateLabel(record.template_key)"
+                          :product-label="getProductLabel(productKey)"
+                          :saving="saving === `${record.template_key}::${productKey ?? 'default'}`"
+                          :can-edit="hasPermission('plantillas_editar')"
+                          :can-delete="hasPermission('plantillas_eliminar')"
+                          :category-id="getCategoryId(record.template_key, productKey)"
+                          @save="(data) => saveConfig(record.template_key, productKey, data)"
+                          @delete="() => { const id = getCategoryId(record.template_key, productKey); id && openDeleteCategoryDialog(id) }"
+                        />
+                      </template>
+                      <template v-else-if="!templateHasCategories(selectedTemplateKey)">
+                        <TemplateConfigEditor
+                          v-for="{ productKey, record } in getConfigRecordsForTemplate(selectedTemplateKey)"
+                          :key="`${record.template_key}-${productKey ?? 'default'}`"
+                          :record="record"
+                          :template-label="getTemplateLabel(record.template_key)"
+                          :product-label="getProductLabel(productKey)"
+                          :saving="saving === `${record.template_key}::${productKey ?? 'default'}`"
+                          :can-edit="hasPermission('plantillas_editar')"
+                          :can-delete="hasPermission('plantillas_eliminar')"
+                          :category-id="getCategoryId(record.template_key, productKey)"
+                          @save="(data) => saveConfig(record.template_key, productKey, data)"
+                          @delete="() => { const id = getCategoryId(record.template_key, productKey); id && openDeleteCategoryDialog(id) }"
+                        />
+                      </template>
+                      <p
+                        v-if="getConfigRecordsForTemplate(selectedTemplateKey).length === 0"
+                        class="py-4 text-center text-sm text-muted-foreground"
+                      >
+                        No hay configuraciones. Crea una categoría o espera a que se carguen los datos iniciales.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <p v-else class="py-8 text-center text-sm text-muted-foreground">
+                Selecciona una plantilla en el panel
+              </p>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent v-if="showCategoriesTab" value="categorias" class="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle class="text-lg">
+                Categorías de cultivos
+              </CardTitle>
+              <CardDescription>
+                Crea y gestiona las categorías para Cultivos Permanentes, Cultivos Ciclo Corto y Tipos de Pez
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-6">
+              <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <div class="rounded-lg border bg-muted/20 p-4">
+                  <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 class="font-semibold">
+                      Cultivos Permanentes
+                    </h3>
+                    <PermissionGate permission="plantillas_crear">
+                      <Button
+                        size="sm"
+                        @click="openCreateCategory('cultivo-permanente')"
+                      >
+                        <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                        Agregar categoría
+                      </Button>
+                    </PermissionGate>
+                  </div>
+                  <p class="mb-3 text-xs text-muted-foreground">
+                    Cacao, Café, Bananito, frutales y especies similares
+                  </p>
+                  <ul class="space-y-1.5">
+                    <li
+                      v-for="cat in (categoriesByTemplate['cultivo-permanente'] ?? [])"
+                      :key="cat.id"
+                      class="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-2 text-sm"
+                    >
+                      <span>{{ cat.name }}</span>
+                      <div class="flex items-center gap-2">
+                        <span class="font-mono text-xs text-muted-foreground">{{ cat.code }}</span>
+                        <Button
+                          v-if="hasPermission('plantillas_eliminar')"
+                          variant="destructive"
+                          size="sm"
+                          class="h-7 gap-1.5 px-2 text-xs"
+                          @click="openDeleteCategoryDialog(cat.id)"
+                        >
+                          <Icon name="i-lucide-trash-2" class="h-3.5 w-3.5 shrink-0" />
+                          Eliminar
+                        </Button>
+                      </div>
+                    </li>
+                    <li v-if="!(categoriesByTemplate['cultivo-permanente'] ?? []).length" class="py-4 text-center text-sm text-muted-foreground">
+                      Sin categorías. Crea la primera.
+                    </li>
+                  </ul>
+                </div>
+                <div class="rounded-lg border bg-muted/20 p-4">
+                  <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 class="font-semibold">
+                      Cultivos de Ciclo Corto
+                    </h3>
+                    <PermissionGate permission="plantillas_crear">
+                      <Button
+                        size="sm"
+                        @click="openCreateCategory('cultivo-ciclo-corto')"
+                      >
+                        <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                        Agregar categoría
+                      </Button>
+                    </PermissionGate>
+                  </div>
+                  <p class="mb-3 text-xs text-muted-foreground">
+                    Maíz, Papa, Habichuela, Yuca, Tomate y similares
+                  </p>
+                  <ul class="space-y-1.5">
+                    <li
+                      v-for="cat in (categoriesByTemplate['cultivo-ciclo-corto'] ?? [])"
+                      :key="cat.id"
+                      class="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-2 text-sm"
+                    >
+                      <span>{{ cat.name }}</span>
+                      <div class="flex items-center gap-2">
+                        <span class="font-mono text-xs text-muted-foreground">{{ cat.code }}</span>
+                        <Button
+                          v-if="hasPermission('plantillas_eliminar')"
+                          variant="destructive"
+                          size="sm"
+                          class="h-7 gap-1.5 px-2 text-xs"
+                          @click="openDeleteCategoryDialog(cat.id)"
+                        >
+                          <Icon name="i-lucide-trash-2" class="h-3.5 w-3.5 shrink-0" />
+                          Eliminar
+                        </Button>
+                      </div>
+                    </li>
+                    <li v-if="!(categoriesByTemplate['cultivo-ciclo-corto'] ?? []).length" class="py-4 text-center text-sm text-muted-foreground">
+                      Sin categorías. Crea la primera.
+                    </li>
+                  </ul>
+                </div>
+                <div class="rounded-lg border bg-muted/20 p-4">
+                  <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <h3 class="font-semibold">
+                      Tipos de pez
+                    </h3>
+                    <PermissionGate permission="plantillas_crear">
+                      <Button
+                        size="sm"
+                        @click="openCreateCategory('peces-tilapia')"
+                      >
+                        <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                        Agregar tipo
+                      </Button>
+                    </PermissionGate>
+                  </div>
+                  <p class="mb-3 text-xs text-muted-foreground">
+                    Tilapia, Cachama y otras especies acuícolas
+                  </p>
+                  <ul class="space-y-1.5">
+                    <li
+                      v-for="cat in (categoriesByTemplate['peces-tilapia'] ?? [])"
+                      :key="cat.id"
+                      class="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-2 text-sm"
+                    >
+                      <span>{{ cat.name }}</span>
+                      <div class="flex items-center gap-2">
+                        <span class="font-mono text-xs text-muted-foreground">{{ cat.code }}</span>
+                        <Button
+                          v-if="hasPermission('plantillas_eliminar')"
+                          variant="destructive"
+                          size="sm"
+                          class="h-7 gap-1.5 px-2 text-xs"
+                          @click="openDeleteCategoryDialog(cat.id)"
+                        >
+                          <Icon name="i-lucide-trash-2" class="h-3.5 w-3.5 shrink-0" />
+                          Eliminar
+                        </Button>
+                      </div>
+                    </li>
+                    <li v-if="!(categoriesByTemplate['peces-tilapia'] ?? []).length" class="py-4 text-center text-sm text-muted-foreground">
+                      Sin tipos. Crea el primero.
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      <CreateCategoryDialog
+        v-model:open="showCreateCategoryDialog"
+        :template-key="newCategoryTemplate"
+        @created="closeCreateCategoryDialog(); fetchData()"
+        @cancel="closeCreateCategoryDialog()"
+      />
+
+      <ConfirmWithReasonDialog
+        v-model:open="deleteCategoryDialogOpen"
+        title="Eliminar categoría de plantilla"
+        description="Se eliminará la categoría y su configuración asociada. Indica el motivo."
+        confirm-text="Aceptar"
+        cancel-text="Cancelar"
+        :loading="deletingCategory"
+        @confirm="onDeleteCategoryConfirm"
+      />
+    </div>
+  </div>
+</template>
