@@ -49,6 +49,18 @@ export function buildVariableOptionsFromMatrix(lines: ScoreMatrixLine[]): Map<st
   return map
 }
 
+/**
+ * Características posibles (columna Cualitativas) de la variable «Garantía»,
+ * en el mismo orden que en parametrización → Plantilla Score.
+ */
+export function caracteristicasGarantiaDesdeMatrix(lines: ScoreMatrixLine[]): string[] {
+  const map = buildVariableOptionsFromMatrix(lines)
+  const opts = map.get('Garantía') ?? []
+  return opts
+    .map(o => o.label.trim())
+    .filter(s => s.length > 0 && s !== '—')
+}
+
 /** Etiqueta de fila en IMPRIMIR → clave `v` en la matriz cuando no coincide literalmente. */
 export const INDEPENDIENTE_IMPRIMIR_MATRIX_ALIASES: Record<string, string> = {
   'Antigüedad como asociado en meses': 'Antigüedad como asociado',

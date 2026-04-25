@@ -30,7 +30,7 @@ function cerrarAlElegir(): void {
 </script>
 
 <template>
-  <div class="space-y-2">
+  <div class="flex min-h-0 min-w-0 flex-col space-y-2">
     <Label class="text-sm font-medium">Perfil del deudor</Label>
     <Popover v-model:open="open">
       <PopoverTrigger as-child>
@@ -38,7 +38,7 @@ function cerrarAlElegir(): void {
           variant="outline"
           role="combobox"
           :aria-expanded="open"
-          class="h-auto min-h-10 w-full max-w-md justify-between py-2 text-left font-normal"
+          class="h-10 w-full min-w-0 justify-between text-left font-normal"
         >
           <span class="line-clamp-2">{{ triggerLabel }}</span>
           <Icon name="i-lucide-chevrons-up-down" class="ml-2 h-4 w-4 shrink-0 opacity-50" />

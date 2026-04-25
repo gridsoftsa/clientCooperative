@@ -27,7 +27,14 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   'update:modelValue': [ApplicantForm]
+  /** Clic/Enter en «Buscar» (los padres suelen vincular con @search) */
+  search: []
 }>()
+
+function runSearch() {
+  emit('search')
+  props.onSearch?.()
+}
 
 const local = computed({
   get: () => props.modelValue,
@@ -265,7 +272,7 @@ function formatFileSize(bytes: number): string {
               autocomplete="off"
               class="h-9 w-full"
               @input="onDigitsOnlyInput($event, v => (local.document_number = v))"
-              @keyup.enter="onSearch?.()"
+              @keyup.enter="runSearch"
             />
           </div>
           <Button
@@ -274,16 +281,13 @@ function formatFileSize(bytes: number): string {
             size="default"
             class="h-9 shrink-0"
             :disabled="loadingSearch || !local.document_number?.trim()"
-            @click="onSearch?.()"
+            @click="runSearch"
           >
             <Icon v-if="loadingSearch" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
             <Icon v-else name="i-lucide-search" class="mr-2 h-4 w-4" />
             Buscar
           </Button>
         </div>
-        <p class="mt-2 text-xs text-muted-foreground">
-          Ingrese la cédula para cargar los datos del solicitante si ya está registrado.
-        </p>
       </div>
     </section>
 

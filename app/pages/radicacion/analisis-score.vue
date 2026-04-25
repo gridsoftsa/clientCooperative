@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import AnalisisEmergenciaForm from '~/components/radicacion/AnalisisEmergenciaForm.vue'
 import AnalisisScoreImprimirPanel from '~/components/radicacion/AnalisisScoreImprimirPanel.vue'
+import {
+  defaultEmergenciaState,
+  mergeEmergenciaFromSnapshot,
+} from '~/constants/analisis-score-emergencia'
+import type { EmergenciaState } from '~/constants/analisis-score-emergencia'
 import type { ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
 import {
   IMPRIMIR_EMPLEADO_META,
@@ -14,7 +20,25 @@ import {
   type ScoreMatrixLine,
 } from '~/constants/analisis-score-matrix'
 import type { AnalisisScorePerfilValue } from '~/constants/analisis-score'
+import {
+  actualizarVrCuotaVarDesdeInputs,
+  formatMontoCopVista,
+  tasaEfectivaPorcentajeDesdeNominal,
+} from '~/utils/analisis-emergencia-cuota'
+import {
+  descripcionErroresAdicionales,
+  validarCreditoEmergenciaCompleto,
+  validarTipoValorCuotaPaso1,
+} from '~/utils/analisis-emergencia-validacion'
+import { caracteristicasGarantiaDesdeMatrix } from '~/utils/analisis-score-matrix-options'
 import { isScoreMatrixLinesRenderable, normalizeScoreMatrixLines } from '~/utils/score-matrix-weights'
+import {
+  classifyNivelRiesgo,
+  classifyPuntajeTotalIFS,
+  sumImprimirPuntajesPorSeccion,
+} from '~/utils/analisis-score-imprimir-totals'
+import { totalIngresosRadicacionFormatted } from '~/utils/radicacion-financial-totals'
+import type { Company } from '~/types/company'
 
 type ScoreMatricesApiResponse = {
   data: Record<string, { lines?: ScoreMatrixLine[] } | null>
@@ -46,6 +70,33 @@ const scoreCabecera = ref({
 
 const observacionesScore = ref('')
 
+const emergenciaState = ref(defaultEmergenciaState())
+
+function sincronizarTasaEfectivaDesdeNominal(): void {
+  const c = emergenciaState.value.credito
+  c.tasaEfectiva = tasaEfectivaPorcentajeDesdeNominal(c.tasaNominal)
+}
+
+/** Fórmula de Vr. cuota var. (paso 2) según Tipo de Valor de cuota (paso 1) y tasa, plazo, monto. */
+function sincronizarVrCuotaVarFormula(): void {
+  const c = emergenciaState.value.credito
+  if (c.tipoValorCuota !== 'Corriente' && c.tipoValorCuota !== 'Emergencia') {
+    return
+  }
+  c.vrCuotaVar = actualizarVrCuotaVarDesdeInputs({
+    tipoValorCuota: c.tipoValorCuota,
+    vrCredito: c.vrCredito,
+    plazoMeses: c.plazoMeses,
+    tasaNominal: c.tasaNominal,
+  })
+}
+
+/** Codeudores de la radicación (misma fuente que entrevista / solicitud). Solo lectura en paso 2. */
+const codeudoresDeSolicitud = ref<{ nombre: string, cedula: string }[]>([])
+
+const companyPrincipal = ref<Company | null>(null)
+const loadingCompany = ref(false)
+
 const loadingSolicitud = ref(false)
 /** Hay filas guardadas en servidor (`analisis_score_snapshot`) para generar PDF. */
 const tieneAnalisisScoreGuardado = ref(false)
@@ -75,9 +126,27 @@ async function fetchScoreMatrices(): Promise<void> {
   }
 }
 
-onMounted(() => {
-  fetchScoreMatrices()
-})
+async function fetchCompanyPrincipal(): Promise<void> {
+  loadingCompany.value = true
+  try {
+    const res = await $api<{ data: Company }>('/company')
+    companyPrincipal.value = res.data
+  }
+  catch {
+    companyPrincipal.value = null
+  }
+  finally {
+    loadingCompany.value = false
+  }
+}
+
+/** Alinea deudor / documento / fecha del paso 2 con la cabecera de SCORE (misma que la solicitud en paso 3). */
+function aplicarCabeceraALineaEmergenciaDeudor(): void {
+  const c = scoreCabecera.value
+  emergenciaState.value.deudorCodeudor.deudor = c.nombre
+  emergenciaState.value.deudorCodeudor.documento = c.cedula
+  emergenciaState.value.deudorCodeudor.fechaAnalisis = c.fecha
+}
 
 function formatFechaRadicacion(createdAt: unknown): string {
   if (createdAt == null || createdAt === '') {
@@ -90,14 +159,98 @@ function formatFechaRadicacion(createdAt: unknown): string {
   return d.toLocaleDateString('es-CO')
 }
 
+function pickStr(row: Record<string, unknown>, ...keys: string[]): string {
+  for (const k of keys) {
+    const v = row[k]
+    if (typeof v === 'string' && v.trim()) {
+      return v
+    }
+  }
+  return ''
+}
+
 function debtorDisplayName(debtor: Record<string, unknown>): string {
   const parts = [
-    debtor.first_name,
-    debtor.second_name,
-    debtor.first_last_name,
-    debtor.second_last_name,
-  ].filter((p) => typeof p === 'string' && p.trim())
+    pickStr(debtor, 'first_name', 'firstName'),
+    pickStr(debtor, 'second_name', 'secondName'),
+    pickStr(debtor, 'first_last_name', 'firstLastName'),
+    pickStr(debtor, 'second_last_name', 'secondLastName'),
+  ].filter((p) => p.length > 0)
   return parts.join(' ').trim()
+}
+
+function cedulaDesdeSolicitante(row: Record<string, unknown>): string {
+  const docType = pickStr(row, 'document_type', 'documentType')
+  const numRaw = row.document_number ?? row.documentNumber
+  const docNum = numRaw != null ? String(numRaw).trim() : ''
+  return [docType, docNum].filter(Boolean).join(' ').trim()
+}
+
+/** Lista de filas de codeudor desde el JSON de la solicitud (soporta anidado `applicant` y clave `coDebtors`). */
+function pickCoDebtorRowsFromSolicitudData(data: Record<string, unknown>): Record<string, unknown>[] {
+  const a = data.co_debtors
+  const b = (data as { coDebtors?: unknown }).coDebtors
+  const fromA = Array.isArray(a) ? a : []
+  const fromB = Array.isArray(b) ? b : []
+  const raw = fromA.length > 0 ? fromA : fromB
+  return raw
+    .map((row): Record<string, unknown> | null => {
+      if (row == null || typeof row !== 'object') {
+        return null
+      }
+      const r = row as Record<string, unknown>
+      const ap = r.applicant
+      if (ap && typeof ap === 'object' && ap !== null) {
+        return { ...r, ...(ap as Record<string, unknown>) }
+      }
+      return r
+    })
+    .filter((r): r is Record<string, unknown> => r != null)
+}
+
+function buildCodeudoresDesdeCoDebtors(coRows: unknown): { nombre: string, cedula: string }[] {
+  if (!Array.isArray(coRows) || coRows.length === 0) {
+    return []
+  }
+  return coRows
+    .filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object')
+    .map((row) => ({
+      nombre: debtorDisplayName(row),
+      cedula: cedulaDesdeSolicitante(row),
+    }))
+}
+
+/**
+ * Monto solicitado y plazo (meses) desde el paso «Datos de la solicitud» de radicación.
+ * Siempre prioriza la solicitud viva sobre un snapshot de emergencia previo.
+ */
+/**
+ * Campo «Ingresos» en capacidad de pago = mismo total que el paso 3 (Datos financieros)
+ * de radicación (deudor y cada codeudor). Siempre la solicitud actual, no un snapshot.
+ */
+function aplicarIngresosCapacidadDesdeRadicacion(data: Record<string, unknown>): void {
+  const e = emergenciaState.value
+  const debtor = data.debtor as Record<string, unknown> | null | undefined
+  e.capacidadBloque1.a.ingresos = totalIngresosRadicacionFormatted(debtor?.financial_info ?? null)
+  const co = pickCoDebtorRowsFromSolicitudData(data)
+  e.capacidadBloque1.b.ingresos = co[0] ? totalIngresosRadicacionFormatted(co[0].financial_info) : ''
+  e.capacidadBloque2.a.ingresos = co[1] ? totalIngresosRadicacionFormatted(co[1].financial_info) : ''
+  e.capacidadBloque2.b.ingresos = co[2] ? totalIngresosRadicacionFormatted(co[2].financial_info) : ''
+}
+
+function aplicarMontoYPlazoCreditoDesdeSolicitud(data: Record<string, unknown>): void {
+  const rawAmount = data.amount_requested
+  if (rawAmount == null || rawAmount === '') {
+    emergenciaState.value.credito.vrCredito = ''
+  }
+  else {
+    const n = Number(rawAmount)
+    emergenciaState.value.credito.vrCredito = Number.isFinite(n)
+      ? formatMontoCopVista(n)
+      : String(rawAmount)
+  }
+  const t = data.term_months
+  emergenciaState.value.credito.plazoMeses = t != null && t !== '' ? String(t) : ''
 }
 
 function cloneImprimirRows(rows: ImprimirVariableRow[]): ImprimirVariableRow[] {
@@ -134,14 +287,120 @@ function isPerfilDeudor(v: unknown): v is AnalisisScorePerfilValue {
   return v === 'independiente' || v === 'empleado' || v === 'pensionado'
 }
 
-/** Un solo perfil: define qué hoja de impresión SCORE se muestra (solo en paso 2). */
+/** Un solo perfil: define qué hoja de impresión SCORE se muestra (paso 3). */
 const perfilDeudor = ref<AnalisisScorePerfilValue | undefined>(undefined)
 
 const currentStep = ref(1)
-const maxStep = 2
+const maxStep = 3
 
 const variableRowsForIndep = ref<ImprimirVariableRow[]>(cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES))
 const variableRowsForEmp = ref<ImprimirVariableRow[]>(cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES))
+
+const opcionesGarantia = computed(() => {
+  const p = perfilDeudor.value
+  if (p == null) {
+    return [] as string[]
+  }
+  const lines = p === 'independiente' ? scoreLinesIndep.value : scoreLinesEmp.value
+  return caracteristicasGarantiaDesdeMatrix(lines)
+})
+
+type CreditoEmergenciaExt = EmergenciaState['credito'] & { garantiaSelecciones?: string[] }
+
+/**
+ * Una sola opción (Cualitativas → Garantía). Migra snapshot con varias opciones o `garantia` con «·»; borra clave legada.
+ */
+function sincronizarGarantiaConPlantilla(): void {
+  const c = emergenciaState.value.credito as CreditoEmergenciaExt
+  const p = perfilDeudor.value
+  if (p == null) {
+    c.garantia = ''
+    if (c.garantiaSelecciones) {
+      delete c.garantiaSelecciones
+    }
+    return
+  }
+  const lines = p === 'independiente' ? scoreLinesIndep.value : scoreLinesEmp.value
+  const opts = caracteristicasGarantiaDesdeMatrix(lines)
+  const valid = new Set(opts)
+  const g = (c.garantia || '').trim()
+  const legacy = Array.isArray(c.garantiaSelecciones) ? c.garantiaSelecciones : []
+  let next = ''
+  if (g && valid.has(g)) {
+    next = g
+  }
+  else if (legacy.length) {
+    const first = legacy.find(s => valid.has(s))
+    if (first) {
+      next = first
+    }
+  }
+  if (!next && g) {
+    const byNl = g.split('\n').map(s => s.trim()).filter(s => s.length > 0)
+    const byDot = g.includes('·') ? g.split(/\s*·\s*/).map(s => s.trim()).filter(s => s.length > 0) : []
+    const candidates
+      = byNl.length > 1 ? byNl
+        : (byDot.length > 0 ? byDot : (byNl.length === 1 ? byNl : [g]))
+    const hit = candidates.find(s => valid.has(s))
+    if (hit) {
+      next = hit
+    }
+  }
+  c.garantia = next
+  if (c.garantiaSelecciones) {
+    delete c.garantiaSelecciones
+  }
+}
+
+onMounted(() => {
+  fetchScoreMatrices()
+  fetchCompanyPrincipal()
+})
+
+watch(companyPrincipal, (co) => {
+  const nit = co?.nit?.trim()
+  if (nit) {
+    emergenciaState.value.encabezado.nit = nit
+  }
+})
+
+watch(
+  () => [currentStep.value, scoreCabecera.value] as const,
+  () => {
+    if (currentStep.value === 2) {
+      aplicarCabeceraALineaEmergenciaDeudor()
+    }
+  },
+  { deep: true },
+)
+
+watch(
+  [perfilDeudor, scoreLinesIndep, scoreLinesEmp],
+  () => {
+    sincronizarGarantiaConPlantilla()
+  },
+  { deep: true, immediate: true },
+)
+
+watch(
+  () => [
+    emergenciaState.value.credito.tipoValorCuota,
+    emergenciaState.value.credito.vrCredito,
+    emergenciaState.value.credito.plazoMeses,
+    emergenciaState.value.credito.tasaNominal,
+  ],
+  () => {
+    sincronizarTasaEfectivaDesdeNominal()
+    sincronizarVrCuotaVarFormula()
+  },
+  { deep: true, immediate: true },
+)
+
+const isVrCuotaVarBloqueada = computed(
+  () =>
+    emergenciaState.value.credito.tipoValorCuota === 'Corriente'
+    || emergenciaState.value.credito.tipoValorCuota === 'Emergencia',
+)
 
 async function loadSolicitudParaAnalisis(id: string): Promise<void> {
   loadingSolicitud.value = true
@@ -181,6 +440,10 @@ async function loadSolicitudParaAnalisis(id: string): Promise<void> {
       perfilDeudor.value = snap.perfil_deudor
     }
 
+    emergenciaState.value = mergeEmergenciaFromSnapshot(
+      snap && typeof snap === 'object' ? (snap as { emergencia?: unknown }).emergencia : undefined,
+    )
+
     variableRowsForIndep.value = mergeRowsFromSnapshot(
       IMPRIMIR_INDEPENDIENTE_VARIABLES,
       snap?.variant === 'independiente' ? snap.variable_rows : null,
@@ -201,6 +464,33 @@ async function loadSolicitudParaAnalisis(id: string): Promise<void> {
       && Array.isArray(snap.variable_rows)
       && snap.variable_rows.length > 0,
     )
+
+    const dPre = data.debtor as Record<string, unknown> | null | undefined
+    if (dPre && typeof dPre === 'object') {
+      if (!emergenciaState.value.deudorCodeudor.deudor.trim()) {
+        emergenciaState.value.deudorCodeudor.deudor = debtorDisplayName(dPre)
+      }
+      if (!emergenciaState.value.deudorCodeudor.documento.trim()) {
+        emergenciaState.value.deudorCodeudor.documento = cedulaDesdeSolicitante(dPre)
+      }
+    }
+    const co = pickCoDebtorRowsFromSolicitudData(data)
+    codeudoresDeSolicitud.value = buildCodeudoresDesdeCoDebtors(co)
+    if (codeudoresDeSolicitud.value.length > 0) {
+      const primero = codeudoresDeSolicitud.value[0]
+      if (primero) {
+        emergenciaState.value.deudorCodeudor.codeudor = primero.nombre
+      }
+    }
+    if (!emergenciaState.value.deudorCodeudor.fechaAnalisis.trim() && scoreCabecera.value.fecha) {
+      emergenciaState.value.deudorCodeudor.fechaAnalisis = scoreCabecera.value.fecha
+    }
+    aplicarMontoYPlazoCreditoDesdeSolicitud(data)
+    aplicarIngresosCapacidadDesdeRadicacion(data)
+    aplicarCabeceraALineaEmergenciaDeudor()
+    sincronizarGarantiaConPlantilla()
+    sincronizarTasaEfectivaDesdeNominal()
+    sincronizarVrCuotaVarFormula()
   } catch (e) {
     console.error('Error cargando solicitud para SCORE:', e)
     scoreCabecera.value = { fecha: '', cedula: '', nombre: '' }
@@ -208,6 +498,8 @@ async function loadSolicitudParaAnalisis(id: string): Promise<void> {
     variableRowsForEmp.value = cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES)
     observacionesScore.value = ''
     tieneAnalisisScoreGuardado.value = false
+    emergenciaState.value = defaultEmergenciaState()
+    codeudoresDeSolicitud.value = []
   } finally {
     loadingSolicitud.value = false
   }
@@ -224,6 +516,8 @@ watch(
       perfilDeudor.value = undefined
       currentStep.value = 1
       tieneAnalisisScoreGuardado.value = false
+      emergenciaState.value = defaultEmergenciaState()
+      codeudoresDeSolicitud.value = []
       return
     }
     loadSolicitudParaAnalisis(id)
@@ -245,7 +539,8 @@ const vistaImprimirScore = computed<'independiente' | 'empleado' | null>(() => {
 
 const stepsScore = [
   { num: 1, title: 'Perfil del deudor' },
-  { num: 2, title: 'Hoja SCORE' },
+  { num: 2, title: 'Análisis' },
+  { num: 3, title: 'Hoja SCORE' },
 ] as const
 
 const activeStepMeta = computed(() => {
@@ -253,7 +548,13 @@ const activeStepMeta = computed(() => {
     return {
       title: 'Perfil del deudor',
       description:
-        'Elige el perfil del deudor (independiente, empleado o pensionado). La hoja SCORE se abre en el siguiente paso. Para corregir el perfil, pulsa Anterior. Las matrices se configuran en Configuración → Plantilla Score.',
+        'Elige el perfil del deudor (independiente, empleado o pensionado). El análisis de capacidad de pago (hoja EMERGENCIA) y la hoja SCORE siguen en los pasos 2 y 3. Las matrices de SCORE se configuran en Configuración → Plantilla Score.',
+    }
+  }
+  if (currentStep.value === 2) {
+    return {
+      title: 'Análisis',
+      description: '',
     }
   }
   if (vistaImprimirScore.value === 'independiente') {
@@ -277,11 +578,27 @@ const activeStepMeta = computed(() => {
 })
 
 function goToStep(num: number): void {
-  if (num === 2 && perfilDeudor.value == null) {
+  if (num === 1) {
+    currentStep.value = 1
+    return
+  }
+  if (perfilDeudor.value == null) {
     toast.error('Primero elige un perfil del deudor en el paso 1.')
     return
   }
-  currentStep.value = num
+  if (num === 3) {
+    const v = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
+    if (!v.ok) {
+      toast.error(
+        v.errores[0] ?? 'Complete la hoja de análisis (paso 2) para abrir el SCORE.',
+        { description: descripcionErroresAdicionales(v.errores) },
+      )
+      return
+    }
+  }
+  if (num >= 2) {
+    currentStep.value = num
+  }
 }
 
 function nextStep(): void {
@@ -290,19 +607,35 @@ function nextStep(): void {
       toast.error('Selecciona un perfil del deudor para continuar.')
       return
     }
+    const t = validarTipoValorCuotaPaso1(emergenciaState.value.credito.tipoValorCuota)
+    if (!t.ok) {
+      toast.error(t.mensaje)
+      return
+    }
     currentStep.value = 2
     return
+  }
+  if (currentStep.value === 2) {
+    const v = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
+    if (!v.ok) {
+      toast.error(
+        v.errores[0] ?? 'Complete la hoja de análisis antes de abrir el SCORE.',
+        { description: descripcionErroresAdicionales(v.errores) },
+      )
+      return
+    }
+    currentStep.value = 3
   }
 }
 
 function prevStep(): void {
   if (currentStep.value > 1) {
-    currentStep.value = 1
+    currentStep.value = currentStep.value - 1
   }
 }
 
 watch(perfilDeudor, (p) => {
-  if (p == null && currentStep.value === 2) {
+  if (p == null && (currentStep.value === 2 || currentStep.value === 3)) {
     currentStep.value = 1
   }
 })
@@ -314,6 +647,77 @@ async function onScoreGuardado(): Promise<void> {
   }
 }
 
+function variantAnalisisAlGuardar(): 'independiente' | 'empleado' {
+  return perfilDeudor.value === 'independiente' ? 'independiente' : 'empleado'
+}
+
+function filasImprimirActuales(): ImprimirVariableRow[] {
+  return variantAnalisisAlGuardar() === 'independiente'
+    ? variableRowsForIndep.value
+    : variableRowsForEmp.value
+}
+
+const guardandoEmergenciaBorrador = ref(false)
+
+async function guardarBorradorAnalisisEmergencia(): Promise<void> {
+  const id = solicitudId.value
+  if (!id) {
+    toast.error('Abre el análisis desde el listado de radicación para vincular una solicitud.')
+    return
+  }
+  if (perfilDeudor.value == null) {
+    toast.error('Selecciona el perfil del deudor en el paso 1.')
+    return
+  }
+  const valCred = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
+  if (!valCred.ok) {
+    toast.error(
+      valCred.errores[0] ?? 'Complete la hoja de análisis (información de crédito) antes de guardar.',
+      { description: descripcionErroresAdicionales(valCred.errores) },
+    )
+    return
+  }
+  if (!hasAnyPermission(['radicacion_crear', 'radicacion_editar'])) {
+    return
+  }
+  guardandoEmergenciaBorrador.value = true
+  try {
+    const { $api, $csrf } = useNuxtApp()
+    await $csrf()
+    const rows = filasImprimirActuales().map(r => ({ ...r }))
+    const sums = sumImprimirPuntajesPorSeccion(rows)
+    const total = sums.total
+    await $api<{
+      data?: { analisis_score_snapshot?: Record<string, unknown> | null }
+      message?: string
+    }>(`/credit-applications/${id}/analisis-score`, {
+      method: 'PUT',
+      body: {
+        perfil_deudor: perfilDeudor.value,
+        variant: variantAnalisisAlGuardar(),
+        cabecera: { ...scoreCabecera.value },
+        variable_rows: rows,
+        sums: { ...sums },
+        nivel_ifs: classifyPuntajeTotalIFS(total),
+        nivel_riesgo: classifyNivelRiesgo(total),
+        observaciones: observacionesScore.value.trim() === '' ? null : observacionesScore.value,
+        emergencia: JSON.parse(JSON.stringify(emergenciaState.value)) as Record<string, unknown>,
+      },
+    })
+    toast.success('Hoja de análisis (EMERGENCIA) guardada con la solicitud.')
+    if (solicitudId.value) {
+      await loadSolicitudParaAnalisis(solicitudId.value)
+    }
+  }
+  catch (e: unknown) {
+    const err = e as { data?: { message?: string } }
+    toast.error(err?.data?.message ?? 'No se pudo guardar la hoja de análisis.')
+  }
+  finally {
+    guardandoEmergenciaBorrador.value = false
+  }
+}
+
 type ScorePanelExpose = {
   guardarAnalisisScore: () => Promise<void>
   guardandoScore: boolean
@@ -322,16 +726,22 @@ type ScorePanelExpose = {
 
 const scorePanelRef = ref<ScorePanelExpose | null>(null)
 
-const mostrarBotonGuardarScore = computed(
+const mostrarBotonGuardarEmergencia = computed(
   () =>
     currentStep.value === 2
+    && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
+)
+
+const mostrarBotonGuardarScore = computed(
+  () =>
+    currentStep.value === 3
     && vistaImprimirScore.value != null
     && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
 )
 
 const mostrarBotonDescargarPdfScore = computed(
   () =>
-    currentStep.value === 2
+    currentStep.value === 3
     && vistaImprimirScore.value != null
     && hasPermission('radicacion_descargar_pdf'),
 )
@@ -465,11 +875,27 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-6">
-        <div v-if="currentStep === 1" class="space-y-4">
+        <div
+          v-if="currentStep === 1"
+          class="grid min-w-0 grid-cols-1 items-start gap-4 sm:grid-cols-2 sm:items-stretch"
+        >
           <RadicacionAnalisisScorePerfilPicker v-model="perfilDeudor" />
+          <RadicacionAnalisisTipoValorCuotaPicker v-model="emergenciaState.credito.tipoValorCuota" />
         </div>
 
         <div v-else-if="currentStep === 2" class="space-y-4">
+          <AnalisisEmergenciaForm
+            v-model="emergenciaState"
+            :lock-deudor-fields="true"
+            :lock-vr-cuota-var="isVrCuotaVarBloqueada"
+            :company="companyPrincipal"
+            :loading-company="loadingCompany"
+            :codeudores="codeudoresDeSolicitud"
+            :opciones-garantia="opcionesGarantia"
+          />
+        </div>
+
+        <div v-else-if="currentStep === 3" class="space-y-4">
           <AnalisisScoreImprimirPanel
             v-if="vistaImprimirScore === 'independiente'"
             ref="scorePanelRef"
@@ -481,6 +907,9 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
             :matrix-lines="scoreLinesIndep"
             :credit-application-id="solicitudId"
             :perfil-deudor="perfilDeudor"
+            :emergencia="emergenciaState"
+            :company="companyPrincipal"
+            :loading-company="loadingCompany"
             @saved="onScoreGuardado"
           />
           <AnalisisScoreImprimirPanel
@@ -494,6 +923,9 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
             :matrix-lines="scoreLinesEmp"
             :credit-application-id="solicitudId"
             :perfil-deudor="perfilDeudor"
+            :emergencia="emergenciaState"
+            :company="companyPrincipal"
+            :loading-company="loadingCompany"
             @saved="onScoreGuardado"
           />
           <p v-else class="text-sm text-muted-foreground">
@@ -520,14 +952,20 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
             </Button>
           </div>
           <div
-            v-if="mostrarBotonGuardarScore || mostrarBotonDescargarPdfScore"
+            v-if="mostrarBotonGuardarEmergencia || mostrarBotonGuardarScore || mostrarBotonDescargarPdfScore"
             class="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end"
           >
             <p
-              v-if="!solicitudId"
+              v-if="!solicitudId && (mostrarBotonGuardarEmergencia || mostrarBotonGuardarScore)"
               class="text-right text-xs text-amber-700 dark:text-amber-400"
             >
               Sin solicitud en la URL: abre esta pantalla desde Radicación para poder guardar.
+            </p>
+            <p
+              v-else-if="mostrarBotonGuardarEmergencia"
+              class="text-right text-xs text-muted-foreground"
+            >
+              Guarda la hoja de análisis (EMERGENCIA) con la misma solicitud; puedes continuar a la hoja SCORE después.
             </p>
             <p
               v-else-if="mostrarBotonGuardarScore"
@@ -561,6 +999,25 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
                   class="mr-2 h-4 w-4 text-red-600 dark:text-red-300"
                 />
                 {{ descargandoScorePdf ? 'Abriendo…' : 'Ver PDF SCORE' }}
+              </Button>
+              <Button
+                v-if="mostrarBotonGuardarEmergencia"
+                type="button"
+                class="shrink-0"
+                :disabled="!solicitudId || guardandoEmergenciaBorrador"
+                @click="guardarBorradorAnalisisEmergencia"
+              >
+                <Icon
+                  v-if="guardandoEmergenciaBorrador"
+                  name="i-lucide-loader-2"
+                  class="mr-2 h-4 w-4 animate-spin"
+                />
+                <Icon
+                  v-else
+                  name="i-lucide-save"
+                  class="mr-2 h-4 w-4"
+                />
+                {{ guardandoEmergenciaBorrador ? 'Guardando…' : 'Guardar hoja de análisis' }}
               </Button>
               <Button
                 v-if="mostrarBotonGuardarScore"

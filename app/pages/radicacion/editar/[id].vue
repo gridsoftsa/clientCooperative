@@ -341,6 +341,60 @@ async function searchApplicant() {
   }
 }
 
+async function searchApplicantForCodeudor() {
+  const doc = codeudorBeingAdded.value.document_number?.trim()
+  if (!doc) {
+    toast.error('Ingresa el número de documento del codeudor')
+    return
+  }
+  loadingSearch.value = true
+  try {
+    const res = await $api<{ data: ApplicantForm | null; found: boolean }>(
+      '/credit-applications/applicants/find',
+      { query: { document_number: doc } },
+    )
+    if (res.found && res.data) {
+      mergeApplicantFromApi(codeudorBeingAdded.value, res.data)
+      toast.success('Codeudor encontrado. Revisa y completa los datos.')
+    } else {
+      toast.info('No encontrado. Completa el formulario con los datos del codeudor.')
+    }
+  } catch (e) {
+    console.error('Error buscando codeudor:', e)
+    toast.error('Error al buscar')
+  } finally {
+    loadingSearch.value = false
+  }
+}
+
+async function searchApplicantForCoDebtor(idx: number) {
+  const co = form.value.co_debtors[idx]
+  if (!co) return
+  const doc = co.document_number?.trim()
+  if (!doc) {
+    toast.error('Ingresa el número de documento del codeudor')
+    return
+  }
+  loadingSearch.value = true
+  try {
+    const res = await $api<{ data: ApplicantForm | null; found: boolean }>(
+      '/credit-applications/applicants/find',
+      { query: { document_number: doc } },
+    )
+    if (res.found && res.data && co) {
+      mergeApplicantFromApi(co, res.data)
+      toast.success('Codeudor encontrado. Revisa y completa los datos.')
+    } else {
+      toast.info('No encontrado. Completa el formulario con los datos del codeudor.')
+    }
+  } catch (e) {
+    console.error('Error buscando codeudor:', e)
+    toast.error('Error al buscar')
+  } finally {
+    loadingSearch.value = false
+  }
+}
+
 const emptyCodeudor = (): ApplicantForm => ({
   document_type: 'CC',
   document_number: '',
@@ -900,7 +954,7 @@ onMounted(() => {
           <CardDescription>
             {{ addingCodeudor
               ? (codeudorStep === 1
-                  ? 'Datos personales y concepto del codeudor'
+                  ? 'Busca por cédula o completa el formulario (datos personales y concepto del codeudor)'
                   : codeudorStep === 2
                     ? 'Plantillas agropecuarias según la actividad económica'
                     : 'Ingresos, gastos y solvencia del codeudor')
@@ -1077,8 +1131,11 @@ onMounted(() => {
                   <div class="border-t border-border px-4 pt-4 pb-2">
                     <ApplicantFormFields
                       :model-value="co"
+                      :show-search="true"
+                      :loading-search="loadingSearch"
                       :show-co-debtor-concept="true"
                       :readonly="false"
+                      @search="() => searchApplicantForCoDebtor(idx)"
                       @update:model-value="form.co_debtors[idx] = $event"
                     />
                   </div>
@@ -1129,9 +1186,12 @@ onMounted(() => {
             <div v-if="codeudorStep === 1" class="space-y-4">
               <ApplicantFormFields
                 v-model="codeudorBeingAdded"
+                :show-search="true"
+                :loading-search="loadingSearch"
                 :show-co-debtor-concept="true"
                 :hide-financial-section="true"
                 :readonly="false"
+                @search="searchApplicantForCodeudor"
               />
             </div>
             <div v-else-if="codeudorStep === 2" class="space-y-4">

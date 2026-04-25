@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { Company } from '~/types/company'
+import type { EmergenciaState } from '~/constants/analisis-score-emergencia'
 import type { AnalisisScorePerfilValue } from '~/constants/analisis-score'
 import type { ImprimirMeta, ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
 import type { ScoreMatrixLine } from '~/constants/analisis-score-matrix'
@@ -11,6 +13,10 @@ import {
   classifyPuntajeTotalIFS,
   sumImprimirPuntajesPorSeccion,
 } from '~/utils/analisis-score-imprimir-totals'
+import {
+  descripcionErroresAdicionales,
+  validarCreditoEmergenciaCompleto,
+} from '~/utils/analisis-emergencia-validacion'
 import {
   buildVariableOptionsFromMatrix,
   EMPLEADO_IMPRIMIR_MATRIX_ALIASES,
@@ -28,6 +34,11 @@ const props = defineProps<{
   /** ID solicitud en la URL; sin él no se puede guardar en servidor. */
   creditApplicationId?: string | null
   perfilDeudor?: AnalisisScorePerfilValue
+  /** Hoja análisis EMERGENCIA (mismo guardado en snapshot) */
+  emergencia?: EmergenciaState | null
+  /** Empresa principal (misma fuente que Configuración → Empresa) */
+  company?: Company | null
+  loadingCompany?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -192,6 +203,18 @@ async function guardarAnalisisScore(): Promise<void> {
     toast.error('Selecciona el perfil del deudor en el paso 1.')
     return
   }
+  if (props.emergencia == null) {
+    toast.error('Faltan datos de la hoja de análisis (EMERGENCIA). Vuelva al paso 2 o recargue la solicitud.')
+    return
+  }
+  const valCred = validarCreditoEmergenciaCompleto(props.emergencia.credito)
+  if (!valCred.ok) {
+    toast.error(
+      valCred.errores[0] ?? 'Complete la hoja de análisis (paso 2) antes de guardar el SCORE.',
+      { description: descripcionErroresAdicionales(valCred.errores) },
+    )
+    return
+  }
   if (!puntajesFormularioValido.value) {
     erroresValidacionVisibles.value = true
     toast.error('Completa el puntaje en todas las variables antes de guardar.')
@@ -217,6 +240,9 @@ async function guardarAnalisisScore(): Promise<void> {
         nivel_ifs: nivelIFS.value,
         nivel_riesgo: nivelRiesgo.value,
         observaciones: observaciones.value.trim() === '' ? null : observaciones.value,
+        emergencia: props.emergencia != null
+          ? JSON.parse(JSON.stringify(props.emergencia)) as Record<string, unknown>
+          : null,
       },
     })
     toast.success(res?.message ?? 'Análisis y SCORE guardado correctamente.')
@@ -252,6 +278,13 @@ defineExpose({
       <div class="mt-2 flex flex-wrap justify-center gap-x-6 gap-y-1 text-muted-foreground">
         <span>Código: <span class="font-mono text-foreground">{{ meta.codigoFormulario }}</span></span>
         <span>Versión: <span class="font-mono text-foreground">{{ meta.version }}</span></span>
+        <span>
+          NIT:
+          <span class="font-mono text-foreground">
+            <template v-if="props.loadingCompany">…</template>
+            <template v-else>{{ (props.company && props.company.nit && props.company.nit.trim()) || '—' }}</template>
+          </span>
+        </span>
       </div>
       <p class="mt-3 text-center text-xs text-muted-foreground">
         {{ meta.entidadLinea }}
@@ -335,7 +368,7 @@ defineExpose({
                   <Select
                     v-if="isMatrixDataRow(row)"
                     :model-value="selectedMatrixOptionValue(row)"
-                    @update:model-value="(v) => onMatrixOptionChange(row, v ?? '__none__')"
+                    @update:model-value="(v) => onMatrixOptionChange(row, v == null ? '__none__' : String(v))"
                   >
                     <SelectTrigger
                       :id="`imp-car-${idx}`"
