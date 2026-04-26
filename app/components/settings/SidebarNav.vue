@@ -11,7 +11,6 @@ const sections: { heading: string; items: NavItem[] }[] = [
       { label: 'Cuenta', href: '/settings/account', permission: 'settings_ver' },
       { label: 'Apariencia', href: '/settings/appearance', permission: 'settings_ver' },
       { label: 'Notificaciones', href: '/settings/notifications', permission: 'settings_ver' },
-      { label: 'Pantalla', href: '/settings/display', permission: 'settings_ver' },
     ],
   },
   {

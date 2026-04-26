@@ -103,12 +103,6 @@ export const navMenu: NavMenu[] = [
             permission: 'settings_ver',
           },
           {
-            title: 'Pantalla',
-            icon: 'i-lucide-monitor',
-            link: '/settings/display',
-            permission: 'settings_ver',
-          },
-          {
             title: 'Empresa principal',
             icon: 'i-lucide-building',
             link: '/settings/company',

@@ -40,6 +40,30 @@ const codeudorBeingAdded = ref<ApplicantForm>({
   documents: [],
 })
 
+/** null = nuevo codeudor en `codeudorBeingAdded`; número = editar `form.co_debtors[index]`. */
+const codeudorEditIndex = ref<number | null>(null)
+
+const codeudorWizardApplicant = computed({
+  get(): ApplicantForm {
+    const i = codeudorEditIndex.value
+    if (i != null) {
+      const co = form.value.co_debtors[i]
+      if (co != null) {
+        return co
+      }
+    }
+    return codeudorBeingAdded.value
+  },
+  set(v: ApplicantForm) {
+    const i = codeudorEditIndex.value
+    if (i != null) {
+      form.value.co_debtors[i] = v
+    } else {
+      codeudorBeingAdded.value = v
+    }
+  },
+})
+
 const form = ref<CreditApplicationForm>({
   debtor: {
     document_type: 'CC',
@@ -406,28 +430,53 @@ const emptyCodeudor = (): ApplicantForm => ({
 
 function startAddingCodeudor() {
   addingCodeudor.value = true
+  codeudorEditIndex.value = null
   codeudorStep.value = 1
   codeudorBeingAdded.value = { ...emptyCodeudor() }
 }
 
-function cancelAddingCodeudor() {
-  addingCodeudor.value = false
+function startEditingCodeudor(idx: number) {
+  if (!form.value.co_debtors[idx]) {
+    return
+  }
+  addingCodeudor.value = true
+  codeudorEditIndex.value = idx
   codeudorStep.value = 1
 }
 
-function confirmAddCodeudor() {
-  if (!codeudorBeingAdded.value.document_number?.trim()
-    || !codeudorBeingAdded.value.first_name?.trim()
-    || !codeudorBeingAdded.value.first_last_name?.trim()) {
+function cancelAddingCodeudor() {
+  addingCodeudor.value = false
+  codeudorEditIndex.value = null
+  codeudorStep.value = 1
+}
+
+function searchApplicantForWizard() {
+  const i = codeudorEditIndex.value
+  if (i != null) {
+    searchApplicantForCoDebtor(i)
+  } else {
+    searchApplicantForCodeudor()
+  }
+}
+
+function finalizeCodeudorWizard() {
+  const app = codeudorWizardApplicant.value
+  if (!app.document_number?.trim()
+    || !app.first_name?.trim()
+    || !app.first_last_name?.trim()) {
     toast.error('Completa documento, primer nombre y primer apellido del codeudor')
     return
   }
-  if (hasDocumentsWithoutTitleInApplicant(codeudorBeingAdded.value)) {
+  if (hasDocumentsWithoutTitleInApplicant(app)) {
     toast.error('Todos los documentos adjuntos deben tener un título')
     return
   }
-  form.value.co_debtors.push({ ...codeudorBeingAdded.value })
-  toast.success('Codeudor agregado')
+  if (codeudorEditIndex.value == null) {
+    form.value.co_debtors.push({ ...codeudorBeingAdded.value })
+    toast.success('Codeudor agregado')
+  } else {
+    toast.success('Cambios del codeudor guardados')
+  }
   cancelAddingCodeudor()
 }
 
@@ -447,6 +496,11 @@ function prevCodeudorStep() {
 }
 
 function removeCoDebtor(index: number) {
+  if (addingCodeudor.value && codeudorEditIndex.value === index) {
+    cancelAddingCodeudor()
+  } else if (addingCodeudor.value && codeudorEditIndex.value != null && codeudorEditIndex.value > index) {
+    codeudorEditIndex.value = codeudorEditIndex.value - 1
+  }
   form.value.co_debtors.splice(index, 1)
 }
 
@@ -510,9 +564,12 @@ function validateActivityTemplatesBeforeSave(): string | null {
   return null
 }
 
-const applicantForFinancialSummary = computed(() =>
-  (addingCodeudor.value ? codeudorBeingAdded.value : form.value.debtor),
-)
+const applicantForFinancialSummary = computed(() => {
+  if (addingCodeudor.value) {
+    return codeudorWizardApplicant.value
+  }
+  return form.value.debtor
+})
 
 function ensureSolvency() {
   const d = applicantForFinancialSummary.value
@@ -949,7 +1006,9 @@ onMounted(() => {
       <Card>
         <CardHeader>
           <CardTitle>
-            {{ addingCodeudor ? `Agregar Codeudor - ${stepsCodeudor[codeudorStep - 1]?.title ?? ''}` : (steps[currentStep - 1]?.title ?? '') }}
+            {{ addingCodeudor
+              ? `${codeudorEditIndex != null ? 'Editar' : 'Agregar'} Codeudor - ${stepsCodeudor[codeudorStep - 1]?.title ?? ''}`
+              : (steps[currentStep - 1]?.title ?? '') }}
           </CardTitle>
           <CardDescription>
             {{ addingCodeudor
@@ -1101,47 +1160,41 @@ onMounted(() => {
               No hay codeudores. Haz clic en "Agregar Codeudor" si aplica.
             </div>
 
-            <Accordion v-else type="multiple" collapsible class="space-y-2">
-              <AccordionItem
+            <div v-else class="space-y-2">
+              <div
                 v-for="(co, idx) in form.co_debtors"
                 :key="idx"
-                :value="`codeudor-${idx}`"
-                class="relative rounded-lg border border-border px-4 pr-12 data-[state=open]:border-primary/30"
+                class="flex w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2.5 sm:gap-3"
               >
                 <Button
                   type="button"
                   variant="destructive"
                   size="sm"
-                  class="absolute right-2 top-2.5 h-8 gap-1.5 px-2 text-xs"
+                  class="h-8 shrink-0 gap-1.5 px-2 text-xs"
                   title="Eliminar codeudor"
                   @click="removeCoDebtor(idx)"
                 >
                   <Icon name="i-lucide-trash" class="h-3.5 w-3.5 shrink-0" />
                   Eliminar
                 </Button>
-                <AccordionTrigger class="py-3 pr-8 hover:no-underline">
-                  <span class="font-medium">
-                    Codeudor {{ idx + 1 }}
-                    <span v-if="co.first_name || co.first_last_name" class="ml-2 text-muted-foreground font-normal">
-                      ({{ [co.first_name, co.first_last_name].filter(Boolean).join(' ') || 'Sin nombre' }})
-                    </span>
+                <div class="min-w-0 flex-1 font-medium">
+                  Codeudor {{ idx + 1 }}
+                  <span v-if="co.first_name || co.first_last_name" class="ml-2 text-muted-foreground font-normal">
+                    ({{ [co.first_name, co.first_last_name].filter(Boolean).join(' ') || 'Sin nombre' }})
                   </span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div class="border-t border-border px-4 pt-4 pb-2">
-                    <ApplicantFormFields
-                      :model-value="co"
-                      :show-search="true"
-                      :loading-search="loadingSearch"
-                      :show-co-debtor-concept="true"
-                      :read-only-form="false"
-                      @search="() => searchApplicantForCoDebtor(idx)"
-                      @update:model-value="form.co_debtors[idx] = $event"
-                    />
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  class="h-8 shrink-0 gap-1.5"
+                  @click="startEditingCodeudor(idx)"
+                >
+                  <Icon name="i-lucide-pencil" class="h-3.5 w-3.5 shrink-0" />
+                  Editar
+                </Button>
+              </div>
+            </div>
           </div>
 
           <div
@@ -1185,24 +1238,24 @@ onMounted(() => {
 
             <div v-if="codeudorStep === 1" class="space-y-4">
               <ApplicantFormFields
-                v-model="codeudorBeingAdded"
+                v-model="codeudorWizardApplicant"
                 :show-search="true"
                 :loading-search="loadingSearch"
                 :show-co-debtor-concept="true"
                 :hide-financial-section="true"
                 :read-only-form="false"
-                @search="searchApplicantForCodeudor"
+                @search="searchApplicantForWizard"
               />
             </div>
             <div v-else-if="codeudorStep === 2" class="space-y-4">
               <CreditsFinancialActivityFormList
-                :model-value="getActivityTemplatesFor(codeudorBeingAdded)"
-                @update:model-value="(v) => setActivityTemplatesFor(codeudorBeingAdded, v)"
+                :model-value="getActivityTemplatesFor(codeudorWizardApplicant)"
+                @update:model-value="(v) => setActivityTemplatesFor(codeudorWizardApplicant, v)"
               />
             </div>
             <div v-else-if="codeudorStep === 3" class="space-y-4">
               <ApplicantFormFields
-                v-model="codeudorBeingAdded"
+                v-model="codeudorWizardApplicant"
                 :show-only-financial="true"
                 :read-only-form="false"
               />
@@ -1237,10 +1290,10 @@ onMounted(() => {
               <Button
                 v-if="codeudorStep === 3"
                 type="button"
-                @click="confirmAddCodeudor"
+                @click="finalizeCodeudorWizard"
               >
-                <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-                Agregar codeudor
+                <Icon :name="codeudorEditIndex != null ? 'i-lucide-save' : 'i-lucide-plus'" class="mr-2 h-4 w-4" />
+                {{ codeudorEditIndex != null ? 'Guardar cambios' : 'Agregar codeudor' }}
               </Button>
             </div>
           </div>
