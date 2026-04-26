@@ -27,18 +27,21 @@ export function useDocumentDownload() {
   }
 
   /**
-   * Muestra el PDF en una nueva pestaña (el asesor puede descargar desde el visor del navegador).
+   * Abre el PDF en una pestaña nueva. Usa enlace con target=_blank: en muchos navegadores
+   * `window.open` con `noopener` devuelve `null` aunque la pestaña sí se abre, lo que
+   * disparaba un falso error "permita ventanas emergentes".
    */
   function openPdfBlobInNewTab(blob: Blob): void {
     if (import.meta.server) return
     const objectUrl = URL.createObjectURL(blob)
-    const opened = window.open(objectUrl, '_blank', 'noopener,noreferrer')
-    if (!opened) {
-      URL.revokeObjectURL(objectUrl)
-      throw new Error(
-        'No se pudo abrir el PDF. Permita ventanas emergentes para este sitio.',
-      )
-    }
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    a.style.cssText = 'position:fixed;left:-9999px;top:0'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000)
   }
 
@@ -119,9 +122,39 @@ export function useDocumentDownload() {
     openPdfBlobInNewTab(blob)
   }
 
+  /**
+   * Fecha, hora y zona tal como el navegador las muestra (equipo del usuario), para el pie del PDF.
+   */
+  function pdfClientLocalQuery(): { clientFecha: string, clientZona: string } {
+    if (import.meta.server) {
+      return { clientFecha: '', clientZona: '' }
+    }
+    const d = new Date()
+    const clientFecha = d.toLocaleString('es-CO', {
+      dateStyle: 'long',
+      timeStyle: 'medium',
+    })
+    let clientZona = ''
+    try {
+      clientZona = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+    } catch {
+      clientZona = ''
+    }
+    return { clientFecha, clientZona }
+  }
+
   async function downloadAnalisisScorePdf(applicationId: string | number, _filename?: string): Promise<void> {
     const xsrf = await ensureCsrfCookie()
-    const url = `${apiBase}/api/credit-applications/${applicationId}/analisis-score/pdf`
+    const { clientFecha, clientZona } = pdfClientLocalQuery()
+    const params = new URLSearchParams()
+    if (clientFecha) {
+      params.set('client_fecha', clientFecha)
+    }
+    if (clientZona) {
+      params.set('client_tz', clientZona)
+    }
+    const q = params.toString()
+    const url = `${apiBase}/api/credit-applications/${applicationId}/analisis-score/pdf${q ? `?${q}` : ''}`
 
     const res = await fetch(url, {
       method: 'GET',

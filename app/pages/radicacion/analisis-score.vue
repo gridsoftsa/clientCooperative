@@ -589,15 +589,32 @@ function resetVistaAnalisisScoreParaSolicitud(): void {
   resumenMontoSolicitado.value = 0
 }
 
-async function loadSolicitudParaAnalisis(id: string): Promise<void> {
+type LoadSolicitudParaAnalisisOptions = {
+  /**
+   * Tras guardar, recarga la misma radicación sin «limpiar» la UI (evita parpadeo 1 → 2/3/4).
+   * Cambiar de `?solicitud=` o carga inicial: siempre reset completo.
+   */
+  recargaTrasGuardarMismaSolicitud?: boolean
+  /** Tras un GET correcto, posicionar en este paso y scrollear arriba. */
+  pasoAlExitoCarga?: 1 | 2 | 3 | 4
+}
+
+async function loadSolicitudParaAnalisis(
+  id: string,
+  options?: LoadSolicitudParaAnalisisOptions,
+): Promise<boolean> {
+  const soft = options?.recargaTrasGuardarMismaSolicitud === true
+  const pasoAlExito = options?.pasoAlExitoCarga
   solicitudCargaSerial.value += 1
   const cargaId = solicitudCargaSerial.value
-  resetVistaAnalisisScoreParaSolicitud()
+  if (!soft) {
+    resetVistaAnalisisScoreParaSolicitud()
+  }
   loadingSolicitud.value = true
   try {
     const res = await $api<{ data?: Record<string, unknown> } & Record<string, unknown>>(`/credit-applications/${id}`)
     if (cargaId !== solicitudCargaSerial.value) {
-      return
+      return false
     }
     const data = (res?.data ?? res) as Record<string, unknown>
     const snap = data.analisis_score_snapshot as Record<string, unknown> | null | undefined
@@ -677,12 +694,18 @@ async function loadSolicitudParaAnalisis(id: string): Promise<void> {
     }
     aplicarVistaFinancieraDesdeSolicitud(data)
     aplicarCabeceraALineaEmergenciaDeudor()
+    if (pasoAlExito != null) {
+      currentStep.value = pasoAlExito
+      scrollVistaAnalisisAlInicio()
+    }
+    return true
   } catch (e) {
     if (cargaId !== solicitudCargaSerial.value) {
-      return
+      return false
     }
     console.error('Error cargando solicitud para SCORE:', e)
     resetVistaAnalisisScoreParaSolicitud()
+    return false
   } finally {
     if (cargaId === solicitudCargaSerial.value) {
       loadingSolicitud.value = false
@@ -891,9 +914,13 @@ watch(perfilDeudor, (p) => {
 
 async function onScoreGuardado(): Promise<void> {
   const id = solicitudId.value
-  if (id) {
-    await loadSolicitudParaAnalisis(id)
+  if (!id) {
+    return
   }
+  await loadSolicitudParaAnalisis(id, {
+    recargaTrasGuardarMismaSolicitud: true,
+    pasoAlExitoCarga: 4,
+  })
 }
 
 function variantAnalisisAlGuardar(): 'independiente' | 'empleado' {
@@ -953,10 +980,11 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
     toast.success('Análisis guardado con la solicitud.')
     emergenciaFormRef.value?.limpiarErroresValidacionCredito()
     if (solicitudId.value) {
-      await loadSolicitudParaAnalisis(solicitudId.value)
+      await loadSolicitudParaAnalisis(solicitudId.value, {
+        recargaTrasGuardarMismaSolicitud: true,
+        pasoAlExitoCarga: 3,
+      })
     }
-    currentStep.value = 3
-    scrollVistaAnalisisAlInicio()
   }
   catch (e: unknown) {
     const err = e as { data?: { message?: string } }
@@ -1378,7 +1406,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
                   name="i-lucide-save"
                   class="mr-2 h-4 w-4"
                 />
-                {{ scorePanelRef?.guardandoScore ? 'Guardando…' : 'Guardar análisis SCORE' }}
+                {{ scorePanelRef?.guardandoScore ? 'Guardando…' : 'Guardar Score' }}
               </Button>
             </div>
           </div>
