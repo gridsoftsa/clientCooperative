@@ -277,7 +277,7 @@ function syncFormFromApplication() {
     agency_id: app.agency_id ?? 0,
     status: 'Draft',
     numero_radicado_externo: app.numero_radicado_externo ?? '',
-    co_debtors: coDebtors.value.map((c) => {
+    co_debtors: coDebtors.value.map((c: (typeof coDebtors.value)[number]) => {
       const docs = getDocumentsForApplicant(c.id)
       return apiApplicantToForm(c, docs)
     }),
@@ -979,7 +979,7 @@ onMounted(() => {
               :show-search="true"
               :loading-search="loadingSearch"
               :hide-financial-section="true"
-              :readonly="false"
+              :read-only-form="false"
               @search="searchApplicant"
             />
           </div>
@@ -1001,7 +1001,7 @@ onMounted(() => {
             <ApplicantFormFields
               v-model="form.debtor"
               :show-only-financial="true"
-              :readonly="false"
+              :read-only-form="false"
             />
           </div>
 
@@ -1134,7 +1134,7 @@ onMounted(() => {
                       :show-search="true"
                       :loading-search="loadingSearch"
                       :show-co-debtor-concept="true"
-                      :readonly="false"
+                      :read-only-form="false"
                       @search="() => searchApplicantForCoDebtor(idx)"
                       @update:model-value="form.co_debtors[idx] = $event"
                     />
@@ -1190,7 +1190,7 @@ onMounted(() => {
                 :loading-search="loadingSearch"
                 :show-co-debtor-concept="true"
                 :hide-financial-section="true"
-                :readonly="false"
+                :read-only-form="false"
                 @search="searchApplicantForCodeudor"
               />
             </div>
@@ -1204,7 +1204,7 @@ onMounted(() => {
               <ApplicantFormFields
                 v-model="codeudorBeingAdded"
                 :show-only-financial="true"
-                :readonly="false"
+                :read-only-form="false"
               />
             </div>
 

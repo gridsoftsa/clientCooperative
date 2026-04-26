@@ -2484,7 +2484,7 @@ function findFinagroRange(data: Record<string, unknown>): { pct_costos: number; 
   if (!range) return null
   return {
     pct_costos: Number(range.pct_costos ?? 0),
-    kg_hectarea: range.kg_hectarea != null && range.kg_hectarea !== '' ? Number(range.kg_hectarea) : null,
+    kg_hectarea: range.kg_hectarea != null ? Number(range.kg_hectarea) : null,
   }
 }
 
@@ -2575,6 +2575,7 @@ function computeCultivoCicloCortoCantKgProducidos(data: Record<string, unknown>)
 /** Cultivo Ciclo Corto: ventas = cant_kg_producidos × precio_unitario_kg */
 function computeCultivoCicloCortoVentas(data: Record<string, unknown>): number | null {
   const kg = computeCultivoCicloCortoCantKgProducidos(data)
+  if (kg == null) return null
   const precio = Number(data.precio_unitario_kg ?? 0)
   const valor = kg * precio
   return Number.isFinite(valor) ? valor : null

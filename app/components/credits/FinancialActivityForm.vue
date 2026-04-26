@@ -29,13 +29,13 @@ const { fetchFlatData } = useTemplateFlatData()
 const props = withDefaults(
   defineProps<{
     modelValue?: ActivityTemplateData | null
-    readonly?: boolean
+    readOnlyForm?: boolean
     /** Tras guardar la plantilla en el listado: deshabilita sector y plantilla */
     lockSectorAndTemplate?: boolean
   }>(),
   {
-    modelValue: () => null,
-    readonly: false,
+    modelValue: undefined,
+    readOnlyForm: false,
     lockSectorAndTemplate: false,
   },
 )
@@ -196,8 +196,9 @@ watch(templateSelected, async (newTemplate) => {
 
 watch(
   () => formData.value.tipo_producto,
-  async (product) => {
-    if (!templateSelected.value || !templateHasProductSelect(templateSelected.value) || !product || isSyncingFromProps.value) return
+  async (product: unknown) => {
+    if (typeof product !== 'string' || !product) return
+    if (!templateSelected.value || !templateHasProductSelect(templateSelected.value) || isSyncingFromProps.value) return
     loadingFlatData.value = true
     try {
       const flatData = await fetchFlatData(templateSelected.value, product)
@@ -222,7 +223,7 @@ watch(sectorSelected, (newSector) => {
   if (isSyncingFromProps.value) return
   // Si el sector tiene solo una plantilla, auto-seleccionarla
   if (templates.length === 1) {
-    templateSelected.value = templates[0].value
+    templateSelected.value = templates[0]!.value
   } else {
     templateSelected.value = ''
   }
@@ -298,7 +299,7 @@ watch(
 )
 
 const sectorTemplateDisabled = computed(
-  () => props.readonly || props.lockSectorAndTemplate,
+  () => props.readOnlyForm || props.lockSectorAndTemplate,
 )
 
 onMounted(() => {
@@ -375,7 +376,7 @@ onMounted(() => {
           :template-key="templateSelected"
           :initial-data="formData"
           :read-only-field-keys="configuredFieldKeys"
-          :readonly="readonly"
+          :read-only-form="readOnlyForm"
           @update:form-data="setFormData"
         />
         <template #fallback>

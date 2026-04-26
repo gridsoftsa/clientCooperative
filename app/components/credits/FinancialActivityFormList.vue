@@ -19,13 +19,13 @@ const props = withDefaults(
   defineProps<{
     modelValue?: ActivityTemplateData[]
     /** Modo solo lectura (sin edición) */
-    readonly?: boolean
+    readOnlyForm?: boolean
     /** Texto bajo el título (por defecto: actividades del deudor) */
     listHint?: string
   }>(),
   {
     modelValue: () => [],
-    readonly: false,
+    readOnlyForm: false,
     listHint: '',
   },
 )
@@ -161,7 +161,7 @@ watch(
       <p class="text-sm text-muted-foreground">
         {{ listHint || 'Añade una o más plantillas según las actividades económicas del deudor' }}
       </p>
-      <div v-if="!readonly" class="flex flex-wrap gap-2">
+      <div v-if="!readOnlyForm" class="flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" @click="addTemplate">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Agregar plantilla
@@ -188,7 +188,7 @@ watch(
       >
         <div class="flex w-full min-w-0 items-center gap-2 sm:gap-3">
           <Button
-            v-if="!readonly"
+            v-if="!readOnlyForm"
             type="button"
             variant="destructive"
             size="sm"
@@ -213,11 +213,11 @@ watch(
           <div class="border-t border-border pt-4 pb-2">
             <CreditsFinancialActivityForm
               :model-value="item"
-              :readonly="readonly"
+              :read-only-form="readOnlyForm"
               :lock-sector-and-template="sectorTemplateLocked[idx] === true"
               @update:model-value="(v) => updateTemplate(idx, v)"
             />
-            <div v-if="!readonly" class="mt-4 flex justify-end">
+            <div v-if="!readOnlyForm" class="mt-4 flex justify-end">
               <Button
                 type="button"
                 variant="outline"

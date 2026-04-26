@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Ref } from 'vue'
 import { toast } from 'vue-sonner'
 import {
   getTemplateConfigSchema,
@@ -53,6 +54,8 @@ const emit = defineEmits<{
 
 const editing = ref(false)
 const editedData = ref<Record<string, unknown>>({ ...props.record.config_data })
+/** Misma ref: tipado ancho solo para v-model de `<Input />` (string | number) */
+const cfgInputModel = editedData as Ref<Record<string, string | number | undefined>>
 
 watch(() => props.record.config_data, (newVal) => {
   editedData.value = { ...newVal }
@@ -473,7 +476,7 @@ function handleCancel() {
               </Label>
               <Input
                 :id="`cfg-${record.id}-${field.key}`"
-                v-model="editedData[field.key]"
+                v-model="cfgInputModel[field.key]"
                 type="number"
                 step="0.01"
                 class="h-8 text-sm"
@@ -489,7 +492,7 @@ function handleCancel() {
               </Label>
               <Input
                 :id="`cfg-${record.id}-${field.key}`"
-                v-model="editedData[field.key]"
+                v-model="cfgInputModel[field.key]"
                 type="text"
                 class="h-8 text-sm"
                 :disabled="!editing || !canEdit"
@@ -526,7 +529,7 @@ function handleCancel() {
           <Input
             v-if="isNumericValue(value)"
             :id="`cfg-${record.id}-${key}`"
-            v-model="editedData[key]"
+            v-model="cfgInputModel[key]"
             type="number"
             step="0.01"
             class="h-8 text-sm"
@@ -537,7 +540,7 @@ function handleCancel() {
           <Input
             v-else
             :id="`cfg-${record.id}-${key}`"
-            v-model="editedData[key]"
+            v-model="cfgInputModel[key]"
             type="text"
             class="h-8 text-sm"
             :disabled="!editing || !canEdit"

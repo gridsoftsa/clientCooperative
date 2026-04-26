@@ -21,7 +21,7 @@ defineProps<DataTablePaginationProps>()
         </p>
         <Select
           :model-value="`${table.getState().pagination.pageSize}`"
-          @update:model-value="table.setPageSize"
+          @update:model-value="(v) => { const n = Number(v); if (Number.isFinite(n)) table.setPageSize(n) }"
         >
           <SelectTrigger class="h-8 w-[70px]">
             <SelectValue :placeholder="`${table.getState().pagination.pageSize}`" />

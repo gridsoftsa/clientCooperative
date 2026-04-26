@@ -5,9 +5,8 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/tailwind.css'],
   vite: {
-    plugins: [
-      tailwindcss(),
-    ],
+    // @ts-expect-error Vite 6 / Rollup: tailwind `Plugin` type differs from Nuxt’s `PluginOption`
+    plugins: [tailwindcss()],
   },
 
   components: [
@@ -79,7 +78,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       // Laravel base URL (Sanctum SPA / cookies)
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8585'
+      apiBase: (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env?.NUXT_PUBLIC_API_BASE || 'http://localhost:8585'
     }
   },
 

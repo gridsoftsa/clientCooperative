@@ -342,7 +342,7 @@ function syncFormFromApplication() {
     agency_id: app.agency_id ?? 0,
     status: app.status ?? 'Draft',
     numero_radicado_externo: app.numero_radicado_externo ?? '',
-    co_debtors: coDebtors.value.map((c) => {
+    co_debtors: coDebtors.value.map((c: (typeof coDebtors.value)[number]) => {
       const docs = getDocumentsForApplicant(c.id)
       return apiApplicantToForm(c, docs)
     }),

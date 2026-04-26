@@ -39,12 +39,13 @@ const props = withDefaults(
     /** Campos que vienen de configuración y no deben ser editables en radicación */
     readOnlyFieldKeys?: string[]
     /** Cuando true, todos los campos son solo lectura */
-    readonly?: boolean
+    /** When true, all fields are read-only (avoids clashing con `readonly` / `isReadonly` de Vue) */
+    readOnlyForm?: boolean
   }>(),
   {
     initialData: () => ({}),
     readOnlyFieldKeys: () => [],
-    readonly: false,
+    readOnlyForm: false,
   },
 )
 
@@ -64,7 +65,7 @@ function selectFieldPlaceholder(field: FormFieldSchema): string {
 }
 
 function isFieldReadOnly(fieldKey: string): boolean {
-  if (props.readonly) return true
+  if (props.readOnlyForm) return true
   return readOnlySet.value.has(fieldKey)
 }
 
@@ -78,7 +79,7 @@ const readOnlyInputRingClass =
   'border-amber-300/70 !bg-amber-50/40 focus-visible:ring-amber-500/30 dark:border-amber-800/60 dark:!bg-amber-950/20 dark:focus-visible:ring-amber-500/20'
 
 function showReadOnlyBadge(field: FormFieldSchema): boolean {
-  if (props.readonly) {
+  if (props.readOnlyForm) {
     return false
   }
   if (field.type === 'computed') {
@@ -95,7 +96,7 @@ function readOnlyFieldGroupClass(field: FormFieldSchema): string {
 }
 
 const hasReadOnlyGuidance = computed(() => {
-  if (props.readonly) {
+  if (props.readOnlyForm) {
     return false
   }
   if (props.readOnlyFieldKeys.length > 0) {
@@ -232,9 +233,9 @@ function buildInitialFormData(): Record<string, unknown> {
       if (field.type === 'computed') continue
       if (data[field.key] !== undefined) continue
       if (field.type === 'number' || field.type === 'money') {
-        data[field.key] = null as unknown
+        data[field.key] = null
       } else if (field.type === 'select' && field.options?.length) {
-        data[field.key] = shouldNotAutoSelectFirstOption(field) ? null : field.options[0].value
+        data[field.key] = shouldNotAutoSelectFirstOption(field) ? null : (field.options[0]!.value)
       } else {
         data[field.key] = ''
       }
@@ -245,7 +246,7 @@ function buildInitialFormData(): Record<string, unknown> {
 
 function formatComputedValue(field: { formulaKey?: string; formulaFormat?: string; key: string }): string {
   if (!field.formulaKey) return '—'
-  const v = computeFormula(field.formulaKey, formData)
+  const v: number | null = computeFormula(field.formulaKey, formData) as number | null
   if (v == null) return '—'
   if (field.formulaFormat === 'percent') {
     return `${v}%`
@@ -323,7 +324,7 @@ const inputBaseClass =
 <template>
   <form class="space-y-6">
     <div
-      v-if="readonly"
+      v-if="readOnlyForm"
       class="flex gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200"
       role="status"
     >
@@ -641,7 +642,7 @@ const inputBaseClass =
                   no-options-text="No hay municipios"
                   no-results-text="No hay resultados. Escribe para filtrar."
                   class="multiselect-municipality"
-                  @update:model-value="(v) => (formData[field.key] = (v as string) ?? '')"
+                  @update:model-value="(v: string | null) => (formData[field.key] = (v as string) ?? '')"
                 />
               </div>
             </template>

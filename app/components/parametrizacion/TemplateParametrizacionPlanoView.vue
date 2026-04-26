@@ -241,7 +241,7 @@ function syncSelectedProduct() {
   }
   const current = selectedProductKey.value
   const exists = opts.some(o => o.value === current)
-  selectedProductKey.value = exists ? current : opts[0].value
+  selectedProductKey.value = exists ? current : opts[0]!.value
 }
 
 watch(selectedTemplateKey, syncSelectedProduct)

@@ -76,7 +76,7 @@ function setField(key: string, value: unknown) {
         Información de referencia
       </label>
       <textarea
-        :value="editedData.descripcion ?? '3 primeros años son pérdidas'"
+        :value="typeof editedData.descripcion === 'string' ? editedData.descripcion : '3 primeros años son pérdidas'"
         rows="3"
         class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         :disabled="!editing || !canEdit"

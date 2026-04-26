@@ -347,7 +347,7 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
           <Input
             id="emg-deudor"
             v-model="state.deudorCodeudor.deudor"
-            :readonly="lockDeudorFields"
+            :read-only-form="lockDeudorFields"
             :class="cn(lockDeudorFields && deudorReadonlyClass)"
             :tabindex="lockDeudorFields ? -1 : undefined"
           />
@@ -358,7 +358,7 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
             id="emg-dcto"
             v-model="state.deudorCodeudor.documento"
             class="font-mono"
-            :readonly="lockDeudorFields"
+            :read-only-form="lockDeudorFields"
             :class="cn(lockDeudorFields && deudorReadonlyClass)"
             :tabindex="lockDeudorFields ? -1 : undefined"
           />
@@ -369,7 +369,7 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
             id="emg-fa2"
             v-model="state.deudorCodeudor.fechaAnalisis"
             class="font-mono"
-            :readonly="lockDeudorFields"
+            :read-only-form="lockDeudorFields"
             :class="cn(lockDeudorFields && deudorReadonlyClass)"
             :tabindex="lockDeudorFields ? -1 : undefined"
           />
@@ -487,7 +487,7 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
               v-model="state.credito.vrCuotaVar"
               class="h-10 w-full font-mono"
               inputmode="decimal"
-              :readonly="lockVrCuotaVar"
+              :read-only-form="lockVrCuotaVar"
               :class="cn(lockVrCuotaVar && deudorReadonlyClass)"
               :tabindex="lockVrCuotaVar ? -1 : undefined"
               placeholder="Ej. $ 5.200.000,00"

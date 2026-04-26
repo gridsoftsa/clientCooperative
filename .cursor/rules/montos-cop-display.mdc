@@ -1,0 +1,9 @@
+---
+description: Mostrar montos COP con prefijo $ en UI; priorizar formato moneda salvo indicación contraria
+alwaysApply: true
+---
+
+# Valores monetarios (COP) en el cliente
+
+- Si el usuario indica que un dato es o se comporta como **valor en dinero** (ingresos, gastos, montos, sumatorias, totales, cuotas, activos en pesos, etc.), **priorizar** en la UI el criterio ya definido en `app/composables/usePesosFormat.ts`: `formatPesosConSimbolo`, `formatPesosConSimboloDesdeTexto` o `CreditsBaseMoneyInput` (mostrar con **`$`**, miles y decimales es-CO). Los valores **persistidos** pueden seguir usando `formatPesos` sin `$` en string si el flujo lo exige; el usuario quitará o ajustará si hace falta.
+- **No** usar aserciones TypeScript `as` dentro de **expresiones de plantilla** (atributos `:`): vue-tsc/Volar no parsean bien el tipo `as` ahí; extraer a una **función en `<script setup>`** y llamarla desde el template.

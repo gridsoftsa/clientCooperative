@@ -64,7 +64,7 @@ const endeudamientoDisplayPct = computed(() => {
 })
 const assetsList = computed(() => financial.value.assets ?? [])
 const assetsTotal = computed(() =>
-  assetsList.value.reduce((sum, a) => sum + (a.value ?? 0), 0)
+  assetsList.value.reduce((sum: number, a: { value?: number | null }) => sum + (a.value ?? 0), 0)
 )
 const incomeTotal = computed(() =>
   (income.value.salary ?? 0) + (income.value.pension ?? 0) + (income.value.business ?? income.value.crops ?? 0)

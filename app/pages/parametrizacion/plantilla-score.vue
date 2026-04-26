@@ -49,7 +49,7 @@ function cloneLines(lines: ScoreMatrixLine[]): ScoreMatrixLine[] {
 async function fetchMatrices() {
   loading.value = true
   try {
-    const res = await $api('/score-template-matrices') as ScoreMatricesApiResponse
+    const res = (await $api('/score-template-matrices')) as unknown as ScoreMatricesApiResponse
     const d = res.data
     if (d.independiente?.lines?.length) {
       const normalized = normalizeScoreMatrixLines(d.independiente.lines)

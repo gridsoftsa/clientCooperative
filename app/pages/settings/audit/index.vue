@@ -22,12 +22,12 @@ const pagination = ref({
 async function fetchActivities() {
   loading.value = true
   try {
-    const res = await $api('/audit', {
+    const res = (await $api('/audit', {
       query: {
         per_page: pagination.value.per_page,
         page: pagination.value.current_page
       }
-    })
+    })) as unknown as { data: any[]; meta: typeof pagination.value }
     activities.value = res.data
     pagination.value = res.meta
   } catch (error) {

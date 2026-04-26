@@ -14,17 +14,16 @@ export default defineNuxtPlugin(() => {
     async onRequest({ request, options }) {
       // FormData: no enviar Content-Type para que el navegador añada boundary
       if (options.body instanceof FormData) {
-        const headers = { ...options.headers } as Record<string, string>
-        delete headers['Content-Type']
+        const headers = new Headers(options.headers as HeadersInit)
+        headers.delete('Content-Type')
         options.headers = headers
       }
       // Get CSRF token before making requests
       const csrfToken = await getCsrfToken(apiBase)
       if (csrfToken) {
-        options.headers = {
-          ...options.headers,
-          'X-XSRF-TOKEN': csrfToken
-        }
+        const headers = new Headers(options.headers as HeadersInit)
+        headers.set('X-XSRF-TOKEN', csrfToken)
+        options.headers = headers
       }
     }
   })
@@ -33,7 +32,7 @@ export default defineNuxtPlugin(() => {
   function readXsrfCookie(): string | null {
     if (import.meta.server) return null
     const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/)
-    return match ? decodeURIComponent(match[1]) : null
+    return match && match[1] != null ? decodeURIComponent(match[1]) : null
   }
 
   // CSRF token helper

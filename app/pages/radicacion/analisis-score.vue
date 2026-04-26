@@ -133,7 +133,7 @@ const scoreLinesEmp = ref<ScoreMatrixLine[]>(normalizeScoreMatrixLines(EMPLEADO_
 
 async function fetchScoreMatrices(): Promise<void> {
   try {
-    const res = await $api('/score-template-matrices') as ScoreMatricesApiResponse
+    const res = (await $api('/score-template-matrices')) as unknown as ScoreMatricesApiResponse
     const d = res.data
     if (d.independiente?.lines?.length) {
       const normalized = normalizeScoreMatrixLines(d.independiente.lines)

@@ -9,7 +9,7 @@ export function useDocumentDownload() {
   function readXsrfCookie(): string | null {
     if (import.meta.server) return null
     const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/)
-    return match ? decodeURIComponent(match[1]) : null
+    return match && match[1] != null ? decodeURIComponent(match[1]) : null
   }
 
   async function ensureCsrfCookie(): Promise<string | null> {
@@ -70,7 +70,7 @@ export function useDocumentDownload() {
     if (!finalFilename && disposition) {
       const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
       if (match) {
-        finalFilename = match[1].replace(/['"]/g, '').trim()
+        finalFilename = match[1]!.replace(/['"]/g, '').trim()
       }
     }
     finalFilename = finalFilename || 'documento'

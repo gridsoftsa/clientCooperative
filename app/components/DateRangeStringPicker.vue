@@ -24,7 +24,8 @@ const df = new DateFormatter('es-CO', { dateStyle: 'medium' })
 const localTz = getLocalTimeZone()
 const todayPlaceholder = today(localTz)
 
-const inner = ref<DateRange>({ start: undefined, end: undefined })
+// `any` evita incompat. CalendarDate (internationalized) vs DateValue (reka) en v-model; en runtime es coherente
+const inner = ref<any>({ start: undefined, end: undefined })
 let syncingFromModel = false
 
 function syncModelIntoInner() {
@@ -33,9 +34,9 @@ function syncModelIntoInner() {
     const f = from.value?.trim()
     const t = to.value?.trim()
     inner.value = {
-      start: f ? parseDate(f) : undefined,
-      end: t ? parseDate(t) : undefined,
-    }
+      start: f ? (parseDate(f) as DateValue) : undefined,
+      end: t ? (parseDate(t) as DateValue) : undefined,
+    } as DateRange
   }
   finally {
     nextTick(() => {
@@ -52,10 +53,10 @@ function formatDay(d: DateValue) {
 
 const buttonLabel = computed(() => {
   if (inner.value.start && inner.value.end) {
-    return `${formatDay(inner.value.start)} – ${formatDay(inner.value.end)}`
+    return `${formatDay(inner.value.start as DateValue)} – ${formatDay(inner.value.end as DateValue)}`
   }
   if (inner.value.start) {
-    return formatDay(inner.value.start)
+    return formatDay(inner.value.start as DateValue)
   }
   return props.placeholderText
 })
@@ -63,7 +64,7 @@ const buttonLabel = computed(() => {
 const hasRange = computed(() => Boolean(from.value?.trim() || to.value?.trim()))
 const popoverId = props.id ? `${props.id}-popover` : undefined
 
-const calendarPlaceholder = computed(() => inner.value.start ?? todayPlaceholder)
+const calendarPlaceholder = computed((): DateValue => (inner.value.start as DateValue | undefined) ?? todayPlaceholder)
 
 watch(
   inner,
@@ -81,7 +82,7 @@ watch(
 )
 
 function clearRange() {
-  inner.value = { start: undefined, end: undefined }
+  inner.value = { start: undefined, end: undefined } as DateRange
 }
 </script>
 

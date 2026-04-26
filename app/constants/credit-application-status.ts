@@ -1,3 +1,5 @@
+import type { BadgeVariants } from '~/components/ui/badge'
+
 /** Estados de solicitud alineados con `App\Models\CreditApplication` (API). */
 
 export const creditApplicationStatusFilterOptions = [
@@ -29,8 +31,10 @@ export function getCreditApplicationStatusLabel(status: string): string {
   return STATUS_LABELS[status] ?? status
 }
 
-export function getCreditApplicationStatusBadgeVariant(status: string): string {
-  return BADGE_VARIANTS[status] ?? 'outline'
+export function getCreditApplicationStatusBadgeVariant(
+  status: string,
+): NonNullable<BadgeVariants['variant']> {
+  return (BADGE_VARIANTS[status] ?? 'outline') as NonNullable<BadgeVariants['variant']>
 }
 
 /** Orden fijo para mostrar conteos en dashboard u otros resúmenes. */

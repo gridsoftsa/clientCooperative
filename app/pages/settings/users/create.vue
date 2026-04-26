@@ -390,7 +390,7 @@ onMounted(() => {
                       <Checkbox
                         :id="`perm-${p.id}`"
                         :model-value="form.permissions.includes(p.name)"
-                        @update:model-value="(v: boolean) => togglePermission(p.name, v)"
+                        @update:model-value="(v: boolean | 'indeterminate') => togglePermission(p.name, v === true)"
                       />
                       <Label :for="`perm-${p.id}`" class="font-normal cursor-pointer text-sm">{{ formatPermissionDisplayName(p.name) }}</Label>
                     </div>

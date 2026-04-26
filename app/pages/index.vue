@@ -80,8 +80,9 @@ const statusBarStackedData = computed(() => {
       estado: getCreditApplicationStatusLabel(st),
     }
     for (let j = 0; j < creditApplicationStatusOrder.length; j++) {
+      const stKey = creditApplicationStatusOrder[j]!
       const key = `s${j}`
-      row[key] = rowIdx === j ? (summary.value!.by_status[creditApplicationStatusOrder[j]] ?? 0) : 0
+      row[key] = rowIdx === j ? (summary.value!.by_status[stKey] ?? 0) : 0
     }
     return row
   })
@@ -93,6 +94,11 @@ const statusBarStackCategories = computed(() =>
 
 const chartNumberFormatter = (n: number) =>
   new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(n)
+
+const chartAxisYFormatter = (tick: number | Date) => {
+  const n = tick instanceof Date ? tick.getTime() : tick
+  return chartNumberFormatter(n)
+}
 
 const hasActiveDateFilters = computed(() => {
   return Boolean(filterDateFrom.value?.trim()) || Boolean(filterDateTo.value?.trim())
@@ -445,7 +451,7 @@ onUnmounted(() => {
                             index="estado"
                             :categories="[...statusBarStackCategories]"
                             :colors="[...STATUS_CHART_COLORS]"
-                            :y-formatter="chartNumberFormatter"
+                            :y-formatter="chartAxisYFormatter"
                             :rounded-corners="6"
                             :show-legend="false"
                             :margin="{ top: 12, bottom: 12, left: 12, right: 12 }"

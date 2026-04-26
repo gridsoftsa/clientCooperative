@@ -15,14 +15,14 @@ const props = withDefaults(
     /** Muestra solo la sección Datos financieros (para paso dedicado) */
     showOnlyFinancial?: boolean
     /** Modo solo lectura (sin edición) */
-    readonly?: boolean
+    readOnlyForm?: boolean
     /**
      * Si true, «Ingreso cultivos/negocio» no se edita a mano: lo calculan las plantillas de actividad económica.
      */
     incomeBusinessReadonly?: boolean
     onSearch?: () => void
   }>(),
-  { readonly: false, incomeBusinessReadonly: true },
+  { readOnlyForm: false, incomeBusinessReadonly: true },
 )
 
 const emit = defineEmits<{
@@ -128,7 +128,7 @@ function onKeydownPesosOnly(e: KeyboardEvent) {
 
 /** Cultivos/negocio: solo lectura si el formulario es readonly o si viene fijado por plantillas. */
 const incomeBusinessInputReadonly = computed(
-  () => props.readonly || props.incomeBusinessReadonly,
+  () => props.readOnlyForm || props.incomeBusinessReadonly,
 )
 
 /** Total ingresos = salario + pensión + cultivos/negocio + arriendos + otros (para mostrar en input readonly). */
@@ -170,6 +170,11 @@ function updateAsset(index: number, field: 'name' | 'value' | 'matricula_inmobil
   const current = next[index] ?? {}
   next[index] = { ...current, [field]: value }
   assetsList.value = next
+}
+
+/** Nombre legado `description` en algunos datos; `as` en template rompe vue-tsc. */
+function assetNameForInput(asset: { name?: string, description?: string }): string {
+  return asset.name ?? asset.description ?? ''
 }
 
 /** Suma de activos marcados como garantía → Bien raíz (se muestra en el input y se sincroniza a solvency). */
@@ -259,7 +264,7 @@ function formatFileSize(bytes: number): string {
 <template>
   <div class="flex flex-col gap-8">
     <!-- Búsqueda por cédula (solo para deudor) -->
-    <section v-if="!showOnlyFinancial && showSearch && !readonly" :class="sectionClass">
+    <section v-if="!showOnlyFinancial && showSearch && !readOnlyForm" :class="sectionClass">
       <h3 :class="sectionTitleClass">Buscar por documento</h3>
       <div class="rounded-lg border border-border bg-muted/30 p-4">
         <div class="flex flex-wrap items-end gap-3">
@@ -301,7 +306,7 @@ function formatFileSize(bytes: number): string {
             id="doc_type"
             :model-value="local.document_type ? local.document_type : null"
             :options="documentTypeOptions"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             mode="single"
             value-prop="value"
             label="label"
@@ -321,8 +326,8 @@ function formatFileSize(bytes: number): string {
             :model-value="local.document_number"
             placeholder="Ej: 1234567890"
             inputmode="numeric"
-            :disabled="readonly"
-            :readonly="readonly"
+            :disabled="readOnlyForm"
+            :readonly="readOnlyForm"
             @input="onDigitsOnlyInput($event, v => updateField('document_number', v))"
           />
         </div>
@@ -332,7 +337,7 @@ function formatFileSize(bytes: number): string {
             id="exp_date"
             :model-value="local.expedition_date"
             type="date"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('expedition_date', $event ?? '')"
           />
         </div>
@@ -341,7 +346,7 @@ function formatFileSize(bytes: number): string {
           <Multiselect
             :model-value="local.expedition_place ?? null"
             :options="multiselectOptionsByLabel"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             value-prop="value"
             label="label"
             :searchable="true"
@@ -366,7 +371,7 @@ function formatFileSize(bytes: number): string {
             id="first_name"
             :model-value="local.first_name"
             placeholder="Ej: Juan"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('first_name', String($event ?? ''))"
           />
         </div>
@@ -376,7 +381,7 @@ function formatFileSize(bytes: number): string {
             id="second_name"
             :model-value="local.second_name"
             placeholder="Ej: Carlos"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('second_name', String($event ?? ''))"
           />
         </div>
@@ -386,7 +391,7 @@ function formatFileSize(bytes: number): string {
             id="first_last"
             :model-value="local.first_last_name"
             placeholder="Ej: Pérez"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('first_last_name', String($event ?? ''))"
           />
         </div>
@@ -396,7 +401,7 @@ function formatFileSize(bytes: number): string {
             id="second_last"
             :model-value="local.second_last_name"
             placeholder="Ej: Gómez"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('second_last_name', String($event ?? ''))"
           />
         </div>
@@ -406,7 +411,7 @@ function formatFileSize(bytes: number): string {
             id="birth_date"
             :model-value="local.birth_date"
             type="date"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('birth_date', String($event ?? ''))"
           />
         </div>
@@ -416,7 +421,7 @@ function formatFileSize(bytes: number): string {
             id="gender"
             :model-value="local.gender ? local.gender : null"
             :options="genderOptions"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             mode="single"
             value-prop="value"
             label="label"
@@ -435,7 +440,7 @@ function formatFileSize(bytes: number): string {
             id="marital"
             :model-value="local.marital_status ? local.marital_status : null"
             :options="maritalStatusOptions"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             mode="single"
             value-prop="value"
             label="label"
@@ -456,7 +461,7 @@ function formatFileSize(bytes: number): string {
             type="number"
             min="0"
             inputmode="numeric"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @keydown="onKeydownNumeric($event, false)"
             @update:model-value="updateField('dependents', Number($event) ?? 0)"
           />
@@ -475,7 +480,7 @@ function formatFileSize(bytes: number): string {
             :model-value="local.mobile_phone"
             placeholder="3001234567"
             inputmode="numeric"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @input="onDigitsOnlyInput($event, v => updateField('mobile_phone', v))"
           />
         </div>
@@ -486,7 +491,7 @@ function formatFileSize(bytes: number): string {
             :model-value="local.landline"
             placeholder="6011234567"
             inputmode="numeric"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @input="onDigitsOnlyInput($event, v => updateField('landline', v))"
           />
         </div>
@@ -497,7 +502,7 @@ function formatFileSize(bytes: number): string {
             :model-value="local.email"
             type="email"
             placeholder="correo@ejemplo.com"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('email', String($event ?? ''))"
           />
         </div>
@@ -514,7 +519,7 @@ function formatFileSize(bytes: number): string {
             id="address"
             :model-value="local.residence_address"
             placeholder="Calle 123 #45-67, barrio..."
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('residence_address', String($event ?? ''))"
           />
         </div>
@@ -523,7 +528,7 @@ function formatFileSize(bytes: number): string {
           <Multiselect
             :model-value="local.residence_city_name ?? null"
             :options="multiselectOptionsByLabel"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             value-prop="value"
             label="label"
             :searchable="true"
@@ -541,7 +546,7 @@ function formatFileSize(bytes: number): string {
             id="residence_type"
             :model-value="local.residence_type ? local.residence_type : null"
             :options="residenceTypeOptions"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             mode="single"
             value-prop="value"
             label="label"
@@ -560,7 +565,7 @@ function formatFileSize(bytes: number): string {
             id="time_residence"
             :model-value="local.time_in_residence"
             placeholder="Ej: 2 años"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('time_in_residence', String($event ?? ''))"
           />
         </div>
@@ -577,7 +582,7 @@ function formatFileSize(bytes: number): string {
             id="activity_type"
             :model-value="financial.activity_type ? financial.activity_type : null"
             :options="economicActivityOptions"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             mode="single"
             value-prop="value"
             label="label"
@@ -596,7 +601,7 @@ function formatFileSize(bytes: number): string {
             id="occupation"
             :model-value="local.occupation"
             placeholder="Ej: Comerciante"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('occupation', String($event ?? ''))"
           />
         </div>
@@ -606,7 +611,7 @@ function formatFileSize(bytes: number): string {
             id="company"
             :model-value="local.company_name"
             placeholder="Nombre empresa"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('company_name', String($event ?? ''))"
           />
         </div>
@@ -616,7 +621,7 @@ function formatFileSize(bytes: number): string {
             id="position"
             :model-value="local.position"
             placeholder="Ej: Vendedor"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('position', String($event ?? ''))"
           />
         </div>
@@ -626,7 +631,7 @@ function formatFileSize(bytes: number): string {
             id="contract"
             :model-value="local.contract_type"
             placeholder="Indefinido, Término fijo..."
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('contract_type', String($event ?? ''))"
           />
         </div>
@@ -636,7 +641,7 @@ function formatFileSize(bytes: number): string {
             id="time_job"
             :model-value="local.time_in_job"
             placeholder="Ej: 3 años"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="updateField('time_in_job', String($event ?? ''))"
           />
         </div>
@@ -651,7 +656,7 @@ function formatFileSize(bytes: number): string {
           <Label for="co_debtor_concept">Concepto</Label>
           <Select
             :model-value="financial.concept ?? null"
-            :disabled="readonly"
+            :disabled="readOnlyForm"
             @update:model-value="setFinancial('concept', $event != null ? String($event) : undefined)"
           >
             <SelectTrigger id="co_debtor_concept">
@@ -720,7 +725,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">
                 Ingreso cultivos/negocio
                 <span
-                  v-if="incomeBusinessInputReadonly && !readonly"
+                  v-if="incomeBusinessInputReadonly && !readOnlyForm"
                   class="mt-0.5 block text-[10px] font-normal leading-tight text-muted-foreground/90"
                 >
                   Calculado desde actividad económica
@@ -994,7 +999,7 @@ function formatFileSize(bytes: number): string {
               <span class="text-xs text-muted-foreground">Bien raíz:</span>
               <span class="font-semibold">{{ formatPesosConSimbolo(bienRaizFromGarantias ?? 0) }}</span>
             </div>
-            <Button v-if="!readonly" type="button" variant="outline" size="sm" @click="addAsset">
+            <Button v-if="!readOnlyForm" type="button" variant="outline" size="sm" @click="addAsset">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
               Agregar activo
             </Button>
@@ -1012,7 +1017,7 @@ function formatFileSize(bytes: number): string {
                 <Label :for="`asset_name_${idx}`">Nombre del activo</Label>
                 <Input
                   :id="`asset_name_${idx}`"
-                  :model-value="asset.name ?? (asset as { description?: string }).description ?? ''"
+                  :model-value="assetNameForInput(asset)"
                   placeholder="Ej: Casa, Lote, Vehículo..."
                   @update:model-value="updateAsset(idx, 'name', $event ?? '')"
                 />
@@ -1054,7 +1059,7 @@ function formatFileSize(bytes: number): string {
                 </p>
               </div>
               <Button
-                v-if="!readonly"
+                v-if="!readOnlyForm"
                 type="button"
                 variant="destructive"
                 size="sm"
@@ -1127,7 +1132,7 @@ function formatFileSize(bytes: number): string {
             </label>
           </div>
           <Button
-            v-if="!readonly"
+            v-if="!readOnlyForm"
             type="button"
             variant="destructive"
             size="sm"
@@ -1138,7 +1143,7 @@ function formatFileSize(bytes: number): string {
             Quitar
           </Button>
         </div>
-        <Button v-if="!readonly" type="button" variant="outline" size="sm" @click="addDocument">
+        <Button v-if="!readOnlyForm" type="button" variant="outline" size="sm" @click="addDocument">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Agregar documento
         </Button>

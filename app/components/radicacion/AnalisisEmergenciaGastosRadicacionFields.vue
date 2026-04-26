@@ -30,7 +30,7 @@ function displayPesosStored(s: string | undefined | null): string {
         <Label class="text-xs">Gastos personales</Label>
         <Input
           :model-value="displayPesosStored(bloque.gastoPersonal)"
-          :readonly="true"
+          :read-only-form="true"
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -45,7 +45,7 @@ function displayPesosStored(s: string | undefined | null): string {
         <Label class="text-xs">Gastos alimentación</Label>
         <Input
           :model-value="displayPesosStored(bloque.alimentacion)"
-          :readonly="true"
+          :read-only-form="true"
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -61,7 +61,7 @@ function displayPesosStored(s: string | undefined | null): string {
         <Input
           v-if="lock"
           :model-value="displayPesosStored(bloque.gastosServiciosArriendo)"
-          :readonly="true"
+          :read-only-form="true"
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -73,7 +73,7 @@ function displayPesosStored(s: string | undefined | null): string {
         <Label class="text-xs">Salud</Label>
         <Input
           :model-value="displayPesosStored(bloque.gastoSalud)"
-          :readonly="true"
+          :read-only-form="true"
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -88,7 +88,7 @@ function displayPesosStored(s: string | undefined | null): string {
         <Label class="text-xs">Pensión</Label>
         <Input
           :model-value="displayPesosStored(bloque.gastoPension)"
-          :readonly="true"
+          :read-only-form="true"
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -103,7 +103,7 @@ function displayPesosStored(s: string | undefined | null): string {
         <Label class="text-xs">ARL</Label>
         <Input
           :model-value="displayPesosStored(bloque.gastoArl)"
-          :readonly="true"
+          :read-only-form="true"
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -118,7 +118,7 @@ function displayPesosStored(s: string | undefined | null): string {
         <Label class="text-xs">Otros</Label>
         <Input
           :model-value="displayPesosStored(bloque.otrosGastos)"
-          :readonly="true"
+          :read-only-form="true"
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -134,7 +134,7 @@ function displayPesosStored(s: string | undefined | null): string {
       <Input
         v-if="lock"
         :model-value="displayPesosStored(bloque.totalEgresos)"
-        :readonly="true"
+        :read-only-form="true"
         :class="roClass"
         :tabindex="-1"
         title="Desde Datos financieros de la radicación. No editable."

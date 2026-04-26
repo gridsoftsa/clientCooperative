@@ -1,14 +1,22 @@
 <script setup lang="ts">
 import type { FieldProps } from './interface'
 import { Trash } from 'lucide-vue-next'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Button } from '@/components/ui/button'
 import { FormControl, FormDescription, FormField, FormItem, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import AutoFormLabel from './AutoFormLabel.vue'
 import { beautifyObjectName } from './utils'
 
-defineProps<FieldProps>()
+const props = defineProps<FieldProps>()
+
+const coercedFileInputProps = computed(() => {
+  const p = { ...props.config?.inputProps } as Record<string, unknown>
+  if ('readonly' in p) {
+    p.readonly = p.readonly === true || p.readonly === 'true'
+  }
+  return p
+})
 
 const inputFile = ref<File>()
 async function parseFileAsString(file: File | undefined): Promise<string> {
@@ -38,8 +46,8 @@ async function parseFileAsString(file: File | undefined): Promise<string> {
           <Input
             v-if="!inputFile"
             type="file"
-            v-bind="{ ...config?.inputProps }"
-            :disabled="config?.inputProps?.disabled ?? disabled"
+            v-bind="coercedFileInputProps"
+            :disabled="disabled || config?.inputProps?.disabled === true || config?.inputProps?.disabled === 'true'"
             @change="async (ev: InputEvent) => {
               const file = (ev.target as HTMLInputElement).files?.[0]
               inputFile = file

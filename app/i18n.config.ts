@@ -1,4 +1,5 @@
-export default defineI18nConfig(() => ({
+// Default export: opciones vue-i18n. Si se reactiva `@nuxtjs/i18n`, se puede volver a envolver con `defineI18nConfig` del módulo.
+export default () => ({
   legacy: false,
   locale: 'es',
   fallbackLocale: 'es',
@@ -135,4 +136,4 @@ export default defineI18nConfig(() => ({
       },
     },
   },
-}))
+})

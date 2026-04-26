@@ -179,7 +179,7 @@ onMounted(() => {
             <ApplicantFormFields
               v-model="form"
               :hide-financial-section="true"
-              :readonly="false"
+              :read-only-form="false"
             />
             <div class="flex justify-end gap-2">
               <Button type="button" variant="outline" @click="router.push('/solicitantes')">

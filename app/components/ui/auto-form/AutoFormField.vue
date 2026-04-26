@@ -22,6 +22,13 @@ const delegatedProps = computed(() => {
 })
 
 const { isDisabled, isHidden, isRequired, overrideOptions } = useDependencies(props.fieldName)
+
+const defaultFieldComponent = computed(() => {
+  const t = (props.shape as { type?: string }).type
+  const k = t && t in DEFAULT_ZOD_HANDLERS ? t : 'ZodString'
+  const h = DEFAULT_ZOD_HANDLERS[k as keyof typeof DEFAULT_ZOD_HANDLERS] ?? 'string'
+  return INPUT_COMPONENTS[h]
+})
 </script>
 
 <template>
@@ -30,7 +37,7 @@ const { isDisabled, isHidden, isRequired, overrideOptions } = useDependencies(pr
       ? typeof config.component === 'string'
         ? INPUT_COMPONENTS[config.component!]
         : config.component
-      : INPUT_COMPONENTS[DEFAULT_ZOD_HANDLERS[shape.type]] "
+      : defaultFieldComponent"
     v-if="!isHidden"
     :field-name="fieldName"
     :label="shape.schema?.description"

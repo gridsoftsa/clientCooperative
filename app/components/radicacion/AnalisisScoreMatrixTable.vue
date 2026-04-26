@@ -10,6 +10,9 @@ import {
   weightDecimalToPercentInput,
 } from '~/utils/score-matrix-weights'
 
+type MatrixSectionLine = Extract<ScoreMatrixLine, { k: 's' }>
+type MatrixRowLine = Extract<ScoreMatrixLine, { k: 'r' }>
+
 const props = withDefaults(
   defineProps<{
     sheetTitle: string
@@ -55,7 +58,7 @@ function emitLines(): void {
 
 function setSectionField(lineIndex: number, field: 'peso' | 'max', value: string): void {
   const line = localLines.value[lineIndex]
-  if (!line || matrixLineKind(line) !== 's') {
+  if (!isMatrixSectionLine(line)) {
     return
   }
   const previousPeso = line.peso
@@ -77,7 +80,7 @@ function setSectionField(lineIndex: number, field: 'peso' | 'max', value: string
 
 function setVariablePeso(firstLineIndex: number, value: string): void {
   const line = localLines.value[firstLineIndex]
-  if (!line || matrixLineKind(line) !== 'r') {
+  if (!isMatrixRowLine(line)) {
     return
   }
   const previousP = line.p
@@ -93,7 +96,7 @@ function setVariablePeso(firstLineIndex: number, value: string): void {
 
 function setRowPt(lineIndex: number, value: string): void {
   const line = localLines.value[lineIndex]
-  if (!line || matrixLineKind(line) !== 'r') {
+  if (!isMatrixRowLine(line)) {
     return
   }
   const previousPt = line.pt
@@ -142,6 +145,14 @@ function matrixLineKind(line: ScoreMatrixLine | undefined): 's' | 'r' | null {
   return null
 }
 
+function isMatrixSectionLine(l: ScoreMatrixLine | undefined): l is MatrixSectionLine {
+  return matrixLineKind(l) === 's'
+}
+
+function isMatrixRowLine(l: ScoreMatrixLine | undefined): l is MatrixRowLine {
+  return matrixLineKind(l) === 'r'
+}
+
 const groupedMatrix = computed((): MatrixBlock[] => {
   const lines = localLines.value
   const out: MatrixBlock[] = []
@@ -153,7 +164,7 @@ const groupedMatrix = computed((): MatrixBlock[] => {
     }
     const kind = matrixLineKind(line)
     if (kind === 's') {
-      out.push({ type: 'section', line: line as Extract<ScoreMatrixLine, { k: 's' }>, lineIndex: i })
+      out.push({ type: 'section', line: line as MatrixSectionLine, lineIndex: i })
       i++
       continue
     }
@@ -161,20 +172,22 @@ const groupedMatrix = computed((): MatrixBlock[] => {
       i++
       continue
     }
-    const variable = line.v
-    const peso = line.p
+    const rowLine = line as MatrixRowLine
+    const variable = rowLine.v
+    const peso = rowLine.p
     const firstLineIndex = i
     const rowLineIndices: number[] = [i]
-    const rows = [{ d: line.d, h: line.h, pt: line.pt }]
+    const rows = [{ d: rowLine.d, h: rowLine.h, pt: rowLine.pt }]
     i++
     while (i < lines.length) {
       const next = lines[i]
       if (!next || matrixLineKind(next) === 's') {
         break
       }
-      if (matrixLineKind(next) === 'r' && next.v === '' && next.p === '') {
+      const nextRow = next as MatrixRowLine
+      if (matrixLineKind(next) === 'r' && nextRow.v === '' && nextRow.p === '') {
         rowLineIndices.push(i)
-        rows.push({ d: next.d, h: next.h, pt: next.pt })
+        rows.push({ d: nextRow.d, h: nextRow.h, pt: nextRow.pt })
         i++
       } else {
         break
@@ -192,6 +205,9 @@ const scoreMatrixSections = computed((): ScoreMatrixSection[] => {
   let idx = 0
   while (idx < blocks.length) {
     const b = blocks[idx]
+    if (!b) {
+      break
+    }
     if (b.type !== 'section') {
       idx++
       continue
@@ -200,8 +216,12 @@ const scoreMatrixSections = computed((): ScoreMatrixSection[] => {
     const lineIndex = b.lineIndex
     idx++
     const variableBlocks: MatrixVariableBlock[] = []
-    while (idx < blocks.length && blocks[idx].type === 'variable') {
-      variableBlocks.push(blocks[idx] as MatrixVariableBlock)
+    while (idx < blocks.length) {
+      const vblk = blocks[idx]
+      if (!vblk || vblk.type !== 'variable') {
+        break
+      }
+      variableBlocks.push(vblk)
       idx++
     }
     sections.push({ header, lineIndex, variableBlocks })
@@ -280,7 +300,7 @@ const VARIABLE_BLOCK_TONES = [
 ] as const
 
 function variableBlockTone(bIdx: number) {
-  return VARIABLE_BLOCK_TONES[bIdx % VARIABLE_BLOCK_TONES.length]
+  return VARIABLE_BLOCK_TONES[bIdx % VARIABLE_BLOCK_TONES.length]!
 }
 
 function variableBlockRowClass(bIdx: number, rIdx: number): string {

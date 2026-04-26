@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { NavGroup, NavLink, NavSectionTitle } from '~/types/nav'
+import type { NavGroup, NavLink, NavMenuItems, NavSectionTitle } from '~/types/nav'
 import { navMenu, navMenuBottom } from '~/constants/menus'
 
 function resolveNavItemComponent(item: NavLink | NavGroup | NavSectionTitle): any {
@@ -93,22 +93,27 @@ const filteredNavMenu = computed(() => {
   }
 
   return navMenu.map((section) => {
-    const filteredItems = section.items.flatMap((item) => {
+    const filteredItems: NavMenuItems = []
+    for (const item of section.items) {
       if ('heading' in item && !('link' in item) && !('children' in item)) {
-        return [item]
+        filteredItems.push(item)
+        continue
       }
       const navItem = item as NavLink | NavGroup
 
       if ('children' in navItem) {
         const filteredChildren = navItem.children.filter((child: NavLink) => canAccessItem(child))
         if (filteredChildren.length === 0 || !canAccessItem(navItem)) {
-          return []
+          continue
         }
-        return [{ ...navItem, children: filteredChildren }]
+        filteredItems.push({ ...navItem, children: filteredChildren })
+        continue
       }
 
-      return canAccessItem(navItem as NavLink) ? [navItem as NavLink] : []
-    })
+      if (canAccessItem(navItem as NavLink)) {
+        filteredItems.push(navItem as NavLink)
+      }
+    }
 
     return { ...section, items: filteredItems }
   }).filter(section => section.items.length > 0)

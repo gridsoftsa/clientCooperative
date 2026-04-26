@@ -9,7 +9,15 @@ defineOptions({
   inheritAttrs: false,
 })
 
-defineProps<FieldProps>()
+const props = defineProps<FieldProps>()
+
+function mergeNumberInputBindings(slotField: Record<string, unknown>) {
+  const p = { ...slotField, ...props.config?.inputProps } as Record<string, unknown>
+  if ('readonly' in p) {
+    p.readonly = p.readonly === true || p.readonly === 'true'
+  }
+  return p
+}
 </script>
 
 <template>
@@ -20,7 +28,11 @@ defineProps<FieldProps>()
       </AutoFormLabel>
       <FormControl>
         <slot v-bind="slotProps">
-          <Input type="number" v-bind="{ ...slotProps.componentField, ...config?.inputProps }" :disabled="config?.inputProps?.disabled ?? disabled" />
+          <Input
+            type="number"
+            v-bind="mergeNumberInputBindings(slotProps.componentField as unknown as Record<string, unknown>)"
+            :disabled="disabled || config?.inputProps?.disabled === true || config?.inputProps?.disabled === 'true'"
+          />
         </slot>
       </FormControl>
       <FormDescription v-if="config?.description">
