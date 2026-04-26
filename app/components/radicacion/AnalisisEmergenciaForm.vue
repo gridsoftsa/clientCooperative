@@ -13,6 +13,12 @@ import {
 } from '~/composables/usePesosFormat'
 import { formatMontoCopVista, parseMontoCop } from '~/utils/analisis-emergencia-cuota'
 import AnalisisEmergenciaGastosRadicacionFields from '~/components/radicacion/AnalisisEmergenciaGastosRadicacionFields.vue'
+import AnalisisEmergenciaActivosPersonaBlock from '~/components/radicacion/AnalisisEmergenciaActivosPersonaBlock.vue'
+import type { ActivoPersonaKey } from '~/utils/radicacion-financial-activos'
+import {
+  formatTotalActivosGlobalVista,
+  totalActivosGlobalDesdeBloque,
+} from '~/utils/radicacion-financial-activos'
 
 const state = defineModel<EmergenciaState>({ required: true })
 
@@ -40,8 +46,15 @@ const props = withDefaults(
     codeudores?: { nombre: string, cedula: string }[]
     /** Características Garantía (Cualitativas) desde plantilla SCORE, según perfil. */
     opcionesGarantia?: string[]
+    /**
+     * Al pulsar, relee la solicitud y actualiza monto, ingresos, gastos y filas de activos (paso 3).
+     * Lo provee `analisis-score` para reflejar cambios en la radicación.
+     */
+    syncPaso3Radicacion?: () => Promise<void>
+    /** true mientras se llama a la API de sincronización. */
+    syncPaso3RadicacionBloqueado?: boolean
   }>(),
-  { lockDeudorFields: true, lockGastosDesdeRadicacion: false, lockVrCuotaVar: false, pctReservaDeudor: 30, pctReservaCodeudor: 10, company: null, loadingCompany: false, codeudores: () => [], opcionesGarantia: () => [] },
+  { lockDeudorFields: true, lockGastosDesdeRadicacion: false, lockVrCuotaVar: false, pctReservaDeudor: 30, pctReservaCodeudor: 10, company: null, loadingCompany: false, codeudores: () => [], opcionesGarantia: () => [], syncPaso3Radicacion: undefined, syncPaso3RadicacionBloqueado: false },
 )
 
 type FilaCapB1 = { key: 'a' | 'b', label: string, reserva: string, codIdx?: number }
@@ -52,13 +65,13 @@ const filasCapacidadBloque1 = computed((): FilaCapB1[] => {
   const pd = props.pctReservaDeudor
   const pc = props.pctReservaCodeudor
   const rows: FilaCapB1[] = [
-    { key: 'a', label: 'Capacidad de pago deudor', reserva: `(-) ${pd}% ing.` },
+    { key: 'a', label: 'Capacidad de pago deudor', reserva: `(-) ${Number(pd ?? 0)}% ing.` },
   ]
   if (props.codeudores.length >= 1) {
     rows.push({
       key: 'b',
       label: 'Capacidad de pago primer codeudor',
-      reserva: `(-) ${pc}% ing.`,
+      reserva: `(-) ${Number(pc ?? 0)}% ing.`,
       codIdx: 0,
     })
   }
@@ -91,11 +104,53 @@ const tituloSubseccionCapacidadBloque2 = computed(() => {
   return ''
 })
 
+/** Deudor + N codeudores (mismo criterio que capacidad de pago). */
+const filasVistaActivos = computed((): { key: ActivoPersonaKey, label: string, codIdx?: number }[] => {
+  const r: { key: ActivoPersonaKey, label: string, codIdx?: number }[] = [
+    { key: 'deudor', label: 'Deudor principal' },
+  ]
+  if (props.codeudores.length >= 1) {
+    r.push({ key: 'codeudor1', label: 'Codeudor 1', codIdx: 0 })
+  }
+  if (props.codeudores.length >= 2) {
+    r.push({ key: 'codeudor2', label: 'Codeudor 2', codIdx: 1 })
+  }
+  if (props.codeudores.length >= 3) {
+    r.push({ key: 'codeudor3', label: 'Codeudor 3', codIdx: 2 })
+  }
+  return r
+})
+
+const keysVisiblesActivos = computed((): ActivoPersonaKey[] => filasVistaActivos.value.map(f => f.key))
+
+function sublineActivoPersona(row: { key: ActivoPersonaKey, codIdx?: number }): string | null {
+  if (row.key === 'deudor') {
+    const d = state.value.deudorCodeudor
+    if (d.deudor || d.documento) {
+      return `Solicitud — ${d.deudor || '—'}${d.documento ? ` · ${d.documento}` : ''}`
+    }
+    return null
+  }
+  if (row.codIdx != null) {
+    const c = codeudorEnSolicitud(row.codIdx)
+    if (c) {
+      return `Solicitud — ${c.nombre}${c.cedula ? ` · ${c.cedula}` : ''}`
+    }
+  }
+  return null
+}
+
 const etiquetaReservaCodeudor = computed(
-  () => `(-) ${props.pctReservaCodeudor}% ing.`,
+  () => `(-) ${Number(props.pctReservaCodeudor ?? 0)}% ing.`,
 )
 
 const deudorReadonlyClass = 'cursor-default bg-muted/50 text-foreground read-only:opacity-100'
+
+/** Misma pila label → input que la sección Gastos (`space-y-1`). */
+const campoStack = 'min-w-0 space-y-1'
+/** Ingresos disponibles, valor cuota, saldo: resaltado suave. */
+const campoMontoClave = 'min-w-0 space-y-1 rounded-md border border-primary/30 bg-primary/[0.07] p-2.5 shadow-sm dark:border-primary/45 dark:bg-primary/[0.12]'
+const labelMontoClave = 'text-xs font-semibold text-foreground'
 
 function onBlurVrCuotaVar(): void {
   if (props.lockVrCuotaVar) {
@@ -246,8 +301,43 @@ function syncAllReservasSobreIngresoCapacidad() {
   syncReservaSobreIngresoBloque(s.capacidadBloque2.b, pc)
 }
 
+/** Cada subsección de capacidad: mismo texto que Vr. cuota var. (crédito) para el snapshot. */
+function syncValorCuotaDesdeCredito() {
+  const v = state.value.credito.vrCuotaVar
+  const c = state.value.capacidadBloque1
+  const c2 = state.value.capacidadBloque2
+  c.a.valorCuota = v
+  c.b.valorCuota = v
+  c2.a.valorCuota = v
+  c2.b.valorCuota = v
+}
+
+/**
+ * Saldo = ingresos disponibles − reserva ING (fila) − valor de cuota (Vr. cuota var.).
+ * Sólo se escribe vía `watch`.
+ */
+function syncSaldoBloque(b: EmergenciaCapacidadBloque) {
+  if (!String(b.ingDisponibles ?? '').trim()) {
+    b.saldo = ''
+    return
+  }
+  const id = parsePesosFlexible(b.ingDisponibles)
+  const res = parsePesosFlexible(b.reservaSobreIngreso)
+  const vc = parsePesosFlexible(state.value.credito.vrCuotaVar)
+  b.saldo = formatPesosDiferencia(id - res - vc)
+}
+
+function syncAllSaldoCapacidad() {
+  const s = state.value
+  syncSaldoBloque(s.capacidadBloque1.a)
+  syncSaldoBloque(s.capacidadBloque1.b)
+  syncSaldoBloque(s.capacidadBloque2.a)
+  syncSaldoBloque(s.capacidadBloque2.b)
+}
+
 watch(
   () => [
+    state.value.credito.vrCuotaVar,
     state.value.capacidadBloque1.a.ingresos,
     state.value.capacidadBloque1.a.otrosIngresos,
     state.value.capacidadBloque1.b.ingresos,
@@ -271,9 +361,63 @@ watch(
     syncAllTotalesIngresosCapacidad()
     syncAllIngresosDisponiblesCapacidad()
     syncAllReservasSobreIngresoCapacidad()
+    syncValorCuotaDesdeCredito()
+    syncAllSaldoCapacidad()
   },
   { flush: 'post', immediate: true },
 )
+
+watch(
+  () => [state.value.activos, keysVisiblesActivos.value] as const,
+  () => {
+    const n = totalActivosGlobalDesdeBloque(state.value.activos, keysVisiblesActivos.value)
+    state.value.activos.totalActivos = formatTotalActivosGlobalVista(n)
+  },
+  { deep: true, immediate: true },
+)
+
+/**
+ * Total endeudamiento (central de riesgos) = deudas directas + deudas indirectas por persona.
+ * Solo se escribe vía `watch`.
+ */
+function syncTotalEndeudamientoCentralRiesgos(): void {
+  const cr = state.value.centralRiesgos
+  const keys: ActivoPersonaKey[] = ['deudor', 'codeudor1', 'codeudor2', 'codeudor3']
+  for (const k of keys) {
+    const d = parsePesosFlexible(cr.deudasDirectas[k])
+    const ind = parsePesosFlexible(cr.deudasIndirectas[k])
+    const emptyD = !String(cr.deudasDirectas[k] ?? '').trim()
+    const emptyI = !String(cr.deudasIndirectas[k] ?? '').trim()
+    if (emptyD && emptyI) {
+      cr.totalEndeudamiento[k] = ''
+    }
+    else {
+      cr.totalEndeudamiento[k] = formatPesos(d + ind)
+    }
+  }
+}
+
+watch(
+  () => [state.value.centralRiesgos.deudasDirectas, state.value.centralRiesgos.deudasIndirectas] as const,
+  () => {
+    syncTotalEndeudamientoCentralRiesgos()
+  },
+  { deep: true, immediate: true },
+)
+
+function onCentralRiesgoMontoUpdate(
+  field: 'deudasDirectas' | 'deudasIndirectas',
+  key: ActivoPersonaKey,
+  v: string,
+): void {
+  const raw = filterPesosChars(String(v))
+  if (!raw.trim()) {
+    state.value.centralRiesgos[field][key] = ''
+    return
+  }
+  const n = parsePesosInput(raw)
+  state.value.centralRiesgos[field][key] = n === undefined ? raw : formatPesos(n)
+}
 
 const { options: bancosOptions, fetchOptions: fetchBancosOptions } = useBancosCatalogOptions()
 
@@ -601,42 +745,42 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
           </p>
           <div class="mt-2 space-y-2">
             <div class="grid grid-cols-2 gap-2">
-              <div>
+              <div :class="campoStack">
                 <Label :for="`c1-${sideIdx}-ing`" class="text-xs">Ingresos</Label>
                 <Input
                   :id="`c1-${sideIdx}-ing`"
                   :model-value="displayPesosStored(state.capacidadBloque1[side.key].ingresos)"
                   type="text"
                   inputmode="decimal"
-                  class="h-8 w-full text-right font-mono"
+                  class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
                   readonly
                   :class="deudorReadonlyClass"
                   :tabindex="-1"
                   title="Valor tomado del paso 3 (Datos financieros) de la radicación. No editable."
                 />
               </div>
-              <div>
+              <div :class="campoStack">
                 <Label :for="`c1-${sideIdx}-oing`" class="text-xs">Otros ingresos</Label>
                 <Input
                   :id="`c1-${sideIdx}-oing`"
                   :model-value="displayPesosStored(state.capacidadBloque1[side.key].otrosIngresos)"
                   type="text"
                   inputmode="decimal"
-                  class="h-8 w-full text-right font-mono"
+                  class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
                   placeholder="0"
                   @keydown="onKeydownPesosOnly"
                   @update:model-value="onOtrosIngresosModelUpdate(state.capacidadBloque1[side.key], $event != null ? String($event) : '')"
                 />
               </div>
             </div>
-            <div>
+            <div :class="campoStack">
               <Label :for="`c1-${sideIdx}-ti`" class="text-xs">Total ingresos</Label>
               <Input
                 :id="`c1-${sideIdx}-ti`"
                 :model-value="displayPesosStored(state.capacidadBloque1[side.key].totalIngresos)"
                 type="text"
                 inputmode="decimal"
-                class="h-8 w-full text-right font-mono"
+                class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
                 readonly
                 :class="deudorReadonlyClass"
                 :tabindex="-1"
@@ -680,7 +824,7 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
                       :model-value="displayPesosStored(line.cuota)"
                       type="text"
                       inputmode="decimal"
-                      class="h-8 w-full bg-background text-right font-mono"
+                      class="h-8 w-full max-w-[15rem] min-w-0 bg-background text-right font-mono"
                       placeholder="0"
                       @keydown="onKeydownPesosOnly"
                       @update:model-value="onCuotaFinPesosModelUpdate(line, $event != null ? String($event) : '')"
@@ -718,26 +862,26 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
               :bloque="state.capacidadBloque1[side.key]"
               :lock="lockGastosDesdeRadicacion"
             />
-            <div>
-              <Label class="text-xs">Ingresos disponibles</Label>
+            <div :class="campoMontoClave">
+              <Label class="text-xs" :class="labelMontoClave">Ingresos disponibles</Label>
               <Input
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque1[side.key].ingDisponibles)"
                 type="text"
                 inputmode="decimal"
-                class="h-8 w-full text-right font-mono"
+                class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
                 readonly
                 :class="deudorReadonlyClass"
                 :tabindex="-1"
                 title="Total ingresos − Total gastos. No editable."
               />
             </div>
-            <div>
+            <div :class="campoStack">
               <Label class="text-xs">{{ side.reserva }}</Label>
               <Input
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque1[side.key].reservaSobreIngreso)"
                 type="text"
                 inputmode="decimal"
-                class="h-8 w-full text-right font-mono"
+                class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
                 readonly
                 :class="deudorReadonlyClass"
                 :tabindex="-1"
@@ -745,13 +889,31 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
               />
             </div>
             <div class="grid grid-cols-2 gap-2">
-              <div>
-                <Label class="text-xs">Valor cuota</Label>
-                <Input v-model="state.capacidadBloque1[side.key].valorCuota" class="h-8 font-mono" />
+              <div :class="campoMontoClave">
+                <Label class="text-xs" :class="labelMontoClave">Valor cuota</Label>
+                <Input
+                  :model-value="displayPesosStored(state.credito.vrCuotaVar)"
+                  type="text"
+                  inputmode="decimal"
+                  class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
+                  readonly
+                  :class="deudorReadonlyClass"
+                  :tabindex="-1"
+                  title="Mismo valor que «Vr. cuota var. (COP)» en el apartado de crédito. No editable."
+                />
               </div>
-              <div>
-                <Label class="text-xs">Saldo</Label>
-                <Input v-model="state.capacidadBloque1[side.key].saldo" class="h-8 font-mono" />
+              <div :class="campoMontoClave">
+                <Label class="text-xs" :class="labelMontoClave">Saldo</Label>
+                <Input
+                  :model-value="displayPesosIngresosDisponibles(state.capacidadBloque1[side.key].saldo)"
+                  type="text"
+                  inputmode="decimal"
+                  class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
+                  readonly
+                  :class="deudorReadonlyClass"
+                  :tabindex="-1"
+                  title="Ingresos disponibles − reserva ING − valor cuota. No editable."
+                />
               </div>
             </div>
           </div>
@@ -781,41 +943,41 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
           </p>
           <div class="mt-2 space-y-2">
             <div class="grid grid-cols-2 gap-2">
-              <div>
+              <div :class="campoStack">
                 <Label :for="`c2-${sideIdx}-ing`" class="text-xs">Ingresos</Label>
                 <Input
                   :id="`c2-${sideIdx}-ing`"
                   :model-value="displayPesosStored(state.capacidadBloque2[side.key].ingresos)"
                   type="text"
                   inputmode="decimal"
-                  class="h-8 w-full text-right font-mono"
+                  class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
                   readonly
                   :class="deudorReadonlyClass"
                   :tabindex="-1"
                   title="Valor tomado del paso 3 (Datos financieros) de la radicación. No editable."
                 />
               </div>
-              <div>
+              <div :class="campoStack">
                 <Label :for="`c2-${sideIdx}-oing`" class="text-xs">Otros ingresos</Label>
                 <Input
                   :id="`c2-${sideIdx}-oing`"
                   :model-value="displayPesosStored(state.capacidadBloque2[side.key].otrosIngresos)"
                   type="text"
                   inputmode="decimal"
-                  class="h-8 w-full text-right font-mono"
+                  class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
                   placeholder="0"
                   @keydown="onKeydownPesosOnly"
                   @update:model-value="onOtrosIngresosModelUpdate(state.capacidadBloque2[side.key], $event != null ? String($event) : '')"
                 />
               </div>
             </div>
-            <div>
+            <div :class="campoStack">
               <Label class="text-xs">Total ingresos</Label>
               <Input
                 :model-value="displayPesosStored(state.capacidadBloque2[side.key].totalIngresos)"
                 type="text"
                 inputmode="decimal"
-                class="h-8 w-full text-right font-mono"
+                class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
                 readonly
                 :class="deudorReadonlyClass"
                 :tabindex="-1"
@@ -859,7 +1021,7 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
                       :model-value="displayPesosStored(line.cuota)"
                       type="text"
                       inputmode="decimal"
-                      class="h-8 w-full bg-background text-right font-mono"
+                      class="h-8 w-full max-w-[15rem] min-w-0 bg-background text-right font-mono"
                       placeholder="0"
                       @keydown="onKeydownPesosOnly"
                       @update:model-value="onCuotaFinPesosModelUpdate(line, $event != null ? String($event) : '')"
@@ -897,26 +1059,26 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
               :bloque="state.capacidadBloque2[side.key]"
               :lock="lockGastosDesdeRadicacion"
             />
-            <div>
-              <Label class="text-xs">Ingresos disponibles</Label>
+            <div :class="campoMontoClave">
+              <Label class="text-xs" :class="labelMontoClave">Ingresos disponibles</Label>
               <Input
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque2[side.key].ingDisponibles)"
                 type="text"
                 inputmode="decimal"
-                class="h-8 w-full text-right font-mono"
+                class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
                 readonly
                 :class="deudorReadonlyClass"
                 :tabindex="-1"
                 title="Total ingresos − Total gastos. No editable."
               />
             </div>
-            <div>
+            <div :class="campoStack">
               <Label class="text-xs">{{ etiquetaReservaCodeudor }}</Label>
               <Input
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque2[side.key].reservaSobreIngreso)"
                 type="text"
                 inputmode="decimal"
-                class="h-8 w-full text-right font-mono"
+                class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
                 readonly
                 :class="deudorReadonlyClass"
                 :tabindex="-1"
@@ -924,13 +1086,31 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
               />
             </div>
             <div class="grid grid-cols-2 gap-2">
-              <div>
-                <Label class="text-xs">Valor cuota</Label>
-                <Input v-model="state.capacidadBloque2[side.key].valorCuota" class="h-8 font-mono" />
+              <div :class="campoMontoClave">
+                <Label class="text-xs" :class="labelMontoClave">Valor cuota</Label>
+                <Input
+                  :model-value="displayPesosStored(state.credito.vrCuotaVar)"
+                  type="text"
+                  inputmode="decimal"
+                  class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
+                  readonly
+                  :class="deudorReadonlyClass"
+                  :tabindex="-1"
+                  title="Mismo valor que «Vr. cuota var. (COP)» en el apartado de crédito. No editable."
+                />
               </div>
-              <div>
-                <Label class="text-xs">Saldo</Label>
-                <Input v-model="state.capacidadBloque2[side.key].saldo" class="h-8 font-mono" />
+              <div :class="campoMontoClave">
+                <Label class="text-xs" :class="labelMontoClave">Saldo</Label>
+                <Input
+                  :model-value="displayPesosIngresosDisponibles(state.capacidadBloque2[side.key].saldo)"
+                  type="text"
+                  inputmode="decimal"
+                  class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
+                  readonly
+                  :class="deudorReadonlyClass"
+                  :tabindex="-1"
+                  title="Ingresos disponibles − reserva ING − valor cuota. No editable."
+                />
               </div>
             </div>
           </div>
@@ -940,72 +1120,125 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
     </div>
 
     <div class="rounded-md border p-4">
-      <h3 class="mb-3 text-sm font-bold uppercase text-foreground">
-        Activos
-      </h3>
-      <div
-        v-for="(k, i) in [
-          { key: 'deudor' as const, t: 'Deudor principal' },
-          { key: 'codeudor1' as const, t: 'Codeudor 1' },
-          { key: 'codeudor2' as const, t: 'Codeudor 2' },
-          { key: 'codeudor3' as const, t: 'Codeudor 3' },
-        ]"
-        :key="k.key"
-        class="mb-4 last:mb-0"
-      >
-        <p class="mb-2 text-xs font-semibold text-muted-foreground">
-          {{ k.t }}
-        </p>
-        <div class="grid gap-2 sm:grid-cols-3">
-          <div>
-            <Label :for="`ac-br-${i}`" class="text-xs">Bienes raíces</Label>
-            <Input :id="`ac-br-${i}`" v-model="state.activos[k.key].bienesRaices" class="h-8 font-mono" />
-          </div>
-          <div>
-            <Label :for="`ac-ot-d-${i}`" class="text-xs">Otros bienes (detalle)</Label>
-            <Input :id="`ac-ot-d-${i}`" v-model="state.activos[k.key].otrosBienesDetalle" class="h-8" />
-          </div>
-          <div>
-            <Label :for="`ac-ot-v-${i}`" class="text-xs">Otros bienes (valor)</Label>
-            <Input :id="`ac-ot-v-${i}`" v-model="state.activos[k.key].otrosBienesValor" class="h-8 font-mono" />
-          </div>
+      <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div class="min-w-0 space-y-1">
+          <h3 class="text-sm font-bold uppercase text-foreground">
+            Activos
+          </h3>
+          <p class="text-xs text-muted-foreground">
+            Se muestran el deudor y los codeudores según la radicación. Bienes raíces: activos con Garantía en el paso 3;
+            otros bienes: activos sin Garantía. El total global suma las dos tablas de cada persona.
+            Si añadiste o quitaste activos en el paso 3, pulsa <span class="font-medium text-foreground">Actualizar desde radicación</span> o vuelve a abrir este paso para alinear con la base.
+          </p>
         </div>
+        <Button
+          v-if="syncPaso3Radicacion"
+          type="button"
+          variant="secondary"
+          class="h-9 shrink-0 gap-2 font-semibold"
+          :disabled="syncPaso3RadicacionBloqueado"
+          @click="() => { void syncPaso3Radicacion?.() }"
+        >
+          <Icon
+            v-if="syncPaso3RadicacionBloqueado"
+            name="i-lucide-loader-2"
+            class="h-4 w-4 shrink-0 animate-spin"
+            aria-hidden="true"
+          />
+          <Icon
+            v-else
+            name="i-lucide-refresh-cw"
+            class="h-4 w-4 shrink-0"
+            aria-hidden="true"
+          />
+          Actualizar desde radicación
+        </Button>
       </div>
-      <div class="pt-2">
+      <div class="space-y-4">
+        <AnalisisEmergenciaActivosPersonaBlock
+          v-for="row in filasVistaActivos"
+          :key="row.key"
+          v-model="state.activos[row.key]"
+          :title="row.label"
+          :subline="sublineActivoPersona(row)"
+        />
+      </div>
+      <div :class="[campoStack, 'pt-2']">
         <Label for="ac-tot" class="text-xs font-bold">Total activos</Label>
-        <Input id="ac-tot" v-model="state.activos.totalActivos" class="mt-1 max-w-md font-mono" />
+        <Input
+          id="ac-tot"
+          :model-value="state.activos.totalActivos"
+          type="text"
+          class="h-8 max-w-md font-mono"
+          readonly
+          :class="deudorReadonlyClass"
+          :tabindex="-1"
+          title="Suma de (Total bienes raíces + Total otros bienes) de cada deudor/codeudor en esta sección. No editable."
+        />
       </div>
     </div>
 
     <div class="rounded-md border p-4">
-      <h3 class="mb-3 text-sm font-bold uppercase text-foreground">
+      <h3 class="mb-1 text-sm font-bold uppercase text-foreground">
         Resultado consulta central de riesgos
       </h3>
-      <div class="space-y-3">
+      <p class="mb-3 text-xs text-muted-foreground">
+        Un recuadro por deudor y por cada codeudor de la radicación. Total endeudamiento = deudas directas + deudas indirectas (no editable).
+      </p>
+      <div class="space-y-4">
         <div
-          v-for="row in [
-            { f: 'calificacion' as const, l: 'Calificación' },
-            { f: 'deudasDirectas' as const, l: 'Deudas directas' },
-            { f: 'deudasIndirectas' as const, l: 'Deudas indirectas' },
-            { f: 'totalEndeudamiento' as const, l: 'Total endeudamiento' },
-          ]"
-          :key="row.f"
+          v-for="row in filasVistaActivos"
+          :key="`cr-${row.key}`"
+          class="rounded-md border border-border/80 bg-card/20 p-3"
         >
-          <p class="mb-1 text-xs font-medium text-muted-foreground">
-            {{ row.l }}
+          <p class="text-xs font-semibold text-foreground">
+            {{ row.label }}
           </p>
-          <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div
-              v-for="col in [
-                { k: 'deudor' as const, t: 'Deudor' },
-                { k: 'codeudor1' as const, t: 'C.1' },
-                { k: 'codeudor2' as const, t: 'C.2' },
-                { k: 'codeudor3' as const, t: 'C.3' },
-              ]"
-              :key="col.k"
-            >
-              <Label class="text-xs">{{ col.t }}</Label>
-              <Input v-model="state.centralRiesgos[row.f][col.k]" class="h-8 font-mono" />
+          <p
+            v-if="sublineActivoPersona(row)"
+            class="mt-0.5 text-xs text-muted-foreground"
+          >
+            {{ sublineActivoPersona(row) }}
+          </p>
+          <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div :class="campoStack">
+              <Label :for="`cr-dd-${row.key}`" class="text-xs font-medium">Deudas directas</Label>
+              <Input
+                :id="`cr-dd-${row.key}`"
+                :model-value="displayPesosStored(state.centralRiesgos.deudasDirectas[row.key])"
+                type="text"
+                inputmode="decimal"
+                class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
+                placeholder="$ 0"
+                @keydown="onKeydownPesosOnly"
+                @update:model-value="onCentralRiesgoMontoUpdate('deudasDirectas', row.key, $event != null ? String($event) : '')"
+              />
+            </div>
+            <div :class="campoStack">
+              <Label :for="`cr-di-${row.key}`" class="text-xs font-medium">Deudas indirectas</Label>
+              <Input
+                :id="`cr-di-${row.key}`"
+                :model-value="displayPesosStored(state.centralRiesgos.deudasIndirectas[row.key])"
+                type="text"
+                inputmode="decimal"
+                class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
+                placeholder="$ 0"
+                @keydown="onKeydownPesosOnly"
+                @update:model-value="onCentralRiesgoMontoUpdate('deudasIndirectas', row.key, $event != null ? String($event) : '')"
+              />
+            </div>
+            <div :class="campoStack">
+              <Label :for="`cr-te-${row.key}`" class="text-xs font-medium">Total endeudamiento</Label>
+              <Input
+                :id="`cr-te-${row.key}`"
+                :model-value="displayPesosStored(state.centralRiesgos.totalEndeudamiento[row.key])"
+                type="text"
+                class="h-8 w-full max-w-[15rem] min-w-0 text-right font-mono"
+                readonly
+                :class="deudorReadonlyClass"
+                :tabindex="-1"
+                title="Suma de deudas directas e indirectas. No editable."
+              />
             </div>
           </div>
         </div>

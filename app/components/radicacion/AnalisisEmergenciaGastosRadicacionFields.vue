@@ -11,9 +11,11 @@ const props = withDefaults(
   { lock: true },
 )
 
-/** Mismo aspecto que Ingresos / Total ingresos en `AnalisisEmergenciaForm` (solo lectura). */
+/** Mismo aspecto que Ingresos / Total ingresos; ancho acotado para montos COP. */
 const roClass
-  = 'h-8 w-full text-right font-mono cursor-default bg-muted/50 text-foreground read-only:opacity-100'
+  = 'h-8 w-full max-w-[15rem] min-w-0 text-right font-mono cursor-default bg-muted/50 text-foreground read-only:opacity-100'
+
+const editableMontoClass = 'h-8 w-full max-w-[15rem] min-w-0 font-mono'
 
 function displayPesosStored(s: string | undefined | null): string {
   return formatPesosConSimboloDesdeTexto(s)
@@ -30,7 +32,7 @@ function displayPesosStored(s: string | undefined | null): string {
         <Label class="text-xs">Gastos personales</Label>
         <Input
           :model-value="displayPesosStored(bloque.gastoPersonal)"
-          :read-only-form="true"
+          readonly
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -38,14 +40,14 @@ function displayPesosStored(s: string | undefined | null): string {
       </div>
       <div v-else class="space-y-1">
         <Label class="text-xs">Gastos personales</Label>
-        <Input v-model="bloque.gastoPersonal" class="h-8 font-mono" />
+        <Input v-model="bloque.gastoPersonal" :class="editableMontoClass" />
       </div>
 
       <div v-if="lock" class="space-y-1">
         <Label class="text-xs">Gastos alimentación</Label>
         <Input
           :model-value="displayPesosStored(bloque.alimentacion)"
-          :read-only-form="true"
+          readonly
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -53,7 +55,7 @@ function displayPesosStored(s: string | undefined | null): string {
       </div>
       <div v-else class="space-y-1">
         <Label class="text-xs">Gastos alimentación</Label>
-        <Input v-model="bloque.alimentacion" class="h-8 font-mono" />
+        <Input v-model="bloque.alimentacion" :class="editableMontoClass" />
       </div>
 
       <div class="sm:col-span-2" :class="lock ? 'space-y-1' : 'space-y-1'">
@@ -61,19 +63,19 @@ function displayPesosStored(s: string | undefined | null): string {
         <Input
           v-if="lock"
           :model-value="displayPesosStored(bloque.gastosServiciosArriendo)"
-          :read-only-form="true"
+          readonly
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
         />
-        <Input v-else v-model="bloque.gastosServiciosArriendo" class="h-8 font-mono" />
+        <Input v-else v-model="bloque.gastosServiciosArriendo" :class="editableMontoClass" />
       </div>
 
       <div v-if="lock" class="space-y-1">
         <Label class="text-xs">Salud</Label>
         <Input
           :model-value="displayPesosStored(bloque.gastoSalud)"
-          :read-only-form="true"
+          readonly
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -81,14 +83,14 @@ function displayPesosStored(s: string | undefined | null): string {
       </div>
       <div v-else class="space-y-1">
         <Label class="text-xs">Salud</Label>
-        <Input v-model="bloque.gastoSalud" class="h-8 font-mono" />
+        <Input v-model="bloque.gastoSalud" :class="editableMontoClass" />
       </div>
 
       <div v-if="lock" class="space-y-1">
         <Label class="text-xs">Pensión</Label>
         <Input
           :model-value="displayPesosStored(bloque.gastoPension)"
-          :read-only-form="true"
+          readonly
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -96,14 +98,14 @@ function displayPesosStored(s: string | undefined | null): string {
       </div>
       <div v-else class="space-y-1">
         <Label class="text-xs">Pensión</Label>
-        <Input v-model="bloque.gastoPension" class="h-8 font-mono" />
+        <Input v-model="bloque.gastoPension" :class="editableMontoClass" />
       </div>
 
       <div v-if="lock" class="space-y-1">
         <Label class="text-xs">ARL</Label>
         <Input
           :model-value="displayPesosStored(bloque.gastoArl)"
-          :read-only-form="true"
+          readonly
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -111,14 +113,14 @@ function displayPesosStored(s: string | undefined | null): string {
       </div>
       <div v-else class="space-y-1">
         <Label class="text-xs">ARL</Label>
-        <Input v-model="bloque.gastoArl" class="h-8 font-mono" />
+        <Input v-model="bloque.gastoArl" :class="editableMontoClass" />
       </div>
 
       <div v-if="lock" class="space-y-1">
         <Label class="text-xs">Otros</Label>
         <Input
           :model-value="displayPesosStored(bloque.otrosGastos)"
-          :read-only-form="true"
+          readonly
           :class="roClass"
           :tabindex="-1"
           title="Desde Datos financieros de la radicación. No editable."
@@ -126,7 +128,7 @@ function displayPesosStored(s: string | undefined | null): string {
       </div>
       <div v-else class="space-y-1">
         <Label class="text-xs">Otros</Label>
-        <Input v-model="bloque.otrosGastos" class="h-8 font-mono" />
+        <Input v-model="bloque.otrosGastos" :class="editableMontoClass" />
       </div>
     </div>
     <div class="space-y-1">
@@ -134,12 +136,12 @@ function displayPesosStored(s: string | undefined | null): string {
       <Input
         v-if="lock"
         :model-value="displayPesosStored(bloque.totalEgresos)"
-        :read-only-form="true"
+        readonly
         :class="roClass"
         :tabindex="-1"
         title="Desde Datos financieros de la radicación. No editable."
       />
-      <Input v-else v-model="bloque.totalEgresos" class="h-8 font-mono" />
+      <Input v-else v-model="bloque.totalEgresos" :class="editableMontoClass" />
     </div>
   </div>
 </template>

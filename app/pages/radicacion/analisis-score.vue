@@ -39,6 +39,7 @@ import {
 } from '~/utils/analisis-score-imprimir-totals'
 import { totalIngresosRadicacionFormatted } from '~/utils/radicacion-financial-totals'
 import { aplicarEgresosCapacidadBloqueDesdeFinancialInfo } from '~/utils/radicacion-financial-egresos'
+import { aplicarActivosEmergenciaDesdeSolicitud } from '~/utils/radicacion-financial-activos'
 import type { Company } from '~/types/company'
 
 const { fetchFlatData } = useTemplateFlatData()
@@ -278,6 +279,65 @@ function aplicarEgresosCapacidadDesdeRadicacion(data: Record<string, unknown>): 
   aplicarEgresosCapacidadBloqueDesdeFinancialInfo(e.capacidadBloque2.b, co[2]?.financial_info ?? null)
 }
 
+/**
+ * Sincroniza monto, ingresos, egresos, activos (filas) y codeudores con el JSON *actual* de la solicitud.
+ * No reemplaza el snapshot de emergencia completo: solo lo alimentado por la radicación (paso 3).
+ */
+function aplicarVistaFinancieraDesdeSolicitud(data: Record<string, unknown>): void {
+  const co = pickCoDebtorRowsFromSolicitudData(data)
+  codeudoresDeSolicitud.value = buildCodeudoresDesdeCoDebtors(co)
+  if (codeudoresDeSolicitud.value.length > 0) {
+    const primero = codeudoresDeSolicitud.value[0]
+    if (primero) {
+      emergenciaState.value.deudorCodeudor.codeudor = primero.nombre
+    }
+  }
+  aplicarMontoYPlazoCreditoDesdeSolicitud(data)
+  aplicarIngresosCapacidadDesdeRadicacion(data)
+  aplicarEgresosCapacidadDesdeRadicacion(data)
+  aplicarActivosEmergenciaDesdeSolicitud(emergenciaState.value, {
+    debtor: data.debtor,
+    coDebtors: co,
+  })
+  sincronizarTasaEfectivaDesdeNominal()
+  sincronizarVrCuotaVarFormula()
+  sincronizarGarantiaConPlantilla()
+}
+
+const sincronizandoPaso3Radicacion = ref(false)
+
+/** Relee la solicitud y aplica monto, ingresos, egresos y activos. `true` si la petición tuvo éxito. */
+async function refrescarVistaFinancieraDesdeSolicitudApi(): Promise<boolean> {
+  const id = solicitudId.value
+  if (id == null) {
+    return false
+  }
+  if (loadingSolicitud.value || sincronizandoPaso3Radicacion.value) {
+    return false
+  }
+  sincronizandoPaso3Radicacion.value = true
+  try {
+    const res = await $api<{ data?: Record<string, unknown> } & Record<string, unknown>>(`/credit-applications/${id}`)
+    const data = (res?.data ?? res) as Record<string, unknown>
+    aplicarVistaFinancieraDesdeSolicitud(data)
+    return true
+  }
+  catch (e) {
+    console.error('Error actualizando datos de radicación (activos, ingresos, gastos):', e)
+    toast.error('No se pudo leer la solicitud actualizada. Vuelve a intentar o recarga la página.')
+    return false
+  }
+  finally {
+    sincronizandoPaso3Radicacion.value = false
+  }
+}
+
+async function sincronizarPaso3RadicacionDesdeFormulario(): Promise<void> {
+  if (await refrescarVistaFinancieraDesdeSolicitudApi()) {
+    toast.success('Ingresos, gastos y activos alineados con el paso 3 de la radicación.')
+  }
+}
+
 function aplicarMontoYPlazoCreditoDesdeSolicitud(data: Record<string, unknown>): void {
   const rawAmount = data.amount_requested
   if (rawAmount == null || rawAmount === '') {
@@ -398,6 +458,21 @@ onMounted(() => {
   void fetchIngParametrizacion()
 })
 
+onActivated(() => {
+  void fetchIngParametrizacion()
+  void refrescarVistaFinancieraDesdeSolicitudApi()
+})
+
+watch(
+  currentStep,
+  (s) => {
+    if (s === 2) {
+      void fetchIngParametrizacion()
+      void refrescarVistaFinancieraDesdeSolicitudApi()
+    }
+  },
+)
+
 watch(companyPrincipal, (co) => {
   const nit = co?.nit?.trim()
   if (nit) {
@@ -515,24 +590,11 @@ async function loadSolicitudParaAnalisis(id: string): Promise<void> {
         emergenciaState.value.deudorCodeudor.documento = cedulaDesdeSolicitante(dPre)
       }
     }
-    const co = pickCoDebtorRowsFromSolicitudData(data)
-    codeudoresDeSolicitud.value = buildCodeudoresDesdeCoDebtors(co)
-    if (codeudoresDeSolicitud.value.length > 0) {
-      const primero = codeudoresDeSolicitud.value[0]
-      if (primero) {
-        emergenciaState.value.deudorCodeudor.codeudor = primero.nombre
-      }
-    }
     if (!emergenciaState.value.deudorCodeudor.fechaAnalisis.trim() && scoreCabecera.value.fecha) {
       emergenciaState.value.deudorCodeudor.fechaAnalisis = scoreCabecera.value.fecha
     }
-    aplicarMontoYPlazoCreditoDesdeSolicitud(data)
-    aplicarIngresosCapacidadDesdeRadicacion(data)
-    aplicarEgresosCapacidadDesdeRadicacion(data)
+    aplicarVistaFinancieraDesdeSolicitud(data)
     aplicarCabeceraALineaEmergenciaDeudor()
-    sincronizarGarantiaConPlantilla()
-    sincronizarTasaEfectivaDesdeNominal()
-    sincronizarVrCuotaVarFormula()
   } catch (e) {
     console.error('Error cargando solicitud para SCORE:', e)
     scoreCabecera.value = { fecha: '', cedula: '', nombre: '' }
@@ -937,6 +999,8 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
             :loading-company="loadingCompany"
             :codeudores="codeudoresDeSolicitud"
             :opciones-garantia="opcionesGarantia"
+            :sync-paso-3-radicacion="sincronizarPaso3RadicacionDesdeFormulario"
+            :sync-paso-3-radicacion-bloqueado="sincronizandoPaso3Radicacion || loadingSolicitud"
           />
         </div>
 

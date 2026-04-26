@@ -15,10 +15,21 @@ export const TIPO_VALOR_CUOTA_OPCIONES: Array<'Corriente' | 'Emergencia'> = ['Co
 /**
  * Acepta formato es-CO (p. ej. 200.000.000) y decimales con coma o con punto (0,02 / 0.02).
  */
+/**
+ * Formato colombiano con punto como **separador de miles** (p. ej. 700.000, 50.000.000).
+ * Debe resolverse antes de tomar un único «p.000» por decimal, porque
+ * `Number("700.000")` en JS devuelve 700 y al sumar con 50.000.000 da 50.000.700.
+ */
+const NUMERO_SOLO_MILES_PUNTOS_ES_CO = /^\d{1,3}(\.\d{3})+$/u
+
 export function parseNumeroFlexible(s: string): number | null {
   const t = s.trim().replace(/%+\s*$/u, '').trim()
   if (!t) {
     return null
+  }
+  if (NUMERO_SOLO_MILES_PUNTOS_ES_CO.test(t)) {
+    const n = Number(t.replace(/\./g, ''))
+    return Number.isFinite(n) ? n : null
   }
   if (!t.includes(',') && /^\d+\.\d+$/.test(t)) {
     const n = Number(t)

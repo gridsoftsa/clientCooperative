@@ -31,10 +31,24 @@ export type EmergenciaCapacidadBloque = {
   saldo: string
 }
 
+/** Fila de tabla (bienes en garantía u otros bienes) en hoja emergency / snapshot. */
+export type EmergenciaFilaActivo = {
+  nombre: string
+  /** Monto en COP, mismo criterio de formato que el resto de la hoja. */
+  valor: string
+  matricula: string
+}
+
+export type EmergenciaTablaActivos = {
+  filas: EmergenciaFilaActivo[]
+  observaciones: string
+}
+
 export type EmergenciaPersonaActivo = {
-  bienesRaices: string
-  otrosBienesDetalle: string
-  otrosBienesValor: string
+  /** Bienes raíces: activos del paso 3 con check «Garantía». */
+  bienesGarantia: EmergenciaTablaActivos
+  /** Otros bienes: activos reportados sin Garantía. */
+  otrosBienes: EmergenciaTablaActivos
 }
 
 export type EmergenciaCentralRiesgoColumna = {
@@ -125,7 +139,10 @@ function emptyCapacidad(): EmergenciaCapacidadBloque {
 }
 
 function emptyActivo(): EmergenciaPersonaActivo {
-  return { bienesRaices: '', otrosBienesDetalle: '', otrosBienesValor: '' }
+  return {
+    bienesGarantia: { filas: [], observaciones: '' },
+    otrosBienes: { filas: [], observaciones: '' },
+  }
 }
 
 function emptyCentral(): EmergenciaCentralRiesgoColumna {
@@ -237,11 +254,77 @@ function ensureCuotasFinMinimo(b: EmergenciaCapacidadBloque) {
   }
 }
 
+function asTablaActivos(t: unknown): EmergenciaTablaActivos | null {
+  if (t == null || typeof t !== 'object' || !Array.isArray((t as { filas?: unknown }).filas)) {
+    return null
+  }
+  const o = t as { filas: unknown[], observaciones?: unknown }
+  return {
+    filas: o.filas.map((f) => {
+      if (f == null || typeof f !== 'object') {
+        return { nombre: '', valor: '', matricula: '' }
+      }
+      const r = f as Record<string, unknown>
+      return {
+        nombre: String(r.nombre ?? ''),
+        valor: String(r.valor ?? ''),
+        matricula: String(r.matricula ?? ''),
+      }
+    }),
+    observaciones: typeof o.observaciones === 'string' ? o.observaciones : '',
+  }
+}
+
+/**
+ * Migra `bienesRaices` / `otrosBienesDetalle` / `otrosBienesValor` (legado) o normaliza
+ * filas/observaciones faltantes.
+ */
+function normalizarPersonaActivo(p: unknown): EmergenciaPersonaActivo {
+  const e = emptyActivo()
+  if (p == null || typeof p !== 'object') {
+    return e
+  }
+  const o = p as Record<string, unknown>
+  const tG = asTablaActivos(o.bienesGarantia)
+  const tO = asTablaActivos(o.otrosBienes)
+  if (tG != null || tO != null) {
+    e.bienesGarantia = tG ?? emptyActivo().bienesGarantia
+    e.otrosBienes = tO ?? emptyActivo().otrosBienes
+    return e
+  }
+  const br = o.bienesRaices
+  const otd = o.otrosBienesDetalle
+  const otv = o.otrosBienesValor
+  e.bienesGarantia = {
+    filas: typeof br === 'string' && br.trim() !== '' ? [{ nombre: 'Consolidado (histórico)', valor: br, matricula: '' }] : [],
+    observaciones: '',
+  }
+  e.otrosBienes = {
+    filas:
+      typeof otv === 'string' && otv.trim() !== ''
+        ? [{ nombre: typeof otd === 'string' && otd.trim() ? otd : 'Otros bienes (hist.)', valor: otv, matricula: '' }]
+        : [],
+    observaciones: typeof otd === 'string' && otd.trim() && (typeof otv !== 'string' || !otv.trim()) ? otd : '',
+  }
+  return e
+}
+
+function normalizarBloqueActivos(a: EmergenciaState['activos']): void {
+  a.deudor = normalizarPersonaActivo(a.deudor)
+  a.codeudor1 = normalizarPersonaActivo(a.codeudor1)
+  a.codeudor2 = normalizarPersonaActivo(a.codeudor2)
+  a.codeudor3 = normalizarPersonaActivo(a.codeudor3)
+  if (typeof a.totalActivos !== 'string') {
+    a.totalActivos = ''
+  }
+}
+
 export function mergeEmergenciaFromSnapshot(saved: unknown): EmergenciaState {
   const merged = deepMerge(defaultEmergenciaState(), saved) as EmergenciaState
   ensureCuotasFinMinimo(merged.capacidadBloque1.a)
   ensureCuotasFinMinimo(merged.capacidadBloque1.b)
   ensureCuotasFinMinimo(merged.capacidadBloque2.a)
   ensureCuotasFinMinimo(merged.capacidadBloque2.b)
+  normalizarBloqueActivos(merged.activos)
   return merged
 }
