@@ -2,8 +2,10 @@
 import { toast } from 'vue-sonner'
 import AnalisisEmergenciaForm from '~/components/radicacion/AnalisisEmergenciaForm.vue'
 import AnalisisScoreImprimirPanel from '~/components/radicacion/AnalisisScoreImprimirPanel.vue'
+import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import {
   defaultEmergenciaState,
+  emergenciaStateToSnapshotObject,
   mergeEmergenciaFromSnapshot,
 } from '~/constants/analisis-score-emergencia'
 import type { EmergenciaState } from '~/constants/analisis-score-emergencia'
@@ -25,8 +27,10 @@ import {
   formatMontoCopVista,
   tasaEfectivaPorcentajeDesdeNominal,
 } from '~/utils/analisis-emergencia-cuota'
+import type { EmergenciaCreditoCampoValidacion } from '~/utils/analisis-emergencia-validacion'
 import {
   descripcionErroresAdicionales,
+  enfocarEmergenciaCreditoCampo,
   validarCreditoEmergenciaCompleto,
   validarTipoValorCuotaPaso1,
 } from '~/utils/analisis-emergencia-validacion'
@@ -41,6 +45,9 @@ import { totalIngresosRadicacionFormatted } from '~/utils/radicacion-financial-t
 import { aplicarEgresosCapacidadBloqueDesdeFinancialInfo } from '~/utils/radicacion-financial-egresos'
 import { aplicarActivosEmergenciaDesdeSolicitud } from '~/utils/radicacion-financial-activos'
 import type { Company } from '~/types/company'
+import { useAuth } from '~/composables/useAuth'
+import { Textarea } from '~/components/ui/textarea'
+import { Label } from '~/components/ui/label'
 
 const { fetchFlatData } = useTemplateFlatData()
 
@@ -59,6 +66,7 @@ const router = useRouter()
 const { hasPermission, hasAnyPermission } = usePermissions()
 const { $api } = useNuxtApp()
 const { downloadAnalisisScorePdf } = useDocumentDownload()
+const { user, fetchUser } = useAuth()
 
 const solicitudId = computed(() => {
   const q = route.query.solicitud
@@ -73,6 +81,8 @@ const scoreCabecera = ref({
 })
 
 const observacionesScore = ref('')
+/** Concepto final del analista (paso 4); se persiste en el snapshot. */
+const conceptoAnalista = ref('')
 
 const emergenciaState = ref(defaultEmergenciaState())
 
@@ -97,6 +107,35 @@ function sincronizarVrCuotaVarFormula(): void {
 
 /** Codeudores de la radicación (misma fuente que entrevista / solicitud). Solo lectura en paso 2. */
 const codeudoresDeSolicitud = ref<{ nombre: string, cedula: string }[]>([])
+
+/** `financial_info` del deudor (parseado) y monto para el resumen financiero (misma vista que en radicación). */
+const resumenDeudorFinancialInfo = ref<Record<string, unknown>>({})
+const resumenMontoSolicitado = ref(0)
+
+function parseJsonFieldSolicitud(val: unknown): Record<string, unknown> {
+  if (val == null) {
+    return {}
+  }
+  if (typeof val === 'object' && !Array.isArray(val)) {
+    return val as Record<string, unknown>
+  }
+  if (typeof val === 'string') {
+    try {
+      const p = JSON.parse(val)
+      return typeof p === 'object' && p !== null && !Array.isArray(p) ? p as Record<string, unknown> : {}
+    }
+    catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+function actualizarResumenFinancieroDeudorDesdeSolicitud(data: Record<string, unknown>): void {
+  const d = data.debtor as Record<string, unknown> | null | undefined
+  resumenDeudorFinancialInfo.value = d && typeof d === 'object' ? parseJsonFieldSolicitud(d.financial_info) : {}
+  resumenMontoSolicitado.value = Number(data.amount_requested) || 0
+}
 
 /** % ING desde parametrización (template `ing`); reserva = ingresos disponibles × %/100. */
 const pctIngDeudor = ref(30)
@@ -299,6 +338,7 @@ function aplicarVistaFinancieraDesdeSolicitud(data: Record<string, unknown>): vo
     debtor: data.debtor,
     coDebtors: co,
   })
+  actualizarResumenFinancieroDeudorDesdeSolicitud(data)
   sincronizarTasaEfectivaDesdeNominal()
   sincronizarVrCuotaVarFormula()
   sincronizarGarantiaConPlantilla()
@@ -391,7 +431,7 @@ function isPerfilDeudor(v: unknown): v is AnalisisScorePerfilValue {
 const perfilDeudor = ref<AnalisisScorePerfilValue | undefined>(undefined)
 
 const currentStep = ref(1)
-const maxStep = 3
+const maxStep = 4
 
 const variableRowsForIndep = ref<ImprimirVariableRow[]>(cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES))
 const variableRowsForEmp = ref<ImprimirVariableRow[]>(cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES))
@@ -452,10 +492,19 @@ function sincronizarGarantiaConPlantilla(): void {
   }
 }
 
+function scrollVistaAnalisisAlInicio(): void {
+  if (import.meta.client) {
+    nextTick(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    })
+  }
+}
+
 onMounted(() => {
   fetchScoreMatrices()
   fetchCompanyPrincipal()
   void fetchIngParametrizacion()
+  void fetchUser()
 })
 
 onActivated(() => {
@@ -469,6 +518,9 @@ watch(
     if (s === 2) {
       void fetchIngParametrizacion()
       void refrescarVistaFinancieraDesdeSolicitudApi()
+    }
+    if (s === 4) {
+      void fetchUser()
     }
   },
 )
@@ -518,10 +570,35 @@ const isVrCuotaVarBloqueada = computed(
     || emergenciaState.value.credito.tipoValorCuota === 'Emergencia',
 )
 
+/** Lleva el contador: cada cambio de solicitud en la URL o petición superseded invalida respuestas viejas. */
+const solicitudCargaSerial = ref(0)
+
+/** Estado local solo de la radicación / snapshot; llamar al cambiar o antes de recargar otra solicitud. */
+function resetVistaAnalisisScoreParaSolicitud(): void {
+  scoreCabecera.value = { fecha: '', cedula: '', nombre: '' }
+  observacionesScore.value = ''
+  conceptoAnalista.value = ''
+  variableRowsForIndep.value = cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES)
+  variableRowsForEmp.value = cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES)
+  perfilDeudor.value = undefined
+  currentStep.value = 1
+  tieneAnalisisScoreGuardado.value = false
+  emergenciaState.value = defaultEmergenciaState()
+  codeudoresDeSolicitud.value = []
+  resumenDeudorFinancialInfo.value = {}
+  resumenMontoSolicitado.value = 0
+}
+
 async function loadSolicitudParaAnalisis(id: string): Promise<void> {
+  solicitudCargaSerial.value += 1
+  const cargaId = solicitudCargaSerial.value
+  resetVistaAnalisisScoreParaSolicitud()
   loadingSolicitud.value = true
   try {
     const res = await $api<{ data?: Record<string, unknown> } & Record<string, unknown>>(`/credit-applications/${id}`)
+    if (cargaId !== solicitudCargaSerial.value) {
+      return
+    }
     const data = (res?.data ?? res) as Record<string, unknown>
     const snap = data.analisis_score_snapshot as Record<string, unknown> | null | undefined
 
@@ -574,6 +651,11 @@ async function loadSolicitudParaAnalisis(id: string): Promise<void> {
         ? snap.observaciones
         : ''
 
+    conceptoAnalista.value
+      = snap && typeof snap === 'object' && typeof snap.concepto_analista === 'string'
+        ? snap.concepto_analista
+        : ''
+
     tieneAnalisisScoreGuardado.value = Boolean(
       snap
       && typeof snap === 'object'
@@ -596,16 +678,15 @@ async function loadSolicitudParaAnalisis(id: string): Promise<void> {
     aplicarVistaFinancieraDesdeSolicitud(data)
     aplicarCabeceraALineaEmergenciaDeudor()
   } catch (e) {
+    if (cargaId !== solicitudCargaSerial.value) {
+      return
+    }
     console.error('Error cargando solicitud para SCORE:', e)
-    scoreCabecera.value = { fecha: '', cedula: '', nombre: '' }
-    variableRowsForIndep.value = cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES)
-    variableRowsForEmp.value = cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES)
-    observacionesScore.value = ''
-    tieneAnalisisScoreGuardado.value = false
-    emergenciaState.value = defaultEmergenciaState()
-    codeudoresDeSolicitud.value = []
+    resetVistaAnalisisScoreParaSolicitud()
   } finally {
-    loadingSolicitud.value = false
+    if (cargaId === solicitudCargaSerial.value) {
+      loadingSolicitud.value = false
+    }
   }
 }
 
@@ -613,18 +694,12 @@ watch(
   solicitudId,
   (id) => {
     if (!id) {
-      scoreCabecera.value = { fecha: '', cedula: '', nombre: '' }
-      observacionesScore.value = ''
-      variableRowsForIndep.value = cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES)
-      variableRowsForEmp.value = cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES)
-      perfilDeudor.value = undefined
-      currentStep.value = 1
-      tieneAnalisisScoreGuardado.value = false
-      emergenciaState.value = defaultEmergenciaState()
-      codeudoresDeSolicitud.value = []
+      solicitudCargaSerial.value += 1
+      resetVistaAnalisisScoreParaSolicitud()
+      loadingSolicitud.value = false
       return
     }
-    loadSolicitudParaAnalisis(id)
+    void loadSolicitudParaAnalisis(id)
   },
   { immediate: true },
 )
@@ -644,7 +719,8 @@ const vistaImprimirScore = computed<'independiente' | 'empleado' | null>(() => {
 const stepsScore = [
   { num: 1, title: 'Perfil del deudor' },
   { num: 2, title: 'Análisis' },
-  { num: 3, title: 'Hoja SCORE' },
+  { num: 3, title: 'Score' },
+  { num: 4, title: 'Concepto del analista' },
 ] as const
 
 const activeStepMeta = computed(() => {
@@ -652,7 +728,7 @@ const activeStepMeta = computed(() => {
     return {
       title: 'Perfil del deudor',
       description:
-        'Elige el perfil del deudor (independiente, empleado o pensionado). El análisis de capacidad de pago (hoja EMERGENCIA) y la hoja SCORE siguen en los pasos 2 y 3. Las matrices de SCORE se configuran en Configuración → Plantilla Score.',
+        'Elige el perfil del deudor (independiente, empleado o pensionado). El análisis de capacidad de pago (hoja EMERGENCIA) y el SCORE siguen en los pasos 2 y 3; el concepto final en el paso 4. Las matrices de SCORE se configuran en Configuración → Plantilla Score.',
     }
   }
   if (currentStep.value === 2) {
@@ -661,25 +737,59 @@ const activeStepMeta = computed(() => {
       description: '',
     }
   }
-  if (vistaImprimirScore.value === 'independiente') {
+  if (currentStep.value === 3) {
+    if (vistaImprimirScore.value === 'independiente') {
+      return {
+        title: 'Score',
+        description:
+          'Hoja Excel IMPRIMIR INDEPENDIENTE — Formato AIR-SARC-FO-02.',
+      }
+    }
+    if (vistaImprimirScore.value === 'empleado') {
+      return {
+        title: 'Score',
+        description:
+          'Hoja Excel IMPRIMIR EMPLEADO - PENSIONADO — Formato AIR-SARC-FO-03.',
+      }
+    }
     return {
-      title: 'IMPRIMIR INDEPENDIENTE',
-      description:
-        'Hoja Excel IMPRIMIR INDEPENDIENTE — Formato AIR-SARC-FO-02.',
+      title: 'Score',
+      description: 'Selecciona un perfil en el paso 1 para ver el formulario de puntajes.',
     }
   }
-  if (vistaImprimirScore.value === 'empleado') {
+  if (currentStep.value === 4) {
     return {
-      title: 'IMPRIMIR EMPLEADO - PENSIONADO',
+      title: 'Concepto del analista',
       description:
-        'Hoja Excel IMPRIMIR EMPLEADO -PENSIONADO — Formato AIR-SARC-FO-03.',
+        'Revise los datos del analista, redacte el concepto final y guarde. Desde aquí puede abrir el PDF con el resumen del análisis y el SCORE.',
     }
   }
   return {
-    title: 'Hoja SCORE',
-    description: 'Selecciona un perfil en el paso 1 para ver el formulario de puntajes.',
+    title: 'Análisis y SCORE',
+    description: '',
   }
 })
+
+function onValidacionCreditoFallida(
+  v: { ok: false, errores: string[], campos: EmergenciaCreditoCampoValidacion[] },
+): void {
+  toast.error(
+    v.errores[0] ?? 'Complete la hoja de análisis (paso 2) o ajuste el paso 1 según se indique.',
+    { description: descripcionErroresAdicionales(v.errores) },
+  )
+  if (v.campos[0] === 'tipoValorCuota') {
+    currentStep.value = 1
+    nextTick(() => enfocarEmergenciaCreditoCampo('tipoValorCuota'))
+    return
+  }
+  currentStep.value = 2
+  nextTick(() => emergenciaFormRef.value?.aplicarErroresValidacionCredito(v))
+}
+
+const emergenciaFormRef = ref<{
+  aplicarErroresValidacionCredito: (v: { ok: false, campos: EmergenciaCreditoCampoValidacion[] }) => void
+  limpiarErroresValidacionCredito: () => void
+} | null>(null)
 
 function goToStep(num: number): void {
   if (num === 1) {
@@ -690,18 +800,42 @@ function goToStep(num: number): void {
     toast.error('Primero elige un perfil del deudor en el paso 1.')
     return
   }
+  if (num === 2) {
+    currentStep.value = 2
+    return
+  }
   if (num === 3) {
     const v = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
     if (!v.ok) {
-      toast.error(
-        v.errores[0] ?? 'Complete la hoja de análisis (paso 2) para abrir el SCORE.',
-        { description: descripcionErroresAdicionales(v.errores) },
-      )
+      onValidacionCreditoFallida(v)
       return
     }
+    currentStep.value = 3
+    scrollVistaAnalisisAlInicio()
+    return
   }
-  if (num >= 2) {
-    currentStep.value = num
+  if (num === 4) {
+    if (currentStep.value < 3) {
+      toast.error('Avance al paso Score y complete el formulario de puntajes antes de concepto del analista.')
+      return
+    }
+    if (vistaImprimirScore.value == null) {
+      toast.error('Seleccione un perfil en el paso 1 para cargar la hoja de score.')
+      return
+    }
+    const v = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
+    if (!v.ok) {
+      onValidacionCreditoFallida(v)
+      return
+    }
+    if (currentStep.value === 3) {
+      if (!arePuntajesCompletos()) {
+        toast.error('Debe completar todos los puntajes de la hoja SCORE antes de continuar.')
+        return
+      }
+    }
+    currentStep.value = 4
+    scrollVistaAnalisisAlInicio()
   }
 }
 
@@ -722,13 +856,24 @@ function nextStep(): void {
   if (currentStep.value === 2) {
     const v = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
     if (!v.ok) {
-      toast.error(
-        v.errores[0] ?? 'Complete la hoja de análisis antes de abrir el SCORE.',
-        { description: descripcionErroresAdicionales(v.errores) },
-      )
+      onValidacionCreditoFallida(v)
       return
     }
     currentStep.value = 3
+    scrollVistaAnalisisAlInicio()
+    return
+  }
+  if (currentStep.value === 3) {
+    if (vistaImprimirScore.value == null) {
+      toast.error('Seleccione un perfil en el paso 1 para cargar la hoja de score.')
+      return
+    }
+    if (!arePuntajesCompletos()) {
+      toast.error('Debe completar todos los puntajes de la hoja SCORE antes de continuar.')
+      return
+    }
+    currentStep.value = 4
+    scrollVistaAnalisisAlInicio()
   }
 }
 
@@ -739,7 +884,7 @@ function prevStep(): void {
 }
 
 watch(perfilDeudor, (p) => {
-  if (p == null && (currentStep.value === 2 || currentStep.value === 3)) {
+  if (p == null && (currentStep.value === 2 || currentStep.value === 3 || currentStep.value === 4)) {
     currentStep.value = 1
   }
 })
@@ -775,10 +920,7 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
   }
   const valCred = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
   if (!valCred.ok) {
-    toast.error(
-      valCred.errores[0] ?? 'Complete la hoja de análisis (información de crédito) antes de guardar.',
-      { description: descripcionErroresAdicionales(valCred.errores) },
-    )
+    onValidacionCreditoFallida(valCred)
     return
   }
   if (!hasAnyPermission(['radicacion_crear', 'radicacion_editar'])) {
@@ -805,13 +947,16 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
         nivel_ifs: classifyPuntajeTotalIFS(total),
         nivel_riesgo: classifyNivelRiesgo(total),
         observaciones: observacionesScore.value.trim() === '' ? null : observacionesScore.value,
-        emergencia: JSON.parse(JSON.stringify(emergenciaState.value)) as Record<string, unknown>,
+        emergencia: emergenciaStateToSnapshotObject(emergenciaState.value),
       },
     })
-    toast.success('Hoja de análisis (EMERGENCIA) guardada con la solicitud.')
+    toast.success('Análisis guardado con la solicitud.')
+    emergenciaFormRef.value?.limpiarErroresValidacionCredito()
     if (solicitudId.value) {
       await loadSolicitudParaAnalisis(solicitudId.value)
     }
+    currentStep.value = 3
+    scrollVistaAnalisisAlInicio()
   }
   catch (e: unknown) {
     const err = e as { data?: { message?: string } }
@@ -823,12 +968,17 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
 }
 
 type ScorePanelExpose = {
-  guardarAnalisisScore: () => Promise<void>
+  guardarAnalisisScore: (options?: { conceptoAnalista?: string | null }) => Promise<void>
   guardandoScore: boolean
   puedeGuardarScore: boolean
+  arePuntajesCompletos: () => boolean
 }
 
 const scorePanelRef = ref<ScorePanelExpose | null>(null)
+
+function arePuntajesCompletos(): boolean {
+  return scorePanelRef.value?.arePuntajesCompletos() ?? false
+}
 
 const mostrarBotonGuardarEmergencia = computed(
   () =>
@@ -845,13 +995,24 @@ const mostrarBotonGuardarScore = computed(
 
 const mostrarBotonDescargarPdfScore = computed(
   () =>
-    currentStep.value === 3
+    currentStep.value === 4
     && vistaImprimirScore.value != null
     && hasPermission('radicacion_descargar_pdf'),
 )
 
+const mostrarBotonGuardarCierre = computed(
+  () =>
+    currentStep.value === 4
+    && vistaImprimirScore.value != null
+    && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
+)
+
 async function ejecutarGuardarScore(): Promise<void> {
   await scorePanelRef.value?.guardarAnalisisScore()
+}
+
+async function ejecutarGuardarCierreAnalista(): Promise<void> {
+  await scorePanelRef.value?.guardarAnalisisScore({ conceptoAnalista: conceptoAnalista.value })
 }
 
 async function ejecutarDescargaScorePdf(): Promise<void> {
@@ -862,7 +1023,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
   descargandoScorePdf.value = true
   try {
     await downloadAnalisisScorePdf(id)
-    toast.success('PDF del SCORE abierto en una nueva pestaña. Puede guardarlo desde el visor si lo desea.')
+    toast.success('PDF (análisis y SCORE) abierto en una nueva pestaña. Puede guardarlo desde el visor si lo desea.')
   } catch (e) {
     toast.error(e instanceof Error ? e.message : 'No se pudo generar el PDF del SCORE.')
   } finally {
@@ -913,7 +1074,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
       v-else
       class="rounded-xl border border-dashed border-muted-foreground/25 bg-muted/20 p-4 text-sm text-muted-foreground"
     >
-      Sin solicitud vinculada en la URL. Puedes usar esta vista en modo prueba o abrir SCORE desde el listado de radicación.
+      Sin <span class="font-mono">?solicitud=</span> en la URL no hay radicación asociada: abre siempre Análisis y SCORE desde el listado de radicación (cada fila enlaza su propia solicitud) para no mezclar datos.
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
@@ -988,7 +1149,18 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
         </div>
 
         <div v-else-if="currentStep === 2" class="space-y-4">
+          <PermissionGate
+            v-if="solicitudId"
+            permission="radicacion_ver_resumen_financiero"
+            strict
+          >
+            <RadicacionResumenFinancieroDeudor
+              :financial-info="resumenDeudorFinancialInfo"
+              :amount-requested="resumenMontoSolicitado"
+            />
+          </PermissionGate>
           <AnalisisEmergenciaForm
+            ref="emergenciaFormRef"
             v-model="emergenciaState"
             :lock-deudor-fields="true"
             :lock-gastos-desde-radicacion="true"
@@ -1004,42 +1176,89 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
           />
         </div>
 
-        <div v-else-if="currentStep === 3" class="space-y-4">
-          <AnalisisScoreImprimirPanel
-            v-if="vistaImprimirScore === 'independiente'"
-            ref="scorePanelRef"
-            v-model:cabecera="scoreCabecera"
-            v-model:observaciones="observacionesScore"
-            variant="independiente"
-            :meta="IMPRIMIR_INDEPENDIENTE_META"
-            :variable-rows="variableRowsForIndep"
-            :matrix-lines="scoreLinesIndep"
-            :credit-application-id="solicitudId"
-            :perfil-deudor="perfilDeudor"
-            :emergencia="emergenciaState"
-            :company="companyPrincipal"
-            :loading-company="loadingCompany"
-            @saved="onScoreGuardado"
-          />
-          <AnalisisScoreImprimirPanel
-            v-else-if="vistaImprimirScore === 'empleado'"
-            ref="scorePanelRef"
-            v-model:cabecera="scoreCabecera"
-            v-model:observaciones="observacionesScore"
-            variant="empleado"
-            :meta="IMPRIMIR_EMPLEADO_META"
-            :variable-rows="variableRowsForEmp"
-            :matrix-lines="scoreLinesEmp"
-            :credit-application-id="solicitudId"
-            :perfil-deudor="perfilDeudor"
-            :emergencia="emergenciaState"
-            :company="companyPrincipal"
-            :loading-company="loadingCompany"
-            @saved="onScoreGuardado"
-          />
-          <p v-else class="text-sm text-muted-foreground">
-            Selecciona un perfil en el paso 1 para cargar la hoja de score.
-          </p>
+        <div v-else-if="currentStep === 3 || currentStep === 4" class="space-y-4">
+          <div v-show="currentStep === 3">
+            <AnalisisScoreImprimirPanel
+              v-if="vistaImprimirScore === 'independiente'"
+              ref="scorePanelRef"
+              v-model:cabecera="scoreCabecera"
+              v-model:observaciones="observacionesScore"
+              variant="independiente"
+              :meta="IMPRIMIR_INDEPENDIENTE_META"
+              :variable-rows="variableRowsForIndep"
+              :matrix-lines="scoreLinesIndep"
+              :credit-application-id="solicitudId"
+              :perfil-deudor="perfilDeudor"
+              :emergencia="emergenciaState"
+              :company="companyPrincipal"
+              :loading-company="loadingCompany"
+              @saved="onScoreGuardado"
+              @credit-validation-failed="onValidacionCreditoFallida"
+            />
+            <AnalisisScoreImprimirPanel
+              v-else-if="vistaImprimirScore === 'empleado'"
+              ref="scorePanelRef"
+              v-model:cabecera="scoreCabecera"
+              v-model:observaciones="observacionesScore"
+              variant="empleado"
+              :meta="IMPRIMIR_EMPLEADO_META"
+              :variable-rows="variableRowsForEmp"
+              :matrix-lines="scoreLinesEmp"
+              :credit-application-id="solicitudId"
+              :perfil-deudor="perfilDeudor"
+              :emergencia="emergenciaState"
+              :company="companyPrincipal"
+              :loading-company="loadingCompany"
+              @saved="onScoreGuardado"
+              @credit-validation-failed="onValidacionCreditoFallida"
+            />
+            <p v-else class="text-sm text-muted-foreground">
+              Selecciona un perfil en el paso 1 para cargar la hoja de score.
+            </p>
+          </div>
+
+          <div v-show="currentStep === 4" class="space-y-5">
+            <div class="rounded-lg border border-dashed border-muted-foreground/30 bg-muted/15 p-4 text-sm">
+              <p class="mb-2 font-semibold text-foreground">
+                Analista que completa el estudio
+              </p>
+              <template v-if="user">
+                <p>
+                  <span class="text-muted-foreground">Nombre: </span>
+                  <span class="text-foreground">{{ user.full_name?.trim() || user.name || '—' }}</span>
+                </p>
+                <p>
+                  <span class="text-muted-foreground">Correo: </span>
+                  <span class="font-mono text-foreground">{{ user.email || '—' }}</span>
+                </p>
+                <p v-if="user.phone">
+                  <span class="text-muted-foreground">Teléfono: </span>
+                  <span class="text-foreground">{{ user.phone }}</span>
+                </p>
+                <p v-if="user.sucursal">
+                  <span class="text-muted-foreground">Sucursal: </span>
+                  <span class="text-foreground">{{ [user.sucursal.code, user.sucursal.name].filter(Boolean).join(' — ') }}</span>
+                </p>
+              </template>
+              <p v-else class="text-muted-foreground">
+                Cargando usuario de sesión…
+              </p>
+            </div>
+
+            <div class="space-y-2">
+              <Label for="concepto-analista">Concepto final del analista</Label>
+              <Textarea
+                id="concepto-analista"
+                v-model="conceptoAnalista"
+                rows="8"
+                class="min-h-44 w-full resize-y"
+                placeholder="Escriba el concepto o decisión final del análisis (visible en el PDF)…"
+              />
+              <p class="text-xs text-muted-foreground">
+                Puede dejarlo en blanco o completarlo; el cierre vuelve a guardar análisis, SCORE y concepto.
+              </p>
+            </div>
+          </div>
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-4 border-t pt-4">
@@ -1061,32 +1280,27 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
             </Button>
           </div>
           <div
-            v-if="mostrarBotonGuardarEmergencia || mostrarBotonGuardarScore || mostrarBotonDescargarPdfScore"
+            v-if="mostrarBotonGuardarEmergencia || mostrarBotonGuardarScore || mostrarBotonDescargarPdfScore || mostrarBotonGuardarCierre"
             class="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end"
           >
             <p
-              v-if="!solicitudId && (mostrarBotonGuardarEmergencia || mostrarBotonGuardarScore)"
+              v-if="!solicitudId && (mostrarBotonGuardarEmergencia || mostrarBotonGuardarScore || mostrarBotonGuardarCierre)"
               class="text-right text-xs text-amber-700 dark:text-amber-400"
             >
               Sin solicitud en la URL: abre esta pantalla desde Radicación para poder guardar.
             </p>
+            
             <p
-              v-else-if="mostrarBotonGuardarEmergencia"
+              v-else-if="mostrarBotonGuardarCierre"
               class="text-right text-xs text-muted-foreground"
             >
-              Guarda la hoja de análisis (EMERGENCIA) con la misma solicitud; puedes continuar a la hoja SCORE después.
-            </p>
-            <p
-              v-else-if="mostrarBotonGuardarScore"
-              class="text-right text-xs text-muted-foreground"
-            >
-              Se guarda en la solicitud vinculada (borrador o en análisis).
+              Guarda con el concepto: análisis, SCORE y observaciones, según el formulario.
             </p>
             <p
               v-if="mostrarBotonDescargarPdfScore && solicitudId"
               class="text-right text-xs text-muted-foreground"
             >
-              Se abre en una nueva pestaña; el contenido es el último SCORE guardado en el servidor.
+              Se abre en una nueva pestaña: PDF con resumen de análisis, SCORE (último guardado) y concepto.
             </p>
             <div class="flex flex-wrap justify-end gap-2">
               <Button
@@ -1107,7 +1321,26 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
                   name="i-simple-icons-adobeacrobatreader"
                   class="mr-2 h-4 w-4 text-red-600 dark:text-red-300"
                 />
-                {{ descargandoScorePdf ? 'Abriendo…' : 'Ver PDF SCORE' }}
+                {{ descargandoScorePdf ? 'Abriendo…' : 'Ver PDF Análisis y SCORE' }}
+              </Button>
+              <Button
+                v-if="mostrarBotonGuardarCierre"
+                type="button"
+                class="shrink-0"
+                :disabled="!solicitudId || scorePanelRef?.guardandoScore"
+                @click="ejecutarGuardarCierreAnalista"
+              >
+                <Icon
+                  v-if="scorePanelRef?.guardandoScore"
+                  name="i-lucide-loader-2"
+                  class="mr-2 h-4 w-4 animate-spin"
+                />
+                <Icon
+                  v-else
+                  name="i-lucide-check-circle-2"
+                  class="mr-2 h-4 w-4"
+                />
+                {{ scorePanelRef?.guardandoScore ? 'Guardando…' : 'Guardar cierre' }}
               </Button>
               <Button
                 v-if="mostrarBotonGuardarEmergencia"
@@ -1126,7 +1359,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
                   name="i-lucide-save"
                   class="mr-2 h-4 w-4"
                 />
-                {{ guardandoEmergenciaBorrador ? 'Guardando…' : 'Guardar hoja de análisis' }}
+                {{ guardandoEmergenciaBorrador ? 'Guardando…' : 'Guardar análisis' }}
               </Button>
               <Button
                 v-if="mostrarBotonGuardarScore"

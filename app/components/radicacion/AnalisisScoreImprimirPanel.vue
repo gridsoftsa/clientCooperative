@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Company } from '~/types/company'
-import type { EmergenciaState } from '~/constants/analisis-score-emergencia'
+import { emergenciaStateToSnapshotObject, type EmergenciaState } from '~/constants/analisis-score-emergencia'
 import type { AnalisisScorePerfilValue } from '~/constants/analisis-score'
 import type { ImprimirMeta, ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
 import type { ScoreMatrixLine } from '~/constants/analisis-score-matrix'
@@ -13,10 +13,8 @@ import {
   classifyPuntajeTotalIFS,
   sumImprimirPuntajesPorSeccion,
 } from '~/utils/analisis-score-imprimir-totals'
-import {
-  descripcionErroresAdicionales,
-  validarCreditoEmergenciaCompleto,
-} from '~/utils/analisis-emergencia-validacion'
+import type { EmergenciaCreditoCampoValidacion } from '~/utils/analisis-emergencia-validacion'
+import { validarCreditoEmergenciaCompleto } from '~/utils/analisis-emergencia-validacion'
 import {
   buildVariableOptionsFromMatrix,
   EMPLEADO_IMPRIMIR_MATRIX_ALIASES,
@@ -43,6 +41,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   saved: [snapshot: Record<string, unknown> | null]
+  'credit-validation-failed': [payload: {
+    ok: false
+    errores: string[]
+    campos: EmergenciaCreditoCampoValidacion[]
+  }]
 }>()
 
 const cabecera = defineModel<{ fecha: string, cedula: string, nombre: string }>('cabecera', {
@@ -193,7 +196,7 @@ const puedeGuardarScore = computed(() =>
 
 const guardandoScore = ref(false)
 
-async function guardarAnalisisScore(): Promise<void> {
+async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null }): Promise<void> {
   const id = props.creditApplicationId?.trim()
   if (!id) {
     toast.error('Abre el análisis SCORE desde el listado de radicación para vincular una solicitud.')
@@ -209,10 +212,7 @@ async function guardarAnalisisScore(): Promise<void> {
   }
   const valCred = validarCreditoEmergenciaCompleto(props.emergencia.credito)
   if (!valCred.ok) {
-    toast.error(
-      valCred.errores[0] ?? 'Complete la hoja de análisis (paso 2) antes de guardar el SCORE.',
-      { description: descripcionErroresAdicionales(valCred.errores) },
-    )
+    emit('credit-validation-failed', valCred)
     return
   }
   if (!puntajesFormularioValido.value) {
@@ -226,24 +226,30 @@ async function guardarAnalisisScore(): Promise<void> {
   try {
     const { $api, $csrf } = useNuxtApp()
     await $csrf()
+    const body: Record<string, unknown> = {
+      perfil_deudor: props.perfilDeudor,
+      variant: props.variant,
+      cabecera: { ...cabecera.value },
+      variable_rows: filasEditables.value.map(r => ({ ...r })),
+      sums: { ...scoreSums.value },
+      nivel_ifs: nivelIFS.value,
+      nivel_riesgo: nivelRiesgo.value,
+      observaciones: observaciones.value.trim() === '' ? null : observaciones.value,
+        emergencia: props.emergencia != null
+        ? emergenciaStateToSnapshotObject(props.emergencia)
+        : null,
+    }
+    if (options && 'conceptoAnalista' in options) {
+      const c = options.conceptoAnalista
+      const t = c == null ? '' : String(c).trim()
+      body.concepto_analista = t === '' ? null : t
+    }
     const res = await $api<{
       data?: { analisis_score_snapshot?: Record<string, unknown> | null }
       message?: string
     }>(`/credit-applications/${id}/analisis-score`, {
       method: 'PUT',
-      body: {
-        perfil_deudor: props.perfilDeudor,
-        variant: props.variant,
-        cabecera: { ...cabecera.value },
-        variable_rows: filasEditables.value.map(r => ({ ...r })),
-        sums: { ...scoreSums.value },
-        nivel_ifs: nivelIFS.value,
-        nivel_riesgo: nivelRiesgo.value,
-        observaciones: observaciones.value.trim() === '' ? null : observaciones.value,
-        emergencia: props.emergencia != null
-          ? JSON.parse(JSON.stringify(props.emergencia)) as Record<string, unknown>
-          : null,
-      },
+      body,
     })
     toast.success(res?.message ?? 'Análisis y SCORE guardado correctamente.')
     emit('saved', res?.data?.analisis_score_snapshot ?? null)
@@ -256,10 +262,15 @@ async function guardarAnalisisScore(): Promise<void> {
   }
 }
 
+function arePuntajesCompletos(): boolean {
+  return puntajesFormularioValido.value
+}
+
 defineExpose({
   guardarAnalisisScore,
   guardandoScore,
   puedeGuardarScore,
+  arePuntajesCompletos,
 })
 </script>
 

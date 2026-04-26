@@ -328,3 +328,11 @@ export function mergeEmergenciaFromSnapshot(saved: unknown): EmergenciaState {
   normalizarBloqueActivos(merged.activos)
   return merged
 }
+
+/**
+ * Clon estructural completo de EMERGENCIA para el snapshot (API, PDF, histórico).
+ * Sin recortar cadenas vacías ni claves: misma fidelidad que en pantalla.
+ */
+export function emergenciaStateToSnapshotObject(state: EmergenciaState): Record<string, unknown> {
+  return JSON.parse(JSON.stringify(state)) as Record<string, unknown>
+}

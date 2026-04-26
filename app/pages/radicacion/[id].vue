@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
+import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 import { parseActivityTemplateList } from '~/types/credit-application'
@@ -234,40 +235,6 @@ function getDocumentsForApplicant(applicantId: number | string | null | undefine
   return documentsByApplicant.value[String(applicantId)] ?? []
 }
 
-const solvenciaPercentage = computed(() => {
-  const d = debtor.value
-  if (!d?.financial_info || !application.value) return null
-  const fi = d.financial_info as any
-  const sol = fi?.solvency ?? {}
-  const assetsArr = fi?.assets ?? []
-  const activos = Array.isArray(assetsArr)
-    ? assetsArr.reduce((s: number, a: any) => s + (a?.value ?? 0), 0)
-    : 0
-  const pasivos = sol?.liabilities ?? 0
-  const monto = Number(application.value.amount_requested) || 0
-  if (!activos || activos <= 0 || !monto) return null
-  return Math.round(((pasivos + monto) / activos) * 100 * 100) / 100
-})
-
-const endeudamientoPercentage = computed(() => {
-  const d = debtor.value
-  if (!d?.financial_info || !application.value) return null
-  const sol = (d.financial_info as any)?.solvency ?? {}
-  const bienRaiz = sol?.real_estate ?? 0
-  const pasivos = sol?.liabilities ?? 0
-  const monto = Number(application.value.amount_requested) || 0
-  if (!bienRaiz || bienRaiz <= 0 || !monto) return null
-  return Math.round(((pasivos + monto) / bienRaiz) * 100 * 100) / 100
-})
-
-/** Menor % = mejor */
-function solvenciaColorClass(pct: number | null): string {
-  if (pct == null) return 'bg-muted text-muted-foreground'
-  if (pct < 50) return 'bg-green-600/20 text-green-700 dark:text-green-400 border-green-600/40'
-  if (pct < 100) return 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/40'
-  return 'bg-destructive/20 text-destructive border-destructive/40'
-}
-
 function fullName(a: any): string {
   return [a.first_name, a.second_name, a.first_last_name, a.second_last_name].filter(Boolean).join(' ') || '-'
 }
@@ -474,55 +441,10 @@ watch([application, debtor, coDebtors], () => {
 
       <!-- Resumen financiero del deudor (requiere permiso; oculto p. ej. para asesor) -->
       <PermissionGate permission="radicacion_ver_resumen_financiero" strict>
-        <div class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
-          <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Resumen financiero del deudor
-          </p>
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            <div class="space-y-1">
-              <p class="text-sm font-bold uppercase">Solvencia</p>
-              <div
-                class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
-                :class="solvenciaColorClass(solvenciaPercentage)"
-              >
-                {{ solvenciaPercentage != null ? `${solvenciaPercentage.toFixed(2)} %` : '—' }}
-              </div>
-              <p class="text-[10px] text-muted-foreground">
-                (Pasivos + monto solicitado) ÷ Activos
-              </p>
-            </div>
-            <div class="space-y-1">
-              <p class="text-sm font-bold uppercase">Endeudamiento</p>
-              <div
-                class="flex h-10 w-full items-center rounded-md border px-3 py-2 text-base font-semibold"
-                :class="solvenciaColorClass(endeudamientoPercentage)"
-              >
-                {{ endeudamientoPercentage != null ? `${endeudamientoPercentage.toFixed(2)} %` : '—' }}
-              </div>
-              <p class="text-[10px] text-muted-foreground">
-                (Pasivos + monto solicitado) ÷ Bien raíz
-              </p>
-            </div>
-            <div class="space-y-1">
-              <p class="text-sm font-bold uppercase">Activos</p>
-              <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-                {{ formatPesosConSimbolo((debtor.financial_info as any)?.solvency?.assets ?? (debtor.financial_info as any)?.assets?.reduce((s: number, a: any) => s + (a?.value ?? 0), 0) ?? 0) }}
-              </p>
-            </div>
-            <div class="space-y-1">
-              <p class="text-sm font-bold uppercase">Pasivos</p>
-              <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-                {{ formatPesosConSimbolo((debtor.financial_info as any)?.solvency?.liabilities) }}
-              </p>
-            </div>
-            <div class="space-y-1">
-              <p class="text-sm font-bold uppercase">Bien raíz</p>
-              <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-                {{ formatPesosConSimbolo((debtor.financial_info as any)?.solvency?.real_estate) }}
-              </p>
-            </div>
-          </div>
-        </div>
+        <RadicacionResumenFinancieroDeudor
+          :financial-info="debtor?.financial_info"
+          :amount-requested="Number(application?.amount_requested) || 0"
+        />
       </PermissionGate>
 
       <!-- Stepper -->

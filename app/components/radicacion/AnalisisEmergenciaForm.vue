@@ -12,6 +12,18 @@ import {
   parsePesosInput,
 } from '~/composables/usePesosFormat'
 import { formatMontoCopVista, parseMontoCop } from '~/utils/analisis-emergencia-cuota'
+import {
+  AYUDA_NIVEL_RCI_TRAMOS,
+  classifyNivelRiesgoAsumidoRci,
+  computeRiesgoAsumidoRciPercento,
+  formatRiesgoAsumidoRciPorcentajeVista,
+  rciNivelRiesgoBloqueClasses,
+  rciResumenContenedorClasses,
+} from '~/utils/analisis-emergencia-rci'
+import type { EmergenciaCreditoCampoValidacion } from '~/utils/analisis-emergencia-validacion'
+import {
+  enfocarEmergenciaCreditoCampo,
+} from '~/utils/analisis-emergencia-validacion'
 import AnalisisEmergenciaGastosRadicacionFields from '~/components/radicacion/AnalisisEmergenciaGastosRadicacionFields.vue'
 import AnalisisEmergenciaActivosPersonaBlock from '~/components/radicacion/AnalisisEmergenciaActivosPersonaBlock.vue'
 import type { ActivoPersonaKey } from '~/utils/radicacion-financial-activos'
@@ -405,6 +417,54 @@ watch(
   { deep: true, immediate: true },
 )
 
+const sumaCuotasEntidadesDeudor = computed(() => {
+  const lines = state.value.capacidadBloque1.a.cuotasFin ?? []
+  return lines.reduce((s, l) => s + parsePesosFlexible(l.cuota), 0)
+})
+
+const vrCuotaVarNumDeudor = computed(() => parsePesosFlexible(state.value.credito.vrCuotaVar))
+const totalIngresosDeudorNum = computed(() => parsePesosFlexible(state.value.capacidadBloque1.a.totalIngresos))
+
+const rciPorcentoDeudor = computed(() => computeRiesgoAsumidoRciPercento({
+  sumaCuotasEntidades: sumaCuotasEntidadesDeudor.value,
+  vrCuotaVar: vrCuotaVarNumDeudor.value,
+  totalIngresos: totalIngresosDeudorNum.value,
+}))
+
+const rciNivelDeudor = computed(() => {
+  const p = rciPorcentoDeudor.value
+  if (p == null) {
+    return null
+  }
+  return classifyNivelRiesgoAsumidoRci(p)
+})
+
+function displayPesosCifra(n: number): string {
+  if (!Number.isFinite(n)) {
+    return formatPesos(0)
+  }
+  if (n === 0) {
+    return formatPesos(0)
+  }
+  return formatPesos(Math.round(n))
+}
+
+watch(
+  [rciPorcentoDeudor, rciNivelDeudor],
+  () => {
+    const p = rciPorcentoDeudor.value
+    if (p == null) {
+      state.value.nivel.riesgoAsumidoRci = ''
+      state.value.nivel.nivelRiesgoAsumido = ''
+    }
+    else {
+      state.value.nivel.riesgoAsumidoRci = formatRiesgoAsumidoRciPorcentajeVista(p)
+      state.value.nivel.nivelRiesgoAsumido = rciNivelDeudor.value ?? ''
+    }
+  },
+  { immediate: true },
+)
+
 function onCentralRiesgoMontoUpdate(
   field: 'deudasDirectas' | 'deudasIndirectas',
   key: ActivoPersonaKey,
@@ -448,33 +508,90 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
   }
   b.cuotasFin.splice(index, 1)
 }
+
+/** Crédito: anillo danger en validación; no incluye `tipoValorCuota` (paso 1). */
+const camposConErrorCredito = shallowRef<Set<EmergenciaCreditoCampoValidacion>>(new Set())
+
+const creditoBordeValidacion = 'rounded-lg border border-destructive/60 bg-destructive/[0.06] p-0.5 shadow-sm ring-2 ring-destructive/40'
+
+function creditoCampoConError(c: EmergenciaCreditoCampoValidacion): boolean {
+  return camposConErrorCredito.value.has(c)
+}
+
+function quitarErrorCredito(c: EmergenciaCreditoCampoValidacion) {
+  if (!camposConErrorCredito.value.has(c)) {
+    return
+  }
+  const next = new Set(camposConErrorCredito.value)
+  next.delete(c)
+  camposConErrorCredito.value = next
+}
+
+/**
+ * Aplica resaltado y foco al primer control del formulario (no incluye paso 1 / tipo de cuota).
+ */
+function aplicarErroresValidacionCredito(
+  v: { ok: false, campos: EmergenciaCreditoCampoValidacion[] },
+) {
+  const enForm = v.campos.filter(c => c !== 'tipoValorCuota')
+  camposConErrorCredito.value = new Set(enForm)
+  nextTick(() => {
+    const first = v.campos.find(c => c !== 'tipoValorCuota')
+    if (first) {
+      enfocarEmergenciaCreditoCampo(first)
+    }
+  })
+}
+
+function limpiarErroresValidacionCredito() {
+  camposConErrorCredito.value = new Set()
+}
+
+defineExpose({
+  aplicarErroresValidacionCredito,
+  limpiarErroresValidacionCredito,
+})
 </script>
 
 <template>
   <div class="space-y-6">
-    <div class="rounded-lg border bg-card p-4 text-center text-sm">
-      <p class="text-base font-bold leading-snug">
-        {{ EMERGENCIA_FORM_META.titulo }}
-      </p>
-      <div class="mt-2 flex flex-wrap justify-center gap-x-6 gap-y-1 text-muted-foreground">
-        <span>Código: <span class="font-mono text-foreground">{{ state.encabezado.codigoFormulario || EMERGENCIA_FORM_META.codigo }}</span></span>
-        <span>Versión: <span class="font-mono text-foreground">{{ state.encabezado.version || EMERGENCIA_FORM_META.version }}</span></span>
-        <span>
-          NIT:
-          <span class="font-mono text-foreground">
-            <template v-if="loadingCompany">…</template>
-            <template v-else>{{ (company && company.nit && company.nit.trim()) || '—' }}</template>
+    <div class="rounded-md border border-border/80 bg-card/60 px-3 py-2 text-sm sm:px-3 sm:py-2.5">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div class="min-w-0 text-left">
+          <p class="text-[10px] font-semibold uppercase leading-none text-muted-foreground sm:text-xs">
+            Hoja de análisis
+          </p>
+          <p class="mt-0.5 line-clamp-2 text-sm font-bold leading-tight sm:text-sm">
+            {{ EMERGENCIA_FORM_META.titulo }}
+          </p>
+        </div>
+        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground sm:justify-end">
+          <span class="whitespace-nowrap">
+            Cód. <span class="font-mono text-foreground">{{ state.encabezado.codigoFormulario || EMERGENCIA_FORM_META.codigo }}</span>
           </span>
-        </span>
+          <span class="whitespace-nowrap">
+            Ver. <span class="font-mono text-foreground">{{ state.encabezado.version || EMERGENCIA_FORM_META.version }}</span>
+          </span>
+          <span class="min-w-0 whitespace-nowrap">
+            NIT
+            <span class="font-mono text-foreground">
+              <template v-if="loadingCompany">…</template>
+              <template v-else>{{ (company && company.nit && company.nit.trim()) || '—' }}</template>
+            </span>
+          </span>
+        </div>
       </div>
-      <p class="mt-2 text-sm font-semibold text-foreground">
+      <p class="mt-1.5 line-clamp-2 text-center text-[11px] font-medium text-foreground/90 sm:text-left sm:text-xs">
         {{ state.encabezado.entidad || EMERGENCIA_FORM_META.entidadLinea }}
       </p>
-      <div class="mx-auto mt-3 max-w-md">
-        <div class="space-y-1 text-left">
-          <Label for="emg-fa">Fecha actualización (formato)</Label>
-          <Input id="emg-fa" v-model="state.encabezado.fechaActualizacion" class="w-full" placeholder="DD/MM/AAAA" />
-        </div>
+      <div class="mt-2 flex max-w-sm flex-col gap-1 sm:mt-2 sm:flex-row sm:items-end sm:gap-2">
+        <Label for="emg-fa" class="shrink-0 text-[11px] text-muted-foreground sm:pb-0.5 sm:text-xs">Fecha actualización</Label>
+        <Input
+          id="emg-fa"
+          v-model="state.encabezado.fechaActualizacion"
+          class="h-8 w-full text-sm"
+          placeholder="DD/MM/AAAA"
+        />
       </div>
     </div>
 
@@ -567,7 +684,10 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
         Móvil: fila a fila en el mismo orden.
       -->
       <div class="grid gap-x-3 gap-y-3 md:grid-cols-3 md:items-stretch">
-        <div class="emg-cred-field flex h-full min-h-0 min-w-0 flex-col">
+        <div
+          class="emg-cred-field flex h-full min-h-0 min-w-0 flex-col"
+          :class="cn(creditoCampoConError('vrCredito') && creditoBordeValidacion)"
+        >
           <Label for="emg-vc" class="shrink-0 text-sm font-medium leading-snug">Valor de crédito (COP)</Label>
           <p class="emg-cred-hint shrink-0">Monto en pesos colombianos; mismo criterio que Vr. cuota var.</p>
           <div class="mt-auto w-full pt-1">
@@ -580,10 +700,14 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
               :class="deudorReadonlyClass"
               :tabindex="-1"
               placeholder="Ej. $ 200.000.000,00"
+              @update:model-value="() => quitarErrorCredito('vrCredito')"
             />
           </div>
         </div>
-        <div class="emg-cred-field flex h-full min-h-0 min-w-0 flex-col">
+        <div
+          class="emg-cred-field flex h-full min-h-0 min-w-0 flex-col"
+          :class="cn(creditoCampoConError('plazoMeses') && creditoBordeValidacion)"
+        >
           <Label for="emg-plz" class="shrink-0 text-sm font-medium leading-snug">Plazo (meses)</Label>
           <p class="emg-cred-hint shrink-0">Plazo del crédito. Viene de la radicación.</p>
           <div class="mt-auto w-full pt-1">
@@ -594,10 +718,14 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
               readonly
               :class="deudorReadonlyClass"
               :tabindex="-1"
+              @update:model-value="() => quitarErrorCredito('plazoMeses')"
             />
           </div>
         </div>
-        <div class="emg-cred-field flex h-full min-h-0 min-w-0 flex-col">
+        <div
+          class="emg-cred-field flex h-full min-h-0 min-w-0 flex-col"
+          :class="cn(creditoCampoConError('garantia') && creditoBordeValidacion)"
+        >
           <Label for="emg-gar" class="shrink-0 text-sm font-medium leading-snug">Garantía</Label>
           <p class="emg-cred-hint shrink-0">Cualitativas según perfil (paso 1) y plantilla SCORE.</p>
           <div class="mt-auto w-full pt-1">
@@ -614,11 +742,14 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
               no-options-text="Sin opciones: elija un perfil del deudor (paso 1) o verifique la plantilla SCORE."
               no-results-text="Sin coincidencias"
               class="multiselect-municipality w-full"
-              @update:model-value="(v: unknown) => { state.credito.garantia = (v != null && v !== '') ? String(v) : '' }"
+              @update:model-value="(v: unknown) => { state.credito.garantia = (v != null && v !== '') ? String(v) : ''; quitarErrorCredito('garantia') }"
             />
           </div>
         </div>
-        <div class="emg-cred-field flex h-full min-h-0 min-w-0 flex-col">
+        <div
+          class="emg-cred-field flex h-full min-h-0 min-w-0 flex-col"
+          :class="cn(creditoCampoConError('vrCuotaVar') && creditoBordeValidacion)"
+        >
           <Label for="emg-vcv" class="shrink-0 text-sm font-medium leading-snug">Vr. cuota var. (COP)</Label>
           <p class="emg-cred-hint shrink-0">
             {{ lockVrCuotaVar
@@ -636,10 +767,14 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
               :tabindex="lockVrCuotaVar ? -1 : undefined"
               placeholder="Ej. $ 5.200.000,00"
               @blur="onBlurVrCuotaVar"
+              @update:model-value="() => quitarErrorCredito('vrCuotaVar')"
             />
           </div>
         </div>
-        <div class="emg-cred-field flex h-full min-h-0 min-w-0 flex-col">
+        <div
+          class="emg-cred-field flex h-full min-h-0 min-w-0 flex-col"
+          :class="cn(creditoCampoConError('tasaNominal') && creditoBordeValidacion)"
+        >
           <Label for="emg-tn" class="shrink-0 text-sm font-medium leading-snug">Tasa nominal — % (anual)</Label>
           <p class="emg-cred-hint shrink-0">Valor en %; coma o punto. Se usa con precisión completa en el cálculo de la cuota.</p>
           <div class="mt-auto w-full pt-1">
@@ -651,6 +786,7 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
                 inputmode="decimal"
                 placeholder="Ej. 12,5"
                 autocomplete="off"
+                @update:model-value="() => quitarErrorCredito('tasaNominal')"
               />
               <span class="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
             </div>
@@ -673,10 +809,6 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
               <span class="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
             </div>
           </div>
-        </div>
-        <div class="flex min-h-0 flex-col gap-1 md:col-span-3">
-          <Label for="emg-cg" class="text-sm font-medium">Observación garantía (texto largo en plantilla)</Label>
-          <Input id="emg-cg" v-model="state.credito.comentarioGarantia" />
         </div>
       </div>
     </div>
@@ -1245,37 +1377,65 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
       </div>
     </div>
 
-    <div class="rounded-md border p-4">
-      <h3 class="mb-3 text-sm font-bold uppercase text-foreground">
-        Nivel de riesgo RCI y perfil
-      </h3>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div>
-          <Label for="n-rci" class="text-xs">Riesgo asumido (RCI)</Label>
-          <Input id="n-rci" v-model="state.nivel.riesgoAsumidoRci" class="mt-1 font-mono" />
+    <div
+      class="rounded-lg border-2 p-4 transition-colors"
+      :class="rciResumenContenedorClasses(rciNivelDeudor)"
+    >
+      <p class="text-sm font-semibold">
+        Nivel de riesgo RCI (deudor)
+      </p>
+      <p class="mt-1 text-xs opacity-90">
+        Riesgo asumido (RCI) = (Suma de cuotas en entidades financieras + Vr. cuota var.) ÷ Total ingresos (deudor, capacidad de pago). Resultado de todo el análisis de flujo; menor porcentaje indica más holgura frente a las cuotas.
+      </p>
+      <p class="mt-1 text-xs opacity-90">
+        {{ AYUDA_NIVEL_RCI_TRAMOS }}
+      </p>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div class="rounded-md border border-border/60 bg-background/60 px-3 py-2">
+          <p class="text-xs font-medium text-muted-foreground">
+            Suma cuotas (entidades)
+          </p>
+          <p class="mt-1 font-mono text-xl font-semibold tabular-nums text-foreground">
+            {{ displayPesosCifra(sumaCuotasEntidadesDeudor) }}
+          </p>
         </div>
-        <div>
-          <Label for="n-nra" class="text-xs">Nivel de riesgo asumido (RCI)</Label>
-          <Input id="n-nra" v-model="state.nivel.nivelRiesgoAsumido" class="mt-1" />
+        <div class="rounded-md border border-border/60 bg-background/60 px-3 py-2">
+          <p class="text-xs font-medium text-muted-foreground">
+            Vr. cuota var.
+          </p>
+          <p class="mt-1 font-mono text-xl font-semibold tabular-nums text-foreground">
+            {{ displayPesosCifra(vrCuotaVarNumDeudor) }}
+          </p>
         </div>
-        <div>
-          <Label for="n-ps" class="text-xs">Puntaje score</Label>
-          <Input id="n-ps" v-model="state.nivel.puntajeScore" class="mt-1 font-mono" />
+        <div class="rounded-md border border-border/60 bg-background/60 px-3 py-2">
+          <p class="text-xs font-medium text-muted-foreground">
+            Total ingresos (deudor)
+          </p>
+          <p class="mt-1 font-mono text-xl font-semibold tabular-nums text-foreground">
+            {{ displayPesosCifra(totalIngresosDeudorNum) }}
+          </p>
         </div>
-        <div>
-          <Label for="n-pd" class="text-xs">Nivel de riesgo perfil deudor (score)</Label>
-          <Input id="n-pd" v-model="state.nivel.nivelRiesgoPerfilDeudor" class="mt-1" />
+        <div class="rounded-md border border-border/60 bg-background/80 px-3 py-2">
+          <p class="text-xs font-medium opacity-80">
+            Riesgo asumido (RCI)
+          </p>
+          <p
+            class="mt-1 font-mono text-2xl font-bold tabular-nums tracking-tight"
+          >
+            {{ rciPorcentoDeudor != null ? formatRiesgoAsumidoRciPorcentajeVista(rciPorcentoDeudor) : '—' }}
+          </p>
         </div>
-      </div>
-    </div>
-
-    <div class="rounded-md border p-4">
-      <h3 class="mb-2 text-sm font-bold uppercase text-foreground">
-        Firma análisis
-      </h3>
-      <div>
-        <Label for="emg-ase">Nombre (asesor / quien consigna en plantilla)</Label>
-        <Input id="emg-ase" v-model="state.asesorNombre" class="mt-1" />
+        <div
+          class="rounded-md border-2 px-3 py-2 transition-colors"
+          :class="rciNivelDeudor ? rciNivelRiesgoBloqueClasses(rciNivelDeudor) : 'border-border/60 bg-background/60'"
+        >
+          <p class="text-xs font-medium opacity-90">
+            Nivel del riesgo asumido (RCI)
+          </p>
+          <p class="mt-1 text-2xl font-bold tracking-tight">
+            {{ rciNivelDeudor ?? '—' }}
+          </p>
+        </div>
       </div>
     </div>
   </div>
