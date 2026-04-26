@@ -63,7 +63,7 @@ const stepsDeudor = [
   { num: 5, title: 'Codeudores' },
 ]
 
-const { formatPesos } = usePesosFormat()
+const { formatPesosConSimbolo } = usePesosFormat()
 const { downloadDocument, downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdf = ref(false)
 const downloadingId = ref<number | null>(null)
@@ -506,19 +506,19 @@ watch([application, debtor, coDebtors], () => {
             <div class="space-y-1">
               <p class="text-sm font-bold uppercase">Activos</p>
               <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-                {{ formatPesos((debtor.financial_info as any)?.solvency?.assets ?? (debtor.financial_info as any)?.assets?.reduce((s: number, a: any) => s + (a?.value ?? 0), 0) ?? 0) }}
+                {{ formatPesosConSimbolo((debtor.financial_info as any)?.solvency?.assets ?? (debtor.financial_info as any)?.assets?.reduce((s: number, a: any) => s + (a?.value ?? 0), 0) ?? 0) }}
               </p>
             </div>
             <div class="space-y-1">
               <p class="text-sm font-bold uppercase">Pasivos</p>
               <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-                {{ formatPesos((debtor.financial_info as any)?.solvency?.liabilities) }}
+                {{ formatPesosConSimbolo((debtor.financial_info as any)?.solvency?.liabilities) }}
               </p>
             </div>
             <div class="space-y-1">
               <p class="text-sm font-bold uppercase">Bien raíz</p>
               <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-                {{ formatPesos((debtor.financial_info as any)?.solvency?.real_estate) }}
+                {{ formatPesosConSimbolo((debtor.financial_info as any)?.solvency?.real_estate) }}
               </p>
             </div>
           </div>
@@ -620,7 +620,7 @@ watch([application, debtor, coDebtors], () => {
               <div class="space-y-1.5">
                 <p class="text-sm font-medium">Monto solicitado (COP)</p>
                 <p class="rounded-md border bg-muted/50 px-3 py-2 font-semibold">
-                  {{ formatPesos(form.amount_requested) }}
+                  {{ formatPesosConSimbolo(form.amount_requested) }}
                 </p>
               </div>
               <div class="space-y-1.5">

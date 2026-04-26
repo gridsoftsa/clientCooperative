@@ -232,7 +232,7 @@ function removeCoDebtor(index: number) {
   form.value.co_debtors.splice(index, 1)
 }
 
-const { formatPesos, parsePesosInput, onKeydownPesosOnly } = usePesosFormat()
+const { formatPesosConSimbolo, parsePesosInput, onKeydownPesosOnly } = usePesosFormat()
 
 function formatTimeAgo(date: Date): string {
   const sec = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -951,7 +951,7 @@ onMounted(() => {
           <Label for="res_activos" class="text-sm font-bold uppercase">Activos</Label>
           <Input
             id="res_activos"
-            :model-value="formatPesos(totalActivosFromAssets)"
+            :model-value="formatPesosConSimbolo(totalActivosFromAssets)"
             type="text"
             placeholder="0"
             readonly
@@ -966,7 +966,7 @@ onMounted(() => {
           <Label for="res_pasivos" class="text-sm font-bold uppercase">Pasivos</Label>
           <Input
             id="res_pasivos"
-            :model-value="formatPesos(getSolvencyField('liabilities'))"
+            :model-value="formatPesosConSimbolo(getSolvencyField('liabilities'))"
             type="text"
             inputmode="decimal"
             placeholder="0"
@@ -979,7 +979,7 @@ onMounted(() => {
           <Label for="res_bien_raiz" class="text-sm font-bold uppercase">Bien raíz</Label>
           <Input
             id="res_bien_raiz"
-            :model-value="formatPesos(bienRaizFromGarantias)"
+            :model-value="formatPesosConSimbolo(bienRaizFromGarantias)"
             type="text"
             placeholder="0"
             readonly
@@ -1110,7 +1110,7 @@ onMounted(() => {
               <Label for="amount">Monto solicitado * (COP)</Label>
               <Input
                 id="amount"
-                :model-value="formatPesos(form.amount_requested)"
+                :model-value="formatPesosConSimbolo(form.amount_requested)"
                 type="text"
                 inputmode="decimal"
                 placeholder="Ej: 5.000.000"

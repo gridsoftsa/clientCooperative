@@ -7,7 +7,7 @@ const props = defineProps<{
   amountRequested?: number
 }>()
 
-const { formatPesos } = usePesosFormat()
+const { formatPesosConSimbolo } = usePesosFormat()
 const { downloadDocument } = useDocumentDownload()
 const downloadingId = ref<number | null>(null)
 
@@ -259,27 +259,27 @@ onMounted(() => {
           <tbody class="divide-y divide-border">
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">Ingreso salario</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(income.salary) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(income.salary) }}</td>
             </tr>
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">Ingreso pensión</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(income.pension) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(income.pension) }}</td>
             </tr>
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">Ingreso cultivos/negocio</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(income.business ?? income.crops) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(income.business ?? income.crops) }}</td>
             </tr>
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">Ingreso arriendos</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(income.rental) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(income.rental) }}</td>
             </tr>
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">Ingresos otros</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(income.other) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(income.other) }}</td>
             </tr>
             <tr class="border-t-2 border-border bg-muted/30 font-semibold">
               <td class="px-3 py-3 text-foreground">Total ingresos</td>
-              <td class="px-3 py-3 text-right">{{ formatPesos(incomeTotal) }}</td>
+              <td class="px-3 py-3 text-right">{{ formatPesosConSimbolo(incomeTotal) }}</td>
             </tr>
           </tbody>
         </table>
@@ -304,35 +304,35 @@ onMounted(() => {
           <tbody class="divide-y divide-border">
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">Gastos personales</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.personal) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(expenses.personal) }}</td>
             </tr>
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">Gastos alimentación</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.food) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(expenses.food) }}</td>
             </tr>
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">Gastos servicios/arriendo</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.rent ?? expenses.services) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(expenses.rent ?? expenses.services) }}</td>
             </tr>
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">Salud</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.health) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(expenses.health) }}</td>
             </tr>
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">Pensión</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.pension) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(expenses.pension) }}</td>
             </tr>
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">ARL</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.arl) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(expenses.arl) }}</td>
             </tr>
             <tr>
               <td class="px-3 py-2.5 text-muted-foreground">Otros</td>
-              <td class="px-3 py-2.5 text-right">{{ formatPesos(expenses.other) }}</td>
+              <td class="px-3 py-2.5 text-right">{{ formatPesosConSimbolo(expenses.other) }}</td>
             </tr>
             <tr class="border-t-2 border-border bg-muted/30 font-semibold">
               <td class="px-3 py-3 text-foreground">Total gastos</td>
-              <td class="px-3 py-3 text-right">{{ formatPesos(expensesTotal) }}</td>
+              <td class="px-3 py-3 text-right">{{ formatPesosConSimbolo(expensesTotal) }}</td>
             </tr>
           </tbody>
         </table>
@@ -357,15 +357,15 @@ onMounted(() => {
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Total activos</p>
-          <p>{{ formatPesos(assetsList.length ? assetsTotal : solvency.assets) }}</p>
+          <p>{{ formatPesosConSimbolo(assetsList.length ? assetsTotal : solvency.assets) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Pasivos totales</p>
-          <p>{{ formatPesos(solvency.liabilities) }}</p>
+          <p>{{ formatPesosConSimbolo(solvency.liabilities) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Bien raíz valor</p>
-          <p>{{ formatPesos(solvency.real_estate) }}</p>
+          <p>{{ formatPesosConSimbolo(solvency.real_estate) }}</p>
         </div>
         <div v-if="assetsList.length" class="sm:col-span-2 lg:col-span-4" :class="fieldClass">
           <p :class="labelClass">Activos reportados</p>
@@ -377,7 +377,7 @@ onMounted(() => {
             >
               <p class="font-medium">{{ asset.name || (asset as any).description || 'Sin nombre' }}</p>
               <p class="text-sm text-muted-foreground">
-                Valor: {{ formatPesos(asset.value) }}
+                Valor: {{ formatPesosConSimbolo(asset.value) }}
                 <template v-if="asset.matricula_inmobiliaria">
                   · Matrícula: {{ asset.matricula_inmobiliaria }}
                 </template>

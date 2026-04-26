@@ -8,6 +8,7 @@
 
 /**
  * Formato pesos colombianos: miles con punto, decimales con coma (ej: 1.234.567,50).
+ * Sin símbolo: útil para **persistir** o combinar; en pantalla prefiere `formatPesosConSimbolo`.
  */
 export function formatPesos(value: number | undefined | null): string {
   if (value === undefined || value === null || Number.isNaN(value)) return ''
@@ -18,6 +19,54 @@ export function formatPesos(value: number | undefined | null): string {
   const decPart = parts[1] ?? '00'
   const withThousands = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   return hasDecimals ? `${withThousands},${decPart}` : withThousands
+}
+
+/**
+ * Mismo criterio que `formatPesos` con prefijo **$** (pesos colombianos) para lectura en UI.
+ * Negativos: `-$ 1.234.567,50`.
+ */
+export function formatPesosConSimbolo(value: number | undefined | null): string {
+  if (value === undefined || value === null || Number.isNaN(value)) {
+    return ''
+  }
+  const num = Number(value)
+  if (num === 0) {
+    return '$ 0'
+  }
+  if (num < 0) {
+    return `-$ ${formatPesos(Math.abs(num))}`
+  }
+  return `$ ${formatPesos(num)}`
+}
+
+/**
+ * Interpreta cadenas guardadas (miles, opcional `−`, opcional `$`/`COP` pegados) y devuelve el número con signo.
+ */
+export function parseMontoCOPConSigno(s: string | undefined | null): number {
+  if (s == null || !String(s).trim()) {
+    return 0
+  }
+  let t = String(s).trim()
+  t = t.replace(/^\$?\s*/u, '').replace(/COP/ig, '').replace(/[\s\u00a0\u202f]+/g, '').trim()
+  const neg = t.startsWith('-')
+  if (neg) {
+    t = t.slice(1).trim()
+  }
+  const p = parsePesosInput(t)
+  if (p === undefined) {
+    return 0
+  }
+  return neg ? -Math.abs(p) : p
+}
+
+/**
+ * Texto almacenado (sin o con $) → monto con **$** para inputs de solo lectura o tablas.
+ */
+export function formatPesosConSimboloDesdeTexto(s: string | undefined | null): string {
+  if (s == null || !String(s).trim()) {
+    return ''
+  }
+  return formatPesosConSimbolo(parseMontoCOPConSigno(s))
 }
 
 /**
@@ -32,7 +81,12 @@ export function filterPesosChars(input: string): string {
  * Acepta puntos como miles y una coma como decimal (centavos).
  */
 export function parsePesosInput(input: string): number | undefined {
-  const trimmed = filterPesosChars(String(input)).replace(/\s/g, '').trim()
+  const pre = String(input)
+    .replace(/^\$?\s*/u, '')
+    .replace(/COP/ig, '')
+    .replace(/[\s\u00a0\u202f]+/g, '')
+    .trim()
+  const trimmed = filterPesosChars(pre).replace(/\s/g, '').trim()
   if (trimmed === '') return undefined
   const lastComma = trimmed.lastIndexOf(',')
   const intStr = (lastComma >= 0 ? trimmed.slice(0, lastComma) : trimmed).replace(/\./g, '')
@@ -117,6 +171,9 @@ export function useDecimalDraft() {
 export function usePesosFormat() {
   return {
     formatPesos,
+    formatPesosConSimbolo,
+    formatPesosConSimboloDesdeTexto,
+    parseMontoCOPConSigno,
     parsePesosInput,
     parseDecimalInput,
     formatDecimalDisplay,

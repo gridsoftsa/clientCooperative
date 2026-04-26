@@ -4,7 +4,13 @@ import type { EmergenciaCapacidadBloque, EmergenciaCuotaLine, EmergenciaState } 
 import { EMERGENCIA_FORM_META } from '~/constants/analisis-score-emergencia'
 import { cn } from '@/lib/utils'
 import Multiselect from '@vueform/multiselect'
-import { filterPesosChars, formatPesos, onKeydownPesosOnly, parsePesosInput } from '~/composables/usePesosFormat'
+import {
+  filterPesosChars,
+  formatPesos,
+  formatPesosConSimboloDesdeTexto,
+  onKeydownPesosOnly,
+  parsePesosInput,
+} from '~/composables/usePesosFormat'
 import { formatMontoCopVista, parseMontoCop } from '~/utils/analisis-emergencia-cuota'
 import AnalisisEmergenciaGastosRadicacionFields from '~/components/radicacion/AnalisisEmergenciaGastosRadicacionFields.vue'
 
@@ -134,25 +140,13 @@ function parsePesosFlexible(s: string | undefined | null): number {
   return m ?? 0
 }
 
-/** Muestra valor almacenado con el mismo criterio que la radicación (miles, decimales). */
+/** Muestra valor almacenado con miles, decimales y prefijo $ (COP) en UI. */
 function displayPesosStored(s: string | undefined | null): string {
-  if (s == null || !String(s).trim()) {
-    return ''
-  }
-  return formatPesos(parsePesosFlexible(s))
+  return formatPesosConSimboloDesdeTexto(s)
 }
 
-/** `ingDisponibles` puede ser negativo (Total ingresos − Total gastos); `displayPesosStored` no conserva el signo. */
 function displayPesosIngresosDisponibles(s: string | undefined | null): string {
-  if (s == null || !String(s).trim()) {
-    return ''
-  }
-  const t = String(s).trim()
-  if (t.startsWith('-')) {
-    const cuerpo = displayPesosStored(t.slice(1).trim())
-    return cuerpo ? `-${cuerpo}` : ''
-  }
-  return displayPesosStored(t)
+  return formatPesosConSimboloDesdeTexto(s)
 }
 
 function onOtrosIngresosModelUpdate(b: EmergenciaCapacidadBloque, v: string) {

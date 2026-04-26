@@ -116,7 +116,7 @@ function onKeydownNumeric(e: KeyboardEvent, allowDecimal = false) {
   }
 }
 
-const { formatPesos, parsePesosInput } = usePesosFormat()
+const { formatPesosConSimbolo, parsePesosInput } = usePesosFormat()
 
 /** En inputs de pesos: solo permite dígitos, punto y coma. Permite teclas de control (borrar, flechas, etc.). */
 function onKeydownPesosOnly(e: KeyboardEvent) {
@@ -692,7 +692,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">Ingreso salario</td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.income?.salary)"
+                  :model-value="formatPesosConSimbolo(financial.income?.salary)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -706,7 +706,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">Ingreso pensión</td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.income?.pension)"
+                  :model-value="formatPesosConSimbolo(financial.income?.pension)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -728,7 +728,7 @@ function formatFileSize(bytes: number): string {
               </td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.income?.business)"
+                  :model-value="formatPesosConSimbolo(financial.income?.business)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -757,7 +757,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">Ingreso arriendos</td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.income?.rental)"
+                  :model-value="formatPesosConSimbolo(financial.income?.rental)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -771,7 +771,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">Ingresos otros</td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.income?.other)"
+                  :model-value="formatPesosConSimbolo(financial.income?.other)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -785,7 +785,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-3 text-foreground">Total ingresos</td>
               <td class="px-3 py-3 text-right">
                 <Input
-                  :model-value="formatPesos(incomeTotalDisplay)"
+                  :model-value="formatPesosConSimbolo(incomeTotalDisplay)"
                   type="text"
                   placeholder="0"
                   readonly
@@ -824,7 +824,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">Gastos personales</td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.expenses?.personal)"
+                  :model-value="formatPesosConSimbolo(financial.expenses?.personal)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -838,7 +838,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">Gastos alimentación</td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.expenses?.food)"
+                  :model-value="formatPesosConSimbolo(financial.expenses?.food)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -852,7 +852,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">Gastos servicios/arriendo</td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.expenses?.rent)"
+                  :model-value="formatPesosConSimbolo(financial.expenses?.rent)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -866,7 +866,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">Salud</td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.expenses?.health)"
+                  :model-value="formatPesosConSimbolo(financial.expenses?.health)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -880,7 +880,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">Pensión</td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.expenses?.pension)"
+                  :model-value="formatPesosConSimbolo(financial.expenses?.pension)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -894,7 +894,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">ARL</td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.expenses?.arl)"
+                  :model-value="formatPesosConSimbolo(financial.expenses?.arl)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -908,7 +908,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-2.5 text-muted-foreground">Otros</td>
               <td class="px-3 py-2 text-right">
                 <Input
-                  :model-value="formatPesos(financial.expenses?.other)"
+                  :model-value="formatPesosConSimbolo(financial.expenses?.other)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"
@@ -922,7 +922,7 @@ function formatFileSize(bytes: number): string {
               <td class="px-3 py-3 text-foreground">Total gastos</td>
               <td class="px-3 py-3 text-right">
                 <Input
-                  :model-value="formatPesos(expensesTotalDisplay)"
+                  :model-value="formatPesosConSimbolo(expensesTotalDisplay)"
                   type="text"
                   placeholder="0"
                   readonly
@@ -950,7 +950,7 @@ function formatFileSize(bytes: number): string {
         <div :class="fieldClass" class="sm:col-span-2 lg:col-span-4">
           <Label>Total activos (COP)</Label>
           <Input
-            :model-value="formatPesos(assetsTotalDisplay)"
+            :model-value="formatPesosConSimbolo(assetsTotalDisplay)"
             type="text"
             placeholder="0"
             readonly
@@ -960,7 +960,7 @@ function formatFileSize(bytes: number): string {
         <div :class="fieldClass">
           <Label>Pasivos totales (COP)</Label>
           <Input
-            :model-value="formatPesos(financial.solvency?.liabilities)"
+            :model-value="formatPesosConSimbolo(financial.solvency?.liabilities)"
             type="text"
             inputmode="decimal"
             placeholder="0"
@@ -971,7 +971,7 @@ function formatFileSize(bytes: number): string {
         <div :class="fieldClass">
           <Label>Bien raíz (COP)</Label>
           <Input
-            :model-value="formatPesos(bienRaizFromGarantias)"
+            :model-value="formatPesosConSimbolo(bienRaizFromGarantias)"
             type="text"
             placeholder="0"
             readonly
@@ -992,7 +992,7 @@ function formatFileSize(bytes: number): string {
             </div>
             <div class="flex items-center gap-2">
               <span class="text-xs text-muted-foreground">Bien raíz:</span>
-              <span class="font-semibold">{{ formatPesos(bienRaizFromGarantias) || '0' }}</span>
+              <span class="font-semibold">{{ formatPesosConSimbolo(bienRaizFromGarantias ?? 0) }}</span>
             </div>
             <Button v-if="!readonly" type="button" variant="outline" size="sm" @click="addAsset">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
@@ -1021,7 +1021,7 @@ function formatFileSize(bytes: number): string {
                 <Label :for="`asset_value_${idx}`">Valor (COP)</Label>
                 <Input
                   :id="`asset_value_${idx}`"
-                  :model-value="formatPesos(asset.value)"
+                  :model-value="formatPesosConSimbolo(asset.value)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0"

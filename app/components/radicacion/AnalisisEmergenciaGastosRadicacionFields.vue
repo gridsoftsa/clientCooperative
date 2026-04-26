@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatPesos, parsePesosInput } from '~/composables/usePesosFormat'
+import { formatPesosConSimboloDesdeTexto } from '~/composables/usePesosFormat'
 import type { EmergenciaCapacidadBloque } from '~/constants/analisis-score-emergencia'
 
 const props = withDefaults(
@@ -15,27 +15,8 @@ const props = withDefaults(
 const roClass
   = 'h-8 w-full text-right font-mono cursor-default bg-muted/50 text-foreground read-only:opacity-100'
 
-function parsePesosFlexible(s: string | undefined | null): number {
-  if (s == null) {
-    return 0
-  }
-  const t = String(s).trim()
-  if (!t) {
-    return 0
-  }
-  const p = parsePesosInput(t)
-  if (p !== undefined) {
-    return p
-  }
-  const m = Number(String(t).replace(/\./g, '').replace(',', '.'))
-  return Number.isFinite(m) ? m : 0
-}
-
 function displayPesosStored(s: string | undefined | null): string {
-  if (s == null || !String(s).trim()) {
-    return ''
-  }
-  return formatPesos(parsePesosFlexible(s))
+  return formatPesosConSimboloDesdeTexto(s)
 }
 </script>
 

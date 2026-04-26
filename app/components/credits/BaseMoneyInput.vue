@@ -3,7 +3,7 @@
  * Input de moneda blindado: muestra formato COP (1.234.567,50) y emite número limpio.
  * Usa usePesosFormat para consistencia con el resto de la app.
  */
-const { formatPesos, parsePesosInput, onKeydownPesosOnly } = usePesosFormat()
+const { formatPesosConSimbolo, parsePesosInput, onKeydownPesosOnly } = usePesosFormat()
 
 const props = withDefaults(
   defineProps<{
@@ -38,8 +38,14 @@ const numericValue = computed(() => {
   return Number.isNaN(num) ? null : num
 })
 
-/** Display con formato pesos (1.234.567,50) */
-const displayValue = computed(() => formatPesos(numericValue.value))
+/** Display con $ y formato COP (1.234.567,50) */
+const displayValue = computed(() => {
+  const n = numericValue.value
+  if (n === null) {
+    return ''
+  }
+  return formatPesosConSimbolo(n)
+})
 
 /** Al editar: parsea con parsePesosInput y emite número */
 function onInput(event: Event) {
@@ -74,12 +80,6 @@ function onBlur() {
       </span>
     </Label>
     <div class="relative">
-      <span
-        v-if="numericValue != null"
-        class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-      >
-        $&nbsp;
-      </span>
       <input
         :id="inputId"
         ref="inputRef"
@@ -89,8 +89,7 @@ function onBlur() {
         :value="displayValue"
         :placeholder="placeholder"
         :disabled="disabled"
-        class="flex h-9 w-full rounded-md border border-input bg-transparent py-1 pr-3 text-right text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-        :class="[numericValue != null ? 'pl-8' : 'pl-3']"
+        class="flex h-9 w-full rounded-md border border-input bg-transparent py-1 pl-3 pr-3 text-right text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         @input="onInput"
         @blur="onBlur"
         @keydown="onKeydownPesosOnly"
