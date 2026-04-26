@@ -10,19 +10,49 @@ import AnalisisEmergenciaGastosRadicacionFields from '~/components/radicacion/An
 
 const state = defineModel<EmergenciaState>({ required: true })
 
+/** Fecha, documento, nombre y codeudor vienen de la radicación; no se editan aquí. */
+const props = withDefaults(
+  defineProps<{
+    lockDeudorFields?: boolean
+    /** Gastos/egresos alineados al paso 3 de radicación: solo lectura (análisis-score). */
+    lockGastosDesdeRadicacion?: boolean
+    /** Si el paso 1 eligió Corriente/Emergencia, Vr. cuota var. es fórmula (solo lectura). */
+    lockVrCuotaVar?: boolean
+    /**
+     * % ING (parametrización) sobre ingresos disponibles — deudor (p. ej. 30).
+     * Si no se pasa, 30.
+     */
+    pctReservaDeudor?: number
+    /**
+     * % ING (parametrización) sobre ingresos disponibles — codeudores (p. ej. 10).
+     * Si no se pasa, 10.
+     */
+    pctReservaCodeudor?: number
+    company?: Company | null
+    loadingCompany?: boolean
+    /** Codeudores de la radicación (entrevista): nombre y cédula; solo lectura. */
+    codeudores?: { nombre: string, cedula: string }[]
+    /** Características Garantía (Cualitativas) desde plantilla SCORE, según perfil. */
+    opcionesGarantia?: string[]
+  }>(),
+  { lockDeudorFields: true, lockGastosDesdeRadicacion: false, lockVrCuotaVar: false, pctReservaDeudor: 30, pctReservaCodeudor: 10, company: null, loadingCompany: false, codeudores: () => [], opcionesGarantia: () => [] },
+)
+
 type FilaCapB1 = { key: 'a' | 'b', label: string, reserva: string, codIdx?: number }
 type FilaCapB2 = { key: 'a' | 'b', label: string, codIdx: number }
 
 /** Sólo deudor si no hay codeudores; con 1+ se añade el recuadro del 1.er codeudor. */
 const filasCapacidadBloque1 = computed((): FilaCapB1[] => {
+  const pd = props.pctReservaDeudor
+  const pc = props.pctReservaCodeudor
   const rows: FilaCapB1[] = [
-    { key: 'a', label: 'Capacidad de pago deudor', reserva: '(-) 30% ing.' },
+    { key: 'a', label: 'Capacidad de pago deudor', reserva: `(-) ${pd}% ing.` },
   ]
   if (props.codeudores.length >= 1) {
     rows.push({
       key: 'b',
       label: 'Capacidad de pago primer codeudor',
-      reserva: '(-) 10% ing.',
+      reserva: `(-) ${pc}% ing.`,
       codIdx: 0,
     })
   }
@@ -55,22 +85,8 @@ const tituloSubseccionCapacidadBloque2 = computed(() => {
   return ''
 })
 
-/** Fecha, documento, nombre y codeudor vienen de la radicación; no se editan aquí. */
-const props = withDefaults(
-  defineProps<{
-    lockDeudorFields?: boolean
-    /** Gastos/egresos alineados al paso 3 de radicación: solo lectura (análisis-score). */
-    lockGastosDesdeRadicacion?: boolean
-    /** Si el paso 1 eligió Corriente/Emergencia, Vr. cuota var. es fórmula (solo lectura). */
-    lockVrCuotaVar?: boolean
-    company?: Company | null
-    loadingCompany?: boolean
-    /** Codeudores de la radicación (entrevista): nombre y cédula; solo lectura. */
-    codeudores?: { nombre: string, cedula: string }[]
-    /** Características Garantía (Cualitativas) desde plantilla SCORE, según perfil. */
-    opcionesGarantia?: string[]
-  }>(),
-  { lockDeudorFields: true, lockGastosDesdeRadicacion: false, lockVrCuotaVar: false, company: null, loadingCompany: false, codeudores: () => [], opcionesGarantia: () => [] },
+const etiquetaReservaCodeudor = computed(
+  () => `(-) ${props.pctReservaCodeudor}% ing.`,
 )
 
 const deudorReadonlyClass = 'cursor-default bg-muted/50 text-foreground read-only:opacity-100'
@@ -126,6 +142,19 @@ function displayPesosStored(s: string | undefined | null): string {
   return formatPesos(parsePesosFlexible(s))
 }
 
+/** `ingDisponibles` puede ser negativo (Total ingresos − Total gastos); `displayPesosStored` no conserva el signo. */
+function displayPesosIngresosDisponibles(s: string | undefined | null): string {
+  if (s == null || !String(s).trim()) {
+    return ''
+  }
+  const t = String(s).trim()
+  if (t.startsWith('-')) {
+    const cuerpo = displayPesosStored(t.slice(1).trim())
+    return cuerpo ? `-${cuerpo}` : ''
+  }
+  return displayPesosStored(t)
+}
+
 function onOtrosIngresosModelUpdate(b: EmergenciaCapacidadBloque, v: string) {
   const raw = filterPesosChars(String(v))
   if (!raw.trim()) {
@@ -165,6 +194,64 @@ function syncAllTotalesIngresosCapacidad() {
   syncTotalIngresosBloque(s.capacidadBloque2.b)
 }
 
+/** `formatPesos` asume no negativos; aquí hace falta el signo y miles en COP. */
+function formatPesosDiferencia(n: number): string {
+  if (!Number.isFinite(n)) {
+    return ''
+  }
+  if (n === 0) {
+    return '0'
+  }
+  const sign = n < 0 ? '-' : ''
+  return sign + formatPesos(Math.abs(n))
+}
+
+/** Total ingresos − Total gastos (total egresos). Solo se escribe vía `watch`. */
+function syncIngresosDisponiblesBloque(b: EmergenciaCapacidadBloque) {
+  const noTi = !String(b.totalIngresos ?? '').trim()
+  const noTe = !String(b.totalEgresos ?? '').trim()
+  if (noTi && noTe) {
+    b.ingDisponibles = ''
+    return
+  }
+  const ti = parsePesosFlexible(b.totalIngresos)
+  const te = parsePesosFlexible(b.totalEgresos)
+  b.ingDisponibles = formatPesosDiferencia(ti - te)
+}
+
+function syncAllIngresosDisponiblesCapacidad() {
+  const s = state.value
+  syncIngresosDisponiblesBloque(s.capacidadBloque1.a)
+  syncIngresosDisponiblesBloque(s.capacidadBloque1.b)
+  syncIngresosDisponiblesBloque(s.capacidadBloque2.a)
+  syncIngresosDisponiblesBloque(s.capacidadBloque2.b)
+}
+
+/**
+ * Reserva = ingresos disponibles × (% ING / 100). Parametrización deudor vs codeudor.
+ * Solo se escribe vía `watch`.
+ */
+function syncReservaSobreIngresoBloque(b: EmergenciaCapacidadBloque, pct: number) {
+  const p = Number.isFinite(pct) && pct >= 0 ? pct : 0
+  if (!String(b.ingDisponibles ?? '').trim()) {
+    b.reservaSobreIngreso = ''
+    return
+  }
+  const id = parsePesosFlexible(b.ingDisponibles)
+  const val = id * (p / 100)
+  b.reservaSobreIngreso = formatPesosDiferencia(val)
+}
+
+function syncAllReservasSobreIngresoCapacidad() {
+  const s = state.value
+  const pd = props.pctReservaDeudor
+  const pc = props.pctReservaCodeudor
+  syncReservaSobreIngresoBloque(s.capacidadBloque1.a, pd)
+  syncReservaSobreIngresoBloque(s.capacidadBloque1.b, pc)
+  syncReservaSobreIngresoBloque(s.capacidadBloque2.a, pc)
+  syncReservaSobreIngresoBloque(s.capacidadBloque2.b, pc)
+}
+
 watch(
   () => [
     state.value.capacidadBloque1.a.ingresos,
@@ -175,9 +262,21 @@ watch(
     state.value.capacidadBloque2.a.otrosIngresos,
     state.value.capacidadBloque2.b.ingresos,
     state.value.capacidadBloque2.b.otrosIngresos,
+    state.value.capacidadBloque1.a.totalEgresos,
+    state.value.capacidadBloque1.b.totalEgresos,
+    state.value.capacidadBloque2.a.totalEgresos,
+    state.value.capacidadBloque2.b.totalEgresos,
+    state.value.capacidadBloque1.a.ingDisponibles,
+    state.value.capacidadBloque1.b.ingDisponibles,
+    state.value.capacidadBloque2.a.ingDisponibles,
+    state.value.capacidadBloque2.b.ingDisponibles,
+    props.pctReservaDeudor,
+    props.pctReservaCodeudor,
   ],
   () => {
     syncAllTotalesIngresosCapacidad()
+    syncAllIngresosDisponiblesCapacidad()
+    syncAllReservasSobreIngresoCapacidad()
   },
   { flush: 'post', immediate: true },
 )
@@ -627,11 +726,29 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
             />
             <div>
               <Label class="text-xs">Ingresos disponibles</Label>
-              <Input v-model="state.capacidadBloque1[side.key].ingDisponibles" class="h-8 font-mono" />
+              <Input
+                :model-value="displayPesosIngresosDisponibles(state.capacidadBloque1[side.key].ingDisponibles)"
+                type="text"
+                inputmode="decimal"
+                class="h-8 w-full text-right font-mono"
+                readonly
+                :class="deudorReadonlyClass"
+                :tabindex="-1"
+                title="Total ingresos − Total gastos. No editable."
+              />
             </div>
             <div>
               <Label class="text-xs">{{ side.reserva }}</Label>
-              <Input v-model="state.capacidadBloque1[side.key].reservaSobreIngreso" class="h-8 font-mono" />
+              <Input
+                :model-value="displayPesosIngresosDisponibles(state.capacidadBloque1[side.key].reservaSobreIngreso)"
+                type="text"
+                inputmode="decimal"
+                class="h-8 w-full text-right font-mono"
+                readonly
+                :class="deudorReadonlyClass"
+                :tabindex="-1"
+                :title="side.key === 'a' ? `Ingresos disponibles × ${props.pctReservaDeudor}% (ING). No editable.` : `Ingresos disponibles × ${props.pctReservaCodeudor}% (ING). No editable.`"
+              />
             </div>
             <div class="grid grid-cols-2 gap-2">
               <div>
@@ -788,11 +905,29 @@ function removeCuotaEntidadFinanciera(b: EmergenciaCapacidadBloque, index: numbe
             />
             <div>
               <Label class="text-xs">Ingresos disponibles</Label>
-              <Input v-model="state.capacidadBloque2[side.key].ingDisponibles" class="h-8 font-mono" />
+              <Input
+                :model-value="displayPesosIngresosDisponibles(state.capacidadBloque2[side.key].ingDisponibles)"
+                type="text"
+                inputmode="decimal"
+                class="h-8 w-full text-right font-mono"
+                readonly
+                :class="deudorReadonlyClass"
+                :tabindex="-1"
+                title="Total ingresos − Total gastos. No editable."
+              />
             </div>
             <div>
-              <Label class="text-xs">(-) 10% ing.</Label>
-              <Input v-model="state.capacidadBloque2[side.key].reservaSobreIngreso" class="h-8 font-mono" />
+              <Label class="text-xs">{{ etiquetaReservaCodeudor }}</Label>
+              <Input
+                :model-value="displayPesosIngresosDisponibles(state.capacidadBloque2[side.key].reservaSobreIngreso)"
+                type="text"
+                inputmode="decimal"
+                class="h-8 w-full text-right font-mono"
+                readonly
+                :class="deudorReadonlyClass"
+                :tabindex="-1"
+                :title="`Ingresos disponibles × ${props.pctReservaCodeudor}% (ING). No editable.`"
+              />
             </div>
             <div class="grid grid-cols-2 gap-2">
               <div>

@@ -82,6 +82,7 @@ const templateLabels: Record<string, string> = {
   'actividad-economica': 'Tipo de actividad económica (solicitante)',
   'estado-civil': 'Estado civil (solicitante)',
   bancos: 'Bancos (Análisis y Score)',
+  ing: 'ING — % reserva (Análisis y Score)',
 }
 
 function getTemplateLabel(key: string): string {

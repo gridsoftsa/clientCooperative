@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { formatPesos, parsePesosInput } from '~/composables/usePesosFormat'
 import type { EmergenciaCapacidadBloque } from '~/constants/analisis-score-emergencia'
-import { Textarea } from '~/components/ui/textarea'
 
 const props = withDefaults(
   defineProps<{
@@ -160,14 +159,6 @@ function displayPesosStored(s: string | undefined | null): string {
         title="Desde Datos financieros de la radicación. No editable."
       />
       <Input v-else v-model="bloque.totalEgresos" class="h-8 font-mono" />
-    </div>
-    <div class="space-y-1">
-      <Label class="text-xs">Descripción gastos / observación</Label>
-      <Textarea
-        v-model="bloque.egresosDescripcion"
-        :rows="3"
-        class="min-h-0"
-      />
     </div>
   </div>
 </template>

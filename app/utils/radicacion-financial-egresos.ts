@@ -71,7 +71,6 @@ export function aplicarEgresosCapacidadBloqueDesdeFinancialInfo(
     b.gastoArl = ''
     b.otrosGastos = ''
     b.totalEgresos = ''
-    b.egresosDescripcion = ''
     return
   }
   const ex = f.expenses
@@ -86,7 +85,6 @@ export function aplicarEgresosCapacidadBloqueDesdeFinancialInfo(
     b.gastoArl = ''
     b.otrosGastos = ''
     b.totalEgresos = ''
-    b.egresosDescripcion = ''
     return
   }
   const e = ex as Record<string, unknown>
@@ -105,5 +103,4 @@ export function aplicarEgresosCapacidadBloqueDesdeFinancialInfo(
   else {
     b.totalEgresos = formatPesos(totalGastosDesdeLineas(e))
   }
-  b.egresosDescripcion = typeof e.description === 'string' ? e.description : ''
 }

@@ -25,8 +25,6 @@ export type EmergenciaCapacidadBloque = {
   gastoArl: string
   otrosGastos: string
   totalEgresos: string
-  /** `expenses.description` en radicación. */
-  egresosDescripcion: string
   ingDisponibles: string
   reservaSobreIngreso: string
   valorCuota: string
@@ -77,7 +75,7 @@ export type EmergenciaState = {
     tasaEfectiva: string
     comentarioGarantia: string
   }
-  /** Deudor | codeudor 1 (reserva 30% / 10% en plantilla) */
+  /** Deudor | codeudor 1 (reserva % ING parametrizable × ingresos disponibles) */
   capacidadBloque1: { a: EmergenciaCapacidadBloque, b: EmergenciaCapacidadBloque }
   /** Codeudor 2 | 3 (reserva 10% / 10%) */
   capacidadBloque2: { a: EmergenciaCapacidadBloque, b: EmergenciaCapacidadBloque }
@@ -119,7 +117,6 @@ function emptyCapacidad(): EmergenciaCapacidadBloque {
     gastoArl: '',
     otrosGastos: '',
     totalEgresos: '',
-    egresosDescripcion: '',
     ingDisponibles: '',
     reservaSobreIngreso: '',
     valorCuota: '',

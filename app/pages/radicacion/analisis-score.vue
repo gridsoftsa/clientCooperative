@@ -41,6 +41,8 @@ import { totalIngresosRadicacionFormatted } from '~/utils/radicacion-financial-t
 import { aplicarEgresosCapacidadBloqueDesdeFinancialInfo } from '~/utils/radicacion-financial-egresos'
 import type { Company } from '~/types/company'
 
+const { fetchFlatData } = useTemplateFlatData()
+
 type ScoreMatricesApiResponse = {
   data: Record<string, { lines?: ScoreMatrixLine[] } | null>
 }
@@ -94,6 +96,29 @@ function sincronizarVrCuotaVarFormula(): void {
 
 /** Codeudores de la radicación (misma fuente que entrevista / solicitud). Solo lectura en paso 2. */
 const codeudoresDeSolicitud = ref<{ nombre: string, cedula: string }[]>([])
+
+/** % ING desde parametrización (template `ing`); reserva = ingresos disponibles × %/100. */
+const pctIngDeudor = ref(30)
+const pctIngCodeudor = ref(10)
+
+function parsePctIngresoParam(v: unknown, fallback: number): number {
+  if (typeof v === 'number' && Number.isFinite(v) && v >= 0) {
+    return v
+  }
+  if (typeof v === 'string' && v.trim()) {
+    const n = Number(v.replace(/\s/g, '').replace(',', '.'))
+    if (Number.isFinite(n) && n >= 0) {
+      return n
+    }
+  }
+  return fallback
+}
+
+async function fetchIngParametrizacion(): Promise<void> {
+  const d = await fetchFlatData('ing')
+  pctIngDeudor.value = parsePctIngresoParam(d.pct_deudor, 30)
+  pctIngCodeudor.value = parsePctIngresoParam(d.pct_codeudor, 10)
+}
 
 const companyPrincipal = ref<Company | null>(null)
 const loadingCompany = ref(false)
@@ -370,6 +395,7 @@ function sincronizarGarantiaConPlantilla(): void {
 onMounted(() => {
   fetchScoreMatrices()
   fetchCompanyPrincipal()
+  void fetchIngParametrizacion()
 })
 
 watch(companyPrincipal, (co) => {
@@ -905,6 +931,8 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
             :lock-deudor-fields="true"
             :lock-gastos-desde-radicacion="true"
             :lock-vr-cuota-var="isVrCuotaVarBloqueada"
+            :pct-reserva-deudor="pctIngDeudor"
+            :pct-reserva-codeudor="pctIngCodeudor"
             :company="companyPrincipal"
             :loading-company="loadingCompany"
             :codeudores="codeudoresDeSolicitud"

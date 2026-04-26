@@ -406,6 +406,21 @@ const schemaTransportePasajeros: TemplateConfigSchema = {
   ],
 }
 
+/** Reserva sobre ingresos en análisis EMERGENCIA: % deudor / % codeudor (× ingresos disponibles en el formulario). */
+const schemaIngAnalisisScore: TemplateConfigSchema = {
+  template_key: 'ing',
+  sections: [
+    {
+      key: 'ing',
+      title: 'ING (reserva % sobre ingresos disponibles)',
+      fields: [
+        { key: 'pct_deudor', label: 'Porcentaje deudor (%)', type: 'number' },
+        { key: 'pct_codeudor', label: 'Porcentaje codeudor (%)', type: 'number' },
+      ],
+    },
+  ],
+}
+
 const TEMPLATE_CONFIG_SCHEMAS: Record<string, TemplateConfigSchema> = {
   'ganado-ceba': schemaGanadoCeba,
   'ganado-doble-proposito': schemaGanadoDobleProposito,
@@ -421,6 +436,7 @@ const TEMPLATE_CONFIG_SCHEMAS: Record<string, TemplateConfigSchema> = {
   'plantilla-comercial': schemaPlantillaComercial,
   'transporte-carga': schemaTransporteCarga,
   'transporte-pasajeros': schemaTransportePasajeros,
+  ing: schemaIngAnalisisScore,
 }
 
 export function getTemplateConfigSchema(templateKey: string): TemplateConfigSchema | null {

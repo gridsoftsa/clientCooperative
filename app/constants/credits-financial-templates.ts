@@ -129,6 +129,7 @@ export const sectorsConfig: SectorConfig[] = [
       { value: 'actividad-economica', label: 'Tipo de actividad económica' },
       { value: 'estado-civil', label: 'Estado civil' },
       { value: 'bancos', label: 'Bancos' },
+      { value: 'ing', label: 'ING' },
     ],
   },
 ]
@@ -136,7 +137,7 @@ export const sectorsConfig: SectorConfig[] = [
 const SECTOR_RADICACION_KEY = 'radicacion'
 
 /** Plantillas agrupadas bajo «Análisis y Score» en /parametrizacion/radicacion. */
-const RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES = new Set<string>(['bancos'])
+const RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES = new Set<string>(['bancos', 'ing'])
 
 /** Plantillas de actividad agro/transporte/… (parametrización /plantillas), sin el bloque de catálogos de radicación. */
 export function sectorsForParametrizacionPlantillas(): SectorConfig[] {
