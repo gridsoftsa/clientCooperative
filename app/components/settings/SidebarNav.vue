@@ -7,10 +7,9 @@ const sections: { heading: string; items: NavItem[] }[] = [
   {
     heading: 'Tu cuenta',
     items: [
-      { label: 'Perfil', href: '/settings/profile', permission: 'settings_ver' },
-      { label: 'Cuenta', href: '/settings/account', permission: 'settings_ver' },
-      { label: 'Apariencia', href: '/settings/appearance', permission: 'settings_ver' },
-      { label: 'Notificaciones', href: '/settings/notifications', permission: 'settings_ver' },
+      { label: 'Perfil', href: '/settings/profile', permission: 'perfil_ver' },
+      { label: 'Cuenta', href: '/settings/account', permission: 'cuenta_ver' },
+      { label: 'Apariencia', href: '/settings/appearance', permission: 'apariencia_ver' },
     ],
   },
   {
@@ -20,7 +19,7 @@ const sections: { heading: string; items: NavItem[] }[] = [
       { label: 'Usuarios', href: '/settings/users', permission: 'usuarios_ver' },
       { label: 'Sucursales', href: '/settings/sucursales', permission: 'sucursales_ver' },
       { label: 'Roles', href: '/settings/roles', permission: 'roles_ver' },
-      { label: 'Auditoría', href: '/settings/audit', permission: 'admin_acceso' },
+      { label: 'Auditoría', href: '/settings/audit', permission: 'auditoria_ver' },
     ],
   },
 ]

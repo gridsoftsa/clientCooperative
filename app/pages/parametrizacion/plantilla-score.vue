@@ -18,11 +18,11 @@ type ScoreMatricesApiResponse = {
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'plantillas_ver',
+  permissions: 'plantilla_score_ver',
 })
 
 const { $api } = useNuxtApp()
-const { hasPermission } = usePermissions()
+const { hasAnyPermission } = usePermissions()
 const router = useRouter()
 
 const defaultTab = SCORE_TEMPLATE_MATRIX_TABS[0]?.value ?? 'independiente'
@@ -31,7 +31,7 @@ const loading = ref(true)
 const linesIndep = ref<ScoreMatrixLine[]>(normalizeScoreMatrixLines(INDEPENDIENTE_MATRIX))
 const linesEmp = ref<ScoreMatrixLine[]>(normalizeScoreMatrixLines(EMPLEADO_PENSIONADO_MATRIX))
 
-const canEdit = computed(() => hasPermission('plantillas_editar'))
+const canEdit = computed(() => hasAnyPermission(['plantilla_score_editar', 'plantillas_editar']))
 
 const isEditingIndep = ref(false)
 const isEditingEmp = ref(false)

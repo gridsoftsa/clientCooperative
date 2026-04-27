@@ -2,7 +2,7 @@
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'settings_ver',
+  permissions: 'cuenta_ver',
 })
 </script>
 

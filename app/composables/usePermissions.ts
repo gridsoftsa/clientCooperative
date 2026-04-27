@@ -6,7 +6,7 @@ export function usePermissions() {
 
   /**
    * super_admin debe pasar cualquier comprobación de permiso en UI (coincide con reglas de negocio en API).
-   * Evita menús ocultos si `settings_ver` u otro permiso está inactivo en BD o la lista efectiva viene vacía.
+   * Evita menús ocultos aunque algún permiso esté inactivo en BD o la lista efectiva venga incompleta.
    */
   function bypassesPermissionChecks(): boolean {
     if (import.meta.server || !user.value?.roles?.length) {

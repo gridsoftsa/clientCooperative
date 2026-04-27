@@ -1,8 +1,8 @@
 <script setup lang="ts">
 definePageMeta({
-  layout: 'default',
-  middleware: 'permission',
-  permissions: 'settings_ver',
+  middleware: [
+    () => navigateTo('/settings/profile'),
+  ],
 })
 </script>
 

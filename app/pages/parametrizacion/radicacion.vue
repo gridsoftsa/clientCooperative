@@ -4,7 +4,7 @@ import { sectorsForParametrizacionRadicacion } from '~/constants/credits-financi
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'plantillas_ver',
+  permissions: 'radicacion_catalogos_ver',
 })
 
 const sectors = sectorsForParametrizacionRadicacion()

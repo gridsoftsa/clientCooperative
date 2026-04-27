@@ -58,7 +58,7 @@ type ScoreMatricesApiResponse = {
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: ['radicacion_crear', 'radicacion_editar', 'radicacion_ver'],
+  permissions: ['radicacion_analisis_ver', 'radicacion_ver'],
 })
 
 const route = useRoute()

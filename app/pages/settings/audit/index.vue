@@ -3,7 +3,7 @@
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'admin_acceso'
+  permissions: 'auditoria_ver'
 })
 
 // const { t } = useI18n() // Temporalmente deshabilitado

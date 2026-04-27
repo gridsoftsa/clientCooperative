@@ -14,13 +14,19 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
   permisos: 'Permisos',
   dashboard: 'Dashboard',
   admin: 'Administrador',
+  auditoria: 'Auditoría',
+  perfil: 'Perfil',
+  cuenta: 'Cuenta',
+  apariencia: 'Apariencia',
+  notificaciones: 'Notificaciones',
+  display: 'Visualización',
   sucursales: 'Sucursales',
   empresa: 'Empresa',
   plantillas: 'Plantillas',
+  plantilla: 'Plantilla SCORE',
   solicitantes: 'Solicitantes (Deudores/Codeudores)',
   radicacion: 'Radicación (Solicitudes de crédito)',
-  /** Prefijo `settings_*` — menú Configuración del sidebar y rutas /settings (ver seeder API). */
-  settings: 'Menú Configuración (/settings)',
+  settings: 'Configuración',
 }
 
 /**
@@ -29,16 +35,23 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
  */
 export const PERMISSION_CATEGORY_ORDER: string[] = [
   'dashboard',
-  'admin',
+  'radicacion',
+  'solicitantes',
+  'plantillas',
+  'plantilla',
   'settings',
+  'perfil',
+  'cuenta',
+  'apariencia',
+  'notificaciones',
+  'display',
+  'empresa',
+  'sucursales',
   'usuarios',
   'roles',
   'permisos',
-  'sucursales',
-  'empresa',
-  'plantillas',
-  'solicitantes',
-  'radicacion',
+  'auditoria',
+  'admin',
 ]
 
 export function sortPermissionCategoryKeys(categories: string[]): string[] {
@@ -87,10 +100,16 @@ function capitalizeWords(str: string): string {
  */
 /** Etiquetas fijas cuando el nombre en varias partes no basta (ej. enviar a análisis) */
 const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
+  settings_ver: 'Ver Configuración',
   radicacion_enviar_analisis: 'Enviar solicitud a análisis (Radicación)',
   /** Bloque “Resumen financiero” (solvencia, activos, pasivos) en formulario/ detalle de radicación. Sin esto, p. ej. asesor no ve ese resumen. */
   radicacion_ver_resumen_financiero: 'Ver resumen financiero del deudor en radicación (solvencia, activos, pasivos, etc.)',
-  settings_ver: 'Ver menú Configuración (perfil, cuenta, apariencia, notificaciones, etc.)',
+  radicacion_analisis_ver: 'Ver análisis y score de radicación',
+  radicacion_documentos_subir: 'Subir documentos en radicación',
+  radicacion_catalogos_ver: 'Ver catálogos de radicación',
+  radicacion_catalogos_editar: 'Editar catálogos de radicación',
+  plantilla_score_ver: 'Ver plantilla SCORE',
+  plantilla_score_editar: 'Editar plantilla SCORE',
 }
 
 export function getPermissionLabel(name: string): string {
