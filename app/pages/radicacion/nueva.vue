@@ -20,6 +20,7 @@ definePageMeta({
 
 const { $api, $csrf } = useNuxtApp()
 const router = useRouter()
+const { user: authUser } = useAuth()
 
 /** Siempre inicia en deudor; 'codeudor' solo al agregar codeudor a solicitud existente por URL */
 const mode = ref<'deudor' | 'codeudor'>('deudor')
@@ -102,12 +103,22 @@ const stepsCodeudor = [
 
 const steps = computed(() => (mode.value === 'codeudor' ? stepsCodeudor : stepsDeudor))
 const maxStep = computed(() => steps.value.length)
+const userSucursalId = computed<number | null>(() => authUser.value?.sucursal_id ?? null)
+const availableAgencies = computed(() => {
+  const userAgencyId = userSucursalId.value
+  if (!userAgencyId) {
+    return agencies.value
+  }
+  return agencies.value.filter(a => a.id === userAgencyId)
+})
 
 async function fetchCatalogs() {
   try {
     const agenciesRes = await $api<{ data: typeof agencies.value }>('/catalogs/agencies')
     agencies.value = agenciesRes.data
-    if (agencies.value.length && !form.value.agency_id) {
+    if (userSucursalId.value && agencies.value.some(a => a.id === userSucursalId.value)) {
+      form.value.agency_id = userSucursalId.value
+    } else if (agencies.value.length && !form.value.agency_id) {
       form.value.agency_id = agencies.value[0]?.id ?? 0
     }
   } catch (e) {
@@ -541,7 +552,9 @@ function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
 /** Payload para auto-guardado: usa valores por defecto si faltan (permite crear borrador temprano) */
 function payloadForAutoSave(): Record<string, unknown> {
   const base = payloadWithoutDocuments('Draft')
-  const agencyId = form.value.agency_id > 0 ? form.value.agency_id : (agencies.value[0]?.id ?? 0)
+  const agencyId = form.value.agency_id > 0
+    ? form.value.agency_id
+    : (availableAgencies.value[0]?.id ?? agencies.value[0]?.id ?? 0)
   return {
     ...base,
     amount_requested: form.value.amount_requested > 0 ? form.value.amount_requested : 1,
@@ -1197,7 +1210,7 @@ onMounted(() => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem
-                    v-for="a in agencies"
+                    v-for="a in availableAgencies"
                     :key="a.id"
                     :value="a.id"
                   >
