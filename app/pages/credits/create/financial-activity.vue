@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { FormSchemaInput } from '~/types/credits'
 import {
-  sectorsConfig,
+  sectorsForActivityTemplates,
   getTemplateSchema,
   templateHasProductSelect,
 } from '~/constants/credits-financial-templates'
@@ -12,10 +12,11 @@ definePageMeta({
 
 const sectorSelected = ref<string>('')
 const templateSelected = ref<string>('')
+const activitySectors = sectorsForActivityTemplates()
 
 const templateOptions = computed(() => {
   if (!sectorSelected.value) return []
-  return sectorsConfig.find((s) => s.value === sectorSelected.value)?.templates ?? []
+  return activitySectors.find((s) => s.value === sectorSelected.value)?.templates ?? []
 })
 
 const currentSchema = computed<FormSchemaInput | null>(() => {
@@ -78,7 +79,7 @@ const formDataPreview = computed(() => JSON.stringify(formData.value, null, 2))
                   </SelectTrigger>
                   <SelectContent class="bg-popover text-popover-foreground">
                     <SelectItem
-                      v-for="s in sectorsConfig"
+                      v-for="s in activitySectors"
                       :key="s.value"
                       :value="s.value"
                     >

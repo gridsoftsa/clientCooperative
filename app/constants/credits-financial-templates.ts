@@ -144,6 +144,11 @@ export function sectorsForParametrizacionPlantillas(): SectorConfig[] {
   return sectorsConfig.filter(s => s.value !== SECTOR_RADICACION_KEY)
 }
 
+/** Plantillas de actividad económica para formularios de crédito/radicación (excluye catálogos de radicación). */
+export function sectorsForActivityTemplates(): SectorConfig[] {
+  return sectorsConfig.filter(s => s.value !== SECTOR_RADICACION_KEY)
+}
+
 /**
  * Parametrización de radicación: dos bloques en el panel — solicitante y Análisis y Score (p. ej. bancos).
  */

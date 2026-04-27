@@ -6,7 +6,7 @@
 import type { FormSchemaInput } from '~/types/credits'
 import type { ActivityTemplateData } from '~/types/credit-application'
 import {
-  sectorsConfig,
+  sectorsForActivityTemplates,
   getTemplateSchema,
   templateHasProductSelect,
 } from '~/constants/credits-financial-templates'
@@ -57,6 +57,7 @@ const loadingFlatData = ref(false)
 const configuredFieldKeys = ref<string[]>([])
 
 const templateOptions = ref<Array<{ value: string; label: string }>>([])
+const activitySectors = sectorsForActivityTemplates()
 
 const currentSchema = computed<FormSchemaInput | null>(() => {
   if (!templateSelected.value) return null
@@ -218,7 +219,7 @@ watch(
 )
 
 watch(sectorSelected, (newSector) => {
-  const templates = sectorsConfig.find((s) => s.value === newSector)?.templates ?? []
+  const templates = activitySectors.find((s) => s.value === newSector)?.templates ?? []
   templateOptions.value = templates
   if (isSyncingFromProps.value) return
   // Si el sector tiene solo una plantilla, auto-seleccionarla
@@ -326,7 +327,7 @@ onMounted(() => {
                 Seleccionar sector
               </option>
               <option
-                v-for="s in sectorsConfig"
+                v-for="s in activitySectors"
                 :key="s.value"
                 :value="s.value"
               >

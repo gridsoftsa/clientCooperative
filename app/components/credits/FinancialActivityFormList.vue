@@ -7,12 +7,14 @@
 import { toast } from 'vue-sonner'
 import type { ActivityTemplateData } from '~/types/credit-application'
 import {
-  sectorsConfig,
+  sectorsForActivityTemplates,
   validateActivityTemplate,
 } from '~/constants/credits-financial-templates'
 
+const activitySectors = sectorsForActivityTemplates()
+
 function templateOptionsFor(sector: string) {
-  return sectorsConfig.find((s) => s.value === sector)?.templates ?? []
+  return activitySectors.find((s) => s.value === sector)?.templates ?? []
 }
 
 const props = withDefaults(
@@ -203,7 +205,7 @@ watch(
             <span class="min-w-0 flex-1 pr-2 text-left font-medium">
               Plantilla {{ idx + 1 }}
               <span v-if="item.sector && item.template" class="ml-2 text-muted-foreground font-bold">
-                — {{ sectorsConfig?.find(s => s.value === item.sector)?.label ?? item.sector }}
+                — {{ activitySectors?.find(s => s.value === item.sector)?.label ?? item.sector }}
                 / {{ templateOptionsFor(item.sector)?.find(t => t.value === item.template)?.label ?? item.template }}
               </span>
             </span>
