@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
-import type { Permission, Role } from '~/types/role'
-import { PERMISSION_CATEGORY_LABELS, formatPermissionDisplayName } from '~/constants/permission-labels'
-import { normalizeRoleNames } from '~/utils/userRoles'
+import type { Role } from '~/types/role'
 
 definePageMeta({
   layout: 'default',
@@ -25,21 +23,10 @@ const form = ref({
   sucursal_id: null as number | null,
   allowed_sucursal_ids: [] as number[],
   roles: [] as string[],
-  permissions: [] as string[],
 })
 
 const roles = ref<Role[]>([])
-const permissions = ref<Permission[]>([])
-const groupedPermissions = computed(() => {
-  const groups: Record<string, Permission[]> = {}
-  for (const p of permissions.value) {
-    const category = p.name.split('_')[0] ?? 'otros'
-    if (!groups[category]) groups[category] = []
-    groups[category].push(p)
-  }
-  return groups
-})
-const getCategoryLabel = (key: string) => PERMISSION_CATEGORY_LABELS[key] ?? key
+const selectedRole = ref<string | null>(null)
 
 /** Opciones para multiselect de roles (value = nombre del rol en API) */
 const roleSelectOptions = computed(() =>
@@ -49,36 +36,22 @@ const roleSelectOptions = computed(() =>
   })),
 )
 
-function rolesMultipleLabel(values: unknown): string {
-  const names = normalizeRoleNames(values)
-  if (!names.length) {
-    return 'Seleccione…'
-  }
-  const opts = roleSelectOptions.value
-  return names.map(name => opts.find(o => o.value === name)?.label ?? name).join(', ')
-}
-
-const openCategories = ref<Record<string, boolean>>({})
-
-const collapseAll = () => {
-  openCategories.value = Object.fromEntries(
-    Object.keys(groupedPermissions.value).map((c) => [c, false]),
-  )
-}
-
-const setCategoryOpen = (category: string, open: boolean) => {
-  openCategories.value = { ...openCategories.value, [category]: open }
-}
-
 const sucursales = ref<Array<{ id: number; name: string; code: string | null; is_main?: boolean }>>([])
 const loading = ref(false)
 const saving = ref(false)
 
-const showAllowedSucursales = computed(() => form.value.roles.includes('admin') && !form.value.roles.includes('super_admin'))
+const sucursalSelectOptions = computed(() =>
+  sucursales.value.map(s => ({
+    value: s.id,
+    label: `${s.name}${s.is_main ? ' (Principal)' : ''}`,
+  })),
+)
+
+const showAllowedSucursales = computed(() => selectedRole.value === 'admin')
 
 const fetchSucursales = async () => {
   try {
-    const res = await $api<{ data: typeof sucursales.value }>('/catalogs/sucursales')
+    const res = await $api<{ data: typeof sucursales.value }>('/sucursales', { query: { per_page: 1000 } })
     sucursales.value = res.data
   } catch {
     sucursales.value = []
@@ -98,25 +71,8 @@ const fetchRoles = async () => {
   }
 }
 
-const fetchPermissions = async () => {
-  try {
-    const res = await $api<{ data: Permission[] }>('/roles/permissions')
-    permissions.value = res.data
-  } catch {
-    permissions.value = []
-  }
-}
-
-const togglePermission = (name: string, checked: boolean) => {
-  if (checked) {
-    if (!form.value.permissions.includes(name)) form.value.permissions.push(name)
-  } else {
-    form.value.permissions = form.value.permissions.filter(p => p !== name)
-  }
-}
-
 const handleSubmit = async () => {
-  if (!form.value.name.trim() || !form.value.email.trim() || !form.value.password) {
+  if (!form.value.name.trim() || !form.value.email.trim() || !form.value.password || !form.value.sucursal_id) {
     toast.error('Completa todos los campos requeridos')
     return
   }
@@ -143,10 +99,9 @@ const handleSubmit = async () => {
         email: form.value.email,
         password: form.value.password,
         password_confirmation: form.value.password_confirmation,
-        sucursal_id: form.value.sucursal_id || undefined,
+        sucursal_id: form.value.sucursal_id,
         allowed_sucursal_ids: form.value.allowed_sucursal_ids,
         roles: form.value.roles,
-        permissions: form.value.permissions,
       },
     })
     
@@ -162,8 +117,15 @@ const handleSubmit = async () => {
 }
 
 onMounted(() => {
-  Promise.all([fetchRoles(), fetchSucursales(), fetchPermissions()])
+  Promise.all([fetchRoles(), fetchSucursales()])
 })
+
+watch(selectedRole, (role) => {
+  form.value.roles = role ? [role] : []
+  if (role !== 'admin') {
+    form.value.allowed_sucursal_ids = []
+  }
+}, { immediate: true })
 </script>
 
 <template>
@@ -239,7 +201,7 @@ onMounted(() => {
               </div>
 
               <div class="space-y-3 md:col-span-2">
-                <Label for="sucursal" class="leading-snug">Sucursal (pertenencia)</Label>
+                <Label for="sucursal" class="leading-snug">Sucursal (pertenencia) *</Label>
                 <Select v-model="form.sucursal_id">
                   <SelectTrigger id="sucursal">
                     <SelectValue placeholder="Seleccionar sucursal" />
@@ -295,25 +257,21 @@ onMounted(() => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div class="space-y-2">
-              <div
-                v-for="s in sucursales"
-                :key="s.id"
-                class="flex items-center space-x-2"
-              >
-                <Checkbox
-                  :id="`suc-${s.id}`"
-                  :checked="form.allowed_sucursal_ids.includes(s.id)"
-                  @update:checked="(checked: boolean) => {
-                    if (checked) form.allowed_sucursal_ids.push(s.id)
-                    else form.allowed_sucursal_ids = form.allowed_sucursal_ids.filter(id => id !== s.id)
-                  }"
-                />
-                <Label :for="`suc-${s.id}`" class="font-normal cursor-pointer">
-                  {{ s.name }}{{ s.is_main ? ' (Principal)' : '' }}
-                </Label>
-              </div>
-            </div>
+            <Multiselect
+              v-model="form.allowed_sucursal_ids"
+              mode="multiple"
+              :object="false"
+              :options="sucursalSelectOptions"
+              value-prop="value"
+              label="label"
+              :searchable="true"
+              :close-on-select="false"
+              :hide-selected="false"
+              placeholder="Seleccione sucursales permitidas"
+              no-options-text="No hay sucursales configuradas"
+              no-results-text="Sin coincidencias"
+              class="multiselect-roles"
+            />
           </CardContent>
         </Card>
 
@@ -332,73 +290,23 @@ onMounted(() => {
             <div v-else class="space-y-2">
               <Label class="leading-snug">Roles asignados</Label>
               <Multiselect
-                v-model="form.roles"
-                mode="multiple"
+                v-model="selectedRole"
+                mode="single"
                 :object="false"
                 :options="roleSelectOptions"
                 value-prop="value"
                 label="label"
                 :searchable="true"
-                :close-on-select="false"
-                :hide-selected="false"
+                :close-on-select="true"
                 placeholder="Seleccione…"
                 no-options-text="No hay roles configurados"
                 no-results-text="Sin coincidencias"
-                :multiple-label="rolesMultipleLabel"
                 class="multiselect-roles"
               />
               <p v-if="roles.length === 0" class="text-center py-4 text-sm text-muted-foreground">
                 No hay roles disponibles
               </p>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader class="flex flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle>Permisos directos</CardTitle>
-              <CardDescription>
-                Permisos adicionales asignados directamente al usuario (además de los de sus roles)
-              </CardDescription>
-            </div>
-            <Button type="button" variant="outline" size="sm" @click="collapseAll">
-              <Icon name="i-lucide-chevrons-up-down" class="mr-2 h-4 w-4" />
-              Contraer todo
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div class="space-y-2">
-              <Collapsible
-                v-for="(categoryPermissions, category) in groupedPermissions"
-                :key="category"
-                :open="openCategories[category] ?? true"
-                class="border rounded-lg"
-                @update:open="(v) => setCategoryOpen(category, v)"
-              >
-                <div class="flex items-center justify-between px-4 py-2 bg-muted/50 rounded-t-lg">
-                  <CollapsibleTrigger as-child>
-                    <button type="button" class="flex items-center gap-2 w-full text-left font-semibold hover:opacity-80">
-                      <Icon name="i-lucide-chevron-down" class="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
-                      {{ getCategoryLabel(category) }}
-                    </button>
-                  </CollapsibleTrigger>
-                </div>
-                <CollapsibleContent>
-                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-4 border-t">
-                    <div v-for="p in categoryPermissions" :key="p.id" class="flex items-center space-x-2">
-                      <Checkbox
-                        :id="`perm-${p.id}`"
-                        :model-value="form.permissions.includes(p.name)"
-                        @update:model-value="(v: boolean | 'indeterminate') => togglePermission(p.name, v === true)"
-                      />
-                      <Label :for="`perm-${p.id}`" class="font-normal cursor-pointer text-sm">{{ formatPermissionDisplayName(p.name) }}</Label>
-                    </div>
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            </div>
-            <p v-if="permissions.length === 0" class="text-center py-4 text-muted-foreground text-sm">No hay permisos disponibles</p>
           </CardContent>
         </Card>
 
