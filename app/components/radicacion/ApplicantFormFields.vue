@@ -1122,6 +1122,14 @@ function formatFileSize(bytes: number): string {
                 </span>
                 <span class="text-xs text-primary">Clic para cambiar</span>
               </template>
+              <template v-else-if="doc.original_name">
+                <Icon name="i-lucide-file-text" class="h-8 w-8 text-primary" />
+                <span class="max-w-full truncate text-center text-sm font-medium text-foreground">
+                  {{ doc.original_name }}
+                </span>
+                <span class="text-xs text-muted-foreground">Archivo existente</span>
+                <span class="text-xs text-primary">Clic para reemplazar</span>
+              </template>
               <template v-else>
                 <Icon name="i-lucide-upload" class="h-8 w-8 text-muted-foreground" />
                 <span class="text-center text-sm font-medium text-muted-foreground">

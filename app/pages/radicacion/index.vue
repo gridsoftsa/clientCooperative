@@ -379,7 +379,7 @@ watch(deactivateDialogOpen, (v) => {
                 </TableCell>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-1">
-                    <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar', 'radicacion_ver']">
+                    <PermissionGate permission="radicacion_analisis_ver">
                       <Button
                         variant="outline"
                         size="sm"

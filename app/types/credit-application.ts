@@ -60,6 +60,8 @@ export interface FinancialInfoForm {
 export interface ApplicantDocumentForm {
   title: string
   file?: File
+  id?: number
+  original_name?: string
 }
 
 export interface ApplicantForm {

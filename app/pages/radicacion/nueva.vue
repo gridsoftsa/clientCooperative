@@ -28,6 +28,7 @@ const currentStep = ref(1)
 const saving = ref(false)
 const loadingSearch = ref(false)
 const loadingApplication = ref(false)
+const submitDirectorDialogOpen = ref(false)
 const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
 /** Solicitud existente cargada para agregar codeudor (por numero_radicado_externo) */
 const existingApplication = ref<Record<string, unknown> | null>(null)
@@ -849,7 +850,7 @@ async function submitApplication() {
     await $api(`/credit-applications/${application.id}/submit-to-director-review`, { method: 'PATCH' })
     clearLocalDraft()
     toast.success('Solicitud enviada al director de agencia.')
-    await navigateTo(`/radicacion/${application.id}`)
+    await navigateTo('/radicacion')
   } catch (e: any) {
     console.error('Error enviando:', e)
     let msg = 'Error al enviar'
@@ -866,6 +867,16 @@ async function submitApplication() {
   } finally {
     saving.value = false
   }
+}
+
+function openSubmitDirectorDialog() {
+  if (saving.value) return
+  submitDirectorDialogOpen.value = true
+}
+
+async function confirmSubmitToDirector() {
+  submitDirectorDialogOpen.value = false
+  await submitApplication()
 }
 
 async function nextStep() {
@@ -1454,14 +1465,38 @@ onMounted(() => {
               v-if="mode === 'deudor'"
               type="button"
               :disabled="saving"
-              @click="submitApplication"
+              @click="openSubmitDirectorDialog"
             >
               <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              Enviar
+              Enviar al director
             </Button>
           </div>
         </div>
       </CardContent>
     </Card>
+
+    <AlertDialog v-model:open="submitDirectorDialogOpen">
+      <AlertDialogContent class="max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar envío al director</AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta acción guarda la radicación y la enviará a revisión del director de agencia.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            :disabled="saving"
+            @click="confirmSubmitToDirector"
+          >
+            <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+            Confirmar
+          </Button>
+          <AlertDialogCancel :disabled="saving">
+            Cancelar
+          </AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>

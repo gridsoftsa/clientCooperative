@@ -26,6 +26,7 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const saving = ref(false)
 const loadingSearch = ref(false)
+const submitDirectorDialogOpen = ref(false)
 const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
 const currentStep = ref(1)
 
@@ -196,7 +197,11 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
     time_in_job: api?.time_in_job,
     financial_info: fi,
     references: parseReferences(api?.references),
-    documents: docs.map((d) => ({ title: d.title || d.original_name || 'Documento' })),
+    documents: docs.map((d) => ({
+      id: d.id,
+      title: d.title || d.original_name || 'Documento',
+      original_name: d.original_name,
+    })),
   }
 }
 
@@ -796,6 +801,64 @@ async function saveChanges() {
   }
 }
 
+async function submitToDirectorReview() {
+  if (!canProceedStep1()) {
+    toast.error('Completa los datos obligatorios del deudor')
+    return
+  }
+  if (!canProceedStep2()) {
+    toast.error('Completa monto, plazo y agencia')
+    return
+  }
+  if (hasDocumentsWithoutTitle()) {
+    toast.error('Todos los documentos adjuntos deben tener un título')
+    return
+  }
+  const errTemplates = validateActivityTemplatesBeforeSave()
+  if (errTemplates) {
+    toast.error(errTemplates)
+    return
+  }
+
+  saving.value = true
+  try {
+    await $csrf()
+    const { data: updated } = await $api<{ data: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> } }>(
+      `/credit-applications/${id.value}`,
+      { method: 'PUT', body: payloadWithoutDocuments('Draft') },
+    )
+    await uploadAllDocuments(updated.id, updated)
+    await $api(`/credit-applications/${updated.id}/submit-to-director-review`, { method: 'PATCH' })
+    toast.success('Solicitud enviada al director de agencia.')
+    await navigateTo('/radicacion')
+  } catch (e: any) {
+    console.error('Error enviando al director:', e)
+    let msg = 'Error al enviar al director'
+    if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
+      msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
+    } else if (e?.data?.errors && typeof e.data.errors === 'object') {
+      msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
+    } else if (e?.data?.message) {
+      msg = e.data.message
+    } else if (e?.message) {
+      msg = e.message
+    }
+    toast.error(msg)
+  } finally {
+    saving.value = false
+  }
+}
+
+function openSubmitDirectorDialog() {
+  if (saving.value) return
+  submitDirectorDialogOpen.value = true
+}
+
+async function confirmSubmitToDirector() {
+  submitDirectorDialogOpen.value = false
+  await submitToDirectorReview()
+}
+
 function nextStep() {
   if (currentStep.value < maxStep.value) currentStep.value++
 }
@@ -1316,16 +1379,52 @@ onMounted(() => {
                 Siguiente
               </Button>
             </div>
-            <Button
-              :disabled="saving"
-              @click="saveChanges"
-            >
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              Guardar cambios
-            </Button>
+            <div class="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                :disabled="saving"
+                @click="saveChanges"
+              >
+                <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                Guardar borrador
+              </Button>
+              <Button
+                type="button"
+                :disabled="saving"
+                @click="openSubmitDirectorDialog"
+              >
+                <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                Enviar al director
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog v-model:open="submitDirectorDialogOpen">
+        <AlertDialogContent class="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar envío al director</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción guarda el borrador y envía la radicación a revisión del director de agencia.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              :disabled="saving"
+              @click="confirmSubmitToDirector"
+            >
+              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              Confirmar
+            </Button>
+            <AlertDialogCancel :disabled="saving">
+              Cancelar
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </template>
   </div>
 </template>

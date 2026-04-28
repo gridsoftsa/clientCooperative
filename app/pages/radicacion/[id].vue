@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
 import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
+import { getCreditApplicationStatusLabel } from '~/constants/credit-application-status'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 import { parseActivityTemplateList } from '~/types/credit-application'
 
@@ -71,6 +72,8 @@ const downloadingId = ref<number | null>(null)
 const deactivating = ref(false)
 const deactivateDialogOpen = ref(false)
 const deleteWithReason = useApiDeleteWithReason()
+const timelineEvents = computed(() => Array.isArray(application.value?.timeline) ? application.value.timeline : [])
+const timelineExpanded = ref(false)
 
 function parseJsonField(val: unknown): Record<string, unknown> {
   if (val == null) return {}
@@ -237,6 +240,13 @@ function getDocumentsForApplicant(applicantId: number | string | null | undefine
 
 function fullName(a: any): string {
   return [a.first_name, a.second_name, a.first_last_name, a.second_last_name].filter(Boolean).join(' ') || '-'
+}
+
+function formatEventDate(iso: string | null | undefined): string {
+  if (!iso) return '-'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '-'
+  return d.toLocaleString('es-CO')
 }
 
 async function handleDownloadPdf() {
@@ -427,6 +437,47 @@ watch([application, debtor, coDebtors], () => {
     </div>
 
     <template v-else-if="application && debtor">
+      <Card>
+        <CardHeader>
+          <div class="flex items-center justify-between gap-3">
+            <CardTitle>Trazabilidad</CardTitle>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              @click="timelineExpanded = !timelineExpanded"
+            >
+              <Icon :name="timelineExpanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="mr-2 h-4 w-4" />
+              {{ timelineExpanded ? 'Contraer' : 'Expandir' }}
+            </Button>
+          </div>
+          <CardDescription>Registro de cambios de estado y acciones relevantes de la radicación.</CardDescription>
+        </CardHeader>
+        <CardContent v-if="timelineExpanded">
+          <div v-if="timelineEvents.length === 0" class="text-sm text-muted-foreground">
+            Aún no hay eventos de trazabilidad.
+          </div>
+          <div v-else class="space-y-3">
+            <div v-for="event in timelineEvents" :key="event.id" class="rounded-lg border p-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="font-medium">{{ event.title }}</p>
+                <span class="text-xs text-muted-foreground">{{ formatEventDate(event.created_at) }}</span>
+              </div>
+              <p v-if="event.description" class="mt-1 text-sm text-muted-foreground">{{ event.description }}</p>
+              <p v-if="event.from_status || event.to_status" class="mt-2 text-xs text-muted-foreground">
+                Estado:
+                <span class="font-medium text-foreground">{{ event.from_status ? getCreditApplicationStatusLabel(event.from_status) : '—' }}</span>
+                →
+                <span class="font-medium text-foreground">{{ event.to_status ? getCreditApplicationStatusLabel(event.to_status) : '—' }}</span>
+              </p>
+              <p v-if="event.actor?.name" class="mt-1 text-xs text-muted-foreground">
+                Por: <span class="font-medium text-foreground">{{ event.actor.name }}</span>
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <!-- Número de radicado externo -->
       <div class="rounded-xl border bg-card p-4">
         <div class="space-y-1.5 max-w-md">

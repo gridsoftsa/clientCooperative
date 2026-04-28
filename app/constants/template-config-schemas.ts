@@ -229,6 +229,16 @@ const schemaGanadoDobleProposito: TemplateConfigSchema = {
           label: 'Ciclo de producción leche (meses)',
           type: 'number',
         },
+        {
+          key: 'produccion_litros_vaca',
+          label: 'Producción en litros',
+          type: 'number',
+        },
+        {
+          key: 'pct_costo_produccion_estandar',
+          label: 'Costo de producción estándar (%)',
+          type: 'number',
+        },
       ],
     },
     {
