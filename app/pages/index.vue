@@ -13,6 +13,7 @@ import {
 const STATUS_CHART_COLORS = [
   '#64748b',
   '#2563eb',
+  '#7c3aed',
   '#d97706',
   '#16a34a',
   '#dc2626',

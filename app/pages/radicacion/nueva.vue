@@ -804,6 +804,7 @@ async function saveDraft() {
   }
 }
 
+/** Guarda borrador, sube documentos y pasa la solicitud a revisión del director de agencia. */
 async function submitApplication() {
   if (mode.value === 'codeudor') {
     await saveCodeudor()
@@ -845,11 +846,10 @@ async function submitApplication() {
       application = data
     }
     await uploadAllDocuments(application.id, application)
+    await $api(`/credit-applications/${application.id}/submit-to-director-review`, { method: 'PATCH' })
     clearLocalDraft()
-    toast.success(
-      'Solicitud guardada (estado: Borrador). Cuando quieras, descarga el PDF desde la vista o el listado de radicación.',
-    )
-    await navigateTo(`/radicacion/editar/${application.id}`)
+    toast.success('Solicitud enviada al director de agencia.')
+    await navigateTo(`/radicacion/${application.id}`)
   } catch (e: any) {
     console.error('Error enviando:', e)
     let msg = 'Error al enviar'
@@ -1429,7 +1429,7 @@ onMounted(() => {
               Siguiente
             </Button>
           </div>
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
             <Button
               v-if="mode === 'codeudor'"
               type="button"
@@ -1442,11 +1442,22 @@ onMounted(() => {
             </Button>
             <Button
               v-if="mode === 'deudor'"
+              type="button"
+              variant="outline"
+              :disabled="saving"
+              @click="saveDraft"
+            >
+              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              Guardar borrador
+            </Button>
+            <Button
+              v-if="mode === 'deudor'"
+              type="button"
               :disabled="saving"
               @click="submitApplication"
             >
               <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              Enviar solicitud
+              Enviar
             </Button>
           </div>
         </div>
