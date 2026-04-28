@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import Multiselect from '@vueform/multiselect'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
 import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
@@ -15,7 +16,7 @@ definePageMeta({
 
 const route = useRoute()
 const router = useRouter()
-const { $api } = useNuxtApp()
+const { $api, $csrf } = useNuxtApp()
 const { hasPermission, hasAnyPermission } = usePermissions()
 const id = computed(() => route.params.id as string)
 const application = ref<any>(null)
@@ -26,7 +27,7 @@ const error = ref<string | null>(null)
 const shouldRedirectDraftToEdit = computed(() =>
   Boolean(
     !loading.value
-      && application.value?.status === 'Draft'
+      && ['Draft', 'Returned'].includes(String(application.value?.status ?? ''))
       && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
   ),
 )
@@ -65,6 +66,12 @@ const stepsDeudor = [
   { num: 5, title: 'Codeudores' },
 ]
 
+const stepsCodeudor = [
+  { num: 1, title: 'Datos del Codeudor' },
+  { num: 2, title: 'Actividad económica' },
+  { num: 3, title: 'Datos financieros' },
+]
+
 const { formatPesosConSimbolo } = usePesosFormat()
 const { downloadDocument, downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdf = ref(false)
@@ -74,6 +81,37 @@ const deactivateDialogOpen = ref(false)
 const deleteWithReason = useApiDeleteWithReason()
 const timelineEvents = computed(() => Array.isArray(application.value?.timeline) ? application.value.timeline : [])
 const timelineExpanded = ref(false)
+const directorDecision = ref<'approved' | 'returned' | ''>('')
+const directorConcept = ref('')
+const directorDecisionDialogOpen = ref(false)
+const submittingDirectorDecision = ref(false)
+const selectedCoDebtorIndex = ref<number | null>(null)
+const selectedCoDebtorStep = ref(1)
+const canDirectorDecide = computed(
+  () => hasPermission('radicacion_director_decidir') && application.value?.status === 'Director_Review',
+)
+const directorDecisionOptions = [
+  { value: 'approved', label: 'Aprobar y enviar a revisión de documentación' },
+  { value: 'returned', label: 'Devolver al asesor para ajustes' },
+]
+
+function onDirectorDecisionUpdate(value: string | null) {
+  if (value === 'approved' || value === 'returned') {
+    directorDecision.value = value
+    return
+  }
+  directorDecision.value = ''
+}
+
+function toggleViewCoDebtor(index: number): void {
+  if (selectedCoDebtorIndex.value === index) {
+    selectedCoDebtorIndex.value = null
+    selectedCoDebtorStep.value = 1
+    return
+  }
+  selectedCoDebtorIndex.value = index
+  selectedCoDebtorStep.value = 1
+}
 
 function parseJsonField(val: unknown): Record<string, unknown> {
   if (val == null) return {}
@@ -305,6 +343,46 @@ async function handleDownload(doc: { id: number; title?: string; original_name?:
   }
 }
 
+function openDirectorDecisionDialog() {
+  if (submittingDirectorDecision.value) {
+    return
+  }
+  if (directorDecision.value === '') {
+    toast.error('Selecciona la decisión del director.')
+    return
+  }
+  if (directorConcept.value.trim().length < 5) {
+    toast.error('Escribe un concepto del director de al menos 5 caracteres.')
+    return
+  }
+  directorDecisionDialogOpen.value = true
+}
+
+async function confirmDirectorDecision() {
+  if (!application.value?.id || directorDecision.value === '' || submittingDirectorDecision.value) {
+    return
+  }
+  submittingDirectorDecision.value = true
+  try {
+    await $csrf()
+    await $api(`/credit-applications/${application.value.id}/director-decision`, {
+      method: 'PATCH',
+      body: {
+        decision: directorDecision.value,
+        concept: directorConcept.value.trim(),
+      },
+    })
+    directorDecisionDialogOpen.value = false
+    toast.success('Decisión del director registrada correctamente.')
+    await navigateTo('/radicacion')
+  } catch (e: any) {
+    console.error('Error registrando decisión de director:', e)
+    toast.error(e?.data?.message ?? 'No se pudo registrar la decisión del director.')
+  } finally {
+    submittingDirectorDecision.value = false
+  }
+}
+
 function syncFormFromApplication() {
   const app = application.value
   if (!app || !debtor.value) return
@@ -336,7 +414,7 @@ async function fetchApplication() {
       ...data,
       documents: Array.isArray(data?.documents) ? data.documents : [],
     }
-    if (application.value?.status === 'Draft' && hasAnyPermission(['radicacion_crear', 'radicacion_editar'])) {
+    if (['Draft', 'Returned'].includes(String(application.value?.status ?? '')) && hasAnyPermission(['radicacion_crear', 'radicacion_editar'])) {
       await navigateTo(`/radicacion/editar/${id.value}`, { replace: true })
       return
     }
@@ -478,6 +556,53 @@ watch([application, debtor, coDebtors], () => {
         </CardContent>
       </Card>
 
+      <Card v-if="canDirectorDecide">
+        <CardHeader>
+          <CardTitle>Concepto director</CardTitle>
+          <CardDescription>
+            Selecciona la decisión y registra el concepto del director de agencia para esta radicación.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div class="space-y-1.5">
+            <Label for="director_decision">Decisión *</Label>
+            <Multiselect
+              id="director_decision"
+              :model-value="directorDecision === '' ? null : directorDecision"
+              :options="directorDecisionOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="false"
+              placeholder="Seleccionar decisión"
+              class="multiselect-director"
+              @update:model-value="onDirectorDecisionUpdate"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="director_concept">Concepto del director *</Label>
+            <textarea
+              id="director_concept"
+              v-model="directorConcept"
+              rows="4"
+              class="flex min-h-[110px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              placeholder="Describe el concepto y, si aplica, qué debe ajustar el asesor..."
+            />
+          </div>
+          <div class="flex justify-end">
+            <Button
+              type="button"
+              :disabled="submittingDirectorDecision"
+              @click="openDirectorDecisionDialog"
+            >
+              <Icon v-if="submittingDirectorDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              Enviar decisión del director
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <!-- Número de radicado externo -->
       <div class="rounded-xl border bg-card p-4">
         <div class="space-y-1.5 max-w-md">
@@ -548,7 +673,7 @@ watch([application, debtor, coDebtors], () => {
               :show-search="false"
               :hide-financial-section="true"
               :show-co-debtor-concept="false"
-              readonly
+              :read-only-form="true"
             />
             <div v-if="getDocumentsForApplicant(debtor.id).length > 0" class="space-y-3 border-t pt-4">
               <p class="text-sm font-semibold">Documentos adjuntos</p>
@@ -574,17 +699,19 @@ watch([application, debtor, coDebtors], () => {
           <div v-else-if="currentStep === 2" class="space-y-4">
             <CreditsFinancialActivityFormList
               :model-value="getActivityTemplates(debtor)"
-              readonly
+              :read-only-form="true"
             />
           </div>
 
           <!-- Paso 3: Datos financieros -->
           <div v-else-if="currentStep === 3" class="space-y-4">
-            <ApplicantFormFields
-              v-model="form.debtor"
-              :show-only-financial="true"
-              readonly
-            />
+            <div class="pointer-events-none">
+              <ApplicantFormFields
+                v-model="form.debtor"
+                :show-only-financial="true"
+                :read-only-form="true"
+              />
+            </div>
           </div>
 
           <!-- Paso 4: Datos de la Solicitud -->
@@ -641,51 +768,118 @@ watch([application, debtor, coDebtors], () => {
             <div v-if="form.co_debtors.length === 0" class="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
               No hay codeudores en esta solicitud.
             </div>
-            <Accordion v-else type="multiple" collapsible class="space-y-2">
-              <AccordionItem
+            <div v-else class="space-y-2">
+              <div
                 v-for="(co, idx) in form.co_debtors"
                 :key="idx"
-                :value="`codeudor-${idx}`"
-                class="relative rounded-lg border border-border px-4 pr-12 data-[state=open]:border-primary/30"
+                class="flex w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2.5 sm:gap-3"
               >
-                <AccordionTrigger class="py-3 pr-8 hover:no-underline">
-                  <span class="font-medium">
-                    Codeudor {{ idx + 1 }}
-                    <span class="ml-2 text-muted-foreground font-normal">
-                      ({{ [co.first_name, co.first_last_name].filter(Boolean).join(' ') || 'Sin nombre' }})
-                    </span>
+                <div class="min-w-0 flex-1 font-medium">
+                  Codeudor {{ idx + 1 }}
+                  <span class="ml-2 text-muted-foreground font-normal">
+                    ({{ [co.first_name, co.first_last_name].filter(Boolean).join(' ') || 'Sin nombre' }})
                   </span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div class="border-t border-border px-4 pt-4 pb-2 space-y-4">
-                    <ApplicantFormFields
-                      :model-value="co"
-                      :show-co-debtor-concept="true"
-                      readonly
-                      @update:model-value="() => {}"
-                    />
-                    <div v-if="getDocumentsForApplicant(coDebtors[idx]?.id ?? coDebtors[idx]?.applicant_id).length > 0" class="space-y-3">
-                      <p class="text-sm font-semibold">Documentos adjuntos</p>
-                      <div class="flex flex-wrap gap-2">
-                        <PermissionGate v-for="doc in getDocumentsForApplicant(coDebtors[idx]?.id ?? coDebtors[idx]?.applicant_id)" :key="doc.id" permission="radicacion_descargar_documentos">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            class="h-auto gap-2 py-2"
-                            :disabled="downloadingId === doc.id"
-                            @click="handleDownload(doc)"
-                          >
-                            <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
-                            {{ doc.title || doc.original_name || 'Documento' }}
-                            <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          </Button>
-                        </PermissionGate>
-                      </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  class="h-8 shrink-0 gap-1.5"
+                  @click="toggleViewCoDebtor(idx)"
+                >
+                  <Icon :name="selectedCoDebtorIndex === idx ? 'i-lucide-eye-off' : 'i-lucide-eye'" class="h-3.5 w-3.5 shrink-0" />
+                  {{ selectedCoDebtorIndex === idx ? 'Ocultar' : 'Ver' }}
+                </Button>
+              </div>
+            </div>
+
+            <div
+              v-if="selectedCoDebtorIndex != null && form.co_debtors[selectedCoDebtorIndex]"
+              class="rounded-lg border border-border p-4 space-y-4"
+            >
+              <p class="text-sm font-semibold">
+                Detalle del codeudor {{ selectedCoDebtorIndex + 1 }}
+              </p>
+              <div class="flex flex-wrap items-center gap-2">
+                <template v-for="step in stepsCodeudor" :key="step.num">
+                  <button
+                    type="button"
+                    class="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    :class="[
+                      selectedCoDebtorStep === step.num
+                        ? 'bg-primary text-primary-foreground cursor-default'
+                        : 'cursor-pointer hover:bg-muted',
+                    ]"
+                    @click="selectedCoDebtorStep = step.num"
+                  >
+                    <div
+                      class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ring-border/50"
+                      :class="selectedCoDebtorStep === step.num
+                        ? 'bg-primary text-primary-foreground ring-primary'
+                        : 'bg-background text-foreground ring-muted-foreground/40'"
+                    >
+                      {{ step.num }}
                     </div>
+                    <span class="text-sm font-semibold hidden sm:inline">
+                      {{ step.title }}
+                    </span>
+                  </button>
+                </template>
+              </div>
+
+              <div v-if="selectedCoDebtorStep === 1" class="space-y-4">
+                <ApplicantFormFields
+                  :model-value="form.co_debtors[selectedCoDebtorIndex]!"
+                  :show-co-debtor-concept="true"
+                  :hide-financial-section="true"
+                  :read-only-form="true"
+                  @update:model-value="() => {}"
+                />
+                <div
+                  v-if="getDocumentsForApplicant(coDebtors[selectedCoDebtorIndex]?.id ?? coDebtors[selectedCoDebtorIndex]?.applicant_id).length > 0"
+                  class="space-y-3"
+                >
+                  <p class="text-sm font-semibold">Documentos adjuntos</p>
+                  <div class="flex flex-wrap gap-2">
+                    <PermissionGate
+                      v-for="doc in getDocumentsForApplicant(coDebtors[selectedCoDebtorIndex]?.id ?? coDebtors[selectedCoDebtorIndex]?.applicant_id)"
+                      :key="doc.id"
+                      permission="radicacion_descargar_documentos"
+                    >
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-auto gap-2 py-2"
+                        :disabled="downloadingId === doc.id"
+                        @click="handleDownload(doc)"
+                      >
+                        <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
+                        {{ doc.title || doc.original_name || 'Documento' }}
+                        <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      </Button>
+                    </PermissionGate>
                   </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
+                </div>
+              </div>
+
+              <div v-else-if="selectedCoDebtorStep === 2" class="space-y-4">
+                <CreditsFinancialActivityFormList
+                  :model-value="getActivityTemplates(form.co_debtors[selectedCoDebtorIndex]!)"
+                  :read-only-form="true"
+                />
+              </div>
+
+              <div v-else class="space-y-4">
+                <div class="pointer-events-none">
+                  <ApplicantFormFields
+                    :model-value="form.co_debtors[selectedCoDebtorIndex]!"
+                    :show-only-financial="true"
+                    :read-only-form="true"
+                    @update:model-value="() => {}"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -700,5 +894,42 @@ watch([application, debtor, coDebtors], () => {
       :loading="deactivating"
       @confirm="onDeactivateConfirm"
     />
+
+    <AlertDialog v-model:open="directorDecisionDialogOpen">
+      <AlertDialogContent class="max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar decisión del director</AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta acción actualizará el estado de la radicación y guardará el concepto del director en la trazabilidad.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            :disabled="submittingDirectorDecision"
+            @click="confirmDirectorDecision"
+          >
+            <Icon v-if="submittingDirectorDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+            Confirmar
+          </Button>
+          <AlertDialogCancel :disabled="submittingDirectorDecision">
+            Cancelar
+          </AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>
+
+<style src="@vueform/multiselect/themes/default.css"></style>
+<style scoped>
+.multiselect-director {
+  --ms-font-size: 0.875rem;
+  --ms-line-height: 1.25rem;
+  --ms-radius: 0.375rem;
+  --ms-border-color: var(--border);
+  --ms-bg: var(--background);
+  --ms-py: 0.5rem;
+  min-height: 2.25rem;
+}
+</style>

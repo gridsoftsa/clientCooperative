@@ -14,9 +14,10 @@ definePageMeta({
 
 const router = useRouter()
 const { $api } = useNuxtApp()
-const { hasAnyPermission } = usePermissions()
+const { hasAnyPermission, hasRole } = usePermissions()
 /** Editar / continuar borrador: crear o editar (nueva solo exige crear) */
 const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
+const isDirectorAgencia = computed(() => hasRole('director_agencia'))
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
@@ -52,6 +53,10 @@ function buildListQuery(): Record<string, string | number> {
   const q: Record<string, string | number> = {
     per_page: pagination.value.per_page,
     page: pagination.value.current_page,
+  }
+  if (isDirectorAgencia.value) {
+    q.status = 'Director_Review'
+    return q
   }
   if (filterStatus.value !== 'all') {
     q.status = filterStatus.value
@@ -356,13 +361,22 @@ watch(deactivateDialogOpen, (v) => {
               <TableRow v-for="app in applications" :key="app.id">
                 <TableCell class="font-medium">
                   <NuxtLink
-                    v-if="app.status === 'Draft' && canOpenDraftForm"
+                    v-if="(app.status === 'Draft' || app.status === 'Returned') && canOpenDraftForm"
                     :to="`/radicacion/editar/${app.id}`"
                     class="font-medium text-primary hover:underline"
-                    title="Abrir formulario editable del borrador"
+                    title="Abrir formulario editable"
                   >
                     {{ app.code || '-' }}
                     <span class="text-xs text-muted-foreground ml-1">(continuar editando)</span>
+                  </NuxtLink>
+                  <NuxtLink
+                    v-else-if="isDirectorAgencia && app.status === 'Director_Review'"
+                    :to="`/radicacion/${app.id}`"
+                    class="font-medium text-primary hover:underline"
+                    title="Abrir revisión del director"
+                  >
+                    {{ app.code || '-' }}
+                    <span class="text-xs text-muted-foreground ml-1">(revisar)</span>
                   </NuxtLink>
                   <span v-else>{{ app.code || '-' }}</span>
                 </TableCell>
@@ -390,6 +404,20 @@ watch(deactivateDialogOpen, (v) => {
                       >
                         <Icon name="i-lucide-chart-column-increasing" class="h-4 w-4 shrink-0" aria-hidden="true" />
                         <span>SCORE</span>
+                      </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="radicacion_director_decidir">
+                      <Button
+                        v-if="isDirectorAgencia && app.status === 'Director_Review'"
+                        variant="outline"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
+                        title="Revisión y concepto del director de agencia"
+                        aria-label="Revisar radicación como director"
+                        @click="router.push(`/radicacion/${app.id}`)"
+                      >
+                        <Icon name="i-lucide-clipboard-check" class="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>Revisión director</span>
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_enviar_analisis">
@@ -424,7 +452,7 @@ watch(deactivateDialogOpen, (v) => {
                     </PermissionGate>
                     <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
                       <Button
-                        v-if="app.status === 'Draft'"
+                        v-if="app.status === 'Draft' || app.status === 'Returned'"
                         variant="warning"
                         size="sm"
                         class="gap-1.5"
@@ -439,6 +467,7 @@ watch(deactivateDialogOpen, (v) => {
                     </PermissionGate>
                     <PermissionGate permission="radicacion_ver">
                       <Button
+                        v-if="!isDirectorAgencia"
                         variant="outline"
                         size="sm"
                         class="gap-1.5"

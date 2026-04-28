@@ -105,6 +105,7 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   /** Bloque “Resumen financiero” (solvencia, activos, pasivos) en formulario/ detalle de radicación. Sin esto, p. ej. asesor no ve ese resumen. */
   radicacion_ver_resumen_financiero: 'Ver resumen financiero del deudor en radicación (solvencia, activos, pasivos, etc.)',
   radicacion_analisis_ver: 'Ver análisis y score de radicación',
+  radicacion_director_decidir: 'Decidir radicaciones como director de agencia',
   radicacion_documentos_subir: 'Subir documentos en radicación',
   radicacion_catalogos_ver: 'Ver catálogos de radicación',
   radicacion_catalogos_editar: 'Editar catálogos de radicación',

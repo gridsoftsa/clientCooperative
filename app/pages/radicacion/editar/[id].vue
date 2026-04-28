@@ -102,7 +102,7 @@ const stepsCodeudor = [
 const steps = computed(() => (addingCodeudor.value ? stepsCodeudor : stepsDeudor))
 const maxStep = computed(() => steps.value.length)
 
-const canEdit = computed(() => application.value?.status === 'Draft')
+const canEdit = computed(() => ['Draft', 'Returned'].includes(String(application.value?.status ?? '')))
 
 /** Última vez que la solicitud se guardó en el servidor (borrador abierto). */
 function formatRadicacionLastSaved(iso: string | null | undefined): string {
@@ -887,7 +887,7 @@ onMounted(() => {
           Editar Radicación
         </h2>
         <p class="text-muted-foreground">
-          Radicación - Borrador
+          Radicación - Editable
         </p>
       </div>
       <Button variant="outline" @click="router.push('/radicacion')">
@@ -912,7 +912,7 @@ onMounted(() => {
       class="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center"
     >
       <p class="text-destructive font-medium">
-        Solo se pueden editar solicitudes en estado Borrador (Draft). Esta solicitud tiene estado: {{ application.status }}.
+        Solo se pueden editar solicitudes en estado Borrador o Devolución. Esta solicitud tiene estado: {{ application.status }}.
       </p>
       <Button variant="outline" class="mt-4" @click="router.push('/radicacion')">
         Volver

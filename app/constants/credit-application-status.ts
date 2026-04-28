@@ -8,6 +8,8 @@ export const creditApplicationStatusFilterOptions = [
   { value: 'Submitted', label: 'Enviada' },
   { value: 'In_Analysis', label: 'En análisis' },
   { value: 'Director_Review', label: 'Revisión director de agencia' },
+  { value: 'Documentation_Review', label: 'Revisión de documentación' },
+  { value: 'Returned', label: 'Devuelta por director' },
   { value: 'Approved', label: 'Aprobada' },
   { value: 'Rejected', label: 'Rechazada' },
 ] as const
@@ -17,6 +19,8 @@ const STATUS_LABELS: Record<string, string> = {
   Submitted: 'Enviada',
   In_Analysis: 'En análisis',
   Director_Review: 'Revisión director de agencia',
+  Documentation_Review: 'Revisión de documentación',
+  Returned: 'Devuelta por director',
   Approved: 'Aprobada',
   Rejected: 'Rechazada',
 }
@@ -26,6 +30,8 @@ const BADGE_VARIANTS: Record<string, string> = {
   Submitted: 'default',
   In_Analysis: 'outline',
   Director_Review: 'default',
+  Documentation_Review: 'secondary',
+  Returned: 'destructive',
   Approved: 'default',
   Rejected: 'destructive',
 }
@@ -45,6 +51,8 @@ export const creditApplicationStatusOrder = [
   'Draft',
   'Submitted',
   'Director_Review',
+  'Documentation_Review',
+  'Returned',
   'In_Analysis',
   'Approved',
   'Rejected',
