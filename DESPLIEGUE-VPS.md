@@ -4,6 +4,7 @@ Dominios:
 
 - **API:** apicooperative.tecnologicaslf.com → Laravel
 - **Frontend:** cooperative.tecnologicaslf.com → Nuxt
+- **Objetos (MinIO S3):** s3.tecnologicaslf.com → Nginx → puerto 9000 (API S3)
 
 En el VPS usarás **Docker** para la app y **Nginx** en el host como reverse proxy (y SSL con Certbot).
 
@@ -13,7 +14,7 @@ En el VPS usarás **Docker** para la app y **Nginx** en el host como reverse pro
 
 - Ubuntu 22.04 o 24.04 (o Debian 11/12)
 - Acceso root o sudo
-- DNS: que **apicooperative.tecnologicaslf.com** y **cooperative.tecnologicaslf.com** apunten al **IP del VPS** (registros A)
+- DNS: que **apicooperative.tecnologicaslf.com**, **cooperative.tecnologicaslf.com** y **s3.tecnologicaslf.com** apunten al **IP del VPS** (registros A)
 
 ---
 
@@ -183,9 +184,11 @@ Copiar las configuraciones del repo a Nginx:
 ```bash
 sudo cp clientCooperative/vps-nginx/apicooperative.tecnologicaslf.com.conf /etc/nginx/sites-available/
 sudo cp clientCooperative/vps-nginx/cooperative.tecnologicaslf.com.conf /etc/nginx/sites-available/
+sudo cp clientCooperative/vps-nginx/s3.tecnologicaslf.com.conf /etc/nginx/sites-available/
 
 sudo ln -s /etc/nginx/sites-available/apicooperative.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
 sudo ln -s /etc/nginx/sites-available/cooperative.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/s3.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
 ```
 
 Comprobar y recargar Nginx:
@@ -199,6 +202,7 @@ Comprueba en el navegador (aún en HTTP):
 
 - http://apicooperative.tecnologicaslf.com
 - http://cooperative.tecnologicaslf.com
+- http://s3.tecnologicaslf.com (debe responder MinIO/S3; sin bucket puede mostrar error XML, es normal)
 
 ---
 
@@ -206,7 +210,7 @@ Comprueba en el navegador (aún en HTTP):
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d apicooperative.tecnologicaslf.com -d cooperative.tecnologicaslf.com
+sudo certbot --nginx -d apicooperative.tecnologicaslf.com -d cooperative.tecnologicaslf.com -d s3.tecnologicaslf.com
 ```
 
 Sigue las preguntas (email, aceptar términos). Certbot modificará los sitios de Nginx y añadirá SSL.
@@ -227,6 +231,7 @@ Que en `apiCooperative/.env` tengas:
 - `FRONTEND_URL=https://cooperative.tecnologicaslf.com`
 - `SANCTUM_STATEFUL_DOMAINS=cooperative.tecnologicaslf.com`
 - `CORS_ALLOWED_ORIGINS=https://cooperative.tecnologicaslf.com`
+- MinIO / Laravel S3: `AWS_ENDPOINT=http://minio:9000` (API en Docker, red interna; **no** pongas aquí el dominio público). URLs públicas de objetos: `AWS_URL=https://s3.tecnologicaslf.com/cooperative` (ajusta el nombre del bucket si no es `cooperative`).
 
 Si cambias algo de entorno, reinicia el contenedor API:
 
@@ -242,9 +247,11 @@ docker compose -f clientCooperative/docker-compose.yml restart api
 | ---------- | ----------------- | ---------------------------------- |
 | API        | 8585              | apicooperative.tecnologicaslf.com  |
 | Frontend   | 3535              | cooperative.tecnologicaslf.com     |
+| MinIO S3   | 9000              | s3.tecnologicaslf.com (Nginx → 9000) |
+| MinIO consola | 9001 (opcional) | no exponer o proxy dedicado        |
 | PostgreSQL | 5435              | solo local (no exponer a internet) |
 
-Nginx escucha 80/443 y hace proxy a 8585 y 3535.
+Nginx escucha 80/443 y hace proxy a 8585, 3535 y 9000 (MinIO API).
 
 ---
 
