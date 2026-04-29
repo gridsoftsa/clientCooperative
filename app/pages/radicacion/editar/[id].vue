@@ -27,6 +27,8 @@ const error = ref<string | null>(null)
 const saving = ref(false)
 const loadingSearch = ref(false)
 const submitDirectorDialogOpen = ref(false)
+/** Tras devolución desde revisión documental: el backend envía directo a esa revisión sin pasar por el director. */
+const skipNextDirectorReview = computed(() => Boolean(application.value?.skip_next_director_review))
 const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
 const currentStep = ref(1)
 
@@ -201,6 +203,9 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
       id: d.id,
       title: d.title || d.original_name || 'Documento',
       original_name: d.original_name,
+      is_reviewed: d.is_reviewed,
+      review_comment: d.review_comment,
+      reviewed_at: d.reviewed_at,
     })),
   }
 }
@@ -828,8 +833,8 @@ async function submitToDirectorReview() {
       { method: 'PUT', body: payloadWithoutDocuments('Draft') },
     )
     await uploadAllDocuments(updated.id, updated)
-    await $api(`/credit-applications/${updated.id}/submit-to-director-review`, { method: 'PATCH' })
-    toast.success('Solicitud enviada al director de agencia.')
+    const submitRes = await $api<{ message?: string }>(`/credit-applications/${updated.id}/submit-to-director-review`, { method: 'PATCH' })
+    toast.success(submitRes?.message ?? 'Solicitud enviada al director de agencia.')
     await navigateTo('/radicacion')
   } catch (e: any) {
     console.error('Error enviando al director:', e)
@@ -1395,7 +1400,7 @@ onMounted(() => {
                 @click="openSubmitDirectorDialog"
               >
                 <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-                Enviar al director
+                {{ skipNextDirectorReview ? 'Enviar a revisión de documentación' : 'Enviar al director' }}
               </Button>
             </div>
           </div>
@@ -1405,9 +1410,16 @@ onMounted(() => {
       <AlertDialog v-model:open="submitDirectorDialogOpen">
         <AlertDialogContent class="max-w-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar envío al director</AlertDialogTitle>
+            <AlertDialogTitle>
+              {{ skipNextDirectorReview ? 'Confirmar envío a revisión de documentación' : 'Confirmar envío al director' }}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción guarda el borrador y envía la radicación a revisión del director de agencia.
+              <template v-if="skipNextDirectorReview">
+                Esta acción guarda los cambios y envía la radicación de nuevo a revisión de documentación, sin pasar por el director de agencia (ya estaba aprobado en esa etapa).
+              </template>
+              <template v-else>
+                Esta acción guarda el borrador y envía la radicación a revisión del director de agencia.
+              </template>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter class="flex flex-col gap-2 sm:flex-row sm:justify-end">

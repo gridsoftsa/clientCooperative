@@ -9,7 +9,8 @@ export const creditApplicationStatusFilterOptions = [
   { value: 'In_Analysis', label: 'En análisis' },
   { value: 'Director_Review', label: 'Revisión director de agencia' },
   { value: 'Documentation_Review', label: 'Revisión de documentación' },
-  { value: 'Returned', label: 'Devuelta por director' },
+  /** Un solo estado en API; el matiz director vs documentación sale del backend (`skip_next_director_review`) al mostrar filas. */
+  { value: 'Returned', label: 'Devuelta (ajustes pendientes)' },
   { value: 'Approved', label: 'Aprobada' },
   { value: 'Rejected', label: 'Rechazada' },
 ] as const
@@ -20,9 +21,44 @@ const STATUS_LABELS: Record<string, string> = {
   In_Analysis: 'En análisis',
   Director_Review: 'Revisión director de agencia',
   Documentation_Review: 'Revisión de documentación',
-  Returned: 'Devuelta por director',
+  Returned: 'Devuelta',
   Approved: 'Aprobada',
   Rejected: 'Rechazada',
+}
+
+export type CreditApplicationStatusLabelOptions = {
+  /** Estado actual: viene del API cuando la solicitud está en `Returned` tras devolución documental. */
+  skipNextDirectorReview?: boolean
+  /** `event_key` de la fila de trazabilidad para acertar el matiz de `Returned`. */
+  timelineEventKey?: string | null
+  /** Si el estado etiquetado es el origen o el destino de esa fila. */
+  timelineRole?: 'from' | 'to'
+}
+
+function returnedLabelFromTimeline(
+  role: 'from' | 'to',
+  eventKey: string | null | undefined,
+): string | null {
+  const ek = eventKey ?? ''
+  if (role === 'to') {
+    if (ek === 'documentation_review_returned') {
+      return 'Devuelta por revisión de documentos'
+    }
+    if (ek === 'director_returned') {
+      return 'Devuelta por director de agencia'
+    }
+    return null
+  }
+  if (role === 'from') {
+    if (ek === 'sent_to_documentation_review_skip_director') {
+      return 'Devuelta por revisión de documentos'
+    }
+    if (ek === 'sent_to_director_review') {
+      return 'Devuelta por director de agencia'
+    }
+    return null
+  }
+  return null
 }
 
 const BADGE_VARIANTS: Record<string, string> = {
@@ -36,8 +72,29 @@ const BADGE_VARIANTS: Record<string, string> = {
   Rejected: 'destructive',
 }
 
-export function getCreditApplicationStatusLabel(status: string): string {
-  return STATUS_LABELS[status] ?? status
+export function getCreditApplicationStatusLabel(
+  status: string,
+  options?: CreditApplicationStatusLabelOptions,
+): string {
+  if (status !== 'Returned') {
+    return STATUS_LABELS[status] ?? status
+  }
+
+  if (options?.timelineEventKey != null && options.timelineRole != null) {
+    const fromTimeline = returnedLabelFromTimeline(options.timelineRole, options.timelineEventKey)
+    if (fromTimeline != null) {
+      return fromTimeline
+    }
+  }
+
+  if (options?.skipNextDirectorReview === true) {
+    return 'Devuelta por revisión de documentos'
+  }
+  if (options?.skipNextDirectorReview === false) {
+    return 'Devuelta por director de agencia'
+  }
+
+  return STATUS_LABELS.Returned ?? status
 }
 
 export function getCreditApplicationStatusBadgeVariant(

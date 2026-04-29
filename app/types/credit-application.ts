@@ -62,6 +62,9 @@ export interface ApplicantDocumentForm {
   file?: File
   id?: number
   original_name?: string
+  is_reviewed?: boolean
+  review_comment?: string
+  reviewed_at?: string
 }
 
 export interface ApplicantForm {

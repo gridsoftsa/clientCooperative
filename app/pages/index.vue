@@ -28,6 +28,7 @@ interface CreditSummaryRow {
   id: number
   code: string | null
   status: string
+  skip_next_director_review?: boolean
   amount_requested: string
   created_at: string | null
   sucursal: { id: number; name: string; code: string | null } | null
@@ -512,7 +513,9 @@ onUnmounted(() => {
                               :variant="getCreditApplicationStatusBadgeVariant(row.status)"
                               class="px-2 py-0.5 text-xs font-normal leading-tight"
                             >
-                              {{ getCreditApplicationStatusLabel(row.status) }}
+                              {{ getCreditApplicationStatusLabel(row.status, {
+                                skipNextDirectorReview: row.skip_next_director_review,
+                              }) }}
                             </Badge>
                           </TableCell>
                           <TableCell class="whitespace-nowrap px-3 py-2.5 text-sm text-muted-foreground">

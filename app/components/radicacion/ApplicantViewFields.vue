@@ -8,7 +8,7 @@ const props = defineProps<{
 }>()
 
 const { formatPesosConSimbolo } = usePesosFormat()
-const { downloadDocument } = useDocumentDownload()
+const { viewDocumentInNewTab } = useDocumentDownload()
 const downloadingId = ref<number | null>(null)
 
 function fullName(a: any): string {
@@ -20,19 +20,16 @@ function cityName(a: any): string {
   return a.residence_city?.name ?? a.residenceCity?.name ?? '-'
 }
 
-async function handleDownload(doc: { id: number; title?: string; original_name?: string }) {
+async function handleViewDocument(doc: { id: number; title?: string; original_name?: string }) {
   if (downloadingId.value) return
   downloadingId.value = doc.id
   try {
-    await downloadDocument(
-      props.applicationId,
-      doc.id,
-      doc.title || doc.original_name || 'documento',
-    )
+    await viewDocumentInNewTab(props.applicationId, doc.id)
   } catch (e) {
-    console.error('Error descargando:', e)
+    console.error('Error abriendo documento:', e)
     const { toast } = await import('vue-sonner')
-    toast.error('No se pudo descargar el documento. Verifica tu sesión.')
+    const msg = e instanceof Error && e.message ? e.message : 'No se pudo abrir el documento. Verifica tu sesión.'
+    toast.error(msg)
   } finally {
     downloadingId.value = null
   }
@@ -415,7 +412,7 @@ onMounted(() => {
           size="sm"
           class="h-auto gap-2 py-2"
           :disabled="downloadingId === doc.id"
-          @click="handleDownload(doc)"
+          @click="handleViewDocument(doc)"
         >
           <Icon
             :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'"
@@ -423,7 +420,7 @@ onMounted(() => {
             :class="{ 'animate-spin': downloadingId === doc.id }"
           />
           {{ doc.title || doc.original_name || 'Documento' }}
-          <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </div>
       <p v-else class="text-sm text-muted-foreground">

@@ -73,7 +73,7 @@ const stepsCodeudor = [
 ]
 
 const { formatPesosConSimbolo } = usePesosFormat()
-const { downloadDocument, downloadApplicationPdf } = useDocumentDownload()
+const { viewDocumentInNewTab, downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdf = ref(false)
 const downloadingId = ref<number | null>(null)
 const deactivating = ref(false)
@@ -85,14 +85,33 @@ const directorDecision = ref<'approved' | 'returned' | ''>('')
 const directorConcept = ref('')
 const directorDecisionDialogOpen = ref(false)
 const submittingDirectorDecision = ref(false)
+const documentationDecision = ref<'approved' | 'returned' | ''>('')
+const documentationConcept = ref('')
+const documentationDecisionDialogOpen = ref(false)
+const submittingDocumentationDecision = ref(false)
 const selectedCoDebtorIndex = ref<number | null>(null)
 const selectedCoDebtorStep = ref(1)
 const canDirectorDecide = computed(
   () => hasPermission('radicacion_director_decidir') && application.value?.status === 'Director_Review',
 )
+const canDocumentationDecide = computed(
+  () => hasPermission('radicacion_documentos_decidir') && application.value?.status === 'Documentation_Review',
+)
+/** Todos los adjuntos (deudor + codeudores) deben estar marcados revisados antes del concepto. */
+const allDocumentsMarkedReviewed = computed(() => {
+  const docs = application.value?.documents ?? []
+  if (docs.length === 0) {
+    return true
+  }
+  return docs.every((d: { is_reviewed?: boolean }) => Boolean(d.is_reviewed))
+})
 const directorDecisionOptions = [
   { value: 'approved', label: 'Aprobar y enviar a revisión de documentación' },
   { value: 'returned', label: 'Devolver al asesor para ajustes' },
+]
+const documentationDecisionOptions = [
+  { value: 'approved', label: 'Aprobar y enviar a análisis' },
+  { value: 'returned', label: 'Devolver por revisión de documentos' },
 ]
 
 function onDirectorDecisionUpdate(value: string | null) {
@@ -101,6 +120,29 @@ function onDirectorDecisionUpdate(value: string | null) {
     return
   }
   directorDecision.value = ''
+}
+
+function onDocumentationDecisionUpdate(value: string | null) {
+  if (value === 'approved' || value === 'returned') {
+    documentationDecision.value = value
+    return
+  }
+  documentationDecision.value = ''
+}
+
+function timelineEventStatusLabel(
+  status: string | null | undefined,
+  role: 'from' | 'to',
+  event: { event_key?: string | null },
+): string {
+  if (!status) {
+    return '—'
+  }
+  return getCreditApplicationStatusLabel(status, {
+    timelineEventKey: event.event_key ?? null,
+    timelineRole: role,
+    skipNextDirectorReview: application.value?.skip_next_director_review,
+  })
 }
 
 function toggleViewCoDebtor(index: number): void {
@@ -185,7 +227,14 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
     time_in_job: api?.time_in_job,
     financial_info: fi,
     references: parseReferences(api?.references),
-    documents: docs.map((d) => ({ title: d.title || d.original_name || 'Documento' })),
+    documents: docs.map((d) => ({
+      id: d.id,
+      title: d.title || d.original_name || 'Documento',
+      original_name: d.original_name,
+      is_reviewed: d.is_reviewed,
+      review_comment: d.review_comment,
+      reviewed_at: d.reviewed_at,
+    })),
   }
 }
 
@@ -329,15 +378,16 @@ async function onDeactivateConfirm(reason: string) {
   }
 }
 
-async function handleDownload(doc: { id: number; title?: string; original_name?: string }) {
+async function handleViewDocument(doc: { id: number; title?: string; original_name?: string }) {
   if (downloadingId.value) return
   downloadingId.value = doc.id
   try {
-    await downloadDocument(application.value.id, doc.id, doc.title || doc.original_name || 'documento')
+    await viewDocumentInNewTab(application.value.id, doc.id)
   } catch (e) {
-    console.error('Error descargando:', e)
+    console.error('Error abriendo documento:', e)
     const { toast } = await import('vue-sonner')
-    toast.error('No se pudo descargar el documento.')
+    const msg = e instanceof Error && e.message ? e.message : 'No se pudo abrir el documento.'
+    toast.error(msg)
   } finally {
     downloadingId.value = null
   }
@@ -380,6 +430,60 @@ async function confirmDirectorDecision() {
     toast.error(e?.data?.message ?? 'No se pudo registrar la decisión del director.')
   } finally {
     submittingDirectorDecision.value = false
+  }
+}
+
+function openDocumentationDecisionDialog() {
+  if (submittingDocumentationDecision.value) {
+    return
+  }
+  if (!allDocumentsMarkedReviewed.value) {
+    toast.error('Marca como revisados todos los documentos del deudor y codeudores antes de registrar el concepto.')
+    return
+  }
+  if (documentationDecision.value === '') {
+    toast.error('Selecciona la decisión de revisión de documentos.')
+    return
+  }
+  if (documentationConcept.value.trim().length < 5) {
+    toast.error('Escribe un concepto de revisión de documentos de al menos 5 caracteres.')
+    return
+  }
+  documentationDecisionDialogOpen.value = true
+}
+
+async function confirmDocumentationDecision() {
+  if (!application.value?.id || documentationDecision.value === '' || submittingDocumentationDecision.value) {
+    return
+  }
+  if (!allDocumentsMarkedReviewed.value) {
+    toast.error('Marca como revisados todos los documentos del deudor y codeudores antes de registrar el concepto.')
+    return
+  }
+  submittingDocumentationDecision.value = true
+  try {
+    await $csrf()
+    const documentsPayload = (application.value?.documents ?? []).map((doc: any) => ({
+      id: Number(doc.id),
+      is_reviewed: Boolean(doc.is_reviewed),
+      review_comment: String(doc.review_comment ?? '').trim(),
+    }))
+    await $api(`/credit-applications/${application.value.id}/documentation-decision`, {
+      method: 'PATCH',
+      body: {
+        decision: documentationDecision.value,
+        concept: documentationConcept.value.trim(),
+        documents: documentsPayload,
+      },
+    })
+    documentationDecisionDialogOpen.value = false
+    toast.success('Decisión de revisión de documentos registrada correctamente.')
+    await navigateTo('/radicacion')
+  } catch (e: any) {
+    console.error('Error registrando decisión de revisión de documentos:', e)
+    toast.error(e?.data?.message ?? 'No se pudo registrar la decisión de revisión de documentos.')
+  } finally {
+    submittingDocumentationDecision.value = false
   }
 }
 
@@ -544,9 +648,9 @@ watch([application, debtor, coDebtors], () => {
               <p v-if="event.description" class="mt-1 text-sm text-muted-foreground">{{ event.description }}</p>
               <p v-if="event.from_status || event.to_status" class="mt-2 text-xs text-muted-foreground">
                 Estado:
-                <span class="font-medium text-foreground">{{ event.from_status ? getCreditApplicationStatusLabel(event.from_status) : '—' }}</span>
+                <span class="font-medium text-foreground">{{ event.from_status ? timelineEventStatusLabel(event.from_status, 'from', event) : '—' }}</span>
                 →
-                <span class="font-medium text-foreground">{{ event.to_status ? getCreditApplicationStatusLabel(event.to_status) : '—' }}</span>
+                <span class="font-medium text-foreground">{{ event.to_status ? timelineEventStatusLabel(event.to_status, 'to', event) : '—' }}</span>
               </p>
               <p v-if="event.actor?.name" class="mt-1 text-xs text-muted-foreground">
                 Por: <span class="font-medium text-foreground">{{ event.actor.name }}</span>
@@ -598,6 +702,59 @@ watch([application, debtor, coDebtors], () => {
             >
               <Icon v-if="submittingDirectorDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
               Enviar decisión del director
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card v-if="canDocumentationDecide">
+        <CardHeader>
+          <CardTitle>Concepto revisión de documentos</CardTitle>
+          <CardDescription>
+            Registra el concepto final de revisión documental y define si la radicación pasa a análisis o se devuelve.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <p
+            v-if="(application?.documents ?? []).length > 0 && !allDocumentsMarkedReviewed"
+            class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
+          >
+            Marca «Revisado» en todos los documentos del deudor y de cada codeudor (pasos del formulario) antes de enviar el concepto.
+          </p>
+          <div class="space-y-1.5">
+            <Label for="documentation_decision">Decisión *</Label>
+            <Multiselect
+              id="documentation_decision"
+              :model-value="documentationDecision === '' ? null : documentationDecision"
+              :options="documentationDecisionOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="false"
+              placeholder="Seleccionar decisión"
+              class="multiselect-director"
+              @update:model-value="onDocumentationDecisionUpdate"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="documentation_concept">Concepto de revisión *</Label>
+            <textarea
+              id="documentation_concept"
+              v-model="documentationConcept"
+              rows="4"
+              class="flex min-h-[110px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              placeholder="Describe observaciones documentales, faltantes y ajustes requeridos..."
+            />
+          </div>
+          <div class="flex justify-end">
+            <Button
+              type="button"
+              :disabled="submittingDocumentationDecision || !allDocumentsMarkedReviewed"
+              @click="openDocumentationDecisionDialog"
+            >
+              <Icon v-if="submittingDocumentationDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              Enviar revisión de documentos
             </Button>
           </div>
         </CardContent>
@@ -679,17 +836,39 @@ watch([application, debtor, coDebtors], () => {
               <p class="text-sm font-semibold">Documentos adjuntos</p>
               <div class="flex flex-wrap gap-2">
                 <PermissionGate v-for="doc in getDocumentsForApplicant(debtor.id)" :key="doc.id" permission="radicacion_descargar_documentos">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    class="h-auto gap-2 py-2"
-                    :disabled="downloadingId === doc.id"
-                    @click="handleDownload(doc)"
-                  >
-                    <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
-                    {{ doc.title || doc.original_name || 'Documento' }}
-                    <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  </Button>
+                  <div class="rounded-md border p-2 space-y-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="h-auto gap-2 py-2"
+                      :disabled="downloadingId === doc.id"
+                      @click="handleViewDocument(doc)"
+                    >
+                      <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
+                      {{ doc.title || doc.original_name || 'Documento' }}
+                      <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    </Button>
+                    <p v-if="doc.review_comment" class="text-xs text-amber-700 dark:text-amber-300">
+                      Nota revisión: {{ doc.review_comment }}
+                    </p>
+                    <div v-if="canDocumentationDecide" class="flex flex-col gap-2">
+                      <div class="flex items-center gap-2">
+                        <Checkbox
+                          :id="`debtor_doc_reviewed_${doc.id}`"
+                          :model-value="!!doc.is_reviewed"
+                          @update:model-value="doc.is_reviewed = !!$event"
+                        />
+                        <Label :for="`debtor_doc_reviewed_${doc.id}`" class="text-xs font-medium">
+                          Revisado
+                        </Label>
+                      </div>
+                      <Input
+                        :model-value="doc.review_comment ?? ''"
+                        placeholder="Descripción corta de revisión"
+                        @update:model-value="doc.review_comment = String($event ?? '')"
+                      />
+                    </div>
+                  </div>
                 </PermissionGate>
               </div>
             </div>
@@ -832,6 +1011,7 @@ watch([application, debtor, coDebtors], () => {
                   :model-value="form.co_debtors[selectedCoDebtorIndex]!"
                   :show-co-debtor-concept="true"
                   :hide-financial-section="true"
+                  :hide-documents-section="true"
                   :read-only-form="true"
                   @update:model-value="() => {}"
                 />
@@ -846,17 +1026,39 @@ watch([application, debtor, coDebtors], () => {
                       :key="doc.id"
                       permission="radicacion_descargar_documentos"
                     >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        class="h-auto gap-2 py-2"
-                        :disabled="downloadingId === doc.id"
-                        @click="handleDownload(doc)"
-                      >
-                        <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
-                        {{ doc.title || doc.original_name || 'Documento' }}
-                        <Icon name="i-lucide-download" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      </Button>
+                      <div class="rounded-md border p-2 space-y-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          class="h-auto gap-2 py-2"
+                          :disabled="downloadingId === doc.id"
+                          @click="handleViewDocument(doc)"
+                        >
+                          <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
+                          {{ doc.title || doc.original_name || 'Documento' }}
+                          <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        </Button>
+                        <p v-if="doc.review_comment" class="text-xs text-amber-700 dark:text-amber-300">
+                          Nota revisión: {{ doc.review_comment }}
+                        </p>
+                        <div v-if="canDocumentationDecide" class="flex flex-col gap-2">
+                          <div class="flex items-center gap-2">
+                            <Checkbox
+                              :id="`codebtor_doc_reviewed_${doc.id}`"
+                              :model-value="!!doc.is_reviewed"
+                              @update:model-value="doc.is_reviewed = !!$event"
+                            />
+                            <Label :for="`codebtor_doc_reviewed_${doc.id}`" class="text-xs font-medium">
+                              Revisado
+                            </Label>
+                          </div>
+                          <Input
+                            :model-value="doc.review_comment ?? ''"
+                            placeholder="Descripción corta de revisión"
+                            @update:model-value="doc.review_comment = String($event ?? '')"
+                          />
+                        </div>
+                      </div>
                     </PermissionGate>
                   </div>
                 </div>
@@ -913,6 +1115,30 @@ watch([application, debtor, coDebtors], () => {
             Confirmar
           </Button>
           <AlertDialogCancel :disabled="submittingDirectorDecision">
+            Cancelar
+          </AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog v-model:open="documentationDecisionDialogOpen">
+      <AlertDialogContent class="max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar revisión de documentos</AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta acción actualizará el estado de la radicación y guardará el concepto de revisión documental.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            :disabled="submittingDocumentationDecision"
+            @click="confirmDocumentationDecision"
+          >
+            <Icon v-if="submittingDocumentationDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+            Confirmar
+          </Button>
+          <AlertDialogCancel :disabled="submittingDocumentationDecision">
             Cancelar
           </AlertDialogCancel>
         </AlertDialogFooter>

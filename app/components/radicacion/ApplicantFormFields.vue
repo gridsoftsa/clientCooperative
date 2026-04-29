@@ -16,13 +16,15 @@ const props = withDefaults(
     showOnlyFinancial?: boolean
     /** Modo solo lectura (sin edición) */
     readOnlyForm?: boolean
+    /** Oculta «Documentos adjuntos» (p. ej. vista detalle con lista de archivos fuera del formulario) */
+    hideDocumentsSection?: boolean
     /**
      * Si true, «Ingreso cultivos/negocio» no se edita a mano: lo calculan las plantillas de actividad económica.
      */
     incomeBusinessReadonly?: boolean
     onSearch?: () => void
   }>(),
-  { readOnlyForm: false, incomeBusinessReadonly: true },
+  { readOnlyForm: false, incomeBusinessReadonly: true, hideDocumentsSection: false },
 )
 
 const emit = defineEmits<{
@@ -1077,7 +1079,7 @@ function formatFileSize(bytes: number): string {
     </section>
 
     <!-- Documentos adjuntos (deudor y codeudores) -->
-    <section v-if="!showOnlyFinancial && (showSearch || showCoDebtorConcept)" class="space-y-3">
+    <section v-if="!showOnlyFinancial && (showSearch || showCoDebtorConcept) && !hideDocumentsSection" class="space-y-3">
       <h3 :class="sectionTitleClass">Documentos adjuntos</h3>
       <p class="text-xs text-muted-foreground">
         Adjunte documentos con título descriptivo. Formatos: PDF, JPG, PNG, DOC, DOCX. Máx. 10 MB cada uno.
@@ -1126,6 +1128,19 @@ function formatFileSize(bytes: number): string {
                 <Icon name="i-lucide-file-text" class="h-8 w-8 text-primary" />
                 <span class="max-w-full truncate text-center text-sm font-medium text-foreground">
                   {{ doc.original_name }}
+                </span>
+                <span
+                  v-if="doc.is_reviewed"
+                  class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                >
+                  Revisado
+                </span>
+                <span
+                  v-if="doc.review_comment"
+                  class="max-w-full truncate text-center text-xs text-amber-700 dark:text-amber-300"
+                  :title="doc.review_comment"
+                >
+                  Nota revisión: {{ doc.review_comment }}
                 </span>
                 <span class="text-xs text-muted-foreground">Archivo existente</span>
                 <span class="text-xs text-primary">Clic para reemplazar</span>

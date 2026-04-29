@@ -45,11 +45,10 @@ export function useDocumentDownload() {
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000)
   }
 
-  async function downloadDocument(
+  async function fetchApplicationDocument(
     applicationId: string | number,
     documentId: number,
-    filename?: string,
-  ): Promise<void> {
+  ): Promise<{ blob: Blob, dispositionFilename: string | null }> {
     const xsrf = await ensureCsrfCookie()
     const url = `${apiBase}/api/credit-applications/${applicationId}/documents/${documentId}/download`
 
@@ -64,19 +63,41 @@ export function useDocumentDownload() {
     })
 
     if (!res.ok) {
-      throw new Error(`Error ${res.status}: No se pudo descargar`)
+      let msg = `Error ${res.status}: No se pudo obtener el documento`
+      try {
+        const ct = res.headers.get('Content-Type') ?? ''
+        if (ct.includes('application/json')) {
+          const body = await res.json() as { message?: string }
+          if (body?.message) {
+            msg = body.message
+          }
+        }
+      } catch {
+        // mantener mensaje por defecto
+      }
+      throw new Error(msg)
+    }
+
+    const disposition = res.headers.get('Content-Disposition')
+    let dispositionFilename: string | null = null
+    if (disposition) {
+      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+      if (match) {
+        dispositionFilename = match[1]!.replace(/['"]/g, '').trim()
+      }
     }
 
     const blob = await res.blob()
-    const disposition = res.headers.get('Content-Disposition')
-    let finalFilename = filename
-    if (!finalFilename && disposition) {
-      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-      if (match) {
-        finalFilename = match[1]!.replace(/['"]/g, '').trim()
-      }
-    }
-    finalFilename = finalFilename || 'documento'
+    return { blob, dispositionFilename }
+  }
+
+  async function downloadDocument(
+    applicationId: string | number,
+    documentId: number,
+    filename?: string,
+  ): Promise<void> {
+    const { blob, dispositionFilename } = await fetchApplicationDocument(applicationId, documentId)
+    const finalFilename = filename || dispositionFilename || 'documento'
 
     const objectUrl = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -86,6 +107,18 @@ export function useDocumentDownload() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(objectUrl)
+  }
+
+  /**
+   * Abre el archivo en una pestaña nueva (vista previa). PDF e imágenes suelen mostrarse en el navegador;
+   * DOC/DOCX pueden descargarse u ofrecer abrir con otra app según el equipo.
+   */
+  async function viewDocumentInNewTab(
+    applicationId: string | number,
+    documentId: number,
+  ): Promise<void> {
+    const { blob } = await fetchApplicationDocument(applicationId, documentId)
+    openPdfBlobInNewTab(blob)
   }
 
   async function downloadApplicationPdf(applicationId: string | number, _filename?: string): Promise<void> {
@@ -186,5 +219,5 @@ export function useDocumentDownload() {
     openPdfBlobInNewTab(blob)
   }
 
-  return { downloadDocument, downloadApplicationPdf, downloadAnalisisScorePdf }
+  return { downloadDocument, viewDocumentInNewTab, downloadApplicationPdf, downloadAnalisisScorePdf }
 }

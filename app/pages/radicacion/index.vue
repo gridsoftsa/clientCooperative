@@ -18,6 +18,7 @@ const { hasAnyPermission, hasRole } = usePermissions()
 /** Editar / continuar borrador: crear o editar (nueva solo exige crear) */
 const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
 const isDirectorAgencia = computed(() => hasRole('director_agencia'))
+const isRevisionDocumentos = computed(() => hasRole('revision_documentos'))
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
@@ -55,7 +56,13 @@ function buildListQuery(): Record<string, string | number> {
     page: pagination.value.current_page,
   }
   if (isDirectorAgencia.value) {
-    q.status = 'Director_Review'
+    if (filterStatus.value !== 'all') {
+      q.status = filterStatus.value
+    }
+    return q
+  }
+  if (isRevisionDocumentos.value) {
+    q.status = filterStatus.value !== 'all' ? filterStatus.value : 'Documentation_Review'
     return q
   }
   if (filterStatus.value !== 'all') {
@@ -385,7 +392,9 @@ watch(deactivateDialogOpen, (v) => {
                 <TableCell>{{ app.term_months }} meses</TableCell>
                 <TableCell>
                   <Badge :variant="getStatusBadgeVariant(app.status) as any">
-                    {{ getStatusLabel(app.status) }}
+                    {{ getStatusLabel(app.status, {
+                      skipNextDirectorReview: app.skip_next_director_review,
+                    }) }}
                   </Badge>
                 </TableCell>
                 <TableCell class="whitespace-nowrap text-sm tabular-nums">
@@ -418,6 +427,20 @@ watch(deactivateDialogOpen, (v) => {
                       >
                         <Icon name="i-lucide-clipboard-check" class="h-4 w-4 shrink-0" aria-hidden="true" />
                         <span>Revisión director</span>
+                      </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="radicacion_documentos_decidir">
+                      <Button
+                        v-if="isRevisionDocumentos && app.status === 'Documentation_Review'"
+                        variant="outline"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
+                        title="Revisión y concepto de documentación"
+                        aria-label="Revisar documentación"
+                        @click="router.push(`/radicacion/${app.id}`)"
+                      >
+                        <Icon name="i-lucide-file-check-2" class="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>Revisión documentos</span>
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_enviar_analisis">
@@ -467,7 +490,7 @@ watch(deactivateDialogOpen, (v) => {
                     </PermissionGate>
                     <PermissionGate permission="radicacion_ver">
                       <Button
-                        v-if="!isDirectorAgencia"
+                        v-if="!isDirectorAgencia && !isRevisionDocumentos"
                         variant="outline"
                         size="sm"
                         class="gap-1.5"
