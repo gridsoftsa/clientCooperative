@@ -191,12 +191,16 @@ watch(puntajesFormularioValido, (ok) => {
 
 const { hasAnyPermission } = usePermissions()
 const puedeGuardarScore = computed(() =>
-  hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
+  hasAnyPermission(['radicacion_analisis_guardar', 'radicacion_crear', 'radicacion_editar']),
 )
 
 const guardandoScore = ref(false)
 
 async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null }): Promise<void> {
+  if (!puedeGuardarScore.value) {
+    toast.error('No tienes permiso para guardar análisis y SCORE.')
+    return
+  }
   const id = props.creditApplicationId?.trim()
   if (!id) {
     toast.error('Abre el análisis SCORE desde el listado de radicación para vincular una solicitud.')

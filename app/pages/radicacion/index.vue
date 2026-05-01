@@ -19,6 +19,7 @@ const { hasAnyPermission, hasRole } = usePermissions()
 const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
 const isDirectorAgencia = computed(() => hasRole('director_agencia'))
 const isRevisionDocumentos = computed(() => hasRole('revision_documentos'))
+const isAnalista = computed(() => hasRole('analista'))
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
@@ -63,6 +64,10 @@ function buildListQuery(): Record<string, string | number> {
   }
   if (isRevisionDocumentos.value) {
     q.status = filterStatus.value !== 'all' ? filterStatus.value : 'Documentation_Review'
+    return q
+  }
+  if (isAnalista.value) {
+    q.status = filterStatus.value !== 'all' ? filterStatus.value : 'In_Analysis'
     return q
   }
   if (filterStatus.value !== 'all') {
@@ -394,6 +399,7 @@ watch(deactivateDialogOpen, (v) => {
                   <Badge :variant="getStatusBadgeVariant(app.status) as any">
                     {{ getStatusLabel(app.status, {
                       skipNextDirectorReview: app.skip_next_director_review,
+                      resubmitToAnalystAfterReturn: app.resubmit_to_analyst_after_return,
                     }) }}
                   </Badge>
                 </TableCell>
@@ -402,7 +408,7 @@ watch(deactivateDialogOpen, (v) => {
                 </TableCell>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-1">
-                    <PermissionGate permission="radicacion_analisis_ver">
+                    <PermissionGate permission="radicacion_analisis_guardar">
                       <Button
                         variant="outline"
                         size="sm"

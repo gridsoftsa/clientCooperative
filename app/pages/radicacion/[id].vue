@@ -97,6 +97,12 @@ const canDirectorDecide = computed(
 const canDocumentationDecide = computed(
   () => hasPermission('radicacion_documentos_decidir') && application.value?.status === 'Documentation_Review',
 )
+const canAnalystDecide = computed(
+  () => hasPermission('radicacion_analisis_guardar') && application.value?.status === 'In_Analysis',
+)
+const analystAlreadyApproved = computed(
+  () => Boolean(application.value?.analyst_review_approved_at),
+)
 /** Todos los adjuntos (deudor + codeudores) deben estar marcados revisados antes del concepto. */
 const allDocumentsMarkedReviewed = computed(() => {
   const docs = application.value?.documents ?? []
@@ -114,6 +120,15 @@ const documentationDecisionOptions = [
   { value: 'returned', label: 'Devolver por revisión de documentos' },
 ]
 
+const analystDecision = ref<'approved' | 'returned' | ''>('')
+const analystConcept = ref('')
+const analystDecisionDialogOpen = ref(false)
+const submittingAnalystDecision = ref(false)
+const analystDecisionOptions = [
+  { value: 'approved', label: 'Aprobar (abre Análisis y SCORE para análisis y envío a director de crédito)' },
+  { value: 'returned', label: 'Devolver al asesor para corrección (visible también para director de agencia)' },
+]
+
 function onDirectorDecisionUpdate(value: string | null) {
   if (value === 'approved' || value === 'returned') {
     directorDecision.value = value
@@ -128,6 +143,14 @@ function onDocumentationDecisionUpdate(value: string | null) {
     return
   }
   documentationDecision.value = ''
+}
+
+function onAnalystDecisionUpdate(value: string | null) {
+  if (value === 'approved' || value === 'returned') {
+    analystDecision.value = value
+    return
+  }
+  analystDecision.value = ''
 }
 
 function timelineEventStatusLabel(
@@ -182,6 +205,18 @@ function parseReferences(val: unknown): any[] {
   return []
 }
 
+/** Normaliza fecha ISO (ej. 1995-06-13T00:00:00.000000Z) a yyyy-MM-dd para input type="date". */
+function toDateInputFormat(val: unknown): string | undefined {
+  if (val == null || val === '') return undefined
+  const str = String(val).trim()
+  if (!str) return undefined
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`
+  const d = new Date(str)
+  if (Number.isNaN(d.getTime())) return undefined
+  return d.toISOString().slice(0, 10)
+}
+
 function getActivityTemplates(app: any): ActivityTemplateData[] {
   const fi = (app?.financial_info || {}) as Record<string, unknown>
   const templates = fi.activity_templates
@@ -202,13 +237,13 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
   return {
     document_type: api?.document_type ?? 'CC',
     document_number: api?.document_number ?? '',
-    expedition_date: api?.expedition_date,
+    expedition_date: toDateInputFormat(api?.expedition_date) ?? api?.expedition_date,
     expedition_place: api?.expedition_place,
     first_name: api?.first_name ?? '',
     second_name: api?.second_name,
     first_last_name: api?.first_last_name ?? '',
     second_last_name: api?.second_last_name,
-    birth_date: api?.birth_date,
+    birth_date: toDateInputFormat(api?.birth_date) ?? api?.birth_date,
     gender: api?.gender,
     marital_status: api?.marital_status,
     dependents: api?.dependents ?? 0,
@@ -406,6 +441,54 @@ function openDirectorDecisionDialog() {
     return
   }
   directorDecisionDialogOpen.value = true
+}
+
+function openAnalystDecisionDialog() {
+  if (submittingAnalystDecision.value || analystAlreadyApproved.value) {
+    return
+  }
+  if (analystDecision.value === '') {
+    toast.error('Selecciona la decisión del analista.')
+    return
+  }
+  if (analystConcept.value.trim().length < 5) {
+    toast.error('Escribe un concepto del analista de al menos 5 caracteres.')
+    return
+  }
+  analystDecisionDialogOpen.value = true
+}
+
+async function confirmAnalystDecision() {
+  if (!application.value?.id || analystDecision.value === '' || submittingAnalystDecision.value) {
+    return
+  }
+  const wasReturned = analystDecision.value === 'returned'
+  submittingAnalystDecision.value = true
+  try {
+    await $csrf()
+    await $api(`/credit-applications/${application.value.id}/analyst-decision`, {
+      method: 'PATCH',
+      body: {
+        decision: analystDecision.value,
+        concept: analystConcept.value.trim(),
+      },
+    })
+    analystDecisionDialogOpen.value = false
+    toast.success('Decisión del analista registrada correctamente.')
+    if (wasReturned) {
+      await navigateTo('/radicacion')
+    } else {
+      await navigateTo({
+        path: '/radicacion/analisis-score',
+        query: { solicitud: String(application.value.id) },
+      })
+    }
+  } catch (e: any) {
+    console.error('Error registrando decisión del analista:', e)
+    toast.error(e?.data?.message ?? 'No se pudo registrar la decisión del analista.')
+  } finally {
+    submittingAnalystDecision.value = false
+  }
 }
 
 async function confirmDirectorDecision() {
@@ -757,6 +840,74 @@ watch([application, debtor, coDebtors], () => {
               Enviar revisión de documentos
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card v-if="canAnalystDecide">
+        <CardHeader>
+          <CardTitle>Concepto del analista</CardTitle>
+          <CardDescription>
+            Registra la aprobación o la devolución con concepto. La aprobación es obligatoria antes de enviar a director de crédito desde Análisis y SCORE.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div
+            v-if="analystAlreadyApproved"
+            class="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-950 dark:text-emerald-100 space-y-2"
+          >
+            <p class="font-medium">
+              Aprobación del analista registrada
+            </p>
+            <p v-if="application?.analyst_review_approved_concept" class="text-muted-foreground">
+              {{ application.analyst_review_approved_concept }}
+            </p>
+            <Button variant="outline" size="sm" class="mt-1" as-child>
+              <NuxtLink
+                :to="{ path: '/radicacion/analisis-score', query: { solicitud: String(application?.id ?? '') } }"
+              >
+                <Icon name="i-lucide-chart-column-increasing" class="mr-2 h-4 w-4" />
+                Ir a Análisis y SCORE para enviar a director de crédito
+              </NuxtLink>
+            </Button>
+          </div>
+          <template v-else>
+            <div class="space-y-1.5">
+              <Label for="analyst_decision">Decisión *</Label>
+              <Multiselect
+                id="analyst_decision"
+                :model-value="analystDecision === '' ? null : analystDecision"
+                :options="analystDecisionOptions"
+                value-prop="value"
+                label="label"
+                mode="single"
+                :can-clear="false"
+                :searchable="false"
+                placeholder="Seleccionar decisión"
+                class="multiselect-director"
+                @update:model-value="onAnalystDecisionUpdate"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="analyst_concept">Concepto del analista *</Label>
+              <textarea
+                id="analyst_concept"
+                v-model="analystConcept"
+                rows="4"
+                class="flex min-h-[110px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                placeholder="Describe el concepto de aprobación o los ajustes requeridos al asesor…"
+              />
+            </div>
+            <div class="flex justify-end">
+              <Button
+                type="button"
+                :disabled="submittingAnalystDecision"
+                @click="openAnalystDecisionDialog"
+              >
+                <Icon v-if="submittingAnalystDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                Registrar decisión del analista
+              </Button>
+            </div>
+          </template>
         </CardContent>
       </Card>
 
@@ -1115,6 +1266,35 @@ watch([application, debtor, coDebtors], () => {
             Confirmar
           </Button>
           <AlertDialogCancel :disabled="submittingDirectorDecision">
+            Cancelar
+          </AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog v-model:open="analystDecisionDialogOpen">
+      <AlertDialogContent class="max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar decisión del analista</AlertDialogTitle>
+          <AlertDialogDescription>
+            <template v-if="analystDecision === 'approved'">
+              Se guardará la aprobación y te llevará a Análisis y SCORE para completar el análisis y el SCORE.
+            </template>
+            <template v-else>
+              Esta acción guardará el concepto, devolverá la radicación al asesor y actualizará el estado.
+            </template>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            :disabled="submittingAnalystDecision"
+            @click="confirmAnalystDecision"
+          >
+            <Icon v-if="submittingAnalystDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+            Confirmar
+          </Button>
+          <AlertDialogCancel :disabled="submittingAnalystDecision">
             Cancelar
           </AlertDialogCancel>
         </AlertDialogFooter>

@@ -26,6 +26,18 @@ const pagination = ref({
   total: 0
 })
 
+function normalizeIsActive(value: unknown): boolean {
+  if (value === true || value === 1 || value === '1' || value === 'true') {
+    return true
+  }
+
+  if (value === false || value === 0 || value === '0' || value === 'false') {
+    return false
+  }
+
+  return true
+}
+
 async function fetchUsers() {
   loading.value = true
   try {
@@ -187,8 +199,8 @@ watch(searchQuery, () => {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge :variant="user.is_active !== false ? 'default' : 'secondary'">
-                      {{ user.is_active !== false ? 'Activo' : 'Inactivo' }}
+                    <Badge :variant="normalizeIsActive(user.is_active) ? 'default' : 'secondary'">
+                      {{ normalizeIsActive(user.is_active) ? 'Activo' : 'Inactivo' }}
                     </Badge>
                   </TableCell>
                   <TableCell>

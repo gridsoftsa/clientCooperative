@@ -164,6 +164,10 @@ const companyPrincipal = ref<Company | null>(null)
 const loadingCompany = ref(false)
 
 const loadingSolicitud = ref(false)
+/** Estado de la radicación cargada (p. ej. `In_Analysis`). */
+const solicitudStatus = ref<string | null>(null)
+/** Si el analista ya registró aprobación en la ficha de la radicación (requisito para enviar a director de crédito). */
+const analystReviewApprovedAt = ref<string | null>(null)
 /** Hay filas guardadas en servidor (`analisis_score_snapshot`) para generar PDF. */
 const tieneAnalisisScoreGuardado = ref(false)
 const descargandoScorePdf = ref(false)
@@ -359,6 +363,10 @@ async function refrescarVistaFinancieraDesdeSolicitudApi(): Promise<boolean> {
   try {
     const res = await $api<{ data?: Record<string, unknown> } & Record<string, unknown>>(`/credit-applications/${id}`)
     const data = (res?.data ?? res) as Record<string, unknown>
+    solicitudStatus.value = typeof data.status === 'string' ? data.status : null
+    analystReviewApprovedAt.value = data.analyst_review_approved_at != null && data.analyst_review_approved_at !== ''
+      ? String(data.analyst_review_approved_at)
+      : null
     aplicarVistaFinancieraDesdeSolicitud(data)
     return true
   }
@@ -587,6 +595,8 @@ function resetVistaAnalisisScoreParaSolicitud(): void {
   codeudoresDeSolicitud.value = []
   resumenDeudorFinancialInfo.value = {}
   resumenMontoSolicitado.value = 0
+  solicitudStatus.value = null
+  analystReviewApprovedAt.value = null
 }
 
 type LoadSolicitudParaAnalisisOptions = {
@@ -617,6 +627,10 @@ async function loadSolicitudParaAnalisis(
       return false
     }
     const data = (res?.data ?? res) as Record<string, unknown>
+    solicitudStatus.value = typeof data.status === 'string' ? data.status : null
+    analystReviewApprovedAt.value = data.analyst_review_approved_at != null && data.analyst_review_approved_at !== ''
+      ? String(data.analyst_review_approved_at)
+      : null
     const snap = data.analisis_score_snapshot as Record<string, unknown> | null | undefined
 
     let cabeceraDesdeSnap = false
@@ -933,6 +947,11 @@ function filasImprimirActuales(): ImprimirVariableRow[] {
     : variableRowsForEmp.value
 }
 
+/** Asesor: crear/editar; analista: radicacion_analisis_guardar. */
+const canPersistAnalisisScore = computed(() =>
+  hasAnyPermission(['radicacion_analisis_guardar', 'radicacion_crear', 'radicacion_editar']),
+)
+
 const guardandoEmergenciaBorrador = ref(false)
 
 async function guardarBorradorAnalisisEmergencia(): Promise<void> {
@@ -950,7 +969,7 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
     onValidacionCreditoFallida(valCred)
     return
   }
-  if (!hasAnyPermission(['radicacion_crear', 'radicacion_editar'])) {
+  if (!canPersistAnalisisScore.value) {
     return
   }
   guardandoEmergenciaBorrador.value = true
@@ -1011,14 +1030,14 @@ function arePuntajesCompletos(): boolean {
 const mostrarBotonGuardarEmergencia = computed(
   () =>
     currentStep.value === 2
-    && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
+    && canPersistAnalisisScore.value,
 )
 
 const mostrarBotonGuardarScore = computed(
   () =>
     currentStep.value === 3
     && vistaImprimirScore.value != null
-    && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
+    && canPersistAnalisisScore.value,
 )
 
 const mostrarBotonDescargarPdfScore = computed(
@@ -1028,11 +1047,15 @@ const mostrarBotonDescargarPdfScore = computed(
     && hasPermission('radicacion_descargar_pdf'),
 )
 
+const cierreRequiereAprobacionAnalista = computed(() => solicitudStatus.value === 'In_Analysis')
+const cierreAprobacionAnalistaOk = computed(() => analystReviewApprovedAt.value != null && analystReviewApprovedAt.value !== '')
+
 const mostrarBotonGuardarCierre = computed(
   () =>
     currentStep.value === 4
     && vistaImprimirScore.value != null
-    && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
+    && canPersistAnalisisScore.value
+    && (!cierreRequiereAprobacionAnalista.value || cierreAprobacionAnalistaOk.value),
 )
 
 async function ejecutarGuardarScore(): Promise<void> {
@@ -1275,6 +1298,21 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
 
             <div class="space-y-2">
               <Label for="concepto-analista">Concepto final del analista</Label>
+              <div
+                v-if="cierreRequiereAprobacionAnalista && !cierreAprobacionAnalistaOk && solicitudId"
+                class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100 space-y-2"
+              >
+                <p>
+                  Antes de <strong>Guardar cierre</strong> (envío a director de crédito), debe registrarse la
+                  <strong>aprobación del analista</strong> en la ficha de la radicación.
+                </p>
+                <Button variant="outline" size="sm" as-child>
+                  <NuxtLink :to="`/radicacion/${solicitudId}`" class="inline-flex items-center gap-2">
+                    <Icon name="i-lucide-file-text" class="h-4 w-4 shrink-0" />
+                    Abrir radicación
+                  </NuxtLink>
+                </Button>
+              </div>
               <Textarea
                 id="concepto-analista"
                 v-model="conceptoAnalista"
@@ -1283,7 +1321,12 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
                 placeholder="Escriba el concepto o decisión final del análisis (visible en el PDF)…"
               />
               <p class="text-xs text-muted-foreground">
-                Puede dejarlo en blanco o completarlo; el cierre vuelve a guardar análisis, SCORE y concepto.
+                <template v-if="cierreRequiereAprobacionAnalista && !cierreAprobacionAnalistaOk">
+                  Tras aprobar en la radicación, podrá usar «Guardar cierre» para enviar a revisión del director de crédito.
+                </template>
+                <template v-else>
+                  Puede dejarlo en blanco o completarlo; el cierre vuelve a guardar análisis, SCORE y concepto.
+                </template>
               </p>
             </div>
           </div>

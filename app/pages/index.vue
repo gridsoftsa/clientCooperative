@@ -515,6 +515,7 @@ onUnmounted(() => {
                             >
                               {{ getCreditApplicationStatusLabel(row.status, {
                                 skipNextDirectorReview: row.skip_next_director_review,
+                                resubmitToAnalystAfterReturn: row.resubmit_to_analyst_after_return,
                               }) }}
                             </Badge>
                           </TableCell>

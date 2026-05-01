@@ -886,7 +886,7 @@ onMounted(() => {
 
 <template>
   <div class="w-full max-w-6xl mx-auto flex flex-col gap-4 px-0">
-    <div class="flex items-center justify-between">
+    <div class="flex flex-wrap items-center justify-between gap-2">
       <div>
         <h2 class="text-2xl font-bold tracking-tight">
           Editar Radicación
@@ -895,10 +895,22 @@ onMounted(() => {
           Radicación - Editable
         </p>
       </div>
-      <Button variant="outline" @click="router.push('/radicacion')">
-        <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
-        Volver
-      </Button>
+      <div class="flex flex-wrap items-center gap-2">
+        <PermissionGate permission="radicacion_analisis_ver">
+          <Button variant="outline" as-child class="shrink-0">
+            <NuxtLink
+              :to="{ path: '/radicacion/analisis-score', query: { solicitud: id } }"
+            >
+              <Icon name="i-lucide-chart-column-increasing" class="mr-2 h-4 w-4" />
+              Análisis y SCORE
+            </NuxtLink>
+          </Button>
+        </PermissionGate>
+        <Button variant="outline" @click="router.push('/radicacion')">
+          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
+          Volver
+        </Button>
+      </div>
     </div>
 
     <div v-if="loading" class="flex justify-center py-12">

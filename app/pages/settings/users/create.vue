@@ -49,6 +49,17 @@ const sucursalSelectOptions = computed(() =>
 
 const showAllowedSucursales = computed(() => selectedRole.value === 'admin')
 
+const accountStatus = ref<'active' | 'inactive'>('active')
+
+const accountStatusOptions = [
+  { value: 'active' as const, label: 'Activo' },
+  { value: 'inactive' as const, label: 'Inactivo' },
+]
+
+watch(accountStatus, (next) => {
+  form.value.is_active = next === 'active'
+})
+
 const fetchSucursales = async () => {
   try {
     const res = await $api<{ data: typeof sucursales.value }>('/sucursales', { query: { per_page: 1000 } })
@@ -95,7 +106,7 @@ const handleSubmit = async () => {
         name: form.value.name,
         full_name: form.value.full_name?.trim() || undefined,
         phone: form.value.phone?.trim() || undefined,
-        is_active: form.value.is_active,
+        is_active: accountStatus.value === 'active',
         email: form.value.email,
         password: form.value.password,
         password_confirmation: form.value.password_confirmation,
@@ -215,14 +226,27 @@ watch(selectedRole, (role) => {
               </div>
             </div>
 
-            <div class="flex items-center justify-between gap-4 rounded-lg border p-4">
+            <div class="space-y-3 md:col-span-2 rounded-lg border p-4">
               <div class="space-y-1.5">
-                <Label for="is_active" class="text-base leading-snug">Usuario activo</Label>
+                <Label for="account_status_create" class="text-base leading-snug">Estado de la cuenta</Label>
                 <p class="text-sm text-muted-foreground leading-relaxed">
                   Los usuarios inactivos no pueden iniciar sesión.
                 </p>
               </div>
-              <Switch id="is_active" v-model:checked="form.is_active" class="shrink-0" />
+              <Multiselect
+                id="account_status_create"
+                v-model="accountStatus"
+                mode="single"
+                :object="false"
+                :options="accountStatusOptions"
+                value-prop="value"
+                label="label"
+                :searchable="false"
+                :can-clear="false"
+                placeholder="Seleccione estado"
+                no-options-text="Sin opciones"
+                class="multiselect-roles max-w-md"
+              />
             </div>
 
             <div class="grid grid-cols-1 gap-6 md:grid-cols-2">

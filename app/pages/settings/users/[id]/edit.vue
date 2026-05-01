@@ -3,8 +3,7 @@ import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import type { User } from '~/types/user'
 import { normalizeRoleNames } from '~/utils/userRoles'
-import type { Permission, Role } from '~/types/role'
-import { PERMISSION_CATEGORY_LABELS, formatPermissionDisplayName } from '~/constants/permission-labels'
+import type { Role } from '~/types/role'
 
 definePageMeta({
   layout: 'default',
@@ -30,22 +29,10 @@ const form = ref({
   sucursal_id: null as number | null,
   allowed_sucursal_ids: [] as number[],
   roles: [] as string[],
-  permissions: [] as string[],
 })
 
 const user = ref<User | null>(null)
 const roles = ref<Role[]>([])
-const permissions = ref<Permission[]>([])
-const groupedPermissions = computed(() => {
-  const groups: Record<string, Permission[]> = {}
-  for (const p of permissions.value) {
-    const category = p.name.split('_')[0] ?? 'otros'
-    if (!groups[category]) groups[category] = []
-    groups[category].push(p)
-  }
-  return groups
-})
-const getCategoryLabel = (key: string) => PERMISSION_CATEGORY_LABELS[key] ?? key
 
 const roleSelectOptions = computed(() =>
   roles.value.map((r) => ({
@@ -63,18 +50,6 @@ function rolesMultipleLabel(values: unknown): string {
   return names.map(name => opts.find(o => o.value === name)?.label ?? name).join(', ')
 }
 
-const openCategories = ref<Record<string, boolean>>({})
-
-const collapseAll = () => {
-  openCategories.value = Object.fromEntries(
-    Object.keys(groupedPermissions.value).map((c) => [c, false]),
-  )
-}
-
-const setCategoryOpen = (category: string, open: boolean) => {
-  openCategories.value = { ...openCategories.value, [category]: open }
-}
-
 const sucursales = ref<Array<{ id: number; name: string; code: string | null; is_main?: boolean }>>([])
 const loading = ref(false)
 const saving = ref(false)
@@ -84,32 +59,60 @@ const showAllowedSucursales = computed(() => form.value.roles.includes('admin') 
 
 const isOwnUser = computed(() => authUser.value?.id === parseInt(userId))
 
-function normalizePermissionNames(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return []
-  return raw
-    .map((p) => (typeof p === 'string' ? p : (p as { name?: string })?.name))
-    .filter((name): name is string => typeof name === 'string' && name.length > 0)
+/** Estado de cuenta (multiselect single), alineado con `is_active` del API */
+const accountStatus = ref<'active' | 'inactive'>('active')
+
+/** Evita toast al hidratar desde API (p. ej. cuenta propia inactiva en BD) */
+const isHydratingAccountStatus = ref(false)
+
+const accountStatusOptions = [
+  { value: 'active' as const, label: 'Activo' },
+  { value: 'inactive' as const, label: 'Inactivo' },
+]
+
+function normalizeIsActive(value: unknown): boolean {
+  if (value === true || value === 1 || value === '1' || value === 'true') {
+    return true
+  }
+
+  if (value === false || value === 0 || value === '0' || value === 'false') {
+    return false
+  }
+
+  return true
 }
+
+watch(accountStatus, (next) => {
+  if (isOwnUser.value && next === 'inactive' && !isHydratingAccountStatus.value) {
+    toast.error('No puedes desactivar tu propia cuenta desde aquí.')
+    accountStatus.value = 'active'
+    return
+  }
+  form.value.is_active = next === 'active'
+})
 
 const fetchUser = async () => {
   loading.value = true
   try {
     const response = await $api<{ data: User }>(`/users/${userId}`)
     user.value = response.data
-    const permissionNames = normalizePermissionNames(response.data.permissions)
+    const active = normalizeIsActive(response.data.is_active)
     form.value = {
       name: response.data.name,
       full_name: response.data.full_name ?? '',
       phone: response.data.phone ?? '',
-      is_active: response.data.is_active !== false,
+      is_active: active,
       email: response.data.email,
       password: '',
       password_confirmation: '',
       sucursal_id: response.data.sucursal_id ?? null,
       allowed_sucursal_ids: response.data.allowed_sucursal_ids ?? [],
       roles: normalizeRoleNames(response.data.roles),
-      permissions: permissionNames,
     }
+    isHydratingAccountStatus.value = true
+    accountStatus.value = active ? 'active' : 'inactive'
+    await nextTick()
+    isHydratingAccountStatus.value = false
   } catch (error) {
     console.error('Error fetching user:', error)
     toast.error('Error al cargar el usuario')
@@ -135,23 +138,6 @@ const fetchRoles = async () => {
   } catch (error) {
     console.error('Error al cargar roles:', error)
     toast.error('Error al cargar roles')
-  }
-}
-
-const fetchPermissions = async () => {
-  try {
-    const res = await $api<{ data: Permission[] }>('/roles/permissions')
-    permissions.value = res.data
-  } catch {
-    permissions.value = []
-  }
-}
-
-const togglePermission = (name: string, checked: boolean) => {
-  if (checked) {
-    if (!form.value.permissions.includes(name)) form.value.permissions.push(name)
-  } else {
-    form.value.permissions = form.value.permissions.filter(p => p !== name)
   }
 }
 
@@ -184,12 +170,11 @@ const handleSubmit = async () => {
       name: form.value.name,
       full_name: form.value.full_name?.trim() || undefined,
       phone: form.value.phone?.trim() || undefined,
-      is_active: form.value.is_active,
+      is_active: accountStatus.value === 'active',
       email: form.value.email,
       sucursal_id: form.value.sucursal_id || undefined,
       allowed_sucursal_ids: form.value.allowed_sucursal_ids,
       roles: form.value.roles,
-      permissions: form.value.permissions,
     }
 
     if (changePassword.value && form.value.password) {
@@ -216,7 +201,7 @@ const handleSubmit = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([fetchRoles(), fetchSucursales(), fetchPermissions()])
+  await Promise.all([fetchRoles(), fetchSucursales()])
   await fetchUser()
 })
 </script>
@@ -316,23 +301,31 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div class="flex items-center justify-between gap-4 rounded-lg border p-4">
+            <div class="space-y-3 md:col-span-2 rounded-lg border p-4">
               <div class="space-y-1.5">
-                <Label for="is_active_edit" class="text-base leading-snug">Usuario activo</Label>
+                <Label for="account_status_edit" class="text-base leading-snug">Estado de la cuenta</Label>
                 <p class="text-sm text-muted-foreground leading-relaxed">
                   Los usuarios inactivos no pueden iniciar sesión.
                 </p>
               </div>
-              <Switch
-                id="is_active_edit"
-                v-model:checked="form.is_active"
-                :disabled="isOwnUser"
-                class="shrink-0"
+              <Multiselect
+                id="account_status_edit"
+                v-model="accountStatus"
+                mode="single"
+                :object="false"
+                :options="accountStatusOptions"
+                value-prop="value"
+                label="label"
+                :searchable="false"
+                :can-clear="false"
+                placeholder="Seleccione estado"
+                no-options-text="Sin opciones"
+                class="multiselect-roles max-w-md"
               />
+              <p v-if="isOwnUser" class="text-xs text-muted-foreground">
+                No puedes dejar tu propia cuenta como inactiva.
+              </p>
             </div>
-            <p v-if="isOwnUser" class="text-xs text-muted-foreground">
-              No puedes desactivar tu propia cuenta desde aquí.
-            </p>
 
             <div class="space-y-5">
               <div class="flex items-center gap-3">
@@ -426,54 +419,6 @@ onMounted(async () => {
                 No hay roles disponibles
               </p>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader class="flex flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle>Permisos directos</CardTitle>
-              <CardDescription>
-                Permisos adicionales asignados directamente al usuario (además de los de sus roles)
-              </CardDescription>
-            </div>
-            <Button type="button" variant="outline" size="sm" @click="collapseAll">
-              <Icon name="i-lucide-chevrons-up-down" class="mr-2 h-4 w-4" />
-              Contraer todo
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div class="space-y-2">
-              <Collapsible
-                v-for="(categoryPermissions, category) in groupedPermissions"
-                :key="category"
-                :open="openCategories[category] ?? true"
-                class="border rounded-lg"
-                @update:open="(v) => setCategoryOpen(category, v)"
-              >
-                <div class="flex items-center justify-between px-4 py-2 bg-muted/50 rounded-t-lg">
-                  <CollapsibleTrigger as-child>
-                    <button type="button" class="flex items-center gap-2 w-full text-left font-semibold hover:opacity-80">
-                      <Icon name="i-lucide-chevron-down" class="h-4 w-4 transition-transform duration-200 data-[state=open]:rotate-180" />
-                      {{ getCategoryLabel(category) }}
-                    </button>
-                  </CollapsibleTrigger>
-                </div>
-                <CollapsibleContent>
-                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-4 border-t">
-                    <div v-for="p in categoryPermissions" :key="p.id" class="flex items-center space-x-2">
-                      <Checkbox
-                        :id="`perm-${p.id}`"
-                        :model-value="form.permissions.includes(p.name)"
-                        @update:model-value="(v: boolean | 'indeterminate') => togglePermission(p.name, v === true)"
-                      />
-                      <Label :for="`perm-${p.id}`" class="font-normal cursor-pointer text-sm">{{ formatPermissionDisplayName(p.name) }}</Label>
-                    </div>
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            </div>
-            <p v-if="permissions.length === 0" class="text-center py-4 text-muted-foreground text-sm">No hay permisos disponibles</p>
           </CardContent>
         </Card>
 

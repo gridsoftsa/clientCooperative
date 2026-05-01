@@ -8,6 +8,7 @@ export const creditApplicationStatusFilterOptions = [
   { value: 'Submitted', label: 'Enviada' },
   { value: 'In_Analysis', label: 'En análisis' },
   { value: 'Director_Review', label: 'Revisión director de agencia' },
+  { value: 'Credit_Director_Review', label: 'Revisión director de crédito' },
   { value: 'Documentation_Review', label: 'Revisión de documentación' },
   /** Un solo estado en API; el matiz director vs documentación sale del backend (`skip_next_director_review`) al mostrar filas. */
   { value: 'Returned', label: 'Devuelta (ajustes pendientes)' },
@@ -20,6 +21,7 @@ const STATUS_LABELS: Record<string, string> = {
   Submitted: 'Enviada',
   In_Analysis: 'En análisis',
   Director_Review: 'Revisión director de agencia',
+  Credit_Director_Review: 'Revisión director de crédito',
   Documentation_Review: 'Revisión de documentación',
   Returned: 'Devuelta',
   Approved: 'Aprobada',
@@ -29,6 +31,8 @@ const STATUS_LABELS: Record<string, string> = {
 export type CreditApplicationStatusLabelOptions = {
   /** Estado actual: viene del API cuando la solicitud está en `Returned` tras devolución documental. */
   skipNextDirectorReview?: boolean
+  /** `true` cuando el analista devolvió la radicación y el asesor debe corregir y reenviar al analista. */
+  resubmitToAnalystAfterReturn?: boolean
   /** `event_key` de la fila de trazabilidad para acertar el matiz de `Returned`. */
   timelineEventKey?: string | null
   /** Si el estado etiquetado es el origen o el destino de esa fila. */
@@ -46,6 +50,9 @@ function returnedLabelFromTimeline(
     }
     if (ek === 'director_returned') {
       return 'Devuelta por director de agencia'
+    }
+    if (ek === 'analyst_returned_review') {
+      return 'Devuelta por analista'
     }
     return null
   }
@@ -66,6 +73,7 @@ const BADGE_VARIANTS: Record<string, string> = {
   Submitted: 'default',
   In_Analysis: 'outline',
   Director_Review: 'default',
+  Credit_Director_Review: 'default',
   Documentation_Review: 'secondary',
   Returned: 'destructive',
   Approved: 'default',
@@ -78,6 +86,10 @@ export function getCreditApplicationStatusLabel(
 ): string {
   if (status !== 'Returned') {
     return STATUS_LABELS[status] ?? status
+  }
+
+  if (options?.resubmitToAnalystAfterReturn === true) {
+    return 'Devuelta por analista (pendiente asesor)'
   }
 
   if (options?.timelineEventKey != null && options.timelineRole != null) {
@@ -108,6 +120,7 @@ export const creditApplicationStatusOrder = [
   'Draft',
   'Submitted',
   'Director_Review',
+  'Credit_Director_Review',
   'Documentation_Review',
   'Returned',
   'In_Analysis',
