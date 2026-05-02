@@ -64,7 +64,7 @@ definePageMeta({
 
 const route = useRoute()
 const router = useRouter()
-const { hasPermission, hasAnyPermission } = usePermissions()
+const { hasPermission } = usePermissions()
 const { $api } = useNuxtApp()
 const { downloadAnalisisScorePdf } = useDocumentDownload()
 const { user, fetchUser } = useAuth()
@@ -952,10 +952,21 @@ const solicitudEsSoloLecturaPorEstado = computed(() =>
   isCreditApplicationTerminalImmutable(solicitudStatus.value),
 )
 
-/** Asesor: crear/editar; analista: radicacion_analisis_guardar. No persistir si la solicitud está cerrada. */
+/** API solo permite guardar en borrador o en análisis; tras envío a director de crédito no debe intentarse persistir desde aquí. */
+const solicitudPermitePersistirAnalisisScore = computed(() => {
+  const s = solicitudStatus.value
+  if (s == null) {
+    return true
+  }
+
+  return s === 'Draft' || s === 'In_Analysis'
+})
+
+/** Solo analista (y roles con radicacion_analisis_guardar). No persistir si la solicitud está cerrada. */
 const canPersistAnalisisScore = computed(() =>
   !solicitudEsSoloLecturaPorEstado.value
-  && hasAnyPermission(['radicacion_analisis_guardar', 'radicacion_crear', 'radicacion_editar']),
+  && solicitudPermitePersistirAnalisisScore.value
+  && hasPermission('radicacion_analisis_guardar'),
 )
 
 const guardandoEmergenciaBorrador = ref(false)
@@ -1021,7 +1032,7 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
 }
 
 type ScorePanelExpose = {
-  guardarAnalisisScore: (options?: { conceptoAnalista?: string | null }) => Promise<void>
+  guardarAnalisisScore: (options?: { conceptoAnalista?: string | null }) => Promise<{ sentToCreditDirectorReview: boolean }>
   guardandoScore: boolean
   puedeGuardarScore: boolean
   arePuntajesCompletos: () => boolean
@@ -1069,7 +1080,10 @@ async function ejecutarGuardarScore(): Promise<void> {
 }
 
 async function ejecutarGuardarCierreAnalista(): Promise<void> {
-  await scorePanelRef.value?.guardarAnalisisScore({ conceptoAnalista: conceptoAnalista.value })
+  const r = await scorePanelRef.value?.guardarAnalisisScore({ conceptoAnalista: conceptoAnalista.value })
+  if (r?.sentToCreditDirectorReview) {
+    await router.push('/radicacion')
+  }
 }
 
 async function ejecutarDescargaScorePdf(): Promise<void> {
@@ -1131,6 +1145,12 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
         class="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-50"
       >
         Esta solicitud está en <strong>desembolso</strong> o <strong>rechazada</strong>: el análisis es solo consulta; no se puede guardar ni modificar.
+      </p>
+      <p
+        v-else-if="solicitudStatus === 'Credit_Director_Review' && !loadingSolicitud"
+        class="rounded-md border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-sm text-sky-950 dark:text-sky-50"
+      >
+        Esta radicación ya fue enviada a <strong>revisión del director de crédito</strong>. Por eso no aparece en su listado predeterminado (solo muestra «En análisis»). Use el filtro de estado «Revisión director de crédito» si necesita abrirla de nuevo.
       </p>
     </div>
     <div

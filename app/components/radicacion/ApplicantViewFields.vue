@@ -22,6 +22,12 @@ function cityName(a: any): string {
 
 async function handleViewDocument(doc: { id: number; title?: string; original_name?: string }) {
   if (downloadingId.value) return
+  const docId = Number(doc?.id)
+  if (!Number.isFinite(docId) || docId < 1) {
+    const { toast } = await import('vue-sonner')
+    toast.error('Documento no válido. Recargue la ficha e intente de nuevo.')
+    return
+  }
   downloadingId.value = doc.id
   try {
     await viewDocumentInNewTab(props.applicationId, doc.id)

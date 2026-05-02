@@ -3,11 +3,16 @@
  * Resumen solo lectura: solvencia, endeudamiento, activos, pasivos, bien raíz.
  * Misma lógica que el detalle de radicación (`/radicacion/[id]`) a partir de `financial_info` y monto solicitado.
  */
-const props = defineProps<{
-  /** Objeto o JSON en string; se normaliza como en el detalle de radicación. */
-  financialInfo?: unknown
-  amountRequested: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** Objeto o JSON en string; se normaliza como en el detalle de radicación. */
+    financialInfo?: unknown
+    amountRequested: number
+    /** Fragmento del título tras «Resumen financiero » (ej. «del deudor», «del codeudor»). */
+    summaryScopeLabel?: string
+  }>(),
+  { summaryScopeLabel: 'del deudor' },
+)
 
 const { formatPesosConSimbolo } = usePesosFormat()
 
@@ -80,7 +85,7 @@ const montoActivos = computed(() => {
 <template>
   <div class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
     <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-      Resumen financiero del deudor
+      Resumen financiero {{ summaryScopeLabel }}
     </p>
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <div class="space-y-1">

@@ -30,6 +30,11 @@ const loadingSearch = ref(false)
 const submitDirectorDialogOpen = ref(false)
 /** Tras devolución desde revisión documental: el backend envía directo a esa revisión sin pasar por el director. */
 const skipNextDirectorReview = computed(() => Boolean(application.value?.skip_next_director_review))
+/** Devolución por revisión de documentos: solo adjuntos; el resto queda bloqueado en UI y el API ignora otros cambios. */
+const documentsOnlyEditMode = computed(
+  () => Boolean(application.value?.skip_next_director_review)
+    && ['Returned', 'Draft'].includes(String(application.value?.status ?? '')),
+)
 const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
 const currentStep = ref(1)
 
@@ -441,6 +446,9 @@ const emptyCodeudor = (): ApplicantForm => ({
 })
 
 function startAddingCodeudor() {
+  if (documentsOnlyEditMode.value) {
+    return
+  }
   addingCodeudor.value = true
   codeudorEditIndex.value = null
   codeudorStep.value = 1
@@ -472,6 +480,10 @@ function searchApplicantForWizard() {
 }
 
 function finalizeCodeudorWizard() {
+  if (documentsOnlyEditMode.value && codeudorEditIndex.value === null) {
+    toast.error('No puede agregar codeudores en una devolución solo por documentos.')
+    return
+  }
   const app = codeudorWizardApplicant.value
   if (!app.document_number?.trim()
     || !app.first_name?.trim()
@@ -508,6 +520,9 @@ function prevCodeudorStep() {
 }
 
 function removeCoDebtor(index: number) {
+  if (documentsOnlyEditMode.value) {
+    return
+  }
   if (addingCodeudor.value && codeudorEditIndex.value === index) {
     cancelAddingCodeudor()
   } else if (addingCodeudor.value && codeudorEditIndex.value != null && codeudorEditIndex.value > index) {
@@ -766,7 +781,7 @@ async function saveChanges() {
     toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
     return
   }
-  if (!canProceedStep2()) {
+  if (!documentsOnlyEditMode.value && !canProceedStep2()) {
     toast.error('Completa monto, plazo y agencia')
     return
   }
@@ -774,15 +789,26 @@ async function saveChanges() {
     toast.error('Todos los documentos adjuntos deben tener un título')
     return
   }
-  const errTemplates = validateActivityTemplatesBeforeSave()
-  if (errTemplates) {
-    toast.error(errTemplates)
-    return
+  if (!documentsOnlyEditMode.value) {
+    const errTemplates = validateActivityTemplatesBeforeSave()
+    if (errTemplates) {
+      toast.error(errTemplates)
+      return
+    }
   }
 
   saving.value = true
   try {
     await $csrf()
+    if (documentsOnlyEditMode.value) {
+      if (!application.value?.id) {
+        return
+      }
+      await uploadAllDocuments(application.value.id, application.value)
+      toast.success('Documentos guardados correctamente')
+      router.push('/radicacion')
+      return
+    }
     const { data: updated } = await $api<{ data: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> } }>(
       `/credit-applications/${id.value}`,
       { method: 'PUT', body: payloadWithoutDocuments('Draft') },
@@ -813,7 +839,7 @@ async function submitToDirectorReview() {
     toast.error('Completa los datos obligatorios del deudor')
     return
   }
-  if (!canProceedStep2()) {
+  if (!documentsOnlyEditMode.value && !canProceedStep2()) {
     toast.error('Completa monto, plazo y agencia')
     return
   }
@@ -821,21 +847,32 @@ async function submitToDirectorReview() {
     toast.error('Todos los documentos adjuntos deben tener un título')
     return
   }
-  const errTemplates = validateActivityTemplatesBeforeSave()
-  if (errTemplates) {
-    toast.error(errTemplates)
-    return
+  if (!documentsOnlyEditMode.value) {
+    const errTemplates = validateActivityTemplatesBeforeSave()
+    if (errTemplates) {
+      toast.error(errTemplates)
+      return
+    }
   }
 
   saving.value = true
   try {
     await $csrf()
-    const { data: updated } = await $api<{ data: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> } }>(
-      `/credit-applications/${id.value}`,
-      { method: 'PUT', body: payloadWithoutDocuments('Draft') },
-    )
-    await uploadAllDocuments(updated.id, updated)
-    const submitRes = await $api<{ message?: string }>(`/credit-applications/${updated.id}/submit-to-director-review`, { method: 'PATCH' })
+    let applicationIdForSubmit = Number(application.value?.id ?? 0)
+    if (!applicationIdForSubmit) {
+      return
+    }
+    if (documentsOnlyEditMode.value) {
+      await uploadAllDocuments(applicationIdForSubmit, application.value!)
+    } else {
+      const { data: updated } = await $api<{ data: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> } }>(
+        `/credit-applications/${id.value}`,
+        { method: 'PUT', body: payloadWithoutDocuments('Draft') },
+      )
+      await uploadAllDocuments(updated.id, updated)
+      applicationIdForSubmit = updated.id
+    }
+    const submitRes = await $api<{ message?: string }>(`/credit-applications/${applicationIdForSubmit}/submit-to-director-review`, { method: 'PATCH' })
     toast.success(submitRes?.message ?? 'Solicitud enviada al director de agencia.')
     await navigateTo('/radicacion')
   } catch (e: any) {
@@ -971,6 +1008,19 @@ onMounted(() => {
         </span>
       </div>
 
+      <div
+        v-if="documentsOnlyEditMode"
+        class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-950 dark:text-amber-50"
+        role="status"
+      >
+        <p class="font-medium">
+          Devolución por revisión de documentos: solo puede cambiar documentos adjuntos
+        </p>
+        <p class="mt-1 text-muted-foreground">
+          Los datos del formulario y el monto no se pueden modificar hasta completar esta revisión. Suba o reemplace los archivos requeridos y use «Enviar a revisión de documentación».
+        </p>
+      </div>
+
       <div class="rounded-xl border bg-card p-4">
         <div class="space-y-1.5 max-w-2xl">
           <Label for="numero_radicado_externo" class="text-sm font-semibold">
@@ -983,6 +1033,7 @@ onMounted(() => {
             maxlength="100"
             placeholder="Ej: RAD-EXT-2025-001234 (se asigna al pasar a análisis)"
             class="max-w-2xl font-mono"
+            :readonly="documentsOnlyEditMode"
           />
         </div>
       </div>
@@ -1043,6 +1094,7 @@ onMounted(() => {
                 inputmode="decimal"
                 placeholder="0"
                 class="font-semibold"
+                :readonly="documentsOnlyEditMode"
                 @keydown="onKeydownPesosOnly"
                 @update:model-value="setSolvencyField('liabilities', parsePesosInput(String($event)))"
               />
@@ -1140,6 +1192,7 @@ onMounted(() => {
               :loading-search="loadingSearch"
               :hide-financial-section="true"
               :read-only-form="false"
+              :documents-editable-only="documentsOnlyEditMode"
               @search="searchApplicant"
             />
           </div>
@@ -1150,6 +1203,7 @@ onMounted(() => {
           >
             <CreditsFinancialActivityFormList
               :model-value="getActivityTemplates()"
+              :read-only-form="documentsOnlyEditMode"
               @update:model-value="setActivityTemplates"
             />
           </div>
@@ -1161,7 +1215,7 @@ onMounted(() => {
             <ApplicantFormFields
               v-model="form.debtor"
               :show-only-financial="true"
-              :read-only-form="false"
+              :read-only-form="documentsOnlyEditMode"
             />
           </div>
 
@@ -1175,6 +1229,7 @@ onMounted(() => {
                   type="text"
                   inputmode="decimal"
                   placeholder="Ej: 5.000.000"
+                  :readonly="documentsOnlyEditMode"
                   @keydown="onKeydownPesosOnly"
                   @update:model-value="(v) => (form.amount_requested = parsePesosInput(String(v)) ?? 0)"
                 />
@@ -1188,12 +1243,13 @@ onMounted(() => {
                   min="1"
                   placeholder="Ej: 12"
                   inputmode="numeric"
+                  :readonly="documentsOnlyEditMode"
                   @keydown="onKeydownNumeric($event, false)"
                 />
               </div>
               <div class="space-y-1.5">
                 <Label for="agency">Sucursal *</Label>
-                <Select v-model="form.agency_id">
+                <Select v-model="form.agency_id" :disabled="documentsOnlyEditMode">
                   <SelectTrigger id="agency">
                     <SelectValue placeholder="Seleccionar agencia" />
                   </SelectTrigger>
@@ -1214,6 +1270,7 @@ onMounted(() => {
                   id="destination"
                   v-model="form.destination"
                   placeholder="Ej: Capital de trabajo, vivienda..."
+                  :readonly="documentsOnlyEditMode"
                 />
               </div>
               <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
@@ -1224,6 +1281,7 @@ onMounted(() => {
                   class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   placeholder="Describa en detalle el uso que se le dará al crédito"
                   rows="4"
+                  :readonly="documentsOnlyEditMode"
                 />
               </div>
             </div>
@@ -1238,6 +1296,7 @@ onMounted(() => {
               </div>
               <CreditsFinancialActivityFormList
                 v-model="form.destination_activity_templates"
+                :read-only-form="documentsOnlyEditMode"
                 list-hint="Añade plantillas que ilustren cómo se invertirá o destinará el crédito. No se sincronizan con el paso 2 ni el 3."
               />
             </div>
@@ -1251,7 +1310,13 @@ onMounted(() => {
               <p class="text-sm text-muted-foreground">
                 Agrega codeudores si el crédito lo requiere
               </p>
-              <Button type="button" variant="outline" size="sm" @click="startAddingCodeudor">
+              <Button
+                v-if="!documentsOnlyEditMode"
+                type="button"
+                variant="outline"
+                size="sm"
+                @click="startAddingCodeudor"
+              >
                 <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
                 Agregar Codeudor
               </Button>
@@ -1268,6 +1333,7 @@ onMounted(() => {
                 class="flex w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2.5 sm:gap-3"
               >
                 <Button
+                  v-if="!documentsOnlyEditMode"
                   type="button"
                   variant="destructive"
                   size="sm"
@@ -1345,12 +1411,14 @@ onMounted(() => {
                 :show-co-debtor-concept="true"
                 :hide-financial-section="true"
                 :read-only-form="false"
+                :documents-editable-only="documentsOnlyEditMode"
                 @search="searchApplicantForWizard"
               />
             </div>
             <div v-else-if="codeudorStep === 2" class="space-y-4">
               <CreditsFinancialActivityFormList
                 :model-value="getActivityTemplatesFor(codeudorWizardApplicant)"
+                :read-only-form="documentsOnlyEditMode"
                 @update:model-value="(v) => setActivityTemplatesFor(codeudorWizardApplicant, v)"
               />
             </div>
@@ -1358,7 +1426,7 @@ onMounted(() => {
               <ApplicantFormFields
                 v-model="codeudorWizardApplicant"
                 :show-only-financial="true"
-                :read-only-form="false"
+                :read-only-form="documentsOnlyEditMode"
               />
             </div>
 

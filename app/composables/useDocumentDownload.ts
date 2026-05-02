@@ -49,8 +49,12 @@ export function useDocumentDownload() {
     applicationId: string | number,
     documentId: number,
   ): Promise<{ blob: Blob, dispositionFilename: string | null }> {
+    const docId = Number(documentId)
+    if (!Number.isFinite(docId) || docId < 1) {
+      throw new Error('Identificador de documento no válido.')
+    }
     const xsrf = await ensureCsrfCookie()
-    const url = `${apiBase}/api/credit-applications/${applicationId}/documents/${documentId}/download`
+    const url = `${apiBase}/api/credit-applications/${applicationId}/documents/${docId}/download`
 
     const res = await fetch(url, {
       method: 'GET',

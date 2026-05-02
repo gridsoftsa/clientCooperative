@@ -103,6 +103,19 @@ const canAnalystDecide = computed(
 const analystAlreadyApproved = computed(
   () => Boolean(application.value?.analyst_review_approved_at),
 )
+/** Hay aprobación previa y la decisión sigue en «aprobar»: solo se actualiza el concepto (sin cambiar estado). */
+const analystConfirmIsConceptOnly = computed(
+  () => Boolean(application.value?.analyst_review_approved_at) && analystDecision.value === 'approved',
+)
+const analystDecisionDialogTitle = computed(() => {
+  if (analystConfirmIsConceptOnly.value) {
+    return 'Confirmar actualización del concepto'
+  }
+  if (analystDecision.value === 'returned') {
+    return 'Confirmar devolución del analista'
+  }
+  return 'Confirmar decisión del analista'
+})
 /** Todos los adjuntos (deudor + codeudores) deben estar marcados revisados antes del concepto. */
 const allDocumentsMarkedReviewed = computed(() => {
   const docs = application.value?.documents ?? []
@@ -467,6 +480,11 @@ async function onDeactivateConfirm(reason: string) {
 
 async function handleViewDocument(doc: { id: number; title?: string; original_name?: string }) {
   if (downloadingId.value) return
+  const docId = Number(doc?.id)
+  if (!Number.isFinite(docId) || docId < 1) {
+    toast.error('Documento no válido. Recargue la ficha e intente de nuevo.')
+    return
+  }
   downloadingId.value = doc.id
   try {
     await viewDocumentInNewTab(application.value.id, doc.id)
@@ -496,7 +514,7 @@ function openDirectorDecisionDialog() {
 }
 
 function openAnalystDecisionDialog() {
-  if (submittingAnalystDecision.value || analystAlreadyApproved.value) {
+  if (submittingAnalystDecision.value) {
     return
   }
   if (analystDecision.value === '') {
@@ -511,22 +529,40 @@ function openAnalystDecisionDialog() {
 }
 
 async function confirmAnalystDecision() {
-  if (!application.value?.id || analystDecision.value === '' || submittingAnalystDecision.value) {
+  const decision = analystDecision.value
+  const updatingConceptOnly = analystConfirmIsConceptOnly.value
+  if (!application.value?.id || decision === '' || submittingAnalystDecision.value) {
     return
   }
-  const wasReturned = analystDecision.value === 'returned'
+  const wasReturned = decision === 'returned'
   submittingAnalystDecision.value = true
   try {
     await $csrf()
     await $api(`/credit-applications/${application.value.id}/analyst-decision`, {
       method: 'PATCH',
       body: {
-        decision: analystDecision.value,
+        decision,
         concept: analystConcept.value.trim(),
       },
     })
     analystDecisionDialogOpen.value = false
-    toast.success('Decisión del analista registrada correctamente.')
+    if (updatingConceptOnly) {
+      toast.success('Concepto del analista actualizado.')
+      await fetchApplication()
+      return
+    }
+    toast.success(
+      wasReturned
+        ? 'Radicación devuelta al asesor.'
+        : 'Decisión del analista registrada correctamente.',
+      wasReturned
+        ? {
+            description:
+              'Dejó de aparecer en el listado por defecto del analista (solo «En análisis»). Para localizarla, use el filtro de estado «Devuelta (ajustes pendientes)».',
+            duration: 10000,
+          }
+        : undefined,
+    )
     if (wasReturned) {
       await navigateTo('/radicacion')
     } else {
@@ -698,6 +734,7 @@ async function fetchApplication() {
       return
     }
     syncFormFromApplication()
+    syncAnalystFieldsFromApplication()
   } catch (e) {
     console.error('Error cargando solicitud:', e)
     error.value = 'No se pudo cargar la solicitud'
@@ -705,6 +742,22 @@ async function fetchApplication() {
   } finally {
     loading.value = false
   }
+}
+
+function syncAnalystFieldsFromApplication(): void {
+  if (!application.value) {
+    return
+  }
+  if (!application.value.analyst_review_approved_at) {
+    analystDecision.value = ''
+    analystConcept.value = ''
+    return
+  }
+  const c = application.value.analyst_review_approved_concept
+  if (typeof c === 'string') {
+    analystConcept.value = c
+  }
+  analystDecision.value = 'approved'
 }
 
 async function fetchCatalogs() {
@@ -728,7 +781,7 @@ watch([application, debtor, coDebtors], () => {
 
 <template>
   <div class="w-full max-w-6xl mx-auto flex flex-col gap-4 px-0">
-    <div class="flex items-center justify-between">
+    <div class="flex flex-wrap items-center justify-between gap-2">
       <div>
         <h2 class="text-2xl font-bold tracking-tight">
           Ver Radicación
@@ -740,7 +793,7 @@ watch([application, debtor, coDebtors], () => {
           Estado cerrado (desembolso o rechazado): no se permiten cambios ni desactivación; cualquier rol solo puede consultar.
         </p>
       </div>
-      <div class="flex gap-2 flex-wrap">
+      <div class="flex flex-wrap items-center gap-2">
         <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
           <Button
             v-if="application?.status === 'Draft' && application?.id"
@@ -768,6 +821,10 @@ watch([application, debtor, coDebtors], () => {
             {{ downloadingPdf ? 'Abriendo…' : 'Ver PDF' }}
           </Button>
         </PermissionGate>
+        <Button variant="outline" class="shrink-0" @click="router.push('/radicacion')">
+          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
+          Volver
+        </Button>
         <PermissionGate permission="radicacion_desactivar">
           <Button
             v-if="!isTerminalImmutable"
@@ -779,10 +836,6 @@ watch([application, debtor, coDebtors], () => {
             {{ deactivating ? 'Desactivando...' : 'Desactivar' }}
           </Button>
         </PermissionGate>
-        <Button variant="outline" @click="router.push('/radicacion')">
-          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
-          Volver
-        </Button>
       </div>
     </div>
 
@@ -1051,67 +1104,70 @@ watch([application, debtor, coDebtors], () => {
         <CardHeader>
           <CardTitle>Concepto del analista</CardTitle>
           <CardDescription>
-            Registra la aprobación o la devolución con concepto. La aprobación es obligatoria antes de enviar a director de crédito desde Análisis y SCORE.
+            Registra la aprobación o la devolución con concepto. La aprobación es obligatoria antes de enviar a director de crédito desde Análisis y SCORE. Si ya aprobaste, puedes corregir el concepto o cambiar la decisión (por ejemplo devolver al asesor) mientras siga en análisis.
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
           <div
             v-if="analystAlreadyApproved"
-            class="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-950 dark:text-emerald-100 space-y-2"
+            class="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2.5 text-sm text-emerald-950 dark:text-emerald-100 space-y-1"
           >
             <p class="font-medium">
               Aprobación del analista registrada
             </p>
-            <p v-if="application?.analyst_review_approved_concept" class="text-muted-foreground">
-              {{ application.analyst_review_approved_concept }}
+            <p class="text-muted-foreground">
+              Elige otra decisión abajo si corresponde, o mantén «Aprobar» y edita solo el concepto.
             </p>
-            <Button variant="outline" size="sm" class="mt-1" as-child>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="analyst_decision">Decisión *</Label>
+            <Multiselect
+              id="analyst_decision"
+              :model-value="analystDecision === '' ? null : analystDecision"
+              :options="analystDecisionOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="false"
+              placeholder="Seleccionar decisión"
+              class="multiselect-director"
+              @update:model-value="onAnalystDecisionUpdate"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="analyst_concept">Concepto del analista *</Label>
+            <textarea
+              id="analyst_concept"
+              v-model="analystConcept"
+              rows="4"
+              class="flex min-h-[110px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              placeholder="Describe el concepto de aprobación o los ajustes requeridos al asesor…"
+            />
+          </div>
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              :disabled="submittingAnalystDecision"
+              @click="openAnalystDecisionDialog"
+            >
+              <Icon v-if="submittingAnalystDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              {{ analystAlreadyApproved ? 'Guardar decisión o concepto' : 'Registrar decisión del analista' }}
+            </Button>
+            <Button
+              v-if="analystDecision === 'approved'"
+              variant="outline"
+              size="sm"
+              as-child
+            >
               <NuxtLink
                 :to="{ path: '/radicacion/analisis-score', query: { solicitud: String(application?.id ?? '') } }"
               >
                 <Icon name="i-lucide-chart-column-increasing" class="mr-2 h-4 w-4" />
-                Ir a Análisis y SCORE para enviar a director de crédito
+                Ir a Análisis y SCORE
               </NuxtLink>
             </Button>
           </div>
-          <template v-else>
-            <div class="space-y-1.5">
-              <Label for="analyst_decision">Decisión *</Label>
-              <Multiselect
-                id="analyst_decision"
-                :model-value="analystDecision === '' ? null : analystDecision"
-                :options="analystDecisionOptions"
-                value-prop="value"
-                label="label"
-                mode="single"
-                :can-clear="false"
-                :searchable="false"
-                placeholder="Seleccionar decisión"
-                class="multiselect-director"
-                @update:model-value="onAnalystDecisionUpdate"
-              />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="analyst_concept">Concepto del analista *</Label>
-              <textarea
-                id="analyst_concept"
-                v-model="analystConcept"
-                rows="4"
-                class="flex min-h-[110px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                placeholder="Describe el concepto de aprobación o los ajustes requeridos al asesor…"
-              />
-            </div>
-            <div class="flex justify-end">
-              <Button
-                type="button"
-                :disabled="submittingAnalystDecision"
-                @click="openAnalystDecisionDialog"
-              >
-                <Icon v-if="submittingAnalystDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-                Registrar decisión del analista
-              </Button>
-            </div>
-          </template>
         </CardContent>
       </Card>
 
@@ -1291,7 +1347,7 @@ watch([application, debtor, coDebtors], () => {
               </p>
               <CreditsFinancialActivityFormList
                 :model-value="form.destination_activity_templates ?? []"
-                readonly
+                :read-only-form="true"
                 list-hint="Detalle de actividades asociadas al uso del crédito; valores informativos respecto al perfil financiero."
               />
             </div>
@@ -1334,6 +1390,13 @@ watch([application, debtor, coDebtors], () => {
               <p class="text-sm font-semibold">
                 Detalle del codeudor {{ selectedCoDebtorIndex + 1 }}
               </p>
+              <PermissionGate permission="radicacion_ver_resumen_financiero" strict>
+                <RadicacionResumenFinancieroDeudor
+                  summary-scope-label="del codeudor"
+                  :financial-info="form.co_debtors[selectedCoDebtorIndex]!.financial_info"
+                  :amount-requested="Number(application?.amount_requested) || 0"
+                />
+              </PermissionGate>
               <div class="flex flex-wrap items-center gap-2">
                 <template v-for="step in stepsCodeudor" :key="step.num">
                   <button
@@ -1508,13 +1571,19 @@ watch([application, debtor, coDebtors], () => {
     <AlertDialog v-model:open="analystDecisionDialogOpen">
       <AlertDialogContent class="max-w-sm">
         <AlertDialogHeader>
-          <AlertDialogTitle>Confirmar decisión del analista</AlertDialogTitle>
+          <AlertDialogTitle>{{ analystDecisionDialogTitle }}</AlertDialogTitle>
           <AlertDialogDescription>
-            <template v-if="analystDecision === 'approved'">
+            <template v-if="analystConfirmIsConceptOnly">
+              Se guardará el texto del concepto en la radicación. Permanecerás en esta vista.
+            </template>
+            <template v-else-if="analystDecision === 'returned'">
+              Esta acción devolverá la radicación al asesor y anulará la aprobación previa del analista si existía.
+            </template>
+            <template v-else-if="analystDecision === 'approved'">
               Se guardará la aprobación y te llevará a Análisis y SCORE para completar el análisis y el SCORE.
             </template>
             <template v-else>
-              Esta acción guardará el concepto, devolverá la radicación al asesor y actualizará el estado.
+              Confirma la decisión del analista y el concepto.
             </template>
           </AlertDialogDescription>
         </AlertDialogHeader>

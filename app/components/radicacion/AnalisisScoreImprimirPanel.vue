@@ -189,40 +189,38 @@ watch(puntajesFormularioValido, (ok) => {
   }
 })
 
-const { hasAnyPermission } = usePermissions()
-const puedeGuardarScore = computed(() =>
-  hasAnyPermission(['radicacion_analisis_guardar', 'radicacion_crear', 'radicacion_editar']),
-)
+const { hasPermission } = usePermissions()
+const puedeGuardarScore = computed(() => hasPermission('radicacion_analisis_guardar'))
 
 const guardandoScore = ref(false)
 
-async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null }): Promise<void> {
+async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null }): Promise<{ sentToCreditDirectorReview: boolean }> {
   if (!puedeGuardarScore.value) {
     toast.error('No tienes permiso para guardar análisis y SCORE.')
-    return
+    return { sentToCreditDirectorReview: false }
   }
   const id = props.creditApplicationId?.trim()
   if (!id) {
     toast.error('Abre el análisis SCORE desde el listado de radicación para vincular una solicitud.')
-    return
+    return { sentToCreditDirectorReview: false }
   }
   if (!props.perfilDeudor) {
     toast.error('Selecciona el perfil del deudor en el paso 1.')
-    return
+    return { sentToCreditDirectorReview: false }
   }
   if (props.emergencia == null) {
     toast.error('Faltan datos de la hoja de análisis (EMERGENCIA). Vuelva al paso 2 o recargue la solicitud.')
-    return
+    return { sentToCreditDirectorReview: false }
   }
   const valCred = validarCreditoEmergenciaCompleto(props.emergencia.credito)
   if (!valCred.ok) {
     emit('credit-validation-failed', valCred)
-    return
+    return { sentToCreditDirectorReview: false }
   }
   if (!puntajesFormularioValido.value) {
     erroresValidacionVisibles.value = true
     toast.error('Completa el puntaje en todas las variables antes de guardar.')
-    return
+    return { sentToCreditDirectorReview: false }
   }
 
   guardandoScore.value = true
@@ -251,15 +249,28 @@ async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null
     const res = await $api<{
       data?: { analisis_score_snapshot?: Record<string, unknown> | null }
       message?: string
+      sent_to_credit_director_review?: boolean
     }>(`/credit-applications/${id}/analisis-score`, {
       method: 'PUT',
       body,
     })
-    toast.success(res?.message ?? 'Análisis y SCORE guardado correctamente.')
+    const sent = Boolean(res?.sent_to_credit_director_review)
+    if (sent) {
+      toast.success(res?.message ?? 'Solicitud enviada a revisión de director de crédito.', {
+        description:
+          'Salió de su bandeja predeterminada (solo muestra «En análisis»). Use el filtro «Revisión director de crédito» si necesita volver a consultar esta radicación.',
+        duration: 11000,
+      })
+    }
+    else {
+      toast.success(res?.message ?? 'Análisis y SCORE guardado correctamente.')
+    }
     emit('saved', res?.data?.analisis_score_snapshot ?? null)
+    return { sentToCreditDirectorReview: sent }
   }
   catch (e: any) {
     toast.error(e?.data?.message ?? 'No se pudo guardar el análisis SCORE.')
+    return { sentToCreditDirectorReview: false }
   }
   finally {
     guardandoScore.value = false
