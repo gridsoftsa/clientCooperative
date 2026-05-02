@@ -1,5 +1,10 @@
 import type { BadgeVariants } from '~/components/ui/badge'
 
+/** Cierre del flujo: sin edición ni desactivación (API y UI alineados). */
+export function isCreditApplicationTerminalImmutable(status: string | null | undefined): boolean {
+  return status === 'Disbursement' || status === 'Rejected'
+}
+
 /** Estados de solicitud alineados con `App\Models\CreditApplication` (API). */
 
 export const creditApplicationStatusFilterOptions = [
@@ -13,6 +18,7 @@ export const creditApplicationStatusFilterOptions = [
   /** Un solo estado en API; el matiz director vs documentación sale del backend (`skip_next_director_review`) al mostrar filas. */
   { value: 'Returned', label: 'Devuelta (ajustes pendientes)' },
   { value: 'Approved', label: 'Aprobada' },
+  { value: 'Disbursement', label: 'Desembolso' },
   { value: 'Rejected', label: 'Rechazada' },
 ] as const
 
@@ -25,6 +31,7 @@ const STATUS_LABELS: Record<string, string> = {
   Documentation_Review: 'Revisión de documentación',
   Returned: 'Devuelta',
   Approved: 'Aprobada',
+  Disbursement: 'Desembolso',
   Rejected: 'Rechazada',
 }
 
@@ -77,6 +84,7 @@ const BADGE_VARIANTS: Record<string, string> = {
   Documentation_Review: 'secondary',
   Returned: 'destructive',
   Approved: 'default',
+  Disbursement: 'default',
   Rejected: 'destructive',
 }
 
@@ -125,5 +133,6 @@ export const creditApplicationStatusOrder = [
   'Returned',
   'In_Analysis',
   'Approved',
+  'Disbursement',
   'Rejected',
 ] as const

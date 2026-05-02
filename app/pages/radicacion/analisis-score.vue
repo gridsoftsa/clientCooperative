@@ -46,6 +46,7 @@ import { aplicarEgresosCapacidadBloqueDesdeFinancialInfo } from '~/utils/radicac
 import { aplicarActivosEmergenciaDesdeSolicitud } from '~/utils/radicacion-financial-activos'
 import type { Company } from '~/types/company'
 import { useAuth } from '~/composables/useAuth'
+import { isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
 import { Textarea } from '~/components/ui/textarea'
 import { Label } from '~/components/ui/label'
 
@@ -947,9 +948,14 @@ function filasImprimirActuales(): ImprimirVariableRow[] {
     : variableRowsForEmp.value
 }
 
-/** Asesor: crear/editar; analista: radicacion_analisis_guardar. */
+const solicitudEsSoloLecturaPorEstado = computed(() =>
+  isCreditApplicationTerminalImmutable(solicitudStatus.value),
+)
+
+/** Asesor: crear/editar; analista: radicacion_analisis_guardar. No persistir si la solicitud está cerrada. */
 const canPersistAnalisisScore = computed(() =>
-  hasAnyPermission(['radicacion_analisis_guardar', 'radicacion_crear', 'radicacion_editar']),
+  !solicitudEsSoloLecturaPorEstado.value
+  && hasAnyPermission(['radicacion_analisis_guardar', 'radicacion_crear', 'radicacion_editar']),
 )
 
 const guardandoEmergenciaBorrador = ref(false)
@@ -1113,12 +1119,18 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
 
     <div
       v-if="solicitudId"
-      class="rounded-xl border bg-card p-4"
+      class="rounded-xl border bg-card p-4 space-y-2"
     >
       <p class="text-sm">
         <span class="text-muted-foreground">Solicitud vinculada:</span>
         <span class="ml-1 font-mono font-medium text-foreground">#{{ solicitudId }}</span>
         <span v-if="loadingSolicitud" class="ml-2 text-muted-foreground">Cargando datos del deudor…</span>
+      </p>
+      <p
+        v-if="solicitudEsSoloLecturaPorEstado && !loadingSolicitud"
+        class="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-50"
+      >
+        Esta solicitud está en <strong>desembolso</strong> o <strong>rechazada</strong>: el análisis es solo consulta; no se puede guardar ni modificar.
       </p>
     </div>
     <div

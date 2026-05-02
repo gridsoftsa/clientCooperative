@@ -107,6 +107,7 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   radicacion_analisis_ver: 'Ver análisis y score de radicación',
   radicacion_analisis_guardar: 'Guardar análisis y score de radicación',
   radicacion_director_decidir: 'Decidir radicaciones como director de agencia',
+  radicacion_director_credito_decidir: 'Decisión final como director de crédito (desembolso o rechazo)',
   radicacion_documentos_decidir: 'Decidir revisión de documentos en radicación',
   radicacion_documentos_subir: 'Subir documentos en radicación',
   radicacion_catalogos_ver: 'Ver catálogos de radicación',

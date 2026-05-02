@@ -4,7 +4,7 @@ import Multiselect from '@vueform/multiselect'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
 import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
-import { getCreditApplicationStatusLabel } from '~/constants/credit-application-status'
+import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 import { parseActivityTemplateList } from '~/types/credit-application'
 
@@ -129,6 +129,34 @@ const analystDecisionOptions = [
   { value: 'returned', label: 'Devolver al asesor para corrección (visible también para director de agencia)' },
 ]
 
+const creditDirectorDecision = ref<'approved' | 'rejected' | ''>('')
+const creditDirectorConcept = ref('')
+const creditDirectorDecisionDialogOpen = ref(false)
+const submittingCreditDirectorDecision = ref(false)
+const creditDirectorDecisionOptions = [
+  { value: 'approved', label: 'Aprobar para desembolso (definitivo)' },
+  { value: 'rejected', label: 'Rechazar solicitud (definitivo)' },
+]
+const canCreditDirectorDecide = computed(
+  () => hasPermission('radicacion_director_credito_decidir') && application.value?.status === 'Credit_Director_Review',
+)
+const analisisSnapshotForDirector = computed((): Record<string, unknown> | null => {
+  const s = application.value?.analisis_score_snapshot
+  if (s && typeof s === 'object' && !Array.isArray(s)) {
+    return s as Record<string, unknown>
+  }
+  return null
+})
+const showCreditDirectorFinalConcept = computed(() => {
+  const st = application.value?.status
+  if (st !== 'Disbursement' && st !== 'Rejected') {
+    return false
+  }
+  return Boolean(application.value?.credit_director_concept)
+})
+
+const isTerminalImmutable = computed(() => isCreditApplicationTerminalImmutable(application.value?.status))
+
 function onDirectorDecisionUpdate(value: string | null) {
   if (value === 'approved' || value === 'returned') {
     directorDecision.value = value
@@ -151,6 +179,26 @@ function onAnalystDecisionUpdate(value: string | null) {
     return
   }
   analystDecision.value = ''
+}
+
+function onCreditDirectorDecisionUpdate(value: string | null) {
+  if (value === 'approved' || value === 'rejected') {
+    creditDirectorDecision.value = value
+    return
+  }
+  creditDirectorDecision.value = ''
+}
+
+function snapshotField(key: string): string {
+  const snap = analisisSnapshotForDirector.value
+  if (!snap) {
+    return ''
+  }
+  const v = snap[key]
+  if (v == null) {
+    return ''
+  }
+  return typeof v === 'string' ? v : String(v)
 }
 
 function timelineEventStatusLabel(
@@ -390,6 +438,10 @@ async function handleDownloadPdf() {
 function openDeactivateDialog() {
   if (!application.value?.id || deactivating.value)
     return
+  if (isCreditApplicationTerminalImmutable(application.value?.status)) {
+    toast.error('Las solicitudes en desembolso o rechazado no se pueden desactivar.')
+    return
+  }
   deactivateDialogOpen.value = true
 }
 
@@ -513,6 +565,46 @@ async function confirmDirectorDecision() {
     toast.error(e?.data?.message ?? 'No se pudo registrar la decisión del director.')
   } finally {
     submittingDirectorDecision.value = false
+  }
+}
+
+function openCreditDirectorDecisionDialog() {
+  if (submittingCreditDirectorDecision.value) {
+    return
+  }
+  if (creditDirectorDecision.value === '') {
+    toast.error('Selecciona la decisión del director de crédito.')
+    return
+  }
+  if (creditDirectorConcept.value.trim().length < 25) {
+    toast.error('El concepto debe ser claro y estructurado (mínimo 25 caracteres). Incluya antecedentes, análisis y decisión fundamentada.')
+    return
+  }
+  creditDirectorDecisionDialogOpen.value = true
+}
+
+async function confirmCreditDirectorDecision() {
+  if (!application.value?.id || creditDirectorDecision.value === '' || submittingCreditDirectorDecision.value) {
+    return
+  }
+  submittingCreditDirectorDecision.value = true
+  try {
+    await $csrf()
+    await $api(`/credit-applications/${application.value.id}/credit-director-decision`, {
+      method: 'PATCH',
+      body: {
+        decision: creditDirectorDecision.value,
+        concept: creditDirectorConcept.value.trim(),
+      },
+    })
+    creditDirectorDecisionDialogOpen.value = false
+    toast.success('Decisión del director de crédito registrada correctamente.')
+    await navigateTo('/radicacion')
+  } catch (e: any) {
+    console.error('Error registrando decisión del director de crédito:', e)
+    toast.error(e?.data?.message ?? 'No se pudo registrar la decisión del director de crédito.')
+  } finally {
+    submittingCreditDirectorDecision.value = false
   }
 }
 
@@ -642,7 +734,10 @@ watch([application, debtor, coDebtors], () => {
           Ver Radicación
         </h2>
         <p class="text-muted-foreground">
-          Solicitud de crédito - Solo lectura
+          Solicitud de crédito — solo lectura
+        </p>
+        <p v-if="isTerminalImmutable" class="mt-1 text-sm font-medium text-amber-900 dark:text-amber-100">
+          Estado cerrado (desembolso o rechazado): no se permiten cambios ni desactivación; cualquier rol solo puede consultar.
         </p>
       </div>
       <div class="flex gap-2 flex-wrap">
@@ -675,6 +770,7 @@ watch([application, debtor, coDebtors], () => {
         </PermissionGate>
         <PermissionGate permission="radicacion_desactivar">
           <Button
+            v-if="!isTerminalImmutable"
             variant="destructive"
             :disabled="deactivating"
             @click="openDeactivateDialog"
@@ -739,6 +835,114 @@ watch([application, debtor, coDebtors], () => {
                 Por: <span class="font-medium text-foreground">{{ event.actor.name }}</span>
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card v-if="showCreditDirectorFinalConcept">
+        <CardHeader>
+          <CardTitle>Concepto final — director de crédito</CardTitle>
+          <CardDescription>
+            Registro de la decisión definitiva sobre esta solicitud.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-2 text-sm">
+          <p v-if="application?.credit_director_decision_at" class="text-muted-foreground">
+            Fecha: {{ formatEventDate(application.credit_director_decision_at) }}
+          </p>
+          <p class="whitespace-pre-wrap rounded-md border bg-muted/30 p-3">
+            {{ application?.credit_director_concept }}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card v-if="canCreditDirectorDecide">
+        <CardHeader>
+          <CardTitle>Decisión final — director de crédito</CardTitle>
+          <CardDescription>
+            Revise la radicación y el SCORE. Esta decisión es definitiva: si aprueba, la solicitud pasa a
+            <strong>desembolso</strong>; si rechaza, queda en estado <strong>rechazado</strong>. Debe dejar un concepto claro y estructurado.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div class="rounded-lg border bg-muted/20 p-4 space-y-2">
+            <p class="text-sm font-medium">
+              Resumen Análisis y SCORE
+            </p>
+            <template v-if="analisisSnapshotForDirector">
+              <dl class="grid gap-1 text-sm sm:grid-cols-2">
+                <div v-if="snapshotField('nivel_riesgo')">
+                  <dt class="text-muted-foreground">
+                    Nivel de riesgo
+                  </dt>
+                  <dd class="font-medium">
+                    {{ snapshotField('nivel_riesgo') }}
+                  </dd>
+                </div>
+                <div v-if="snapshotField('nivel_ifs')">
+                  <dt class="text-muted-foreground">
+                    Nivel IFS
+                  </dt>
+                  <dd class="font-medium">
+                    {{ snapshotField('nivel_ifs') }}
+                  </dd>
+                </div>
+              </dl>
+              <p v-if="snapshotField('concepto_analista')" class="text-sm text-muted-foreground mt-2">
+                <span class="font-medium text-foreground">Concepto del analista (cierre):</span>
+                {{ snapshotField('concepto_analista') }}
+              </p>
+            </template>
+            <p v-else class="text-sm text-muted-foreground">
+              No hay resumen SCORE en esta respuesta. Abra la hoja completa para revisar.
+            </p>
+            <Button variant="outline" size="sm" class="mt-2" as-child>
+              <NuxtLink
+                :to="{ path: '/radicacion/analisis-score', query: { solicitud: String(application?.id ?? '') } }"
+              >
+                <Icon name="i-lucide-chart-column-increasing" class="mr-2 h-4 w-4" />
+                Abrir Análisis y SCORE (lectura)
+              </NuxtLink>
+            </Button>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="credit_director_decision">Decisión *</Label>
+            <Multiselect
+              id="credit_director_decision"
+              :model-value="creditDirectorDecision === '' ? null : creditDirectorDecision"
+              :options="creditDirectorDecisionOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="false"
+              placeholder="Seleccionar decisión"
+              class="multiselect-director"
+              @update:model-value="onCreditDirectorDecisionUpdate"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="credit_director_concept">Concepto estructurado *</Label>
+            <textarea
+              id="credit_director_concept"
+              v-model="creditDirectorConcept"
+              rows="6"
+              class="flex min-h-[140px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              placeholder="Sugerencia de estructura: 1) Antecedentes / radicación. 2) Análisis (incl. SCORE y riesgo). 3) Decisión fundamentada (desembolso o rechazo)."
+            />
+            <p class="text-xs text-muted-foreground">
+              Mínimo 25 caracteres. Este texto queda en la trazabilidad.
+            </p>
+          </div>
+          <div class="flex justify-end">
+            <Button
+              type="button"
+              :disabled="submittingCreditDirectorDecision"
+              @click="openCreditDirectorDecisionDialog"
+            >
+              <Icon v-if="submittingCreditDirectorDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              Registrar decisión final
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -1247,6 +1451,35 @@ watch([application, debtor, coDebtors], () => {
       :loading="deactivating"
       @confirm="onDeactivateConfirm"
     />
+
+    <AlertDialog v-model:open="creditDirectorDecisionDialogOpen">
+      <AlertDialogContent class="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar decisión final del director de crédito</AlertDialogTitle>
+          <AlertDialogDescription>
+            <template v-if="creditDirectorDecision === 'approved'">
+              La solicitud pasará a estado <strong>desembolso</strong>. Verifique que el concepto quede completo antes de confirmar.
+            </template>
+            <template v-else>
+              La solicitud quedará <strong>rechazada</strong> de forma definitiva. Esta acción no se puede deshacer desde aquí.
+            </template>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            :disabled="submittingCreditDirectorDecision"
+            @click="confirmCreditDirectorDecision"
+          >
+            <Icon v-if="submittingCreditDirectorDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+            Confirmar
+          </Button>
+          <AlertDialogCancel :disabled="submittingCreditDirectorDecision">
+            Cancelar
+          </AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     <AlertDialog v-model:open="directorDecisionDialogOpen">
       <AlertDialogContent class="max-w-sm">

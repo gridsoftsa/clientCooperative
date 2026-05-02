@@ -3,6 +3,7 @@ import {
   creditApplicationStatusFilterOptions as statusFilterOptions,
   getCreditApplicationStatusBadgeVariant as getStatusBadgeVariant,
   getCreditApplicationStatusLabel as getStatusLabel,
+  isCreditApplicationTerminalImmutable,
 } from '~/constants/credit-application-status'
 import { toast } from 'vue-sonner'
 
@@ -18,6 +19,7 @@ const { hasAnyPermission, hasRole } = usePermissions()
 /** Editar / continuar borrador: crear o editar (nueva solo exige crear) */
 const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
 const isDirectorAgencia = computed(() => hasRole('director_agencia'))
+const isDirectorCredito = computed(() => hasRole('director_credito'))
 const isRevisionDocumentos = computed(() => hasRole('revision_documentos'))
 const isAnalista = computed(() => hasRole('analista'))
 const { downloadApplicationPdf } = useDocumentDownload()
@@ -57,6 +59,12 @@ function buildListQuery(): Record<string, string | number> {
     page: pagination.value.current_page,
   }
   if (isDirectorAgencia.value) {
+    if (filterStatus.value !== 'all') {
+      q.status = filterStatus.value
+    }
+    return q
+  }
+  if (isDirectorCredito.value) {
     if (filterStatus.value !== 'all') {
       q.status = filterStatus.value
     }
@@ -390,6 +398,15 @@ watch(deactivateDialogOpen, (v) => {
                     {{ app.code || '-' }}
                     <span class="text-xs text-muted-foreground ml-1">(revisar)</span>
                   </NuxtLink>
+                  <NuxtLink
+                    v-else-if="isDirectorCredito && app.status === 'Credit_Director_Review'"
+                    :to="`/radicacion/${app.id}`"
+                    class="font-medium text-primary hover:underline"
+                    title="Abrir revisión del director de crédito"
+                  >
+                    {{ app.code || '-' }}
+                    <span class="text-xs text-muted-foreground ml-1">(concepto final)</span>
+                  </NuxtLink>
                   <span v-else>{{ app.code || '-' }}</span>
                 </TableCell>
                 <TableCell class="font-mono text-sm">{{ app.numero_radicado_externo || '-' }}</TableCell>
@@ -421,6 +438,20 @@ watch(deactivateDialogOpen, (v) => {
                         <span>SCORE</span>
                       </Button>
                     </PermissionGate>
+                    <PermissionGate permission="radicacion_analisis_ver">
+                      <Button
+                        v-if="isDirectorCredito && app.status === 'Credit_Director_Review'"
+                        variant="outline"
+                        size="sm"
+                        class="h-8 gap-1.5 border-primary/35 bg-primary/[0.06] px-2 text-xs font-semibold tracking-wide text-primary shadow-sm hover:bg-primary/12 hover:text-primary"
+                        title="Ver Análisis y SCORE (solo lectura)"
+                        aria-label="Ver SCORE"
+                        @click="goToAnalisisScore(app.id)"
+                      >
+                        <Icon name="i-lucide-chart-column-increasing" class="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>SCORE</span>
+                      </Button>
+                    </PermissionGate>
                     <PermissionGate permission="radicacion_director_decidir">
                       <Button
                         v-if="isDirectorAgencia && app.status === 'Director_Review'"
@@ -433,6 +464,20 @@ watch(deactivateDialogOpen, (v) => {
                       >
                         <Icon name="i-lucide-clipboard-check" class="h-4 w-4 shrink-0" aria-hidden="true" />
                         <span>Revisión director</span>
+                      </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="radicacion_director_credito_decidir">
+                      <Button
+                        v-if="isDirectorCredito && app.status === 'Credit_Director_Review'"
+                        variant="outline"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs font-semibold text-primary"
+                        title="Concepto final: desembolso o rechazo"
+                        aria-label="Revisar como director de crédito"
+                        @click="router.push(`/radicacion/${app.id}`)"
+                      >
+                        <Icon name="i-lucide-badge-check" class="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>Director crédito</span>
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_documentos_decidir">
@@ -496,7 +541,7 @@ watch(deactivateDialogOpen, (v) => {
                     </PermissionGate>
                     <PermissionGate permission="radicacion_ver">
                       <Button
-                        v-if="!isDirectorAgencia && !isRevisionDocumentos"
+                        v-if="!isDirectorAgencia && !isRevisionDocumentos && !(isDirectorCredito && app.status === 'Credit_Director_Review')"
                         variant="outline"
                         size="sm"
                         class="gap-1.5"
@@ -509,6 +554,7 @@ watch(deactivateDialogOpen, (v) => {
                     </PermissionGate>
                     <PermissionGate permission="radicacion_desactivar">
                       <Button
+                        v-if="!isCreditApplicationTerminalImmutable(app.status)"
                         variant="destructive"
                         size="sm"
                         class="gap-1.5"

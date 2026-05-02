@@ -9,6 +9,7 @@ import {
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 import { parseActivityTemplateList } from '~/types/credit-application'
 import { mergeApplicantFromApi } from '~/utils/merge-applicant-search'
+import { isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
 
 definePageMeta({
   layout: 'default',
@@ -105,6 +106,7 @@ const steps = computed(() => (addingCodeudor.value ? stepsCodeudor : stepsDeudor
 const maxStep = computed(() => steps.value.length)
 
 const canEdit = computed(() => ['Draft', 'Returned'].includes(String(application.value?.status ?? '')))
+const isTerminalClosed = computed(() => isCreditApplicationTerminalImmutable(application.value?.status))
 
 /** Última vez que la solicitud se guardó en el servidor (borrador abierto). */
 function formatRadicacionLastSaved(iso: string | null | undefined): string {
@@ -922,6 +924,25 @@ onMounted(() => {
       <Button variant="outline" class="mt-4" @click="router.push('/radicacion')">
         Volver
       </Button>
+    </div>
+
+    <div
+      v-else-if="application && !canEdit && isTerminalClosed"
+      class="rounded-lg border border-amber-500/40 bg-amber-500/10 p-6 text-center space-y-3"
+    >
+      <p class="font-medium text-amber-950 dark:text-amber-50">
+        Esta solicitud está cerrada (desembolso o rechazado). No admite modificaciones para ningún rol; use la vista de solo lectura.
+      </p>
+      <Button as-child>
+        <NuxtLink :to="`/radicacion/${application.id}`">
+          Ver radicación
+        </NuxtLink>
+      </Button>
+      <div>
+        <Button variant="outline" @click="router.push('/radicacion')">
+          Volver al listado
+        </Button>
+      </div>
     </div>
 
     <div
