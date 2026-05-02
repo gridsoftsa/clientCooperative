@@ -51,6 +51,7 @@ const form = ref<CreditApplicationForm>({
   term_months: 12,
   destination: '',
   destination_description: '',
+  credito_garantia_fng: null,
   destination_activity_templates: [],
   agency_id: 0,
   status: 'Draft',
@@ -708,6 +709,7 @@ function syncFormFromApplication() {
     term_months: app.term_months ?? 12,
     destination: app.destination ?? '',
     destination_description: app.destination_description ?? '',
+    credito_garantia_fng: app.credito_garantia_fng ?? null,
     destination_activity_templates: parseActivityTemplateList(app.destination_activity_templates),
     agency_id: app.agency_id ?? 0,
     status: app.status ?? 'Draft',
@@ -1335,6 +1337,20 @@ watch([application, debtor, coDebtors], () => {
                 <p class="text-sm font-medium">Descripción del destino</p>
                 <p class="whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2">
                   {{ form.destination_description }}
+                </p>
+              </div>
+              <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+                <p class="text-sm font-medium">Créditos con garantía del Fondo Nacional de Garantías (FNG)</p>
+                <p class="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                  <template v-if="form.credito_garantia_fng === true">
+                    Sí
+                  </template>
+                  <template v-else-if="form.credito_garantia_fng === false">
+                    No
+                  </template>
+                  <template v-else>
+                    Sin indicar
+                  </template>
                 </p>
               </div>
             </div>

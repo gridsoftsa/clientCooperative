@@ -6,6 +6,8 @@ import type { ApplicantForm, ApplicantDocumentForm, FinancialInfoForm } from '~/
 const props = withDefaults(
   defineProps<{
     modelValue: ApplicantForm
+    /** Solicitud de crédito (para sincronizar título / borrado de documentos ya persistidos). */
+    creditApplicationId?: number | null
     showSearch?: boolean
     loadingSearch?: boolean
     /** Muestra campo "Concepto" (ej. Codeudor bien raíz) para codeudores */
@@ -29,13 +31,47 @@ const props = withDefaults(
     incomeBusinessReadonly?: boolean
     onSearch?: () => void
   }>(),
-  { readOnlyForm: false, documentsEditableOnly: false, incomeBusinessReadonly: true, hideDocumentsSection: false },
+  { readOnlyForm: false, documentsEditableOnly: false, incomeBusinessReadonly: true, hideDocumentsSection: false, creditApplicationId: null },
 )
+
+const { hasAnyPermission } = usePermissions()
 
 const personalReadOnly = computed(() => props.readOnlyForm || props.documentsEditableOnly)
 
 /** Alta/edición de documentos (título, archivo, quitar, agregar). */
 const docActionsEnabled = computed(() => !props.readOnlyForm || props.documentsEditableOnly)
+
+const docFallbackRadicacion = ['radicacion_crear', 'radicacion_editar'] as const
+
+const docCanSubir = computed(
+  () => docActionsEnabled.value && hasAnyPermission(['radicacion_documentos_subir', ...docFallbackRadicacion]),
+)
+const docCanEditar = computed(
+  () => docActionsEnabled.value && hasAnyPermission(['radicacion_documentos_editar', ...docFallbackRadicacion]),
+)
+const docCanEliminar = computed(
+  () => docActionsEnabled.value && hasAnyPermission(['radicacion_documentos_eliminar', ...docFallbackRadicacion]),
+)
+
+function canEditDocumentTitle(doc: ApplicantDocumentForm): boolean {
+  if (!docActionsEnabled.value) return false
+  if (!doc.id) return docCanSubir.value
+  return docCanEditar.value
+}
+
+function canPickDocumentFile(doc: ApplicantDocumentForm): boolean {
+  if (!docActionsEnabled.value) return false
+  if (!doc.id) return docCanSubir.value
+  return docCanSubir.value
+}
+
+function canRemoveDocumentRow(doc: ApplicantDocumentForm): boolean {
+  if (!docActionsEnabled.value) return false
+  if (doc.id) return docCanEliminar.value
+  return docCanSubir.value
+}
+
+const { $api, $csrf } = useNuxtApp()
 
 const emit = defineEmits<{
   'update:modelValue': [ApplicantForm]
@@ -90,7 +126,7 @@ const { options: economicActivityOptions, fetchOptions: fetchEconomicActivityOpt
   { value: 'Empleado formal', label: 'Empleado formal' },
   { value: 'Independiente', label: 'Independiente' },
   { value: 'Pensionado', label: 'Pensionado' },
-  { value: 'Otro', label: 'Otro' },
+  { value: 'agropecuario', label: 'Agropecuario' },
 ])
 
 onMounted(() => {
@@ -205,11 +241,44 @@ const documents = computed({
 })
 
 function addDocument() {
+  if (!docCanSubir.value) return
   documents.value = [...(documents.value || []), { title: '', file: undefined }]
 }
 
-function removeDocument(index: number) {
-  documents.value = documents.value.filter((_, i) => i !== index)
+async function removeDocument(index: number) {
+  const list = documents.value ?? []
+  const doc = list[index]
+  if (!doc) return
+  if (!canRemoveDocumentRow(doc)) return
+  if (doc.id && props.creditApplicationId) {
+    try {
+      await $csrf()
+      await $api(`/credit-applications/${props.creditApplicationId}/documents/${doc.id}`, { method: 'DELETE' })
+    } catch (e: unknown) {
+      const msg = e && typeof e === 'object' && 'data' in e && e.data && typeof e.data === 'object' && 'message' in e.data
+        ? String((e.data as { message?: string }).message)
+        : 'No se pudo eliminar el documento.'
+      toast.error(msg)
+      return
+    }
+  }
+  documents.value = list.filter((_, i) => i !== index)
+}
+
+async function onDocumentTitleBlur(index: number) {
+  const doc = documents.value?.[index]
+  if (!doc?.id || !props.creditApplicationId || !docCanEditar.value) return
+  const title = doc.title?.trim() ?? ''
+  if (!title) return
+  try {
+    await $csrf()
+    await $api(`/credit-applications/${props.creditApplicationId}/documents/${doc.id}`, {
+      method: 'PATCH',
+      body: { title },
+    })
+  } catch {
+    toast.error('No se pudo guardar el título del documento.')
+  }
 }
 
 function updateDocument(index: number, updates: Partial<ApplicantDocumentForm>) {
@@ -220,6 +289,8 @@ function updateDocument(index: number, updates: Partial<ApplicantDocumentForm>) 
 }
 
 function onDocumentFileChange(index: number, e: Event) {
+  const doc = documents.value[index]
+  if (!doc || !canPickDocumentFile(doc)) return
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
@@ -234,6 +305,8 @@ function onDocumentFileChange(index: number, e: Event) {
 
 function onDocumentDrop(index: number, e: DragEvent) {
   e.preventDefault()
+  const doc = documents.value[index]
+  if (!doc || !canPickDocumentFile(doc)) return
   const file = e.dataTransfer?.files?.[0]
   if (!file) return
   const { valid, message } = validateDocumentFile(file)
@@ -1106,8 +1179,9 @@ function formatFileSize(bytes: number): string {
               :id="`doc_title_${idx}`"
               :model-value="doc.title"
               placeholder="Ej: Cédula, Certificado laboral..."
-              :readonly="!docActionsEnabled"
+              :readonly="!canEditDocumentTitle(doc)"
               @update:model-value="updateDocument(idx, { title: String($event ?? '') })"
+              @blur="onDocumentTitleBlur(idx)"
             />
           </div>
           <div :class="fieldClass" class="min-w-0 flex-1 sm:basis-0">
@@ -1122,7 +1196,7 @@ function formatFileSize(bytes: number): string {
             <label
               :for="`doc_file_${idx}`"
               class="flex min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/30 px-3 py-2.5 transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
-              :class="docActionsEnabled ? 'cursor-pointer hover:border-primary/50 hover:bg-muted/50' : 'cursor-not-allowed opacity-60 pointer-events-none'"
+              :class="canPickDocumentFile(doc) ? 'cursor-pointer hover:border-primary/50 hover:bg-muted/50' : 'cursor-not-allowed opacity-60 pointer-events-none'"
               @dragover="onDocumentDragOver"
               @drop="onDocumentDrop(idx, $event)"
             >
@@ -1167,7 +1241,7 @@ function formatFileSize(bytes: number): string {
             </label>
           </div>
           <Button
-            v-if="docActionsEnabled"
+            v-if="canRemoveDocumentRow(doc)"
             type="button"
             variant="destructive"
             size="sm"
@@ -1178,7 +1252,7 @@ function formatFileSize(bytes: number): string {
             Quitar
           </Button>
         </div>
-        <Button v-if="docActionsEnabled" type="button" variant="outline" size="sm" @click="addDocument">
+        <Button v-if="docCanSubir" type="button" variant="outline" size="sm" @click="addDocument">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Agregar documento
         </Button>

@@ -109,7 +109,11 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   radicacion_director_decidir: 'Decidir radicaciones como director de agencia',
   radicacion_director_credito_decidir: 'Decisión final como director de crédito (desembolso o rechazo)',
   radicacion_documentos_decidir: 'Decidir revisión de documentos en radicación',
-  radicacion_documentos_subir: 'Subir documentos en radicación',
+  /** Ver listados, abrir y descargar archivos de documentos adjuntos (sin crear/editar/borrar). */
+  radicacion_descargar_documentos: 'Ver y descargar documentos adjuntos en radicación',
+  radicacion_documentos_subir: 'Subir documentos adjuntos en radicación',
+  radicacion_documentos_editar: 'Editar títulos de documentos adjuntos en radicación',
+  radicacion_documentos_eliminar: 'Eliminar documentos adjuntos en radicación',
   radicacion_catalogos_ver: 'Ver catálogos de radicación',
   radicacion_catalogos_editar: 'Editar catálogos de radicación',
   plantilla_score_ver: 'Ver plantilla SCORE',

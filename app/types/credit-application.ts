@@ -107,6 +107,10 @@ export interface CreditApplicationForm {
   destination?: string
   destination_description?: string
   /**
+   * Crédito con garantía del Fondo Nacional de Garantías (FNG). Opcional (null = sin indicar).
+   */
+  credito_garantia_fng?: boolean | null
+  /**
    * Plantillas agropecuarias descritas en el paso “Datos de la solicitud”, solo informativas.
    * No se sincronizan con ingresos del deudor (eso queda en paso 2).
    */

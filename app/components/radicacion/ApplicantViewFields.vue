@@ -105,7 +105,7 @@ const { labelForValue: economicActivityLabel, fetchOptions: fetchEconomicActivit
   { value: 'Empleado formal', label: 'Empleado formal' },
   { value: 'Independiente', label: 'Independiente' },
   { value: 'Pensionado', label: 'Pensionado' },
-  { value: 'Otro', label: 'Otro' },
+  { value: 'agropecuario', label: 'Agropecuario' },
 ])
 
 onMounted(() => {

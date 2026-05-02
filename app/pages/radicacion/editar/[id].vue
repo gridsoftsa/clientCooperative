@@ -86,6 +86,7 @@ const form = ref<CreditApplicationForm>({
   term_months: 12,
   destination: '',
   destination_description: '',
+  credito_garantia_fng: null,
   destination_activity_templates: [],
   agency_id: 0,
   status: 'Draft',
@@ -314,6 +315,7 @@ function syncFormFromApplication() {
     term_months: app.term_months ?? 12,
     destination: app.destination ?? '',
     destination_description: app.destination_description ?? '',
+    credito_garantia_fng: app.credito_garantia_fng ?? null,
     destination_activity_templates: parseActivityTemplateList(app.destination_activity_templates),
     agency_id: app.agency_id ?? 0,
     status: 'Draft',
@@ -764,6 +766,9 @@ async function uploadAllDocuments(
     const docs = form.value.debtor.documents ?? []
     for (const doc of docs) {
       if (!doc.file || !doc.title?.trim()) continue
+      if (doc.id) {
+        await $api(`/credit-applications/${applicationId}/documents/${doc.id}`, { method: 'DELETE' })
+      }
       const fd = new FormData()
       fd.append('title', doc.title.trim())
       fd.append('file', doc.file)
@@ -779,6 +784,9 @@ async function uploadAllDocuments(
     const docs = co.documents ?? []
     for (const doc of docs) {
       if (!doc.file || !doc.title?.trim()) continue
+      if (doc.id) {
+        await $api(`/credit-applications/${applicationId}/documents/${doc.id}`, { method: 'DELETE' })
+      }
       const fd = new FormData()
       fd.append('title', doc.title.trim())
       fd.append('file', doc.file)
@@ -1215,6 +1223,7 @@ onMounted(() => {
           >
             <ApplicantFormFields
               v-model="form.debtor"
+              :credit-application-id="application?.id"
               :show-search="true"
               :loading-search="loadingSearch"
               :hide-financial-section="true"
@@ -1241,6 +1250,7 @@ onMounted(() => {
           >
             <ApplicantFormFields
               v-model="form.debtor"
+              :credit-application-id="application?.id"
               :show-only-financial="true"
               :read-only-form="documentsOnlyEditMode"
             />
@@ -1310,6 +1320,26 @@ onMounted(() => {
                   rows="4"
                   :readonly="documentsOnlyEditMode"
                 />
+              </div>
+              <div class="space-y-3 sm:col-span-2 lg:col-span-3">
+                <div class="rounded-lg border border-border bg-muted/30 p-4">
+                  <div class="flex items-start gap-3">
+                    <Checkbox
+                      id="credito_garantia_fng"
+                      :model-value="form.credito_garantia_fng === true"
+                      :disabled="documentsOnlyEditMode"
+                      @update:model-value="form.credito_garantia_fng = $event ? true : false"
+                    />
+                    <div class="min-w-0 space-y-1.5">
+                      <Label for="credito_garantia_fng" class="cursor-pointer text-sm font-medium leading-snug">
+                        Créditos con garantía del Fondo Nacional de Garantías (FNG)
+                      </Label>
+                      <p class="text-xs text-muted-foreground leading-relaxed">
+                        Marque si la operación cuenta con cobertura o garantía del FNG. Dato informativo y opcional para la solicitud.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="space-y-4 border-t border-border pt-6">
@@ -1433,6 +1463,7 @@ onMounted(() => {
             <div v-if="codeudorStep === 1" class="space-y-4">
               <ApplicantFormFields
                 v-model="codeudorWizardApplicant"
+                :credit-application-id="application?.id"
                 :show-search="true"
                 :loading-search="loadingSearch"
                 :show-co-debtor-concept="true"
@@ -1452,6 +1483,7 @@ onMounted(() => {
             <div v-else-if="codeudorStep === 3" class="space-y-4">
               <ApplicantFormFields
                 v-model="codeudorWizardApplicant"
+                :credit-application-id="application?.id"
                 :show-only-financial="true"
                 :read-only-form="documentsOnlyEditMode"
               />
