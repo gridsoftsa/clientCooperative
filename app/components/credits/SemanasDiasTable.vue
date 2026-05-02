@@ -78,10 +78,27 @@ const semanasMesDisplay = computed(() => {
   return Number.isFinite(n) ? n.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '—'
 })
 
+/** Tabla Semanas: techo y venta mensual (semanas) — sigue `semanas_mes` / plantilla. */
 const semanasMes = computed(() => {
   const n = Number(props.formData.semanas_mes ?? props.formData.semanas_mes_default ?? 4.75)
   return Number.isFinite(n) && n > 0 ? n : 4.75
 })
+
+/**
+ * Tabla Días — factor para pasar de venta semanal a mensual:
+ * si total días = 7 → semana completa (config, típ. 4,75); si la suma es menor a 7 → semana parcial (config, típ. 4).
+ */
+const semanasMesParaDias = computed(() => {
+  const completa = Number(props.formData.semanas_mes_completa_default)
+  const parcial = Number(props.formData.semanas_mes_parcial_default)
+  const completaOk = Number.isFinite(completa) && completa > 0 ? completa : 4.75
+  const parcialOk = Number.isFinite(parcial) && parcial > 0 ? parcial : 4
+  return totalDiasCantidad.value === MAX_DIAS_SEMANA_TOTAL ? completaOk : parcialOk
+})
+
+const semanasMesParaDiasDisplay = computed(() =>
+  semanasMesParaDias.value.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+)
 
 function toIntCantidad(v: unknown): number {
   const n = Number(v)
@@ -233,9 +250,9 @@ const ventaSemanalDias = computed(() => {
   return Number.isFinite(total) ? total : 0
 })
 
-/** VENTA MENSUAL (Días) = venta semanal × semanas al mes */
+/** VENTA MENSUAL (Días) = venta semanal × factor mes (4,75 si suma días = 7; si no, 4 — parametrizable en plantilla) */
 const ventaMensualDias = computed(() => {
-  const total = ventaSemanalDias.value * semanasMes.value
+  const total = ventaSemanalDias.value * semanasMesParaDias.value
   return Number.isFinite(total) ? total : 0
 })
 
@@ -427,6 +444,9 @@ function formatMoney(value: number | null | undefined): string {
     <div class="overflow-x-auto">
       <p class="mb-2 text-xs text-muted-foreground">
         Días (cantidades enteras): cada fila es como máximo 7 y entre las tres filas no pueden sumar más de <strong>7 días</strong> (una semana).
+        <span class="block mt-1">
+          Semanas al mes (fila siguiente): si la suma de días es <strong>7</strong> se usa la semana completa de plantilla (típ. 4,75); si es <strong>menor a 7</strong>, semana parcial (típ. 4).
+        </span>
       </p>
       <table class="w-full min-w-[560px] table-fixed border-collapse text-sm">
         <colgroup>
@@ -526,7 +546,7 @@ function formatMoney(value: number | null | undefined): string {
               Semanas al mes
             </td>
             <td colspan="3" class="border border-black px-3 py-2 text-center tabular-nums bg-muted/50 text-muted-foreground select-none">
-              {{ semanasMesDisplay }}
+              {{ semanasMesParaDiasDisplay }}
             </td>
           </tr>
           <tr class="bg-[#f4d03f] font-bold">

@@ -11,12 +11,14 @@ import {
   templateHasProductSelect,
 } from '~/constants/credits-financial-templates'
 import {
-  getConfigFieldKeys,
+  getRadicacionReadOnlyConfigKeys,
   CULTIVO_PERMANENTE_DURACION_MESES_DEFAULT,
   CANA_PANELA_DURACION_CICLO_MESES_DEFAULT,
   CANA_PANELA_CANT_KG_HECTAREA_DEFAULT,
   CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT,
   CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT,
+  PESES_TILAPIA_TIEMPO_CICLO_DIAS_DEFAULT,
+  POLLOS_ENGORDE_TIEMPO_CICLO_DIAS_DEFAULT,
   GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT,
   GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT,
   GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT,
@@ -171,9 +173,23 @@ async function loadFlatDataForTemplate(template: string, product: string | null)
     if (template === 'servicios') {
       applyServiciosPctContribucion(formData.value)
     }
+    if (template === 'pollos-engorde') {
+      const d = formData.value
+      const tc = d.tiempo_ciclo_dias
+      if (tc === undefined || tc === null || tc === '') {
+        d.tiempo_ciclo_dias = POLLOS_ENGORDE_TIEMPO_CICLO_DIAS_DEFAULT
+      }
+    }
+    if (template === 'peces-tilapia') {
+      const d = formData.value
+      const tc = d.tiempo_ciclo_dias
+      if (tc === undefined || tc === null || tc === '') {
+        d.tiempo_ciclo_dias = PESES_TILAPIA_TIEMPO_CICLO_DIAS_DEFAULT
+      }
+    }
     formDataVersion.value++ // Forzar que DynamicFormRenderer reciba los datos en su mount
     // Plantillas con esquema de config: campos marcados en el schema como “solo desde plantilla” quedan solo lectura
-    configuredFieldKeys.value = getConfigFieldKeys(template)
+    configuredFieldKeys.value = getRadicacionReadOnlyConfigKeys(template)
     emitActivityTemplate()
   } finally {
     loadingFlatData.value = false
@@ -210,7 +226,7 @@ watch(
         applyServiciosPctContribucion(formData.value)
       }
       formDataVersion.value++
-      configuredFieldKeys.value = getConfigFieldKeys(templateSelected.value)
+      configuredFieldKeys.value = getRadicacionReadOnlyConfigKeys(templateSelected.value)
       emitActivityTemplate()
     } finally {
       loadingFlatData.value = false
@@ -293,7 +309,21 @@ watch(
     if (newTemplate === 'servicios') {
       applyServiciosPctContribucion(formData.value)
     }
-    configuredFieldKeys.value = val?.template ? getConfigFieldKeys(val.template) : []
+    if (newTemplate === 'pollos-engorde') {
+      const d = formData.value
+      const tc = d.tiempo_ciclo_dias
+      if (tc === undefined || tc === null || tc === '') {
+        d.tiempo_ciclo_dias = POLLOS_ENGORDE_TIEMPO_CICLO_DIAS_DEFAULT
+      }
+    }
+    if (newTemplate === 'peces-tilapia') {
+      const d = formData.value
+      const tc = d.tiempo_ciclo_dias
+      if (tc === undefined || tc === null || tc === '') {
+        d.tiempo_ciclo_dias = PESES_TILAPIA_TIEMPO_CICLO_DIAS_DEFAULT
+      }
+    }
+    configuredFieldKeys.value = val?.template ? getRadicacionReadOnlyConfigKeys(val.template) : []
     nextTick(() => { isSyncingFromProps.value = false })
   },
   { immediate: true },

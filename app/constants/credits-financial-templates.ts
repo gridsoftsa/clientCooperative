@@ -274,8 +274,8 @@ function schemaGanadoCeba(): FormSchemaInput {
         key: 'valores',
         title: 'Valores estandarizados',
         fields: [
-          { key: 'precio_compra_animal', label: 'Precio de compra por animal', type: 'money', cols: 1 },
-          { key: 'precio_kg_animal', label: 'Precio del kg x animal', type: 'money', meta: 'Para fórmula de peso inicial', cols: 1 },
+          { key: 'precio_compra_animal', label: 'Precio de compra por animal', type: 'money', meta: 'COP — editable en radicación', cols: 1 },
+          { key: 'precio_kg_animal', label: 'Precio del kg x animal', type: 'money', meta: 'COP — editable en radicación (peso inicial = compra ÷ precio kg)', cols: 1 },
           {
             key: 'peso_kg_inicial',
             label: 'Peso en kg inicial',
@@ -284,7 +284,7 @@ function schemaGanadoCeba(): FormSchemaInput {
             formulaKey: 'ganado_ceba_peso_inicial',
             cols: 1,
           },
-          { key: 'peso_kg_final', label: 'Peso en kg final para la venta', type: 'number', meta: 'Decimal', cols: 1 },
+          { key: 'peso_kg_final', label: 'Peso en kg final para la venta', type: 'number', meta: 'Decimal — editable en radicación', cols: 1 },
           { key: 'costo_por_kg', label: 'Costo por kg', type: 'money', cols: 1 },
         ],
       },
@@ -1119,7 +1119,7 @@ function schemaPecesTilapia(): FormSchemaInput {
             key: 'tiempo_ciclo_dias',
             label: 'Tiempo ciclo de engorde (días)',
             type: 'number',
-            meta: 'Int',
+            meta: 'Solo lectura (configuración de plantilla)',
             cols: 1,
           },
           {
@@ -1167,7 +1167,7 @@ function schemaPecesTilapia(): FormSchemaInput {
             key: 'precio_venta_libra',
             label: 'Precio de venta por libra',
             type: 'money',
-            meta: 'COP',
+            meta: 'COP — editable según mercado',
             cols: 1,
           },
         ],
@@ -1808,7 +1808,7 @@ function schemaTransporteCarga(): FormSchemaInput {
             ],
             cols: 1,
           },
-          { key: 'cantidad_viajes_semana', label: 'Cantidad de viajes por semana', type: 'number', meta: 'Int', cols: 1 },
+          { key: 'cantidad_viajes_semana', label: 'Cantidad de viajes por semana', type: 'number', meta: 'Int — editable en radicación', cols: 1 },
           { key: 'carga_ida', label: '¿Qué transporta? Ida', type: 'text', meta: 'Ej: Arena', cols: 1 },
           { key: 'carga_vuelta', label: '¿Qué transporta? Vuelta', type: 'text', meta: 'Ej: Cemento', cols: 1 },
         ],
@@ -2436,6 +2436,19 @@ function computeAvesTotalCantidadDiaria(data: Record<string, unknown>): number |
   const c5 = Number(data.cantidad_diaria_criollos ?? 0)
   const valor = c1 + c2 + c3 + c4 + c5
   return Number.isFinite(valor) ? valor : null
+}
+
+/**
+ * Aves ponedoras: la suma de cantidades diarias por clasificación no debe superar N° de cubetas diarias.
+ */
+export function isAvesTotalCantidadDiariaExceedsCubetas(data: Record<string, unknown>): boolean {
+  const cubetas = computeAvesCubetasDiarias(data)
+  const total = computeAvesTotalCantidadDiaria(data)
+  if (cubetas == null || total == null) {
+    return false
+  }
+
+  return total - cubetas > 1e-4
 }
 
 /** Aves Ponedoras: total valor diario = suma de totales por clasificación */
@@ -3232,6 +3245,12 @@ export function validateActivityTemplate(
 
   if (item.template === 'ganado-doble-proposito' && isGanadoDobleCriasSuperaVacasCria(data)) {
     errors.push('El número de crías no puede ser superior al número de vacas de cría')
+  }
+
+  if (item.template === 'aves-ponedoras' && isAvesTotalCantidadDiariaExceedsCubetas(data)) {
+    errors.push(
+      'En «Clasificación de huevo y precios», la suma de cantidades diarias (total diario) no puede superar el N° de cubetas diarias de «Cantidad de aves». Reduzca las cantidades o revise cantidad de aves y mortalidad.',
+    )
   }
 
   return {

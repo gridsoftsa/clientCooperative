@@ -261,6 +261,11 @@ function finalizeCodeudorWizard() {
     toast.error('Completa documento, primer nombre y primer apellido del codeudor')
     return
   }
+  const rTemplates = validateAllActivityTemplates(getActivityTemplatesFor(app))
+  if (!rTemplates.valid) {
+    toast.error(rTemplates.errors.join('. '))
+    return
+  }
   if (hasDocumentsWithoutTitleInApplicant(app)) {
     toast.error('Todos los documentos adjuntos deben tener un título')
     return
@@ -282,6 +287,13 @@ function hasDocumentsWithoutTitleInApplicant(app: ApplicantForm): boolean {
 }
 
 function nextCodeudorStep() {
+  if (codeudorStep.value === 2) {
+    const r = validateAllActivityTemplates(getActivityTemplatesFor(codeudorWizardApplicant.value))
+    if (!r.valid) {
+      toast.error(r.errors.join('. '))
+      return
+    }
+  }
   if (codeudorStep.value < 3) codeudorStep.value++
 }
 
@@ -887,6 +899,24 @@ async function nextStep() {
     }
     const ok = await fetchApplicationByRadicado()
     if (!ok) return
+  }
+  if (
+    (mode.value === 'deudor' && currentStep.value === 2)
+    || (mode.value === 'codeudor' && currentStep.value === 2)
+  ) {
+    const r = validateAllActivityTemplates(getActivityTemplates())
+    if (!r.valid) {
+      toast.error(r.errors.join('. '))
+      return
+    }
+  }
+  if (mode.value === 'deudor' && currentStep.value === 4) {
+    const destT = form.value.destination_activity_templates ?? []
+    const r = validateAllActivityTemplates(destT)
+    if (!r.valid) {
+      toast.error(`Destino del crédito: ${r.errors.join('. ')}`)
+      return
+    }
   }
   if (currentStep.value < maxStep.value) currentStep.value++
 }

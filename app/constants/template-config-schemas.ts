@@ -21,6 +21,12 @@ export const CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT = 45
 /** Valor por defecto — duración del ciclo (meses), cerdos de ceba. */
 export const CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT = 4
 
+/** Valor por defecto — tiempo ciclo de engorde (días), pollos de engorde. */
+export const POLLOS_ENGORDE_TIEMPO_CICLO_DIAS_DEFAULT = 45
+
+/** Valor por defecto — tiempo ciclo de engorde (días), peces (tilapia/cachama/otros). */
+export const PESES_TILAPIA_TIEMPO_CICLO_DIAS_DEFAULT = 180
+
 /** Valor por defecto — duración (meses) en producción, cultivos permanentes. */
 export const CULTIVO_PERMANENTE_DURACION_MESES_DEFAULT = 12
 
@@ -180,6 +186,17 @@ const schemaPollosEngorde: TemplateConfigSchema = {
         },
       ],
     },
+    {
+      key: 'parametros_ciclo_engorde',
+      title: 'Parámetros de ciclo (radicación)',
+      fields: [
+        {
+          key: 'tiempo_ciclo_dias',
+          label: 'Tiempo ciclo de engorde (días)',
+          type: 'number',
+        },
+      ],
+    },
   ],
 }
 
@@ -321,6 +338,11 @@ const schemaPecesTilapia: TemplateConfigSchema = {
         { key: 'unidad_por_m2', label: 'Unidad por m²', type: 'number' },
         { key: 'peso_final_libras', label: 'Peso final en libras', type: 'number' },
         { key: 'duracion_ciclo_dias', label: 'Duración del ciclo (días)', type: 'number' },
+        {
+          key: 'tiempo_ciclo_dias',
+          label: 'Tiempo ciclo de engorde (días)',
+          type: 'number',
+        },
         { key: 'precio_venta_libra', label: 'Precio de venta por libra', type: 'money' },
       ],
     },
@@ -377,7 +399,19 @@ const schemaPlantillaComercial: TemplateConfigSchema = {
       key: 'valores_estandar',
       title: 'Valores estándar',
       fields: [
-        { key: 'semanas_mes_default', label: 'Semanas al mes (default)', type: 'number' },
+        { key: 'semanas_mes_default', label: 'Semanas al mes (tabla Semanas)', type: 'number', formulaDisplay: 'tope suma semanas' },
+        {
+          key: 'semanas_mes_completa_default',
+          label: 'Semanas al mes — tabla Días (suma días = 7)',
+          type: 'number',
+          formulaDisplay: 'default 4.75',
+        },
+        {
+          key: 'semanas_mes_parcial_default',
+          label: 'Semanas al mes — tabla Días (suma días menor a 7)',
+          type: 'number',
+          formulaDisplay: 'default 4',
+        },
         { key: 'sensibilizacion', label: '% Sensibilización', type: 'number' },
       ],
     },
@@ -456,6 +490,15 @@ export function getTemplateConfigSchema(templateKey: string): TemplateConfigSche
 /** Claves que no deben mostrarse en la configuración (son dinámicos, se calculan por radicación). */
 export const EXCLUDED_CONFIG_KEYS: Record<string, string[]> = {}
 
+/**
+ * Claves que vienen del flat_data pero el asesor puede sobrescribirlas en radicación (no solo lectura).
+ */
+export const RADICACION_EDITABLE_CONFIG_KEYS: Record<string, string[]> = {
+  'ganado-ceba': ['precio_compra_animal', 'precio_kg_animal', 'peso_kg_final'],
+  'peces-tilapia': ['precio_venta_libra'],
+  'transporte-carga': ['cantidad_viajes_semana'],
+}
+
 /** Devuelve las claves de campos que provienen de la configuración (valores estandarizados, etc.). */
 export function getConfigFieldKeys(templateKey: string): string[] {
   const schema = getTemplateConfigSchema(templateKey)
@@ -479,6 +522,12 @@ export function getConfigFieldKeys(templateKey: string): string[] {
     }
   }
   return keys
+}
+
+/** Claves de plantilla que en radicación deben mostrarse como solo lectura (excluye las editables). */
+export function getRadicacionReadOnlyConfigKeys(templateKey: string): string[] {
+  const editable = new Set(RADICACION_EDITABLE_CONFIG_KEYS[templateKey] ?? [])
+  return getConfigFieldKeys(templateKey).filter(k => !editable.has(k))
 }
 
 export function computeFormulaForConfig(

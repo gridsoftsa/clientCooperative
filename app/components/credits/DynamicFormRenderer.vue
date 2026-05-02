@@ -10,6 +10,7 @@ import {
   AVES_COST_PCT_DEFAULTS,
   FINAGRO_DEFAULTS,
   GANADO_CEBA_MAX_GANANCIA_MENSUAL_KG,
+  isAvesTotalCantidadDiariaExceedsCubetas,
   isGanadoCebaGananciaMensualSobreMaximo,
   isGanadoDobleCriasSuperaVacasCria,
 } from '~/constants/credits-financial-templates'
@@ -280,6 +281,10 @@ const ganadoDobleCriasExceedsVacasCria = computed(() =>
   props.templateKey === 'ganado-doble-proposito' && isGanadoDobleCriasSuperaVacasCria(formData),
 )
 
+const avesCantidadDiariaExceedsCubetas = computed(() =>
+  props.templateKey === 'aves-ponedoras' && isAvesTotalCantidadDiariaExceedsCubetas(formData),
+)
+
 watch(
   () => [props.schema, props.initialData],
   () => {
@@ -518,6 +523,15 @@ const inputBaseClass =
             :table-rows="section.tableRows"
             @update:field="({ key, value }) => (formData[key] = value)"
           />
+          <Alert v-if="avesCantidadDiariaExceedsCubetas" variant="destructive" class="py-2">
+            <AlertTitle class="text-sm">
+              Total diario superior a cubetas diarias
+            </AlertTitle>
+            <AlertDescription class="text-xs">
+              La suma de «cantidad diaria» por clasificación (fila TOTAL DIARIO) no puede superar el valor de
+              <span class="font-medium">N° de cubetas diarias</span> en la sección «Cantidad de aves». Reduzca las cantidades o revise cantidad de aves y mortalidad.
+            </AlertDescription>
+          </Alert>
           <CreditsAvesCostBreakdown
             :form-data="formData"
             @update:field="({ key, value }) => (formData[key] = value)"
