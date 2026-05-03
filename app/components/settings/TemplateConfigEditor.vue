@@ -28,6 +28,7 @@ import {
   isRadicacionOptionCatalogTemplate,
   RADICACION_OPTION_CATALOG_FIELD_LABELS,
 } from '~/constants/radicacion-catalog-templates'
+import { migrateAuxiliaryDocumentsFlatConfig } from '~/utils/auxiliary-documents-config'
 
 interface FlatDataRecord {
   id: number
@@ -103,9 +104,26 @@ watch(() => props.record.config_data, (newVal) => {
   if (isRadicacionOptionCatalogTemplate(props.record.template_key) && !Array.isArray(editedData.value.options)) {
     editedData.value.options = []
   }
+  if (
+    props.record.template_key === 'auxiliary-documents'
+    || props.record.template_key === 'documentos-radicacion'
+  ) {
+    migrateAuxiliaryDocumentsFlatConfig(editedData.value)
+    if (!editedData.value.itemsByActivity || typeof editedData.value.itemsByActivity !== 'object') {
+      editedData.value.itemsByActivity = {}
+    }
+  }
 }, { immediate: true })
 
-const schema = computed(() => getTemplateConfigSchema(props.record.template_key))
+/** Legacy DB rows may still use `documentos-radicacion`; schema is registered as `auxiliary-documents`. */
+function normalizeTemplateKeyForSchema(templateKey: string): string {
+  if (templateKey === 'documentos-radicacion') {
+    return 'auxiliary-documents'
+  }
+  return templateKey
+}
+
+const schema = computed(() => getTemplateConfigSchema(normalizeTemplateKeyForSchema(props.record.template_key)))
 
 function formatKey(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
@@ -255,6 +273,10 @@ function handleCancel() {
   bancosCatalogSearch.value = ''
   editing.value = false
 }
+
+function onAuxiliaryDocumentsChecklistField(payload: { key: string, value: unknown }) {
+  editedData.value[payload.key] = payload.value
+}
 </script>
 
 <template>
@@ -395,6 +417,21 @@ function handleCancel() {
             :editing="editing"
             :can-edit="canEdit"
             @update:field="({ key, value }) => (editedData[key] = value)"
+          />
+        </div>
+        <!-- Auxiliary documents checklist (match by layout or stable section.key — avoids falling through to empty standard grid) -->
+        <div
+          v-else-if="section.key === 'auxiliary_documents' || section.layout === 'auxiliaryDocumentsChecklist'"
+          class="space-y-3"
+        >
+          <h5 v-if="section.title" class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {{ section.title }}
+          </h5>
+          <SettingsAuxiliaryDocumentsChecklistConfig
+            :edited-data="editedData"
+            :editing="editing"
+            :can-edit="canEdit"
+            @update:field="onAuxiliaryDocumentsChecklistField"
           />
         </div>
         <!-- Tabla FINAGRO (cultivo-permanente) -->

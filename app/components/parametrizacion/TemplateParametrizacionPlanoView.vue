@@ -80,6 +80,7 @@ const templateLabels: Record<string, string> = {
   'tipo-documento': 'Tipo de documento (solicitante)',
   'tipo-vivienda': 'Tipo de vivienda (solicitante)',
   'actividad-economica': 'Tipo de actividad económica (solicitante)',
+  'auxiliary-documents': 'Documentos módulo auxiliar (por actividad económica)',
   'estado-civil': 'Estado civil (solicitante)',
   bancos: 'Bancos (Análisis y Score)',
   ing: 'ING — % reserva (Análisis y Score)',

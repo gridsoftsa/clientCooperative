@@ -1,6 +1,18 @@
 import type { ApplicantForm } from '~/types/credit-application'
 import { toDateInputFormat } from '~/utils/applicant-dates'
 
+/** Maps legacy Spanish JSON keys to English (`financial_info`). */
+export function normalizeFinancialInfoAliases(fi: ApplicantForm['financial_info']): ApplicantForm['financial_info'] {
+  if (!fi || typeof fi !== 'object') return fi
+  const o = fi as Record<string, unknown>
+  const next = { ...o }
+  if (next.auxiliaryDocuments === undefined && next.documentos_auxiliar !== undefined) {
+    next.auxiliaryDocuments = next.documentos_auxiliar
+    delete next.documentos_auxiliar
+  }
+  return next as ApplicantForm['financial_info']
+}
+
 /**
  * Fusiona respuesta de GET /credit-applications/applicants/find en el formulario.
  * Normaliza fechas para input type="date" y mezcla `financial_info` (p. ej. activity_type).
@@ -10,10 +22,11 @@ export function mergeApplicantFromApi(target: ApplicantForm, data: ApplicantForm
   const d = data as unknown as Record<string, unknown>
   const residenceName = (d.residence_city_name as string) || (d.residence_city as { name?: string } | null)?.name || ''
   const incomingFi = d.financial_info as Record<string, unknown> | undefined
-  const mergedFi =
+  const mergedFiRaw =
     incomingFi && typeof incomingFi === 'object'
       ? { ...(target.financial_info ?? {}), ...incomingFi }
       : target.financial_info
+  const mergedFi = normalizeFinancialInfoAliases(mergedFiRaw)
 
   const expRaw = d.expedition_date ?? (data as ApplicantForm).expedition_date
   const birthRaw = d.birth_date ?? (data as ApplicantForm).birth_date

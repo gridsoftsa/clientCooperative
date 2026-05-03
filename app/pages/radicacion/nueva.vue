@@ -10,7 +10,13 @@ import {
   useAutoSaveCreditApplication,
 } from '~/composables/useAutoSaveCreditApplication'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
+import {
+  extractItemsByActivityFromCatalogResponse,
+  resolveAuxiliaryChecklistRows,
+  titleForAuxiliaryDocumentUpload,
+} from '~/constants/auxiliary-documents-checklist'
 import { mergeApplicantFromApi } from '~/utils/merge-applicant-search'
+import { messageFromFetchError } from '~/utils/http-error-message'
 
 definePageMeta({
   layout: 'default',
@@ -25,6 +31,8 @@ const { user: authUser } = useAuth()
 /** Siempre inicia en deudor; 'codeudor' solo al agregar codeudor a solicitud existente por URL */
 const mode = ref<'deudor' | 'codeudor'>('deudor')
 const currentStep = ref(1)
+/** Paso 1 deudor: validación checklist auxiliar antes de «Siguiente». */
+const debtorStepOneFormRef = ref<{ validateAuxiliaryDocumentsRequired: () => boolean } | null>(null)
 const saving = ref(false)
 const loadingSearch = ref(false)
 const loadingApplication = ref(false)
@@ -116,16 +124,21 @@ const availableAgencies = computed(() => {
 
 async function fetchCatalogs() {
   try {
+    await $csrf()
     const agenciesRes = await $api<{ data: typeof agencies.value }>('/catalogs/agencies')
-    agencies.value = agenciesRes.data
+    const list = agenciesRes.data
+    agencies.value = Array.isArray(list) ? list : []
     if (userSucursalId.value && agencies.value.some(a => a.id === userSucursalId.value)) {
       form.value.agency_id = userSucursalId.value
     } else if (agencies.value.length && !form.value.agency_id) {
       form.value.agency_id = agencies.value[0]?.id ?? 0
     }
-  } catch (e) {
-    console.error('Error cargando catálogos:', e)
-    toast.error('Error al cargar catálogos')
+  } catch (e: unknown) {
+    console.error('Error cargando agencias (catálogo):', e)
+    agencies.value = []
+    toast.error(
+      messageFromFetchError(e, 'No se pudieron cargar las agencias. Revise la conexión con el servidor o su sesión.'),
+    )
   }
 }
 
@@ -551,7 +564,7 @@ function hasDocumentsWithoutTitle(): boolean {
 
 function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
   const { debtor, co_debtors, ...rest } = form.value
-  const { documents: _d, ...debtorWithoutDocs } = debtor
+  const { documents: _d, auxiliaryDocumentFiles: _aux, ...debtorWithoutDocs } = debtor
   const coDebtorsWithoutDocs = (co_debtors ?? []).map(({ documents: _doc, ...co }) => co)
   const radicado = form.value.numero_radicado_externo?.trim() || null
   return {
@@ -617,6 +630,11 @@ function validateAllDocumentsBeforeUpload(): string | null {
     const err = check(co.documents ?? [])
     if (err) return err
   }
+  for (const f of Object.values(form.value.debtor.auxiliaryDocumentFiles ?? {})) {
+    if (f instanceof File && f.size > MAX_DOCUMENT_SIZE) {
+      return `"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`
+    }
+  }
   return null
 }
 
@@ -646,6 +664,60 @@ async function uploadAllDocuments(
       fd.append('title', doc.title.trim())
       fd.append('file', doc.file)
       await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
+    }
+
+    let labelByKey: Record<string, string> = {}
+    const auxFiles = form.value.debtor.auxiliaryDocumentFiles
+    const fiRaw = form.value.debtor.financial_info
+    const activityType = fiRaw && typeof fiRaw === 'object'
+      ? String((fiRaw as { activity_type?: string }).activity_type ?? '').trim()
+      : ''
+    if (auxFiles && Object.keys(auxFiles).length > 0 && activityType) {
+      try {
+        const cfg = await $api<unknown>('/catalogs/template-flat-data/auxiliary-documents')
+        const iba = extractItemsByActivityFromCatalogResponse(cfg)
+        const rows = resolveAuxiliaryChecklistRows(iba, activityType)
+        labelByKey = Object.fromEntries(rows.map(r => [r.key, r.label]))
+      } catch {
+        labelByKey = {}
+      }
+    }
+
+    let didAuxiliarUpload = false
+    if (auxFiles && debtorPivot) {
+      const fi = { ...(typeof fiRaw === 'object' && fiRaw ? fiRaw : {}) } as Record<string, unknown>
+      const docMap = { ...(typeof fi.auxiliaryDocuments === 'object' && fi.auxiliaryDocuments
+        ? fi.auxiliaryDocuments as Record<string, number | null>
+        : {}) }
+
+      for (const [key, file] of Object.entries(auxFiles)) {
+        if (!(file instanceof File)) continue
+        const prevId = docMap[key]
+        if (typeof prevId === 'number' && prevId > 0) {
+          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+        }
+        const label = labelByKey[key] ?? key
+        const fd = new FormData()
+        fd.append('title', titleForAuxiliaryDocumentUpload(label))
+        fd.append('file', file)
+        fd.append('auxiliary_checklist', '1')
+        const res = await $api<{ data: { id: number } }>(
+          `/credit-applications/${applicationId}/documents`,
+          { method: 'POST', body: fd },
+        )
+        docMap[key] = res.data.id
+        didAuxiliarUpload = true
+      }
+
+      if (didAuxiliarUpload) {
+        form.value.debtor.financial_info = { ...fi, auxiliaryDocuments: docMap }
+        form.value.debtor.auxiliaryDocumentFiles = {}
+        await $csrf()
+        await $api(`/credit-applications/${applicationId}`, {
+          method: 'PUT',
+          body: payloadWithoutDocuments('Draft'),
+        })
+      }
     }
   }
 
@@ -906,6 +978,12 @@ async function nextStep() {
     }
     const ok = await fetchApplicationByRadicado()
     if (!ok) return
+  }
+  if (mode.value === 'deudor' && currentStep.value === 1) {
+    const okAux = debtorStepOneFormRef.value?.validateAuxiliaryDocumentsRequired() ?? true
+    if (!okAux) {
+      return
+    }
   }
   if (
     (mode.value === 'deudor' && currentStep.value === 2)
@@ -1192,12 +1270,15 @@ onMounted(() => {
           class="space-y-4"
         >
           <ApplicantFormFields
+            ref="debtorStepOneFormRef"
             v-model="form.debtor"
             :credit-application-id="draftId ?? undefined"
             :show-search="true"
             :loading-search="loadingSearch"
             :hide-financial-section="true"
             :show-co-debtor-concept="mode === 'codeudor'"
+            :show-documentos-auxiliar-checklist="mode === 'deudor' && !addingCodeudor"
+            :credit-application-documents="[]"
             @search="searchApplicant"
           />
         </div>

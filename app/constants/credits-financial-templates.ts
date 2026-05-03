@@ -128,6 +128,7 @@ export const sectorsConfig: SectorConfig[] = [
       { value: 'tipo-vivienda', label: 'Tipo de vivienda' },
       { value: 'actividad-economica', label: 'Tipo de actividad económica' },
       { value: 'estado-civil', label: 'Estado civil' },
+      { value: 'auxiliary-documents', label: 'Documentos (módulo auxiliar)' },
       { value: 'bancos', label: 'Bancos' },
       { value: 'ing', label: 'ING' },
     ],

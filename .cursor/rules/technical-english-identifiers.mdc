@@ -1,0 +1,9 @@
+---
+description: Identificadores técnicos en inglés; textos de usuario en español (GridSoft cooperative)
+alwaysApply: true
+---
+
+# Inglés en código y datos técnicos; español en la UI
+
+- **Usuario / negocio**: textos visibles, etiquetas, mensajes de validación, `label` en catálogos y plantillas, valores de dominio acordados pueden ir en **español**.
+- **Programación y persistencia**: claves JSON (`financial_info`, plantillas), props tipadas, nombres de constantes y funciones **en inglés**. Ej.: `auxiliaryDocuments`, `auxiliaryDocumentFiles`, `required`, no `documentos_auxiliar` / `obligatorio` en nuevas APIs.

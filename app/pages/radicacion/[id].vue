@@ -7,6 +7,7 @@ import CreditsFinancialActivityFormList from '~/components/credits/FinancialActi
 import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 import { parseActivityTemplateList } from '~/types/credit-application'
+import { normalizeFinancialInfoAliases } from '~/utils/merge-applicant-search'
 
 definePageMeta({
   layout: 'default',
@@ -292,7 +293,7 @@ function getActivityTemplates(app: any): ActivityTemplateData[] {
 }
 
 function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
-  const fi = parseJsonField(api?.financial_info)
+  const fi = normalizeFinancialInfoAliases(parseJsonField(api?.financial_info))
   const residenceName = (typeof api?.residence_city_name === 'string' && api.residence_city_name?.trim())
     ? api.residence_city_name
     : (api?.residence_city as { name?: string } | null)?.name ?? ''

@@ -44,6 +44,11 @@ export interface FinancialInfoForm {
     /** Si es garantía, su valor suma en Bien raíz */
     garantia?: boolean
   }>
+  /**
+   * Credit application document IDs for the auxiliary checklist (`auxiliary-documents`), keyed by checklist item key.
+   * Persisted in applicant pivot `financial_info` JSON.
+   */
+  auxiliaryDocuments?: Record<string, number | null>
   solvency?: {
     /** (Pasivos + monto solicitado) ÷ Activos × 100 — se calcula en resumen */
     solvency?: number
@@ -68,6 +73,8 @@ export interface ApplicantDocumentForm {
 }
 
 export interface ApplicantForm {
+  /** ID del registro en `applicants` cuando ya existe en servidor */
+  id?: number
   document_type: string
   document_number: string
   expedition_date?: string
@@ -98,6 +105,11 @@ export interface ApplicantForm {
   references?: Array<{ name?: string; phone?: string; relationship?: string }>
   /** Documentos del deudor (título + archivo para subir) */
   documents?: ApplicantDocumentForm[]
+  /**
+   * Pending local files for auxiliary checklist uploads (item key → file). Not sent as JSON; uploaded via multipart
+   * then IDs are stored on `financial_info.auxiliaryDocuments`.
+   */
+  auxiliaryDocumentFiles?: Record<string, File | undefined>
 }
 
 export interface CreditApplicationForm {

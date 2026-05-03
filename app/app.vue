@@ -51,6 +51,9 @@ defineShortcuts({
 
 const textDirection = useTextDirection({ initialValue: 'ltr' })
 const dir = computed(() => textDirection.value === 'rtl' ? 'rtl' : 'ltr')
+
+/** Vercel injects `/_vercel/insights/script.js` only on their platform; localhost would 404 and spam the console. */
+const showVercelAnalytics = computed(() => !import.meta.dev && Boolean(import.meta.env.VERCEL))
 </script>
 
 <template>
@@ -67,6 +70,6 @@ const dir = computed(() => textDirection.value === 'rtl' ? 'rtl' : 'ltr')
       <Toaster :theme="colorMode.preference as any || 'system'" />
     </ConfigProvider>
 
-    <Analytics />
+    <Analytics v-if="showVercelAnalytics" />
   </Body>
 </template>

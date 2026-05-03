@@ -6,9 +6,15 @@ import {
   sumUtilidadMensualFromTemplates,
   validateAllActivityTemplates,
 } from '~/constants/credits-financial-templates'
+import {
+  extractItemsByActivityFromCatalogResponse,
+  resolveAuxiliaryChecklistRows,
+  titleForAuxiliaryDocumentUpload,
+} from '~/constants/auxiliary-documents-checklist'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 import { parseActivityTemplateList } from '~/types/credit-application'
-import { mergeApplicantFromApi } from '~/utils/merge-applicant-search'
+import { mergeApplicantFromApi, normalizeFinancialInfoAliases } from '~/utils/merge-applicant-search'
+import { messageFromFetchError } from '~/utils/http-error-message'
 import { isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
 
 definePageMeta({
@@ -37,6 +43,7 @@ const documentsOnlyEditMode = computed(
 )
 const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
 const currentStep = ref(1)
+const radicacionStepOneFormRef = ref<{ validateAuxiliaryDocumentsRequired: () => boolean } | null>(null)
 
 const addingCodeudor = ref(false)
 const codeudorStep = ref(1)
@@ -175,7 +182,7 @@ function toDateInputFormat(val: string | null | undefined): string | undefined {
 }
 
 function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
-  const fi = parseJsonField(api?.financial_info)
+  const fi = normalizeFinancialInfoAliases(parseJsonField(api?.financial_info))
   const residenceName = (typeof api?.residence_city_name === 'string' && api.residence_city_name?.trim())
     ? api.residence_city_name
     : (api?.residence_city as { name?: string } | null)?.name ?? ''
@@ -350,11 +357,16 @@ async function fetchApplication() {
 
 async function fetchCatalogs() {
   try {
+    await $csrf()
     const agenciesRes = await $api<{ data: typeof agencies.value }>('/catalogs/agencies')
-    agencies.value = agenciesRes.data
-  } catch (e) {
-    console.error('Error cargando catálogos:', e)
-    toast.error('Error al cargar catálogos')
+    const list = agenciesRes.data
+    agencies.value = Array.isArray(list) ? list : []
+  } catch (e: unknown) {
+    console.error('Error cargando agencias (catálogo):', e)
+    agencies.value = []
+    toast.error(
+      messageFromFetchError(e, 'No se pudieron cargar las agencias. Revise la conexión con el servidor o su sesión.'),
+    )
   }
 }
 
@@ -715,7 +727,7 @@ function hasDocumentsWithoutTitle(): boolean {
 
 function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
   const { debtor, co_debtors, ...rest } = form.value
-  const { documents: _d, ...debtorWithoutDocs } = debtor
+  const { documents: _d, auxiliaryDocumentFiles: _aux, ...debtorWithoutDocs } = debtor
   const coDebtorsWithoutDocs = (co_debtors ?? []).map(({ documents: _doc, ...co }) => co)
   return {
     ...rest,
@@ -741,6 +753,11 @@ function validateAllDocumentsBeforeUpload(): string | null {
   for (const co of form.value.co_debtors ?? []) {
     const err = check(co.documents ?? [])
     if (err) return err
+  }
+  for (const f of Object.values(form.value.debtor.auxiliaryDocumentFiles ?? {})) {
+    if (f instanceof File && f.size > MAX_DOCUMENT_SIZE) {
+      return `"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`
+    }
   }
   return null
 }
@@ -773,6 +790,60 @@ async function uploadAllDocuments(
       fd.append('title', doc.title.trim())
       fd.append('file', doc.file)
       await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
+    }
+
+    let labelByKey: Record<string, string> = {}
+    const auxFiles = form.value.debtor.auxiliaryDocumentFiles
+    const fiRaw = form.value.debtor.financial_info
+    const activityType = fiRaw && typeof fiRaw === 'object'
+      ? String((fiRaw as { activity_type?: string }).activity_type ?? '').trim()
+      : ''
+    if (auxFiles && Object.keys(auxFiles).length > 0 && activityType) {
+      try {
+        const cfg = await $api<unknown>('/catalogs/template-flat-data/auxiliary-documents')
+        const iba = extractItemsByActivityFromCatalogResponse(cfg)
+        const rows = resolveAuxiliaryChecklistRows(iba, activityType)
+        labelByKey = Object.fromEntries(rows.map(r => [r.key, r.label]))
+      } catch {
+        labelByKey = {}
+      }
+    }
+
+    let didAuxiliarUpload = false
+    if (auxFiles) {
+      const fi = { ...(typeof fiRaw === 'object' && fiRaw ? fiRaw : {}) } as Record<string, unknown>
+      const docMap = { ...(typeof fi.auxiliaryDocuments === 'object' && fi.auxiliaryDocuments
+        ? fi.auxiliaryDocuments as Record<string, number | null>
+        : {}) }
+
+      for (const [key, file] of Object.entries(auxFiles)) {
+        if (!(file instanceof File)) continue
+        const prevId = docMap[key]
+        if (typeof prevId === 'number' && prevId > 0) {
+          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+        }
+        const label = labelByKey[key] ?? key
+        const fd = new FormData()
+        fd.append('title', titleForAuxiliaryDocumentUpload(label))
+        fd.append('file', file)
+        fd.append('auxiliary_checklist', '1')
+        const res = await $api<{ data: { id: number } }>(
+          `/credit-applications/${applicationId}/documents`,
+          { method: 'POST', body: fd },
+        )
+        docMap[key] = res.data.id
+        didAuxiliarUpload = true
+      }
+
+      if (didAuxiliarUpload) {
+        form.value.debtor.financial_info = { ...fi, auxiliaryDocuments: docMap }
+        form.value.debtor.auxiliaryDocumentFiles = {}
+        await $csrf()
+        await $api(`/credit-applications/${applicationId}`, {
+          method: 'PUT',
+          body: payloadWithoutDocuments('Draft'),
+        })
+      }
     }
   }
 
@@ -924,6 +995,12 @@ async function confirmSubmitToDirector() {
 }
 
 function nextStep() {
+  if (currentStep.value === 1) {
+    const okAux = radicacionStepOneFormRef.value?.validateAuxiliaryDocumentsRequired() ?? true
+    if (!okAux) {
+      return
+    }
+  }
   if (!documentsOnlyEditMode.value && currentStep.value === 2) {
     const r = validateAllActivityTemplates(getActivityTemplates())
     if (!r.valid) {
@@ -1222,6 +1299,7 @@ onMounted(() => {
             class="space-y-4"
           >
             <ApplicantFormFields
+              ref="radicacionStepOneFormRef"
               v-model="form.debtor"
               :credit-application-id="application?.id"
               :show-search="true"
@@ -1229,6 +1307,8 @@ onMounted(() => {
               :hide-financial-section="true"
               :read-only-form="false"
               :documents-editable-only="documentsOnlyEditMode"
+              :show-documentos-auxiliar-checklist="!addingCodeudor"
+              :credit-application-documents="application?.documents ?? []"
               @search="searchApplicant"
             />
           </div>
@@ -1253,6 +1333,7 @@ onMounted(() => {
               :credit-application-id="application?.id"
               :show-only-financial="true"
               :read-only-form="documentsOnlyEditMode"
+              :documents-editable-only="documentsOnlyEditMode"
             />
           </div>
 
