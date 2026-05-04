@@ -179,14 +179,21 @@ const sectionClass = 'space-y-4'
 const sectionTitleClass = 'text-sm font-semibold text-foreground border-b pb-2 mb-1'
 const fieldClass = 'space-y-1.5'
 
-/** Documentos adjuntos: checklist parametrizado (paso 1 deudor con prop) o filas libres (codeudor / sin checklist). */
-const attachmentsSectionVisible = computed(
+/** Checklist auxiliar (deudor): solo visible si el rol puede subir adjuntos. */
+const auxiliaryChecklistVisible = computed(
   () =>
     !props.hideDocumentsSection
-    && (
-      (props.showDocumentosAuxiliarChecklist && docCanSubir.value)
-      || (!props.showOnlyFinancial && (props.showSearch || props.showCoDebtorConcept))
-    ),
+    && props.showDocumentosAuxiliarChecklist
+    && docCanSubir.value,
+)
+
+/** Documentos libres (sin checklist): flujo de codeudor u otros formularios. */
+const freeAttachmentsVisible = computed(
+  () =>
+    !props.hideDocumentsSection
+    && !props.showDocumentosAuxiliarChecklist
+    && !props.showOnlyFinancial
+    && (props.showSearch || props.showCoDebtorConcept),
 )
 
 /** Con checklist auxiliar, mostrar el contenido expandido por defecto (la lista no debe quedar «vacía» hasta abrir). */
@@ -804,7 +811,7 @@ function formatFileSize(bytes: number): string {
 
     <!-- Documentos auxiliares: justo después del tipo de actividad (misma pantalla en radicación / nueva) -->
     <section
-      v-if="attachmentsSectionVisible && showDocumentosAuxiliarChecklist"
+      v-if="auxiliaryChecklistVisible"
       :class="sectionClass"
     >
       <div class="space-y-3 rounded-lg border border-border bg-muted/25 p-4">
@@ -824,7 +831,7 @@ function formatFileSize(bytes: number): string {
           :credit-application-id="creditApplicationId ?? undefined"
           :application-documents="creditApplicationDocuments ?? []"
           :economic-activity-options="economicActivityOptions"
-          :disabled="personalReadOnly && !documentsEditableOnly"
+          :disabled="(personalReadOnly && !documentsEditableOnly) || !docCanSubir"
           @update:applicant="emit('update:modelValue', $event)"
         />
       </div>
@@ -1259,7 +1266,7 @@ function formatFileSize(bytes: number): string {
     </section>
 
     <!-- Documentos adjuntos (filas libres; el checklist auxiliar va junto a «Actividad económica» arriba) -->
-    <section v-if="attachmentsSectionVisible && !showDocumentosAuxiliarChecklist" :class="sectionClass">
+    <section v-if="freeAttachmentsVisible" :class="sectionClass">
       <Collapsible
         v-model:open="documentosAdjuntosOpen"
       >
