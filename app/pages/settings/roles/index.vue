@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { Role, PaginatedRoles } from '~/types/role'
+import { formatPermissionDisplayName } from '~/constants/permission-labels'
+import { getRoleDisplayLabel, roleShowsSystemBadge } from '~/constants/role-labels'
 
 definePageMeta({
   layout: 'default',
@@ -170,19 +172,20 @@ watch(searchQuery, () => {
                   <TableCell class="font-medium">{{ role.id }}</TableCell>
                   <TableCell>
                     <div class="flex items-center gap-2">
-                      <span class="font-medium">{{ role.name }}</span>
-                      <Badge v-if="role.name === 'admin'" variant="default">Sistema</Badge>
+                      <span class="font-medium">{{ getRoleDisplayLabel(role.name) }}</span>
+                      <Badge v-if="roleShowsSystemBadge(role.name)" variant="default">Sistema</Badge>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div class="flex gap-1 flex-wrap max-w-md">
+                    <div class="flex max-w-xl flex-wrap gap-1">
                       <Badge 
                         v-for="permission in (role.permissions || []).slice(0, 3)" 
                         :key="permission" 
                         variant="outline"
-                        class="text-xs"
+                        class="max-w-[14rem] truncate text-xs"
+                        :title="permission"
                       >
-                        {{ permission }}
+                        {{ formatPermissionDisplayName(permission) }}
                       </Badge>
                       <Badge 
                         v-if="(role.permissions || []).length > 3" 
@@ -264,7 +267,7 @@ watch(searchQuery, () => {
       v-model:open="deleteRoleDialogOpen"
       title="Eliminar rol"
       :description="rolePendingDelete
-        ? `Se eliminará el rol “${rolePendingDelete.name}”. Indica el motivo.`
+        ? `Se eliminará el rol «${getRoleDisplayLabel(rolePendingDelete.name)}» (${rolePendingDelete.name}). Indica el motivo.`
         : ''"
       confirm-text="Aceptar"
       cancel-text="Cancelar"

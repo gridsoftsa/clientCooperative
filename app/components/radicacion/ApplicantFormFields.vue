@@ -63,16 +63,14 @@ const personalReadOnly = computed(() => props.readOnlyForm || props.documentsEdi
 /** Alta/edición de documentos (título, archivo, quitar, agregar). */
 const docActionsEnabled = computed(() => !props.readOnlyForm || props.documentsEditableOnly)
 
-const docFallbackRadicacion = ['radicacion_crear', 'radicacion_editar'] as const
-
 const docCanSubir = computed(
-  () => docActionsEnabled.value && hasAnyPermission(['radicacion_documentos_subir', ...docFallbackRadicacion]),
+  () => docActionsEnabled.value && hasAnyPermission(['radicacion_documentos_subir']),
 )
 const docCanEditar = computed(
-  () => docActionsEnabled.value && hasAnyPermission(['radicacion_documentos_editar', ...docFallbackRadicacion]),
+  () => docActionsEnabled.value && hasAnyPermission(['radicacion_documentos_editar']),
 )
 const docCanEliminar = computed(
-  () => docActionsEnabled.value && hasAnyPermission(['radicacion_documentos_eliminar', ...docFallbackRadicacion]),
+  () => docActionsEnabled.value && hasAnyPermission(['radicacion_documentos_eliminar']),
 )
 
 function canEditDocumentTitle(doc: ApplicantDocumentForm): boolean {
@@ -186,7 +184,7 @@ const attachmentsSectionVisible = computed(
   () =>
     !props.hideDocumentsSection
     && (
-      props.showDocumentosAuxiliarChecklist
+      (props.showDocumentosAuxiliarChecklist && docCanSubir.value)
       || (!props.showOnlyFinancial && (props.showSearch || props.showCoDebtorConcept))
     ),
 )
@@ -210,7 +208,7 @@ type AuxiliaryDocumentsSectionExpose = {
 const auxiliaryDocumentsSectionRef = ref<AuxiliaryDocumentsSectionExpose | null>(null)
 
 function validateAuxiliaryDocumentsRequired(): boolean {
-  if (!props.showDocumentosAuxiliarChecklist) {
+  if (!props.showDocumentosAuxiliarChecklist || !docCanSubir.value) {
     return true
   }
   return auxiliaryDocumentsSectionRef.value?.validateRequiredAuxiliaryUploads() ?? true

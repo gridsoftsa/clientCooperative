@@ -3,7 +3,9 @@ import { toast } from 'vue-sonner'
 import type { Permission } from '~/types/role'
 import {
   PERMISSION_CATEGORY_LABELS,
+  PERMISSION_CATEGORY_SECTION_TITLES,
   formatPermissionDisplayName,
+  groupRadicacionPermissions,
   sortPermissionCategoryKeys,
 } from '~/constants/permission-labels'
 
@@ -39,7 +41,12 @@ const orderedCategoryKeys = computed(() =>
   sortPermissionCategoryKeys(Object.keys(groupedPermissions.value)),
 )
 
-const getCategoryLabel = (key: string) => PERMISSION_CATEGORY_LABELS[key] ?? key
+const radicacionSubgroups = computed(() =>
+  groupRadicacionPermissions(groupedPermissions.value['radicacion'] ?? []),
+)
+
+const getCategoryLabel = (key: string) =>
+  PERMISSION_CATEGORY_SECTION_TITLES[key] ?? PERMISSION_CATEGORY_LABELS[key] ?? key
 
 const openCategories = ref<Record<string, boolean>>({})
 
@@ -200,7 +207,34 @@ onMounted(() => fetchPermissions())
                   </Button>
                 </div>
                 <CollapsibleContent>
-                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 p-4 border-t">
+                  <div v-if="category === 'radicacion'" class="divide-y border-t">
+                    <div
+                      v-for="sub in radicacionSubgroups"
+                      :key="sub.key"
+                      class="px-4 py-3"
+                    >
+                      <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {{ sub.label }}
+                      </p>
+                      <div class="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
+                        <div
+                          v-for="p in sub.items"
+                          :key="p.id"
+                          class="flex items-center space-x-2"
+                        >
+                          <Checkbox
+                            :id="`permission-${p.id}`"
+                            :model-value="formData.permissions.includes(p.name)"
+                            @update:model-value="(v: boolean | 'indeterminate') => togglePermission(p.name, v === true)"
+                          />
+                          <Label :for="`permission-${p.id}`" class="cursor-pointer text-sm font-normal">
+                            {{ formatPermissionDisplayName(p.name) }}
+                          </Label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="grid grid-cols-1 gap-2 border-t p-4 md:grid-cols-2 lg:grid-cols-3">
                     <div
                       v-for="p in groupedPermissions[category] ?? []"
                       :key="p.id"
@@ -211,7 +245,7 @@ onMounted(() => fetchPermissions())
                         :model-value="formData.permissions.includes(p.name)"
                         @update:model-value="(v: boolean | 'indeterminate') => togglePermission(p.name, v === true)"
                       />
-                      <Label :for="`permission-${p.id}`" class="font-normal cursor-pointer text-sm">
+                      <Label :for="`permission-${p.id}`" class="cursor-pointer text-sm font-normal">
                         {{ formatPermissionDisplayName(p.name) }}
                       </Label>
                     </div>
