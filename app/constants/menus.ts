@@ -10,6 +10,12 @@ export const navMenu: NavMenu[] = [
         link: '/',
         permission: 'dashboard_ver',
       },
+      {
+        title: 'Reportes',
+        icon: 'i-lucide-chart-column',
+        link: '/reportes',
+        permission: 'reportes_ver',
+      },
       /* {
         title: 'Email',
         icon: 'i-lucide-mail',

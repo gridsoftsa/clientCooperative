@@ -213,6 +213,105 @@ type AuxiliaryDocumentsSectionExpose = {
 }
 
 const auxiliaryDocumentsSectionRef = ref<AuxiliaryDocumentsSectionExpose | null>(null)
+const submitValidationAttempted = ref(false)
+
+const requiredFieldIds = {
+  document_type: 'doc_type',
+  document_number: 'search_doc',
+  first_name: 'first_name',
+  first_last_name: 'first_last',
+  expedition_date: 'exp_date',
+  expedition_place: 'exp_place',
+  birth_date: 'birth_date',
+  gender: 'gender',
+  mobile_phone: 'mobile',
+  residence_address: 'address',
+  activity_type: 'activity_type',
+} as const
+
+type RequiredFieldKey = keyof typeof requiredFieldIds
+
+function hasValue(value: unknown): boolean {
+  return typeof value === 'string' ? value.trim().length > 0 : value != null
+}
+
+function isRequiredFieldMissing(field: RequiredFieldKey): boolean {
+  if (field === 'activity_type') {
+    return !hasValue(financial.value.activity_type)
+  }
+  return !hasValue(local.value[field as keyof ApplicantForm])
+}
+
+function firstMissingRequiredField(): RequiredFieldKey | null {
+  const ordered: RequiredFieldKey[] = [
+    'document_type',
+    'document_number',
+    'first_name',
+    'first_last_name',
+    'expedition_date',
+    'expedition_place',
+    'birth_date',
+    'gender',
+    'mobile_phone',
+    'residence_address',
+    'activity_type',
+  ]
+  return ordered.find(field => isRequiredFieldMissing(field)) ?? null
+}
+
+function focusField(field: RequiredFieldKey): void {
+  const id = requiredFieldIds[field]
+  const root = document.getElementById(id)
+  if (!root) return
+  if (root instanceof HTMLInputElement || root instanceof HTMLTextAreaElement || root instanceof HTMLSelectElement) {
+    root.focus()
+    return
+  }
+  const focusable = root.querySelector('input,button,[tabindex]:not([tabindex="-1"])') as HTMLElement | null
+  focusable?.focus()
+}
+
+function validateRequiredStepOneFields(): boolean {
+  submitValidationAttempted.value = true
+  const firstMissing = firstMissingRequiredField()
+  if (!firstMissing) {
+    return true
+  }
+  nextTick(() => focusField(firstMissing))
+  return false
+}
+
+function fieldErrorClass(field: RequiredFieldKey): string {
+  if (!submitValidationAttempted.value || !isRequiredFieldMissing(field)) {
+    return ''
+  }
+  return 'border-destructive focus-visible:ring-destructive'
+}
+
+function multiselectErrorClass(field: RequiredFieldKey): string {
+  if (!submitValidationAttempted.value || !isRequiredFieldMissing(field)) {
+    return 'multiselect-municipality'
+  }
+  return 'multiselect-municipality multiselect-danger'
+}
+
+watch(local, () => {
+  if (!submitValidationAttempted.value) {
+    return
+  }
+  if (!firstMissingRequiredField()) {
+    submitValidationAttempted.value = false
+  }
+}, { deep: true })
+
+watch(financial, () => {
+  if (!submitValidationAttempted.value) {
+    return
+  }
+  if (!firstMissingRequiredField()) {
+    submitValidationAttempted.value = false
+  }
+}, { deep: true })
 
 function validateAuxiliaryDocumentsRequired(): boolean {
   if (!props.showDocumentosAuxiliarChecklist || !docCanSubir.value) {
@@ -222,6 +321,7 @@ function validateAuxiliaryDocumentsRequired(): boolean {
 }
 
 defineExpose({
+  validateRequiredStepOneFields,
   validateAuxiliaryDocumentsRequired,
 })
 
@@ -436,7 +536,7 @@ function formatFileSize(bytes: number): string {
               placeholder="Ej: 1234567890"
               inputmode="numeric"
               autocomplete="off"
-              class="h-9 w-full"
+            :class="['h-9 w-full', fieldErrorClass('document_number')]"
               @input="onDigitsOnlyInput($event, v => (local.document_number = v))"
               @keyup.enter="runSearch"
             />
@@ -476,7 +576,7 @@ function formatFileSize(bytes: number): string {
             placeholder="Seleccionar"
             no-options-text="Sin opciones. Configura «Tipo de documento» en Parametrización → Radicación."
             no-results-text="Sin coincidencias"
-            class="multiselect-municipality"
+            :class="multiselectErrorClass('document_type')"
             @update:model-value="updateField('document_type', ($event != null && $event !== '') ? String($event) : '')"
           />
         </div>
@@ -489,22 +589,25 @@ function formatFileSize(bytes: number): string {
             inputmode="numeric"
             :disabled="personalReadOnly"
             :readonly="personalReadOnly"
+            :class="fieldErrorClass('document_number')"
             @input="onDigitsOnlyInput($event, v => updateField('document_number', v))"
           />
         </div>
         <div :class="fieldClass">
-          <Label for="exp_date">Fecha expedición</Label>
+          <Label for="exp_date">Fecha expedición *</Label>
           <Input
             id="exp_date"
             :model-value="local.expedition_date"
             type="date"
             :disabled="personalReadOnly"
+            :class="fieldErrorClass('expedition_date')"
             @update:model-value="updateField('expedition_date', $event ?? '')"
           />
         </div>
         <div :class="fieldClass">
-          <Label for="exp_place">Lugar de expedición</Label>
+          <Label for="exp_place">Lugar de expedición *</Label>
           <Multiselect
+            id="exp_place"
             :model-value="local.expedition_place ?? null"
             :options="multiselectOptionsByLabel"
             :disabled="personalReadOnly"
@@ -515,7 +618,7 @@ function formatFileSize(bytes: number): string {
             placeholder="Municipio"
             no-options-text="No hay municipios"
             no-results-text="No hay resultados. Escribe para filtrar."
-            class="multiselect-municipality"
+            :class="multiselectErrorClass('expedition_place')"
             @update:model-value="updateField('expedition_place', ($event as string) ?? '')"
           />
         </div>
@@ -533,6 +636,7 @@ function formatFileSize(bytes: number): string {
             :model-value="local.first_name"
             placeholder="Ej: Juan"
             :disabled="personalReadOnly"
+            :class="fieldErrorClass('first_name')"
             @update:model-value="updateField('first_name', String($event ?? ''))"
           />
         </div>
@@ -553,6 +657,7 @@ function formatFileSize(bytes: number): string {
             :model-value="local.first_last_name"
             placeholder="Ej: Pérez"
             :disabled="personalReadOnly"
+            :class="fieldErrorClass('first_last_name')"
             @update:model-value="updateField('first_last_name', String($event ?? ''))"
           />
         </div>
@@ -567,17 +672,18 @@ function formatFileSize(bytes: number): string {
           />
         </div>
         <div :class="fieldClass">
-          <Label for="birth_date">Fecha nacimiento</Label>
+          <Label for="birth_date">Fecha nacimiento *</Label>
           <Input
             id="birth_date"
             :model-value="local.birth_date"
             type="date"
             :disabled="personalReadOnly"
+            :class="fieldErrorClass('birth_date')"
             @update:model-value="updateField('birth_date', String($event ?? ''))"
           />
         </div>
         <div :class="fieldClass">
-          <Label for="gender">Género</Label>
+          <Label for="gender">Género *</Label>
           <Multiselect
             id="gender"
             :model-value="local.gender ? local.gender : null"
@@ -591,7 +697,7 @@ function formatFileSize(bytes: number): string {
             placeholder="Seleccionar"
             no-options-text="Sin opciones. Configura «Género» en Parametrización → Radicación."
             no-results-text="Sin coincidencias"
-            class="multiselect-municipality"
+            :class="multiselectErrorClass('gender')"
             @update:model-value="updateField('gender', ($event != null && $event !== '') ? String($event) : '')"
           />
         </div>
@@ -635,13 +741,14 @@ function formatFileSize(bytes: number): string {
       <h3 :class="sectionTitleClass">Contacto</h3>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div :class="fieldClass">
-          <Label for="mobile">Celular</Label>
+          <Label for="mobile">Celular *</Label>
           <Input
             id="mobile"
             :model-value="local.mobile_phone"
             placeholder="3001234567"
             inputmode="numeric"
             :disabled="personalReadOnly"
+            :class="fieldErrorClass('mobile_phone')"
             @input="onDigitsOnlyInput($event, v => updateField('mobile_phone', v))"
           />
         </div>
@@ -675,12 +782,13 @@ function formatFileSize(bytes: number): string {
       <h3 :class="sectionTitleClass">Dirección y residencia</h3>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div class="sm:col-span-2 lg:col-span-3" :class="fieldClass">
-          <Label for="address">Dirección de residencia</Label>
+          <Label for="address">Dirección de residencia *</Label>
           <Input
             id="address"
             :model-value="local.residence_address"
             placeholder="Calle 123 #45-67, barrio..."
             :disabled="personalReadOnly"
+            :class="fieldErrorClass('residence_address')"
             @update:model-value="updateField('residence_address', String($event ?? ''))"
           />
         </div>
@@ -738,7 +846,7 @@ function formatFileSize(bytes: number): string {
       <h3 :class="sectionTitleClass">Actividad económica</h3>
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div :class="fieldClass">
-          <Label for="activity_type">Tipo de actividad económica</Label>
+          <Label for="activity_type">Tipo de actividad económica *</Label>
           <Multiselect
             id="activity_type"
             :model-value="financial.activity_type ? financial.activity_type : null"
@@ -752,7 +860,7 @@ function formatFileSize(bytes: number): string {
             placeholder="Seleccionar (ej. Empleado formal)"
             no-options-text="Sin opciones. Configura «Tipo de actividad económica» en Parametrización → Radicación."
             no-results-text="Sin coincidencias"
-            class="multiselect-municipality"
+            :class="multiselectErrorClass('activity_type')"
             @update:model-value="setActivityTypeFromSelect($event)"
           />
         </div>
@@ -1401,5 +1509,11 @@ function formatFileSize(bytes: number): string {
   min-height: 2.25rem; /* h-9: igual que Input y Select del formulario */
   width: 100%;
   min-width: 0;
+}
+
+/* El root del Multiselect es a la vez .multiselect y recibe .multiselect-danger por class merge (no es padre→hijo). */
+.multiselect-municipality.multiselect-danger {
+  --ms-border-color: hsl(var(--destructive));
+  --ms-border-color-active: hsl(var(--destructive));
 }
 </style>

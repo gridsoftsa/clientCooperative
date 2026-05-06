@@ -13,6 +13,7 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
   roles: 'Roles',
   permisos: 'Permisos',
   dashboard: 'Dashboard',
+  reportes: 'Reportes',
   admin: 'Administrador',
   auditoria: 'Auditoría',
   perfil: 'Perfil',
@@ -44,6 +45,7 @@ export const PERMISSION_CATEGORY_SECTION_TITLES: Record<string, string> = {
  */
 export const PERMISSION_CATEGORY_ORDER: string[] = [
   'dashboard',
+  'reportes',
   'radicacion',
   'solicitantes',
   'plantillas',
@@ -188,6 +190,7 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   radicacion_documentos_subir: 'Subir adjuntos',
   radicacion_documentos_editar: 'Editar títulos de adjuntos',
   radicacion_documentos_eliminar: 'Eliminar adjuntos',
+  reportes_ver: 'Ver reportes',
   radicacion_catalogos_ver: 'Ver catálogos',
   radicacion_catalogos_editar: 'Editar catálogos',
   plantilla_score_ver: 'Ver plantilla SCORE',

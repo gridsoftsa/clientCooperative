@@ -32,7 +32,10 @@ const { user: authUser } = useAuth()
 const mode = ref<'deudor' | 'codeudor'>('deudor')
 const currentStep = ref(1)
 /** Paso 1 deudor: validación checklist auxiliar antes de «Siguiente». */
-const debtorStepOneFormRef = ref<{ validateAuxiliaryDocumentsRequired: () => boolean } | null>(null)
+const debtorStepOneFormRef = ref<{
+  validateRequiredStepOneFields: () => boolean
+  validateAuxiliaryDocumentsRequired: () => boolean
+} | null>(null)
 const saving = ref(false)
 const loadingSearch = ref(false)
 const loadingApplication = ref(false)
@@ -980,6 +983,11 @@ async function nextStep() {
     if (!ok) return
   }
   if (mode.value === 'deudor' && currentStep.value === 1) {
+    const okRequired = debtorStepOneFormRef.value?.validateRequiredStepOneFields() ?? true
+    if (!okRequired) {
+      toast.error('Completa los campos obligatorios del deudor')
+      return
+    }
     const okAux = debtorStepOneFormRef.value?.validateAuxiliaryDocumentsRequired() ?? true
     if (!okAux) {
       return
