@@ -8,6 +8,7 @@ export const RADICACION_OPTION_CATALOG_TEMPLATE_KEYS = [
   'tipo-vivienda',
   'actividad-economica',
   'estado-civil',
+  'aprobadores',
   'bancos',
 ] as const
 
@@ -24,5 +25,6 @@ export const RADICACION_OPTION_CATALOG_FIELD_LABELS: Record<RadicacionOptionCata
   'tipo-vivienda': 'Tipo de vivienda',
   'actividad-economica': 'Tipo de actividad económica',
   'estado-civil': 'Estado civil',
+  aprobadores: 'Aprobadores',
   bancos: 'Bancos',
 }

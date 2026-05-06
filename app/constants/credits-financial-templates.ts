@@ -128,6 +128,7 @@ export const sectorsConfig: SectorConfig[] = [
       { value: 'tipo-vivienda', label: 'Tipo de vivienda' },
       { value: 'actividad-economica', label: 'Tipo de actividad económica' },
       { value: 'estado-civil', label: 'Estado civil' },
+      { value: 'aprobadores', label: 'Aprobadores' },
       { value: 'auxiliary-documents', label: 'Documentos (módulo auxiliar)' },
       { value: 'bancos', label: 'Bancos' },
       { value: 'ing', label: 'ING' },
@@ -136,6 +137,9 @@ export const sectorsConfig: SectorConfig[] = [
 ]
 
 const SECTOR_RADICACION_KEY = 'radicacion'
+
+/** Plantillas agrupadas bajo «Aprobadores» en /parametrizacion/radicacion. */
+const RADICACION_APROBADORES_TEMPLATE_VALUES = new Set<string>(['aprobadores'])
 
 /** Plantillas agrupadas bajo «Análisis y Score» en /parametrizacion/radicacion. */
 const RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES = new Set<string>(['bancos', 'ing'])
@@ -151,7 +155,7 @@ export function sectorsForActivityTemplates(): SectorConfig[] {
 }
 
 /**
- * Parametrización de radicación: dos bloques en el panel — solicitante y Análisis y Score (p. ej. bancos).
+ * Parametrización de radicación: Solicitante, Aprobadores y Análisis y Score.
  */
 export function sectorsForParametrizacionRadicacion(): SectorConfig[] {
   const r = sectorsConfig.find(s => s.value === SECTOR_RADICACION_KEY)
@@ -159,13 +163,18 @@ export function sectorsForParametrizacionRadicacion(): SectorConfig[] {
     return []
   }
   const solicitanteTemplates = r.templates.filter(
-    t => !RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES.has(t.value),
+    t => !RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES.has(t.value)
+      && !RADICACION_APROBADORES_TEMPLATE_VALUES.has(t.value),
+  )
+  const aprobadoresTemplates = r.templates.filter(
+    t => RADICACION_APROBADORES_TEMPLATE_VALUES.has(t.value),
   )
   const analisisTemplates = r.templates.filter(
     t => RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES.has(t.value),
   )
   return [
     { value: SECTOR_RADICACION_KEY, label: 'Solicitante', templates: solicitanteTemplates },
+    { value: 'radicacion-aprobadores', label: 'Aprobadores', templates: aprobadoresTemplates },
     { value: 'radicacion-analisis-score', label: 'Análisis y Score', templates: analisisTemplates },
   ]
 }

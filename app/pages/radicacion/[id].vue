@@ -146,6 +146,14 @@ const analystDecisionOptions = [
 
 const creditDirectorDecision = ref<'approved' | 'rejected' | ''>('')
 const creditDirectorConcept = ref('')
+const creditDirectorExceptionOptions = [
+  { value: 'no', label: 'No' },
+  { value: 'yes', label: 'Sí' },
+]
+const creditDirectorIsExceptionChoice = ref<'yes' | 'no'>('no')
+const creditDirectorExceptionJustification = ref('')
+const creditDirectorApproverValue = ref('')
+const creditDirectorApproverOptions = ref<Array<{ value: string, label: string }>>([])
 const creditDirectorDecisionDialogOpen = ref(false)
 const submittingCreditDirectorDecision = ref(false)
 const creditDirectorDecisionOptions = [
@@ -202,6 +210,45 @@ function onCreditDirectorDecisionUpdate(value: string | null) {
     return
   }
   creditDirectorDecision.value = ''
+}
+
+function onCreditDirectorExceptionUpdate(value: string | null) {
+  if (value === 'yes' || value === 'no') {
+    creditDirectorIsExceptionChoice.value = value
+    if (value === 'no') {
+      creditDirectorExceptionJustification.value = ''
+      creditDirectorApproverValue.value = ''
+    }
+    return
+  }
+  creditDirectorIsExceptionChoice.value = 'no'
+  creditDirectorExceptionJustification.value = ''
+  creditDirectorApproverValue.value = ''
+}
+
+function approverLabelForValue(value: string | null | undefined): string {
+  if (value == null || value === '') {
+    return ''
+  }
+  const o = creditDirectorApproverOptions.value.find(x => x.value === value)
+  return o?.label ?? value
+}
+
+async function loadAprobadoresCatalog(): Promise<void> {
+  try {
+    const res = await $api<{ data: { options?: Array<{ value: string, label: string }> } }>(
+      '/catalogs/template-flat-data/aprobadores',
+    )
+    const opts = res.data?.options
+    creditDirectorApproverOptions.value = Array.isArray(opts) ? opts : []
+  } catch (e) {
+    console.error('Error cargando catálogo aprobadores:', e)
+    creditDirectorApproverOptions.value = []
+  }
+}
+
+function onCreditDirectorApproverUpdate(value: string | null): void {
+  creditDirectorApproverValue.value = value ?? ''
 }
 
 function snapshotField(key: string): string {
@@ -618,6 +665,16 @@ function openCreditDirectorDecisionDialog() {
     toast.error('El concepto debe ser claro y estructurado (mínimo 25 caracteres). Incluya antecedentes, análisis y decisión fundamentada.')
     return
   }
+  if (creditDirectorIsExceptionChoice.value === 'yes') {
+    if (creditDirectorExceptionJustification.value.trim().length < 10) {
+      toast.error('Si marca excepción, la justificación debe tener al menos 10 caracteres.')
+      return
+    }
+    if (creditDirectorApproverValue.value.trim() === '') {
+      toast.error('Si marca excepción, seleccione el aprobador.')
+      return
+    }
+  }
   creditDirectorDecisionDialogOpen.value = true
 }
 
@@ -633,6 +690,13 @@ async function confirmCreditDirectorDecision() {
       body: {
         decision: creditDirectorDecision.value,
         concept: creditDirectorConcept.value.trim(),
+        is_exception: creditDirectorIsExceptionChoice.value === 'yes',
+        exception_justification: creditDirectorIsExceptionChoice.value === 'yes'
+          ? creditDirectorExceptionJustification.value.trim()
+          : null,
+        approver_value: creditDirectorIsExceptionChoice.value === 'yes'
+          ? creditDirectorApproverValue.value.trim()
+          : null,
       },
     })
     creditDirectorDecisionDialogOpen.value = false
@@ -738,6 +802,12 @@ async function fetchApplication() {
     }
     syncFormFromApplication()
     syncAnalystFieldsFromApplication()
+    if (
+      application.value?.status === 'Credit_Director_Review'
+      || application.value?.credit_director_is_exception
+    ) {
+      await loadAprobadoresCatalog()
+    }
   } catch (e) {
     console.error('Error cargando solicitud:', e)
     error.value = 'No se pudo cargar la solicitud'
@@ -906,6 +976,22 @@ watch([application, debtor, coDebtors], () => {
           <p v-if="application?.credit_director_decision_at" class="text-muted-foreground">
             Fecha: {{ formatEventDate(application.credit_director_decision_at) }}
           </p>
+          <div
+            v-if="application?.credit_director_is_exception"
+            class="space-y-2 rounded-md border border-amber-200 bg-amber-50/80 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"
+          >
+            <p class="font-medium text-foreground">
+              Excepción: Sí
+            </p>
+            <p v-if="application?.credit_director_approver_value">
+              <span class="text-muted-foreground">Aprobador:</span>
+              {{ approverLabelForValue(application.credit_director_approver_value) }}
+            </p>
+            <p class="whitespace-pre-wrap">
+              <span class="text-muted-foreground">Justificación:</span>
+              {{ application?.credit_director_exception_justification }}
+            </p>
+          </div>
           <p class="whitespace-pre-wrap rounded-md border bg-muted/30 p-3">
             {{ application?.credit_director_concept }}
           </p>
@@ -977,6 +1063,56 @@ watch([application, debtor, coDebtors], () => {
               @update:model-value="onCreditDirectorDecisionUpdate"
             />
           </div>
+          <div class="space-y-1.5">
+            <Label for="credit_director_exception">¿Es una excepción? *</Label>
+            <Multiselect
+              id="credit_director_exception"
+              :model-value="creditDirectorIsExceptionChoice"
+              :options="creditDirectorExceptionOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="false"
+              placeholder="Seleccionar"
+              class="multiselect-director"
+              @update:model-value="onCreditDirectorExceptionUpdate"
+            />
+            <p class="text-xs text-muted-foreground">
+              Por defecto «No». Si elige «Sí», debe justificar y seleccionar un aprobador del catálogo parametrizado.
+            </p>
+          </div>
+          <template v-if="creditDirectorIsExceptionChoice === 'yes'">
+            <div class="space-y-1.5">
+              <Label for="credit_director_exception_justification">Justificación de la excepción *</Label>
+              <textarea
+                id="credit_director_exception_justification"
+                v-model="creditDirectorExceptionJustification"
+                rows="4"
+                class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                placeholder="Explique por qué esta operación se considera excepción."
+              />
+              <p class="text-xs text-muted-foreground">
+                Mínimo 10 caracteres.
+              </p>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="credit_director_approver">Aprobador (excepción) *</Label>
+              <Multiselect
+                id="credit_director_approver"
+                :model-value="creditDirectorApproverValue === '' ? null : creditDirectorApproverValue"
+                :options="creditDirectorApproverOptions"
+                value-prop="value"
+                label="label"
+                mode="single"
+                :can-clear="false"
+                :searchable="true"
+                placeholder="Seleccionar aprobador"
+                class="multiselect-director"
+                @update:model-value="onCreditDirectorApproverUpdate"
+              />
+            </div>
+          </template>
           <div class="space-y-1.5">
             <Label for="credit_director_concept">Concepto estructurado *</Label>
             <textarea

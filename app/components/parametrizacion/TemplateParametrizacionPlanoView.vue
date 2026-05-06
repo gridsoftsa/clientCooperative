@@ -82,6 +82,7 @@ const templateLabels: Record<string, string> = {
   'actividad-economica': 'Tipo de actividad económica (solicitante)',
   'auxiliary-documents': 'Documentos módulo auxiliar (por actividad económica)',
   'estado-civil': 'Estado civil (solicitante)',
+  aprobadores: 'Aprobadores (niveles de aprobación)',
   bancos: 'Bancos (Análisis y Score)',
   ing: 'ING — % reserva (Análisis y Score)',
 }
