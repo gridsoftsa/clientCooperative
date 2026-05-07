@@ -10,10 +10,14 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
+const { downloadReportFile } = useReportExport()
 
 const applicants = ref<Applicant[]>([])
 const loading = ref(false)
 const searchQuery = ref('')
+const downloadingTemplate = ref(false)
+const importingApplicants = ref(false)
+const importInputRef = ref<HTMLInputElement | null>(null)
 const deleteWithReason = useApiDeleteWithReason()
 const deleteApplicantDialogOpen = ref(false)
 const applicantIdPendingDelete = ref<number | null>(null)
@@ -107,6 +111,83 @@ watch(deleteApplicantDialogOpen, (v) => {
     applicantIdPendingDelete.value = null
   }
 })
+
+interface ApplicantImportSummary {
+  created: number
+  updated: number
+  skipped_empty: number
+  errors: Array<{ row: number, message: string }>
+}
+
+async function downloadImportTemplate() {
+  if (downloadingTemplate.value) {
+    return
+  }
+  downloadingTemplate.value = true
+  try {
+    await downloadReportFile(
+      '/applicants/import-template',
+      {},
+      'plantilla-importacion-solicitantes.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    toast.success('Plantilla descargada')
+  } catch (e: unknown) {
+    console.error(e)
+    const msg = e instanceof Error ? e.message : 'No se pudo descargar la plantilla'
+    toast.error(msg)
+  } finally {
+    downloadingTemplate.value = false
+  }
+}
+
+function triggerApplicantImportPick() {
+  importInputRef.value?.click()
+}
+
+async function onApplicantImportFileChange(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) {
+    return
+  }
+  const name = file.name.toLowerCase()
+  if (!name.endsWith('.xlsx')) {
+    toast.error('Seleccione un archivo Excel (.xlsx)')
+    return
+  }
+  if (importingApplicants.value) {
+    return
+  }
+  importingApplicants.value = true
+  try {
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await $api<{ message: string, data: ApplicantImportSummary }>('/applicants/import', {
+      method: 'POST',
+      body: fd,
+    })
+    const d = res.data
+    const errN = d.errors.length
+    const detail = `${d.created} nuevos, ${d.updated} actualizados. Filas vacías omitidas: ${d.skipped_empty}.`
+    if (errN > 0) {
+      toast.message(res.message, { description: `${detail} Errores en ${errN} fila(s). Revise la consola para el detalle.` })
+      console.warn('Errores importación solicitantes (fila / mensaje):', d.errors)
+    } else {
+      toast.success(res.message, { description: detail })
+    }
+    await fetchApplicants()
+  } catch (err: unknown) {
+    console.error(err)
+    const msg = err && typeof err === 'object' && 'data' in err
+      ? (err as { data?: { message?: string } }).data?.message
+      : undefined
+    toast.error(msg ?? 'No se pudo importar el archivo')
+  } finally {
+    importingApplicants.value = false
+  }
+}
 </script>
 
 <template>
@@ -115,13 +196,63 @@ watch(deleteApplicantDialogOpen, (v) => {
         <h2 class="text-2xl font-bold tracking-tight">
           Deudores y Codeudores
         </h2>
+        <div class="flex flex-wrap items-center gap-2">
+          <PermissionGate permission="solicitantes_crear">
+            <Button
+              variant="default"
+              size="sm"
+              class="gap-1.5"
+              @click="router.push('/solicitantes/create')"
+            >
+              <Icon name="i-lucide-user-plus" class="h-3.5 w-3.5 shrink-0" />
+              Nuevo solicitante
+            </Button>
+          </PermissionGate>
+          <PermissionGate permission="solicitantes_importar">
+            <Button
+              variant="outline"
+              size="sm"
+              class="gap-1.5"
+              :disabled="downloadingTemplate"
+              @click="downloadImportTemplate"
+            >
+              <Icon
+                :name="downloadingTemplate ? 'i-lucide-loader-2' : 'i-lucide-download'"
+                class="h-3.5 w-3.5 shrink-0"
+                :class="{ 'animate-spin': downloadingTemplate }"
+              />
+              Plantilla Excel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              class="gap-1.5"
+              :disabled="importingApplicants"
+              @click="triggerApplicantImportPick"
+            >
+              <Icon
+                :name="importingApplicants ? 'i-lucide-loader-2' : 'i-lucide-upload'"
+                class="h-3.5 w-3.5 shrink-0"
+                :class="{ 'animate-spin': importingApplicants }"
+              />
+              Importar
+            </Button>
+            <input
+              ref="importInputRef"
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              class="sr-only"
+              @change="onApplicantImportFileChange"
+            />
+          </PermissionGate>
+        </div>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>Lista de Solicitantes</CardTitle>
           <CardDescription>
-            Consulta y edita datos de deudores y codeudores registrados en radicaciones
+            La importación masiva incluye identificación, nombres, celular (obligatorio en plantilla), dirección y correo opcionales; complete el resto en la ficha o en radicación.
           </CardDescription>
         </CardHeader>
         <CardContent>

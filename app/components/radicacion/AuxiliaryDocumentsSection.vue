@@ -259,7 +259,7 @@ defineExpose({
 </script>
 
 <template>
-  <div id="radicacion-auxiliary-documents" class="space-y-3">
+  <div id="radicacion-auxiliary-documents" class="space-y-4">
     <div v-if="loadingConfig" class="text-sm text-muted-foreground">
       Cargando listado de documentos…
     </div>
@@ -271,125 +271,126 @@ defineExpose({
       <p v-else-if="checklistRows.length === 0" class="text-sm text-muted-foreground">
         No hay documentos parametrizados para «{{ activityType }}». Revise Parametrización → Radicación → Documentos (módulo auxiliar).
       </p>
-      <ul v-else class="list-none space-y-3 p-0">
+      <ul v-else class="list-none space-y-4 p-0">
         <li
           v-for="(row, idx) in checklistRows"
           :key="`${row.key}-${idx}`"
-          class="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color,background-color]"
+          class="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color]"
           :class="rowMissingRequired(row)
-            ? 'border-destructive ring-2 ring-destructive/35'
+            ? 'border-destructive ring-2 ring-destructive/25'
             : 'border-border'"
           :data-aux-doc-error="rowMissingRequired(row) ? '1' : undefined"
         >
-          <div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-stretch sm:gap-5">
-            <div class="min-w-0 flex-1 space-y-2 border-b border-border pb-4 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-5">
-              <div class="flex flex-wrap items-center gap-2">
-                <Badge
-                  :variant="row.required ? 'default' : 'secondary'"
-                  class="text-[10px] font-semibold uppercase tracking-wide"
-                  :class="rowMissingRequired(row) ? 'bg-destructive text-destructive-foreground hover:bg-destructive' : ''"
-                >
-                  {{ row.required ? 'Obligatorio' : 'Opcional' }}
-                </Badge>
-                <span class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Documento
-                </span>
-              </div>
-              <p class="text-left text-sm leading-relaxed text-foreground">
-                {{ row.label }}
-              </p>
-              <p
-                v-if="rowMissingRequired(row)"
-                class="flex items-start gap-1.5 text-xs font-medium text-destructive"
+          <!-- Encabezado: requisito + nombre del documento (sin columna vacía lateral) -->
+          <div
+            class="border-b border-border px-4 py-3 sm:px-5"
+            :class="rowMissingRequired(row) ? 'bg-destructive/[0.06]' : 'bg-muted/40'"
+          >
+            <div class="flex flex-wrap items-center gap-2">
+              <span
+                class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+                :class="row.required
+                  ? 'border-amber-600/35 bg-amber-500/10 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100'
+                  : 'border-muted-foreground/25 bg-background text-muted-foreground'"
               >
-                <Icon name="i-lucide-alert-circle" class="mt-0.5 size-4 shrink-0" />
-                Falta el archivo. Súbelo o arrástralo en la columna derecha.
-              </p>
+                {{ row.required ? 'Obligatorio' : 'Opcional' }}
+              </span>
+              <span class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Checklist
+              </span>
             </div>
-            <div class="flex w-full shrink-0 flex-col gap-2 sm:w-[min(100%,20rem)]">
-              <Label
-                :for="safeInputId(row.key, idx)"
-                class="text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground sm:text-left"
-              >
-                Archivo
-              </Label>
-              <input
-                :id="safeInputId(row.key, idx)"
-                type="file"
-                accept=".pdf,.zip,.png,.jpg,.jpeg,.gif,.webp,.bmp,application/pdf,application/zip,image/*"
-                class="sr-only"
-                :disabled="disabled"
-                @change="onFileInput(row.key, $event)"
-              >
-              <label
-                :for="safeInputId(row.key, idx)"
-                class="flex h-36 flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-3 text-center transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
-                :class="[
-                  disabled ? 'cursor-not-allowed opacity-60 pointer-events-none' : 'cursor-pointer hover:border-primary/50 hover:bg-muted/40',
-                  rowMissingRequired(row)
-                    ? 'border-destructive bg-destructive/5 text-destructive'
-                    : 'border-muted-foreground/30 bg-muted/25',
-                ]"
-                @dragover="onAuxiliaryDragOver"
-                @drop="onAuxiliaryDrop(row.key, $event)"
-              >
-                <template v-if="pendingFileFor(row.key)">
-                  <Icon name="i-lucide-file-check" class="size-8 text-green-600 dark:text-green-500" />
-                  <span class="max-w-full truncate text-sm font-medium text-foreground">
-                    {{ pendingFileFor(row.key)!.name }}
-                  </span>
-                  <span class="text-xs text-muted-foreground">
-                    {{ formatFileSize(pendingFileFor(row.key)!.size) }}
-                  </span>
-                  <span v-if="!disabled" class="text-xs text-amber-700 dark:text-amber-400">
-                    Pendiente al guardar la solicitud
-                  </span>
-                  <button
-                    v-if="!disabled"
-                    type="button"
-                    class="text-xs text-primary underline"
-                    @click.prevent="clearPending(row.key)"
-                  >
-                    Quitar selección
-                  </button>
-                </template>
-                <template v-else-if="docMetaForKey(row.key)">
-                  <Icon name="i-lucide-file-text" class="size-8 text-primary" />
-                  <a
-                    :href="docMetaForKey(row.key)!.download_url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="max-w-full truncate text-sm font-medium text-primary underline"
-                    @click.stop
-                  >
-                    {{ docMetaForKey(row.key)?.original_name || 'Ver archivo' }}
-                  </a>
-                  <span class="text-xs text-muted-foreground">Archivo cargado</span>
-                  <button
-                    v-if="!disabled && creditApplicationId"
-                    type="button"
-                    class="text-xs text-destructive underline"
-                    @click.prevent="removeUploaded(row.key)"
-                  >
-                    Eliminar
-                  </button>
-                </template>
-                <template v-else>
+            <p class="mt-2.5 text-sm font-medium leading-snug text-foreground">
+              {{ row.label }}
+            </p>
+            <p
+              v-if="rowMissingRequired(row)"
+              class="mt-2 flex items-start gap-1.5 text-xs font-medium text-destructive"
+            >
+              <Icon name="i-lucide-alert-circle" class="mt-0.5 size-4 shrink-0" />
+              Falta adjuntar el archivo. Use el área de abajo.
+            </p>
+          </div>
+
+          <!-- Zona de carga a todo ancho -->
+          <div class="p-4 sm:p-5">
+            <input
+              :id="safeInputId(row.key, idx)"
+              type="file"
+              accept=".pdf,.zip,.png,.jpg,.jpeg,.gif,.webp,.bmp,application/pdf,application/zip,image/*"
+              class="sr-only"
+              :disabled="disabled"
+              @change="onFileInput(row.key, $event)"
+            >
+            <label
+              :for="safeInputId(row.key, idx)"
+              class="flex min-h-[6.5rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-4 text-center transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+              :class="[
+                disabled ? 'cursor-not-allowed opacity-60 pointer-events-none' : 'hover:border-primary/45 hover:bg-muted/30',
+                rowMissingRequired(row)
+                  ? 'border-destructive/50 bg-destructive/[0.04]'
+                  : 'border-muted-foreground/25 bg-muted/20',
+              ]"
+              @dragover="onAuxiliaryDragOver"
+              @drop="onAuxiliaryDrop(row.key, $event)"
+            >
+              <template v-if="pendingFileFor(row.key)">
+                <Icon name="i-lucide-file-check" class="size-7 text-green-600 dark:text-green-500" />
+                <span class="max-w-full truncate text-sm font-medium text-foreground">
+                  {{ pendingFileFor(row.key)!.name }}
+                </span>
+                <span class="text-xs text-muted-foreground">
+                  {{ formatFileSize(pendingFileFor(row.key)!.size) }}
+                </span>
+                <span v-if="!disabled" class="text-xs text-amber-700 dark:text-amber-400">
+                  Se subirá al guardar la solicitud
+                </span>
+                <button
+                  v-if="!disabled"
+                  type="button"
+                  class="text-xs font-medium text-primary underline underline-offset-2"
+                  @click.prevent="clearPending(row.key)"
+                >
+                  Quitar selección
+                </button>
+              </template>
+              <template v-else-if="docMetaForKey(row.key)">
+                <Icon name="i-lucide-file-text" class="size-7 text-primary" />
+                <a
+                  :href="docMetaForKey(row.key)!.download_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="max-w-full truncate text-sm font-medium text-primary underline underline-offset-2"
+                  @click.stop
+                >
+                  {{ docMetaForKey(row.key)?.original_name || 'Ver archivo' }}
+                </a>
+                <span class="text-xs text-muted-foreground">Archivo en la solicitud</span>
+                <button
+                  v-if="!disabled && creditApplicationId"
+                  type="button"
+                  class="text-xs font-medium text-destructive underline underline-offset-2"
+                  @click.prevent="removeUploaded(row.key)"
+                >
+                  Eliminar
+                </button>
+              </template>
+              <template v-else>
+                <div class="flex size-10 items-center justify-center rounded-full bg-muted">
                   <Icon
                     name="i-lucide-upload"
-                    class="size-8 shrink-0"
+                    class="size-5 shrink-0"
                     :class="rowMissingRequired(row) ? 'text-destructive' : 'text-muted-foreground'"
                   />
-                  <span
-                    class="text-sm font-medium"
-                    :class="rowMissingRequired(row) ? 'text-destructive' : 'text-muted-foreground'"
-                  >
-                    Arrastra aquí o haz clic para seleccionar
-                  </span>
-                  <span class="text-xs text-muted-foreground">PDF, ZIP o imagen · máx. 10 MB</span>
-                </template>
-              </label>
-            </div>
+                </div>
+                <span
+                  class="max-w-sm text-sm font-medium leading-snug"
+                  :class="rowMissingRequired(row) ? 'text-destructive' : 'text-foreground'"
+                >
+                  Arrastre el archivo aquí o haga clic para elegir
+                </span>
+                <span class="text-xs text-muted-foreground">PDF, ZIP o imagen · máximo 10 MB</span>
+              </template>
+            </label>
           </div>
         </li>
       </ul>

@@ -1404,21 +1404,25 @@ function formatFileSize(bytes: number): string {
               <div
                 v-for="(doc, idx) in documents"
                 :key="idx"
-                class="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 p-3 sm:flex-row sm:items-center sm:gap-3"
+                class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
               >
-                <div :class="fieldClass" class="flex min-w-0 flex-1 flex-col justify-center sm:max-w-[220px]">
-                  <Label :for="`doc_title_${idx}`" class="block text-center">Título del documento *</Label>
-                  <Input
-                    :id="`doc_title_${idx}`"
-                    :model-value="doc.title"
-                    placeholder="Ej: Cédula, Certificado laboral..."
-                    :readonly="!canEditDocumentTitle(doc)"
-                    @update:model-value="updateDocument(idx, { title: String($event ?? '') })"
-                    @blur="onDocumentTitleBlur(idx)"
-                  />
+                <div class="border-b border-border bg-muted/40 px-4 py-3">
+                  <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Documento adjunto {{ idx + 1 }}
+                  </p>
+                  <div :class="fieldClass" class="mt-2">
+                    <Label :for="`doc_title_${idx}`" class="text-xs">Título del documento *</Label>
+                    <Input
+                      :id="`doc_title_${idx}`"
+                      :model-value="doc.title"
+                      placeholder="Ej: Cédula, Certificado laboral..."
+                      :readonly="!canEditDocumentTitle(doc)"
+                      @update:model-value="updateDocument(idx, { title: String($event ?? '') })"
+                      @blur="onDocumentTitleBlur(idx)"
+                    />
+                  </div>
                 </div>
-                <div :class="fieldClass" class="min-w-0 flex-1 sm:basis-0">
-                  <Label :for="`doc_file_${idx}`" class="block text-center">Archivo</Label>
+                <div class="p-4">
                   <input
                     :id="`doc_file_${idx}`"
                     type="file"
@@ -1428,23 +1432,23 @@ function formatFileSize(bytes: number): string {
                   >
                   <label
                     :for="`doc_file_${idx}`"
-                    class="flex min-h-[72px] flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/30 px-3 py-2.5 transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
-                    :class="canPickDocumentFile(doc) ? 'cursor-pointer hover:border-primary/50 hover:bg-muted/50' : 'cursor-not-allowed opacity-60 pointer-events-none'"
+                    class="flex min-h-[6.5rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 px-4 py-4 text-center transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+                    :class="canPickDocumentFile(doc) ? 'hover:border-primary/45 hover:bg-muted/35' : 'cursor-not-allowed opacity-60 pointer-events-none'"
                     @dragover="onDocumentDragOver"
                     @drop="onDocumentDrop(idx, $event)"
                   >
                     <template v-if="doc.file">
-                      <Icon name="i-lucide-file-check" class="h-8 w-8 text-green-600 dark:text-green-500" />
+                      <Icon name="i-lucide-file-check" class="h-7 w-7 text-green-600 dark:text-green-500" />
                       <span class="max-w-full truncate text-center text-sm font-medium text-foreground">
                         {{ doc.file.name }}
                       </span>
                       <span class="text-xs text-muted-foreground">
                         {{ formatFileSize(doc.file.size) }}
                       </span>
-                      <span class="text-xs text-primary">Clic para cambiar</span>
+                      <span class="text-xs font-medium text-primary">Clic para cambiar</span>
                     </template>
                     <template v-else-if="doc.original_name">
-                      <Icon name="i-lucide-file-text" class="h-8 w-8 text-primary" />
+                      <Icon name="i-lucide-file-text" class="h-7 w-7 text-primary" />
                       <span class="max-w-full truncate text-center text-sm font-medium text-foreground">
                         {{ doc.original_name }}
                       </span>
@@ -1462,28 +1466,31 @@ function formatFileSize(bytes: number): string {
                         Nota revisión: {{ doc.review_comment }}
                       </span>
                       <span class="text-xs text-muted-foreground">Archivo existente</span>
-                      <span class="text-xs text-primary">Clic para reemplazar</span>
+                      <span class="text-xs font-medium text-primary">Clic para reemplazar</span>
                     </template>
                     <template v-else>
-                      <Icon name="i-lucide-upload" class="h-8 w-8 text-muted-foreground" />
-                      <span class="text-center text-sm font-medium text-muted-foreground">
-                        Arrastra aquí o clic para seleccionar
+                      <div class="flex size-10 items-center justify-center rounded-full bg-muted">
+                        <Icon name="i-lucide-upload" class="size-5 text-muted-foreground" />
+                      </div>
+                      <span class="max-w-sm text-center text-sm font-medium text-foreground">
+                        Arrastre aquí o haga clic para seleccionar
                       </span>
-                      <span class="text-xs text-muted-foreground">PDF, JPG, PNG, DOC</span>
+                      <span class="text-xs text-muted-foreground">PDF, JPG, PNG, DOC · máx. 10 MB</span>
                     </template>
                   </label>
                 </div>
-                <Button
-                  v-if="canRemoveDocumentRow(doc)"
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  class="h-9 shrink-0 gap-1.5 px-2.5"
-                  @click="removeDocument(idx)"
-                >
-                  <Icon name="i-lucide-trash" class="h-4 w-4 shrink-0" />
-                  Quitar
-                </Button>
+                <div v-if="canRemoveDocumentRow(doc)" class="flex justify-end border-t border-border px-4 py-3">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    class="h-9 gap-1.5 px-2.5"
+                    @click="removeDocument(idx)"
+                  >
+                    <Icon name="i-lucide-trash" class="h-4 w-4 shrink-0" />
+                    Quitar
+                  </Button>
+                </div>
               </div>
               <Button v-if="docCanSubir" type="button" variant="outline" size="sm" @click="addDocument">
                 <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
