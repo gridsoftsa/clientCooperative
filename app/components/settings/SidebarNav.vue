@@ -7,8 +7,8 @@ const sections: { heading: string; items: NavItem[] }[] = [
   {
     heading: 'Tu cuenta',
     items: [
-      { label: 'Perfil', href: '/settings/profile', permission: 'perfil_ver' },
-      { label: 'Cuenta', href: '/settings/account', permission: 'cuenta_ver' },
+      { label: 'Datos personales', href: '/settings/profile', permission: 'perfil_ver' },
+      { label: 'Contraseña', href: '/settings/account', permission: 'cuenta_ver' },
       { label: 'Apariencia', href: '/settings/appearance', permission: 'apariencia_ver' },
     ],
   },

@@ -163,7 +163,10 @@ watch(selectedRole, (role) => {
           <CardHeader>
             <CardTitle>Información del Usuario</CardTitle>
             <CardDescription>
-              Nombre de usuario para el acceso, datos de contacto opcionales y estado de la cuenta.
+              <span class="font-medium text-foreground">Nombre de usuario</span> es el identificador de acceso (campo
+              <code class="rounded bg-muted px-1 py-0.5 text-xs">name</code>).
+              <span class="font-medium text-foreground">Nombre completo</span> y teléfono los verá el propio usuario en
+              <span class="font-medium text-foreground">Configuración → Datos personales</span>; puedes dejarlos vacíos y completarlos allí después.
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">

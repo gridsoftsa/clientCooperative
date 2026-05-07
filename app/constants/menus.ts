@@ -89,14 +89,14 @@ export const navMenu: NavMenu[] = [
         ],
         children: [
           {
-            title: 'Perfil',
+            title: 'Datos personales',
             icon: 'i-lucide-user',
             link: '/settings/profile',
             permission: 'perfil_ver',
           },
           {
-            title: 'Cuenta',
-            icon: 'i-lucide-id-card',
+            title: 'Contraseña',
+            icon: 'i-lucide-key',
             link: '/settings/account',
             permission: 'cuenta_ver',
           },

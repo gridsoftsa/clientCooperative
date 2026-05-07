@@ -238,7 +238,9 @@ onMounted(async () => {
           <CardHeader>
             <CardTitle>Información del Usuario</CardTitle>
             <CardDescription>
-              Información básica del usuario
+              <span class="font-medium text-foreground">Nombre de usuario</span> es el identificador de acceso. El
+              <span class="font-medium text-foreground">nombre completo</span> y teléfono también los puede editar el propio usuario en
+              <span class="font-medium text-foreground">Configuración → Datos personales</span>.
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">
