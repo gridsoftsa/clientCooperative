@@ -18,6 +18,8 @@ const searchQuery = ref('')
 const downloadingTemplate = ref(false)
 const importingApplicants = ref(false)
 const importInputRef = ref<HTMLInputElement | null>(null)
+const importModalOpen = ref(false)
+const importZoneHover = ref(false)
 const deleteWithReason = useApiDeleteWithReason()
 const deleteApplicantDialogOpen = ref(false)
 const applicantIdPendingDelete = ref<number | null>(null)
@@ -112,6 +114,12 @@ watch(deleteApplicantDialogOpen, (v) => {
   }
 })
 
+watch(importModalOpen, (v) => {
+  if (!v) {
+    importZoneHover.value = false
+  }
+})
+
 interface ApplicantImportSummary {
   created: number
   updated: number
@@ -141,17 +149,22 @@ async function downloadImportTemplate() {
   }
 }
 
+function openApplicantImportModal() {
+  importModalOpen.value = true
+}
+
+function setImportModalOpen(open: boolean) {
+  if (!open && importingApplicants.value) {
+    return
+  }
+  importModalOpen.value = open
+}
+
 function triggerApplicantImportPick() {
   importInputRef.value?.click()
 }
 
-async function onApplicantImportFileChange(ev: Event) {
-  const input = ev.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) {
-    return
-  }
+async function applyApplicantImportFile(file: File) {
   const name = file.name.toLowerCase()
   if (!name.endsWith('.xlsx')) {
     toast.error('Seleccione un archivo Excel (.xlsx)')
@@ -177,6 +190,7 @@ async function onApplicantImportFileChange(ev: Event) {
     } else {
       toast.success(res.message, { description: detail })
     }
+    importModalOpen.value = false
     await fetchApplicants()
   } catch (err: unknown) {
     console.error(err)
@@ -187,6 +201,41 @@ async function onApplicantImportFileChange(ev: Event) {
   } finally {
     importingApplicants.value = false
   }
+}
+
+function onApplicantImportFileChange(ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file) {
+    void applyApplicantImportFile(file)
+  }
+}
+
+function onApplicantImportDrop(ev: DragEvent) {
+  ev.preventDefault()
+  importZoneHover.value = false
+  const file = ev.dataTransfer?.files?.[0]
+  if (file) {
+    void applyApplicantImportFile(file)
+  }
+}
+
+function onApplicantImportDragOver(ev: DragEvent) {
+  ev.preventDefault()
+  if (ev.dataTransfer) {
+    ev.dataTransfer.dropEffect = 'copy'
+  }
+  importZoneHover.value = true
+}
+
+function onApplicantImportDragLeave(ev: DragEvent) {
+  const target = ev.currentTarget as HTMLElement | null
+  const related = ev.relatedTarget as Node | null
+  if (related && target?.contains(related)) {
+    return
+  }
+  importZoneHover.value = false
 }
 </script>
 
@@ -226,24 +275,17 @@ async function onApplicantImportFileChange(ev: Event) {
             <Button
               variant="outline"
               size="sm"
-              class="gap-1.5"
+              class="gap-1.5 border-primary/25 bg-primary/5 hover:bg-primary/10"
               :disabled="importingApplicants"
-              @click="triggerApplicantImportPick"
+              @click="openApplicantImportModal"
             >
               <Icon
-                :name="importingApplicants ? 'i-lucide-loader-2' : 'i-lucide-upload'"
+                :name="importingApplicants ? 'i-lucide-loader-2' : 'i-lucide-file-spreadsheet'"
                 class="h-3.5 w-3.5 shrink-0"
                 :class="{ 'animate-spin': importingApplicants }"
               />
-              Importar
+              Importar Excel
             </Button>
-            <input
-              ref="importInputRef"
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              class="sr-only"
-              @change="onApplicantImportFileChange"
-            />
           </PermissionGate>
         </div>
       </div>
@@ -394,5 +436,147 @@ async function onApplicantImportFileChange(ev: Event) {
       :loading="deletingApplicant"
       @confirm="onDeleteApplicantConfirm"
     />
+
+    <Dialog
+      :open="importModalOpen"
+      @update:open="setImportModalOpen"
+    >
+      <DialogContent class="gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <div class="relative border-b border-border/80 bg-gradient-to-br from-emerald-600/[0.12] via-background to-sky-600/[0.08] px-6 pb-7 pt-8 dark:from-emerald-500/15 dark:to-sky-500/10">
+          <div class="pointer-events-none absolute -right-12 -top-16 size-40 rounded-full bg-primary/15 blur-3xl" />
+          <div class="pointer-events-none absolute -bottom-8 left-1/4 size-28 rounded-full bg-emerald-500/10 blur-2xl" />
+          <div class="relative flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div class="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-background/80 text-emerald-700 shadow-sm ring-1 ring-emerald-600/20 dark:bg-background/60 dark:text-emerald-400 dark:ring-emerald-500/30">
+              <Icon name="i-lucide-sheet" class="size-7" />
+            </div>
+            <div class="min-w-0 space-y-2">
+              <DialogHeader class="space-y-2 text-left sm:pr-2">
+                <DialogTitle class="text-xl font-semibold tracking-tight">
+                  Importar solicitantes desde Excel
+                </DialogTitle>
+                <DialogDescription class="text-sm leading-relaxed text-muted-foreground">
+                  Use la plantilla oficial, complete las columnas marcadas como obligatorias y cargue el archivo aquí. Los registros existentes se actualizan por tipo y número de documento.
+                </DialogDescription>
+              </DialogHeader>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-5 px-6 py-6">
+          <div class="flex gap-4 rounded-xl border border-border/80 bg-muted/30 p-4 dark:bg-muted/20">
+            <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-600/15 text-sm font-bold text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200">
+              1
+            </div>
+            <div class="min-w-0 flex-1 space-y-2">
+              <p class="text-sm font-medium text-foreground">
+                Descargue la plantilla
+              </p>
+              <p class="text-xs leading-relaxed text-muted-foreground">
+                Incluye cabeceras con colores (obligatorio / opcional) y el formato esperado por el sistema.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                class="mt-1 w-full gap-2 border-emerald-600/30 bg-background hover:bg-emerald-600/5 sm:w-auto"
+                :disabled="downloadingTemplate || importingApplicants"
+                @click="downloadImportTemplate"
+              >
+                <Icon
+                  :name="downloadingTemplate ? 'i-lucide-loader-2' : 'i-lucide-download'"
+                  class="h-4 w-4 shrink-0"
+                  :class="{ 'animate-spin': downloadingTemplate }"
+                />
+                Descargar plantilla .xlsx
+              </Button>
+            </div>
+          </div>
+
+          <div class="flex gap-4 rounded-xl border border-border/80 bg-muted/30 p-4 dark:bg-muted/20">
+            <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-sky-600/15 text-sm font-bold text-sky-900 dark:bg-sky-500/20 dark:text-sky-100">
+              2
+            </div>
+            <div class="min-w-0 flex-1 space-y-3">
+              <div>
+                <p class="text-sm font-medium text-foreground">
+                  Suba el archivo completado
+                </p>
+                <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Solo archivos <span class="font-medium text-foreground">.xlsx</span> · máximo razonable por filas grandes
+                </p>
+              </div>
+              <input
+                id="applicant-import-file-input"
+                ref="importInputRef"
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                class="sr-only"
+                :disabled="importingApplicants"
+                @change="onApplicantImportFileChange"
+              >
+              <label
+                for="applicant-import-file-input"
+                class="relative flex min-h-[9.5rem] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-6 text-center transition-[border-color,box-shadow,background-color] focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+                :class="[
+                  importingApplicants ? 'pointer-events-none opacity-70' : '',
+                  importZoneHover
+                    ? 'border-primary/60 bg-primary/5 shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]'
+                    : 'border-muted-foreground/30 bg-background/50 hover:border-primary/35 hover:bg-muted/40',
+                ]"
+                @dragover="onApplicantImportDragOver"
+                @dragleave="onApplicantImportDragLeave"
+                @drop="onApplicantImportDrop"
+              >
+                <div class="pointer-events-none flex flex-col items-center gap-2">
+                  <div
+                    class="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
+                  >
+                    <Icon
+                      :name="importingApplicants ? 'i-lucide-loader-2' : 'i-lucide-cloud-upload'"
+                      class="size-6"
+                      :class="{ 'animate-spin': importingApplicants }"
+                    />
+                  </div>
+                  <span class="text-sm font-medium text-foreground">
+                    {{ importingApplicants ? 'Procesando importación…' : 'Arrastre el Excel aquí' }}
+                  </span>
+                  <span v-if="!importingApplicants" class="text-xs text-muted-foreground">
+                    o haga clic en esta zona para elegir el archivo en su equipo
+                  </span>
+                  <span class="text-[11px] text-muted-foreground">
+                    Formato permitido: hoja de cálculo Excel (.xlsx)
+                  </span>
+                </div>
+              </label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="h-auto w-full py-2 text-xs text-muted-foreground hover:text-foreground"
+                :disabled="importingApplicants"
+                @click="triggerApplicantImportPick"
+              >
+                <Icon name="i-lucide-folder-open" class="mr-1.5 size-3.5" />
+                Abrir explorador de archivos…
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter class="gap-2 border-t border-border/80 bg-muted/25 px-6 py-4 sm:justify-between">
+          <p class="hidden text-xs text-muted-foreground sm:block sm:max-w-[55%] sm:self-center">
+            Tras importar, puede completar el resto de datos en la ficha del solicitante o en radicación.
+          </p>
+          <Button
+            variant="outline"
+            type="button"
+            class="sm:shrink-0"
+            :disabled="importingApplicants"
+            @click="setImportModalOpen(false)"
+          >
+            Cerrar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

@@ -63,6 +63,9 @@ const displayValue = computed(() => {
 
 /** Al editar: parsea con parsePesosInput y emite número */
 function onInput(event: Event) {
+  if (props.disabled) {
+    return
+  }
   const input = event.target as HTMLInputElement
   const raw = input.value
   const parsed = parsePesosInput(raw)
@@ -71,6 +74,9 @@ function onInput(event: Event) {
 
 /** Al salir: re-parsea por si acaso */
 function onBlur() {
+  if (props.disabled) {
+    return
+  }
   const input = inputRef.value
   if (input) {
     const parsed = parsePesosInput(input.value)
@@ -105,7 +111,9 @@ function onBlur() {
         type="text"
         inputmode="decimal"
         autocomplete="off"
+        :disabled="disabled"
         :value="displayValue"
+        :placeholder="placeholder"
         :aria-invalid="invalid"
         :aria-required="required"
         :class="[

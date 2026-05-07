@@ -359,6 +359,7 @@ function onAuxiliaryDocumentsChecklistField(payload: { key: string, value: unkno
           class="h-9 pl-9"
           placeholder="Buscar banco…"
           autocomplete="off"
+          :disabled="!editing || !canEdit"
         />
       </div>
       <div class="overflow-x-auto rounded-md border bg-background">
