@@ -10,19 +10,21 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
-const { hasPermission } = usePermissions()
 
 const applicants = ref<Applicant[]>([])
 const loading = ref(false)
 const searchQuery = ref('')
+const deleteWithReason = useApiDeleteWithReason()
+const deleteApplicantDialogOpen = ref(false)
+const applicantIdPendingDelete = ref<number | null>(null)
+const deletingApplicant = ref(false)
+
 const pagination = ref({
   current_page: 1,
   last_page: 1,
   per_page: 15,
   total: 0,
 })
-
-const canEdit = computed(() => hasPermission('solicitantes_editar'))
 
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('es-CO', {
@@ -63,6 +65,34 @@ function handlePageChange(page: number) {
   fetchApplicants()
 }
 
+function openDeleteApplicantDialog(id: number) {
+  applicantIdPendingDelete.value = id
+  deleteApplicantDialogOpen.value = true
+}
+
+async function onDeleteApplicantConfirm(reason: string) {
+  const id = applicantIdPendingDelete.value
+  if (id == null || deletingApplicant.value) {
+    return
+  }
+  deletingApplicant.value = true
+  try {
+    await deleteWithReason(`/applicants/${id}`, reason)
+    deleteApplicantDialogOpen.value = false
+    applicantIdPendingDelete.value = null
+    toast.success('Solicitante desactivado correctamente')
+    await fetchApplicants()
+  } catch (error: unknown) {
+    console.error('Error al desactivar solicitante:', error)
+    const message = error && typeof error === 'object' && 'data' in error
+      ? (error as { data?: { message?: string } }).data?.message
+      : undefined
+    toast.error(message ?? 'No se pudo desactivar el solicitante')
+  } finally {
+    deletingApplicant.value = false
+  }
+}
+
 onMounted(() => {
   fetchApplicants()
 })
@@ -70,6 +100,12 @@ onMounted(() => {
 watch(searchQuery, () => {
   const timeout = setTimeout(() => handleSearch(), 500)
   return () => clearTimeout(timeout)
+})
+
+watch(deleteApplicantDialogOpen, (v) => {
+  if (!v) {
+    applicantIdPendingDelete.value = null
+  }
 })
 </script>
 
@@ -153,17 +189,36 @@ watch(searchQuery, () => {
                       </span>
                     </TableCell>
                     <TableCell class="text-right">
-                      <PermissionGate permission="solicitantes_editar">
-                        <Button
-                          variant="warning"
-                          size="sm"
-                          class="gap-1.5"
-                          @click="router.push(`/solicitantes/${a.id}/edit`)"
-                        >
-                          <Icon name="i-lucide-edit" class="h-4 w-4 shrink-0" />
-                          Editar
-                        </Button>
-                      </PermissionGate>
+                      <div class="flex flex-wrap justify-end gap-2">
+                        <PermissionGate permission="solicitantes_editar">
+                          <Button
+                            variant="warning"
+                            size="sm"
+                            class="gap-1.5"
+                            @click="router.push(`/solicitantes/${a.id}/edit`)"
+                          >
+                            <Icon name="i-lucide-edit" class="h-4 w-4 shrink-0" />
+                            Editar
+                          </Button>
+                        </PermissionGate>
+                        <PermissionGate permission="solicitantes_eliminar">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            class="gap-1.5"
+                            title="Desactivar"
+                            :disabled="deletingApplicant && applicantIdPendingDelete === a.id"
+                            @click="() => openDeleteApplicantDialog(a.id)"
+                          >
+                            <Icon
+                              :name="deletingApplicant && applicantIdPendingDelete === a.id ? 'i-lucide-loader-2' : 'i-lucide-ban'"
+                              class="h-3.5 w-3.5 shrink-0"
+                              :class="{ 'animate-spin': deletingApplicant && applicantIdPendingDelete === a.id }"
+                            />
+                            {{ deletingApplicant && applicantIdPendingDelete === a.id ? 'Desactivando...' : 'Desactivar' }}
+                          </Button>
+                        </PermissionGate>
+                      </div>
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -198,5 +253,15 @@ watch(searchQuery, () => {
           </div>
         </CardContent>
       </Card>
+
+    <ConfirmWithReasonDialog
+      v-model:open="deleteApplicantDialogOpen"
+      title="Desactivar solicitante"
+      description="El registro se ocultará del catálogo pero se conservará en base de datos. No aplica si el solicitante participa en una radicación activa. Indica el motivo."
+      confirm-text="Aceptar"
+      cancel-text="Cancelar"
+      :loading="deletingApplicant"
+      @confirm="onDeleteApplicantConfirm"
+    />
   </div>
 </template>
