@@ -42,13 +42,36 @@ const props = withDefaults(
     /** Cuando true, todos los campos son solo lectura */
     /** When true, all fields are read-only (avoids clashing con `readonly` / `isReadonly` de Vue) */
     readOnlyForm?: boolean
+    /** Claves con error de validación (resaltado tipo paso 1 radicación) */
+    invalidFieldKeys?: string[]
+    /** Prefijo para ids DOM de campos (evita duplicados con varias plantillas de actividad abiertas) */
+    fieldDomIdPrefix?: string
   }>(),
   {
     initialData: () => ({}),
     readOnlyFieldKeys: () => [],
     readOnlyForm: false,
+    invalidFieldKeys: () => [],
+    fieldDomIdPrefix: '',
   },
 )
+
+/** Id estable para inputs / foco; alineado con FinancialActivityForm (sector/plantilla/prefijo). */
+function domFieldId(key: string): string {
+  const p = props.fieldDomIdPrefix?.trim()
+  return p ? `${p}-field-${key}` : `field-${key}`
+}
+
+const clasificacionHuevosSectionDomId = computed(() => {
+  const p = props.fieldDomIdPrefix?.trim()
+  return p ? `${p}-section-clasificacion-huevos` : 'section-clasificacion-huevos'
+})
+
+const invalidKeySet = computed(() => new Set(props.invalidFieldKeys ?? []))
+
+function isInvalidKey(key: string): boolean {
+  return invalidKeySet.value.has(key)
+}
 
 const readOnlySet = computed(() => new Set(props.readOnlyFieldKeys))
 const { multiselectOptionsByLabel } = useMunicipalities()
@@ -78,6 +101,18 @@ const readOnlyValueBoxClass =
 
 const readOnlyInputRingClass =
   'border-amber-300/70 !bg-amber-50/40 focus-visible:ring-amber-500/30 dark:border-amber-800/60 dark:!bg-amber-950/20 dark:focus-visible:ring-amber-500/20'
+
+const fieldValidationErrorClass =
+  '!border-destructive ring-2 ring-destructive/50 focus-visible:ring-destructive'
+
+/** Secciones cuya leyenda lleva asterisco (datos obligatorios en tablas / bloques especiales). */
+function sectionLegendShowsRequiredStar(section: { layout?: string }): boolean {
+  const layouts = [
+    'productosTable',
+    'transportePasajerosPasajesTable',
+  ]
+  return Boolean(section.layout && layouts.includes(section.layout))
+}
 
 function showReadOnlyBadge(field: FormFieldSchema): boolean {
   if (props.readOnlyForm) {
@@ -328,6 +363,15 @@ const inputBaseClass =
 
 <template>
   <form class="space-y-6">
+    <Alert
+      v-if="(invalidFieldKeys?.length ?? 0) > 0"
+      variant="destructive"
+      class="py-2"
+    >
+      <AlertDescription class="text-sm">
+        Complete los campos obligatorios marcados con <span class="font-semibold">*</span> o resaltados en rojo.
+      </AlertDescription>
+    </Alert>
     <div
       v-if="readOnlyForm"
       class="flex gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-800 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200"
@@ -403,11 +447,18 @@ const inputBaseClass =
       >
         <legend class="text-sm font-semibold text-foreground">
           {{ section.title }}
+          <span
+            v-if="sectionLegendShowsRequiredStar(section)"
+            class="ml-0.5 text-destructive font-semibold"
+            aria-hidden="true"
+          >*</span>
         </legend>
         <div class="mt-4">
           <CreditsServiciosIngresosTable
             :form-data="formData"
             :table-rows="(section.serviciosTableRows && section.serviciosTableRows.length > 0) ? section.serviciosTableRows : SERVICIOS_INGRESOS_ROWS"
+            :invalid-field-keys="invalidFieldKeys"
+            :field-dom-id-prefix="fieldDomIdPrefix"
             @update:field="({ key, value }) => (formData[key] = value)"
           />
         </div>
@@ -419,16 +470,25 @@ const inputBaseClass =
       >
         <legend class="text-sm font-semibold text-foreground">
           {{ section.title }}
+          <span
+            v-if="sectionLegendShowsRequiredStar(section)"
+            class="ml-0.5 text-destructive font-semibold"
+            aria-hidden="true"
+          >*</span>
         </legend>
         <div class="mt-4 space-y-4">
           <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <CreditsTransporteCargaGastosTable
               :form-data="formData"
               :table-rows="(section.gastosTableRows && section.gastosTableRows.length > 0) ? section.gastosTableRows : TRANSPORTE_CARGA_GASTOS_ROWS"
+              :invalid-field-keys="invalidFieldKeys"
+              :field-dom-id-prefix="fieldDomIdPrefix"
               @update:field="({ key, value }) => (formData[key] = value)"
             />
             <CreditsTransporteCargaOtrosGastosTable
               :form-data="formData"
+              :invalid-field-keys="invalidFieldKeys"
+              :field-dom-id-prefix="fieldDomIdPrefix"
               @update:field="({ key, value }) => (formData[key] = value)"
             />
           </div>
@@ -440,11 +500,11 @@ const inputBaseClass =
               <div :class="['grid gap-2', gridColClass(field.cols), readOnlyFieldGroupClass(field as FormFieldSchema)]">
                 <CreditsFormFieldLabel
                   :field="(field as FormFieldSchema)"
-                  :for-id="`field-${field.key}`"
+                  :for-id="domFieldId(field.key)"
                   :show-read-only-badge="showReadOnlyBadge(field as FormFieldSchema)"
                 />
                 <div
-                  :id="`field-${field.key}`"
+                  :id="domFieldId(field.key)"
                   :class="['flex h-9 w-full select-none items-center rounded-md border px-3 py-2 text-sm text-foreground cursor-default', readOnlyValueBoxClass]"
                   tabindex="-1"
                   aria-readonly="true"
@@ -463,11 +523,18 @@ const inputBaseClass =
       >
         <legend class="text-sm font-semibold text-foreground">
           {{ section.title }}
+          <span
+            v-if="sectionLegendShowsRequiredStar(section)"
+            class="ml-0.5 text-destructive font-semibold"
+            aria-hidden="true"
+          >*</span>
         </legend>
         <div class="mt-4">
           <CreditsTransportePasajerosPasajesTable
             :form-data="formData"
             :table-rows="(section.pasajesTableRows && section.pasajesTableRows.length > 0) ? section.pasajesTableRows : TRANSPORTE_PASAJEROS_PASAJES_ROWS"
+            :invalid-field-keys="invalidFieldKeys"
+            :field-dom-id-prefix="fieldDomIdPrefix"
             @update:field="({ key, value }) => (formData[key] = value)"
           />
         </div>
@@ -479,10 +546,17 @@ const inputBaseClass =
       >
         <legend class="text-sm font-semibold text-foreground">
           {{ section.title }}
+          <span
+            v-if="sectionLegendShowsRequiredStar(section)"
+            class="ml-0.5 text-destructive font-semibold"
+            aria-hidden="true"
+          >*</span>
         </legend>
         <div class="mt-4 space-y-4">
           <CreditsTransportePasajerosGastosTable
             :form-data="formData"
+            :invalid-field-keys="invalidFieldKeys"
+            :field-dom-id-prefix="fieldDomIdPrefix"
             @update:field="({ key, value }) => (formData[key] = value)"
           />
           <div
@@ -493,11 +567,11 @@ const inputBaseClass =
               <div :class="['grid gap-2', gridColClass(field.cols), readOnlyFieldGroupClass(field as FormFieldSchema)]">
                 <CreditsFormFieldLabel
                   :field="(field as FormFieldSchema)"
-                  :for-id="`field-${field.key}`"
+                  :for-id="domFieldId(field.key)"
                   :show-read-only-badge="showReadOnlyBadge(field as FormFieldSchema)"
                 />
                 <div
-                  :id="`field-${field.key}`"
+                  :id="domFieldId(field.key)"
                   :class="['flex h-9 w-full select-none items-center rounded-md border px-3 py-2 text-sm text-foreground cursor-default', readOnlyValueBoxClass]"
                   tabindex="-1"
                   aria-readonly="true"
@@ -512,15 +586,24 @@ const inputBaseClass =
       <!-- Tabla de clasificación de huevos + desglose de costos (aves ponedoras) -->
       <fieldset
         v-else-if="section.layout === 'eggsTable' && section.tableRows"
+        :id="clasificacionHuevosSectionDomId"
         class="rounded-lg border border-border p-4"
+        :class="isInvalidKey('__aves_clasificacion_huevos') ? 'ring-2 ring-destructive/50' : ''"
       >
         <legend class="text-sm font-semibold text-foreground">
           {{ section.title }}
+          <span
+            v-if="sectionLegendShowsRequiredStar(section)"
+            class="ml-0.5 text-destructive font-semibold"
+            aria-hidden="true"
+          >*</span>
         </legend>
         <div class="mt-4 space-y-4">
           <CreditsEggClassificationTable
             :form-data="formData"
             :table-rows="section.tableRows"
+            :invalid-field-keys="invalidFieldKeys"
+            :field-dom-id-prefix="fieldDomIdPrefix"
             @update:field="({ key, value }) => (formData[key] = value)"
           />
           <Alert v-if="avesCantidadDiariaExceedsCubetas" variant="destructive" class="py-2">
@@ -545,10 +628,17 @@ const inputBaseClass =
       >
         <legend class="text-sm font-semibold text-foreground">
           {{ section.title }}
+          <span
+            v-if="sectionLegendShowsRequiredStar(section)"
+            class="ml-0.5 text-destructive font-semibold"
+            aria-hidden="true"
+          >*</span>
         </legend>
         <div class="mt-4">
           <CreditsProductosTable
             :form-data="formData"
+            :invalid-field-keys="invalidFieldKeys"
+            :field-dom-id-prefix="fieldDomIdPrefix"
             @update:field="({ key, value }) => (formData[key] = value)"
           />
         </div>
@@ -560,10 +650,17 @@ const inputBaseClass =
       >
         <legend class="text-sm font-semibold text-foreground">
           {{ section.title }}
+          <span
+            v-if="sectionLegendShowsRequiredStar(section)"
+            class="ml-0.5 text-destructive font-semibold"
+            aria-hidden="true"
+          >*</span>
         </legend>
         <div class="mt-4">
           <CreditsSemanasDiasTable
             :form-data="formData"
+            :invalid-field-keys="invalidFieldKeys"
+            :field-dom-id-prefix="fieldDomIdPrefix"
             @update:field="({ key, value }) => (formData[key] = value)"
           />
         </div>
@@ -576,10 +673,17 @@ const inputBaseClass =
       >
         <legend class="text-base font-semibold text-foreground">
           {{ section.title }}
+          <span
+            v-if="sectionLegendShowsRequiredStar(section)"
+            class="ml-0.5 text-destructive font-semibold"
+            aria-hidden="true"
+          >*</span>
         </legend>
         <div class="mt-4">
           <CreditsIngresosGastosOperacionalesTable
             :form-data="formData"
+            :invalid-field-keys="invalidFieldKeys"
+            :field-dom-id-prefix="fieldDomIdPrefix"
             @update:field="({ key, value }) => (formData[key] = value)"
           />
         </div>
@@ -601,8 +705,11 @@ const inputBaseClass =
               <CreditsBaseMoneyInput
                 :model-value="(formData[field.key] as number | null) ?? null"
                 :label="field.label"
+                :required="field.required === true"
+                :input-id="domFieldId(field.key)"
                 :show-solo-lectura-hint="showReadOnlyBadge(field)"
                 :disabled="isFieldReadOnly(field.key)"
+                :invalid="isInvalidKey(field.key) && !isFieldReadOnly(field.key)"
                 @update:model-value="(v) => (formData[field.key] = v)"
               />
             </template>
@@ -611,7 +718,7 @@ const inputBaseClass =
               <div class="space-y-1.5">
                 <CreditsFormFieldLabel
                   :field="field"
-                  :for-id="`field-${field.key}`"
+                  :for-id="domFieldId(field.key)"
                   :show-read-only-badge="showReadOnlyBadge(field)"
                 />
                 <Select
@@ -620,8 +727,8 @@ const inputBaseClass =
                   @update:model-value="(v) => (formData[field.key] = v as string | number | null | undefined)"
                 >
                   <SelectTrigger
-                    :id="`field-${field.key}`"
-                    :class="['w-full', showReadOnlyBadge(field) ? readOnlyInputRingClass : '']"
+                    :id="domFieldId(field.key)"
+                    :class="['w-full', showReadOnlyBadge(field) ? readOnlyInputRingClass : '', isInvalidKey(field.key) && !isFieldReadOnly(field.key) ? '!border-destructive ring-2 ring-destructive/50' : '']"
                   >
                     <SelectValue :placeholder="selectFieldPlaceholder(field)" />
                   </SelectTrigger>
@@ -642,7 +749,7 @@ const inputBaseClass =
               <div class="space-y-1.5">
                 <CreditsFormFieldLabel
                   :field="field"
-                  :for-id="`field-${field.key}`"
+                  :for-id="domFieldId(field.key)"
                   :show-read-only-badge="showReadOnlyBadge(field)"
                 />
                 <Multiselect
@@ -655,7 +762,10 @@ const inputBaseClass =
                   placeholder="Municipio"
                   no-options-text="No hay municipios"
                   no-results-text="No hay resultados. Escribe para filtrar."
-                  class="multiselect-municipality"
+                  :class="[
+                    'multiselect-municipality',
+                    isInvalidKey(field.key) && !isFieldReadOnly(field.key) ? 'multiselect-municipality-invalid' : '',
+                  ]"
                   @update:model-value="(v: string | null) => (formData[field.key] = (v as string) ?? '')"
                 />
               </div>
@@ -665,11 +775,11 @@ const inputBaseClass =
               <div v-if="isGanadoCebaCantidadCalculadaField(field)" class="space-y-1.5">
                 <CreditsFormFieldLabel
                   :field="field"
-                  :for-id="`field-${field.key}`"
+                  :for-id="domFieldId(field.key)"
                   :show-read-only-badge="showReadOnlyBadge(field)"
                 />
                 <div
-                  :id="`field-${field.key}`"
+                  :id="domFieldId(field.key)"
                   class="flex h-9 w-full select-none items-center rounded-md border px-3 py-2 text-sm text-foreground cursor-default"
                   :class="[
                     readOnlyValueBoxClass,
@@ -684,11 +794,11 @@ const inputBaseClass =
               <div v-else class="space-y-1.5">
                 <CreditsFormFieldLabel
                   :field="field"
-                  :for-id="`field-${field.key}`"
+                  :for-id="domFieldId(field.key)"
                   :show-read-only-badge="showReadOnlyBadge(field)"
                 />
                 <div
-                  :id="`field-${field.key}`"
+                  :id="domFieldId(field.key)"
                   :class="['flex h-9 w-full select-none items-center rounded-md border px-3 py-2 text-sm text-foreground cursor-default', readOnlyValueBoxClass]"
                   tabindex="-1"
                   aria-readonly="true"
@@ -701,26 +811,30 @@ const inputBaseClass =
             <template v-else-if="field.type === 'date'">
               <CreditsFormFieldLabel
                 :field="field"
-                :for-id="`field-${field.key}`"
+                :for-id="domFieldId(field.key)"
                 :show-read-only-badge="showReadOnlyBadge(field)"
               />
               <input
-                :id="`field-${field.key}`"
+                :id="domFieldId(field.key)"
                 v-model="formData[field.key]"
                 type="date"
                 :disabled="isFieldReadOnly(field.key)"
-                :class="[inputBaseClass, showReadOnlyBadge(field) ? readOnlyInputRingClass : '']"
+                :class="[
+                  inputBaseClass,
+                  showReadOnlyBadge(field) ? readOnlyInputRingClass : '',
+                  isInvalidKey(field.key) && !isFieldReadOnly(field.key) ? fieldValidationErrorClass : '',
+                ]"
               >
             </template>
             <!-- number -->
             <template v-else-if="field.type === 'number'">
               <CreditsFormFieldLabel
                 :field="field"
-                :for-id="`field-${field.key}`"
+                :for-id="domFieldId(field.key)"
                 :show-read-only-badge="showReadOnlyBadge(field)"
               />
               <input
-                :id="`field-${field.key}`"
+                :id="domFieldId(field.key)"
                 v-model.number="formData[field.key]"
                 type="number"
                 step="any"
@@ -728,8 +842,9 @@ const inputBaseClass =
                 :class="[
                   inputBaseClass,
                   showReadOnlyBadge(field) ? readOnlyInputRingClass : '',
-                  ganadoDobleCriasExceedsVacasCria && (field.key === 'numero_crias' || field.key === 'vacas_cria')
-                    ? 'border-destructive ring-1 ring-destructive/30'
+                  (ganadoDobleCriasExceedsVacasCria && (field.key === 'numero_crias' || field.key === 'vacas_cria'))
+                    || (isInvalidKey(field.key) && !isFieldReadOnly(field.key))
+                    ? fieldValidationErrorClass
                     : '',
                 ]"
               >
@@ -746,16 +861,16 @@ const inputBaseClass =
               <div class="space-y-1.5">
                 <CreditsFormFieldLabel
                   :field="field"
-                  :for-id="`field-${field.key}`"
+                  :for-id="domFieldId(field.key)"
                   :show-read-only-badge="showReadOnlyBadge(field)"
                 />
                 <Textarea
-                  :id="`field-${field.key}`"
+                  :id="domFieldId(field.key)"
                   :model-value="(formData[field.key] as string) ?? ''"
                   :placeholder="field.meta"
                   rows="6"
                   :disabled="isFieldReadOnly(field.key)"
-                  :class="['min-h-36 resize-y', showReadOnlyBadge(field) ? readOnlyInputRingClass : '']"
+                  :class="['min-h-36 resize-y', showReadOnlyBadge(field) ? readOnlyInputRingClass : '', isInvalidKey(field.key) && !isFieldReadOnly(field.key) ? fieldValidationErrorClass : '']"
                   @update:model-value="(v) => (formData[field.key] = v)"
                 />
               </div>
@@ -764,15 +879,19 @@ const inputBaseClass =
             <template v-else>
               <CreditsFormFieldLabel
                 :field="field"
-                :for-id="`field-${field.key}`"
+                :for-id="domFieldId(field.key)"
                 :show-read-only-badge="showReadOnlyBadge(field)"
               />
               <input
-                :id="`field-${field.key}`"
+                :id="domFieldId(field.key)"
                 v-model="formData[field.key]"
                 type="text"
                 :disabled="isFieldReadOnly(field.key)"
-                :class="[inputBaseClass, showReadOnlyBadge(field) ? readOnlyInputRingClass : '']"
+                :class="[
+                  inputBaseClass,
+                  showReadOnlyBadge(field) ? readOnlyInputRingClass : '',
+                  isInvalidKey(field.key) && !isFieldReadOnly(field.key) ? fieldValidationErrorClass : '',
+                ]"
               >
             </template>
           </div>
@@ -808,5 +927,10 @@ const inputBaseClass =
   --ms-py: 0.5rem;
   min-height: 2.25rem;
   width: 100%;
+}
+
+.multiselect-municipality.multiselect-municipality-invalid {
+  --ms-border-color: hsl(var(--destructive));
+  --ms-border-color-active: hsl(var(--destructive));
 }
 </style>

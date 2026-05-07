@@ -2,7 +2,10 @@
  * Plantillas de actividad financiera basadas en OFICIAL PLANTILLAS AGRO AREA CREDITO 2026.
  * Consolidadas por sector: Ganadería, Pecuaria, Cultivos Permanentes, Cultivos Ciclo Corto.
  */
-import type { FormSchemaInput, FormSectionSchema } from '~/types/credits'
+import type { FormFieldSchema, FormSchemaInput, FormSectionSchema } from '~/types/credits'
+
+import { SERVICIOS_INGRESOS_ROWS } from '~/constants/servicios-ingresos-table'
+import { TRANSPORTE_PASAJEROS_PASAJES_ROWS } from '~/constants/transporte-pasajeros-pasajes-table'
 
 /** Sectores con sus plantillas disponibles */
 export interface SectorTemplate {
@@ -353,6 +356,7 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             label: 'Edad de las vacas (años)',
             type: 'number',
             meta: 'Int',
+            required: true,
             cols: 1,
           },
           {
@@ -366,6 +370,7 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             key: 'valor_unitario_venta_cria',
             label: 'Valor unitario venta cría',
             type: 'money',
+            required: true,
             cols: 1,
           },
           {
@@ -383,8 +388,8 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
         key: 'leche',
         title: 'Recolección de leche',
         fields: [
-          { key: 'vacas_cria', label: 'Vacas de cría', type: 'number', meta: 'Int', cols: 1 },
-          { key: 'edad_vacas_leche', label: 'Edad de las vacas (años)', type: 'number', meta: 'Int', cols: 1 },
+          { key: 'vacas_cria', label: 'Vacas de cría', type: 'number', meta: 'Int', required: true, cols: 1 },
+          { key: 'edad_vacas_leche', label: 'Edad de las vacas (años)', type: 'number', meta: 'Int', required: true, cols: 1 },
           {
             key: 'produccion_lt_ciclo',
             label: 'Producción LT del ciclo',
@@ -406,6 +411,7 @@ function schemaGanadoDobleProposito(): FormSchemaInput {
             label: 'Precio por LT leche',
             type: 'money',
             meta: 'Solo modificar este precio',
+            required: true,
             cols: 1,
           },
           {
@@ -588,7 +594,7 @@ function schemaCerdosCria(): FormSchemaInput {
             formulaFormat: 'number',
             cols: 1,
           },
-          { key: 'precio_cerdo_destetado', label: 'Precio cerdo destetado', type: 'money', cols: 1 },
+          { key: 'precio_cerdo_destetado', label: 'Precio cerdo destetado', type: 'money', required: true, cols: 1 },
           {
             key: 'duracion_ciclo_dias',
             label: 'Duración del ciclo (días)',
@@ -698,6 +704,7 @@ function schemaCerdosCeba(): FormSchemaInput {
             label: 'Peso promedio (kg)',
             type: 'number',
             meta: 'Solo lectura (configuración de plantilla)',
+            required: true,
             cols: 1,
           },
         ],
@@ -707,12 +714,13 @@ function schemaCerdosCeba(): FormSchemaInput {
         title: 'Cerdos para la ceba',
         fields: [
           { key: 'cerdos_para_ceba', label: 'Cerdos para la ceba', type: 'number', meta: 'Int', required: true, cols: 1 },
-          { key: 'precio_kg_pie', label: 'Precio de kg en pie', type: 'money', cols: 1 },
+          { key: 'precio_kg_pie', label: 'Precio de kg en pie', type: 'money', required: true, cols: 1 },
           {
             key: 'duracion_ciclo_meses',
             label: 'Duración del ciclo (meses)',
             type: 'number',
             meta: 'Solo lectura (configuración de plantilla)',
+            required: true,
             cols: 1,
           },
           {
@@ -720,6 +728,7 @@ function schemaCerdosCeba(): FormSchemaInput {
             label: '% costos estándar',
             type: 'number',
             meta: 'Decimal (ej: 0.7)',
+            required: true,
             cols: 1,
           },
           {
@@ -738,13 +747,13 @@ function schemaCerdosCeba(): FormSchemaInput {
         title: 'Discriminación de costos',
         fields: [
           { key: 'valor_lechon_destetado', label: 'Lechón destetado – Valor', type: 'computed', formulaKey: 'cerdos_ceba_valor_lechon_destetado', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
-          { key: 'pct_lechon_destetado', label: 'Lechón destetado – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'pct_lechon_destetado', label: 'Lechón destetado – %', type: 'number', meta: 'Editable', required: true, cols: 1 },
           { key: 'valor_alimentacion_ceba', label: 'Alimentación – Valor', type: 'computed', formulaKey: 'cerdos_ceba_valor_alimentacion', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
-          { key: 'pct_alimentacion_ceba', label: 'Alimentación – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'pct_alimentacion_ceba', label: 'Alimentación – %', type: 'number', meta: 'Editable', required: true, cols: 1 },
           { key: 'valor_medicamento_complementos_ceba', label: 'Medicamento y complementos – Valor', type: 'computed', formulaKey: 'cerdos_ceba_valor_medicamento_complementos', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
-          { key: 'pct_medicamento_complementos_ceba', label: 'Medicamento y complementos – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'pct_medicamento_complementos_ceba', label: 'Medicamento y complementos – %', type: 'number', meta: 'Editable', required: true, cols: 1 },
           { key: 'valor_mano_obra_ceba', label: 'Mano de obra – Valor', type: 'computed', formulaKey: 'cerdos_ceba_valor_mano_obra', formulaFormat: 'money', meta: 'Costo total × %', cols: 1 },
-          { key: 'pct_mano_obra_ceba', label: 'Mano de obra – %', type: 'number', meta: 'Editable', cols: 1 },
+          { key: 'pct_mano_obra_ceba', label: 'Mano de obra – %', type: 'number', meta: 'Editable', required: true, cols: 1 },
           {
             key: 'total_costos_cerdos_ceba',
             label: 'Total',
@@ -1178,6 +1187,7 @@ function schemaPecesTilapia(): FormSchemaInput {
             label: 'Precio de venta por libra',
             type: 'money',
             meta: 'COP — editable según mercado',
+            required: true,
             cols: 1,
           },
         ],
@@ -1298,6 +1308,7 @@ function schemaCultivoPermanente(): FormSchemaInput {
             label: 'Edad del cultivo (años)',
             type: 'number',
             meta: 'Int',
+            required: true,
             cols: 1,
           },
           {
@@ -1506,6 +1517,7 @@ function schemaCultivoCicloCorto(): FormSchemaInput {
             key: 'precio_unitario_kg',
             label: 'Precio unitario kg',
             type: 'money',
+            required: true,
             cols: 1,
           },
         ],
@@ -1657,6 +1669,7 @@ function schemaCanaPanela(): FormSchemaInput {
             label: 'Valor unitario kg',
             type: 'money',
             cols: 1,
+            required: true,
           },
         ],
       },
@@ -1677,7 +1690,6 @@ function schemaServicios(): FormSchemaInput {
             label: 'Servicio',
             type: 'select',
             meta: 'Seleccione el tipo de servicio',
-            required: true,
             cols: 1,
           },
         ],
@@ -1816,19 +1828,41 @@ function schemaTransporteCarga(): FormSchemaInput {
               { value: 'si', label: 'Sí' },
               { value: 'no', label: 'No' },
             ],
+            required: true,
             cols: 1,
           },
-          { key: 'cantidad_viajes_semana', label: 'Cantidad de viajes por semana', type: 'number', meta: 'Int — editable en radicación', cols: 1 },
-          { key: 'carga_ida', label: '¿Qué transporta? Ida', type: 'text', meta: 'Ej: Arena', cols: 1 },
-          { key: 'carga_vuelta', label: '¿Qué transporta? Vuelta', type: 'text', meta: 'Ej: Cemento', cols: 1 },
+          {
+            key: 'cantidad_viajes_semana',
+            label: 'Cantidad de viajes por semana',
+            type: 'number',
+            meta: 'Int — editable en radicación',
+            required: true,
+            cols: 1,
+          },
+          {
+            key: 'carga_ida',
+            label: '¿Qué transporta? Ida',
+            type: 'text',
+            meta: 'Ej: Arena',
+            required: true,
+            cols: 1,
+          },
+          {
+            key: 'carga_vuelta',
+            label: '¿Qué transporta? Vuelta',
+            type: 'text',
+            meta: 'Ej: Cemento',
+            required: true,
+            cols: 1,
+          },
         ],
       },
       {
         key: 'flete',
         title: 'Flete',
         fields: [
-          { key: 'valor_flete_ida', label: 'Valor flete IDA', type: 'money', cols: 1 },
-          { key: 'valor_flete_vuelta', label: 'Valor flete VUELTA', type: 'money', cols: 1 },
+          { key: 'valor_flete_ida', label: 'Valor flete IDA', type: 'money', required: true, cols: 1 },
+          { key: 'valor_flete_vuelta', label: 'Valor flete VUELTA', type: 'money', required: true, cols: 1 },
           { key: 'total_viaje', label: 'Total viaje', type: 'computed', meta: 'Calculado', formulaKey: 'transporte_carga_total_viaje', formulaFormat: 'money', cols: 1 },
           { key: 'ingreso_total_mes', label: 'Ingreso total en el mes', type: 'computed', meta: 'Calculado', formulaKey: 'transporte_carga_ingreso_total_mes', formulaFormat: 'money', cols: 1 },
         ],
@@ -1862,10 +1896,17 @@ function schemaTransportePasajeros(): FormSchemaInput {
         key: 'operacion',
         title: 'Operación',
         fields: [
-          { key: 'viajes_semana', label: 'Viajes por semana', type: 'number', meta: 'Int', cols: 1 },
-          { key: 'capacidad_buseta', label: 'Capacidad de la buseta (personas)', type: 'number', meta: 'Int', cols: 1 },
-          { key: 'ruta_ida', label: 'Ruta IDA (municipio origen)', type: 'municipality', cols: 1 },
-          { key: 'ruta_vuelta', label: 'Ruta VUELTA (municipio destino)', type: 'municipality', cols: 1 },
+          { key: 'viajes_semana', label: 'Viajes por semana', type: 'number', meta: 'Int', required: true, cols: 1 },
+          {
+            key: 'capacidad_buseta',
+            label: 'Capacidad de la buseta (personas)',
+            type: 'number',
+            meta: 'Int',
+            required: true,
+            cols: 1,
+          },
+          { key: 'ruta_ida', label: 'Ruta IDA (municipio origen)', type: 'municipality', required: true, cols: 1 },
+          { key: 'ruta_vuelta', label: 'Ruta VUELTA (municipio destino)', type: 'municipality', required: true, cols: 1 },
         ],
       },
       {
@@ -3195,6 +3236,229 @@ export function templateHasProductSelect(templateKey: string): boolean {
 export interface ValidateTemplateResult {
   valid: boolean
   errors: string[]
+  /** Claves de datos (o `__sector` / `__template`) para resaltar campos en el formulario */
+  invalidFieldKeys: string[]
+}
+
+const PLANTILLA_COMERCIAL_SEMANAS_DIAS_PAIRS: Array<{ cantidadKey: string; valorKey: string; label: string }> = [
+  { cantidadKey: 'semanas_buenas', valorKey: 'semanas_buenas_valor', label: 'Semanas buenas' },
+  { cantidadKey: 'semanas_regulares', valorKey: 'semanas_regulares_valor', label: 'Semanas regulares' },
+  { cantidadKey: 'semanas_malas', valorKey: 'semanas_malas_valor', label: 'Semanas malas' },
+  { cantidadKey: 'dias_buenos', valorKey: 'dias_buenos_valor', label: 'Días buenos' },
+  { cantidadKey: 'dias_regulares', valorKey: 'dias_regulares_valor', label: 'Días regulares' },
+  { cantidadKey: 'dias_malos', valorKey: 'dias_malos_valor', label: 'Días malos' },
+]
+
+function isMissingRequiredInput(val: unknown): boolean {
+  return (
+    val === undefined
+    || val === null
+    || val === ''
+    || (typeof val === 'number' && Number.isNaN(val))
+  )
+}
+
+/** Clasificación huevos: lado rellenado si el valor es numérico y > 0 (pareja precio cubeta / cantidad diaria). */
+function isEggClasificacionPairSideFilled(val: unknown): boolean {
+  if (isMissingRequiredInput(val)) {
+    return false
+  }
+  const n = Number(val)
+  return Number.isFinite(n) && n > 0
+}
+
+/** Ingresos por servicio: lado rellenado si el valor es numérico y > 0 (pareja valor $ / días por semana). */
+function isServiciosIngresosPairSideFilled(val: unknown): boolean {
+  if (isMissingRequiredInput(val)) {
+    return false
+  }
+  const n = Number(val)
+  return Number.isFinite(n) && n > 0
+}
+
+function isSchemaFieldVisibleForValidation(field: FormFieldSchema, data: Record<string, unknown>): boolean {
+  const vw = field.visibleWhen
+  if (!vw) {
+    return true
+  }
+  return data[vw.fieldKey] === vw.value
+}
+
+function pushKeyedError(errors: string[], invalidFieldKeys: string[], key: string, message: string): void {
+  errors.push(message)
+  if (!invalidFieldKeys.includes(key)) {
+    invalidFieldKeys.push(key)
+  }
+}
+
+function validateLayoutSectionFields(
+  section: FormSectionSchema,
+  data: Record<string, unknown>,
+  errors: string[],
+  invalidFieldKeys: string[],
+): void {
+  const layout = section.layout
+  if (!layout) {
+    return
+  }
+
+  if (layout === 'serviciosIngresosTable') {
+    const rows = section.serviciosTableRows?.length ? section.serviciosTableRows : SERVICIOS_INGRESOS_ROWS
+    for (const row of rows) {
+      const vk = `dia_${row.suffix}_valor`
+      const ck = `dia_${row.suffix}_cantidad`
+      const valorFilled = isServiciosIngresosPairSideFilled(data[vk])
+      const cantidadFilled = isServiciosIngresosPairSideFilled(data[ck])
+      if (valorFilled === cantidadFilled) {
+        continue
+      }
+      errors.push(
+        `${section.title}: ${row.label} — si indica valor ($), complete la cantidad por semana (y viceversa); o deje ambos vacíos.`,
+      )
+      if (!invalidFieldKeys.includes(vk)) {
+        invalidFieldKeys.push(vk)
+      }
+      if (!invalidFieldKeys.includes(ck)) {
+        invalidFieldKeys.push(ck)
+      }
+    }
+    return
+  }
+
+  if (layout === 'productosTable') {
+    const raw = data.productos
+    if (!Array.isArray(raw) || raw.length === 0) {
+      pushKeyedError(
+        errors,
+        invalidFieldKeys,
+        'productos',
+        'Productos: indique al menos un producto completo (nombre, precio de compra y precio de venta)',
+      )
+      return
+    }
+    let hasComplete = false
+    for (let i = 0; i < raw.length; i++) {
+      const r = raw[i] as Record<string, unknown>
+      const prod = String(r?.producto ?? '').trim()
+      const compra = r?.precio_compra
+      const venta = r?.precio_venta
+      const any = prod !== '' || compra != null || venta != null
+      if (!any) {
+        continue
+      }
+      const compraOk = compra != null && !Number.isNaN(Number(compra))
+      const ventaOk = venta != null && !Number.isNaN(Number(venta))
+      if (prod && compraOk && ventaOk) {
+        hasComplete = true
+        continue
+      }
+      if (!prod) {
+        pushKeyedError(
+          errors,
+          invalidFieldKeys,
+          `productos_${i}_producto`,
+          `Productos (fila ${i + 1}): nombre es obligatorio`,
+        )
+      }
+      if (!compraOk) {
+        pushKeyedError(
+          errors,
+          invalidFieldKeys,
+          `productos_${i}_precio_compra`,
+          `Productos (fila ${i + 1}): precio de compra es obligatorio`,
+        )
+      }
+      if (!ventaOk) {
+        pushKeyedError(
+          errors,
+          invalidFieldKeys,
+          `productos_${i}_precio_venta`,
+          `Productos (fila ${i + 1}): precio de venta es obligatorio`,
+        )
+      }
+    }
+    if (!hasComplete) {
+      pushKeyedError(
+        errors,
+        invalidFieldKeys,
+        'productos',
+        'Productos: indique al menos un producto completo (nombre, precio de compra y precio de venta)',
+      )
+    }
+    return
+  }
+
+  if (layout === 'semanasDiasTable') {
+    for (const { cantidadKey, valorKey, label } of PLANTILLA_COMERCIAL_SEMANAS_DIAS_PAIRS) {
+      const cantFilled = isServiciosIngresosPairSideFilled(data[cantidadKey])
+      const valorFilled = isServiciosIngresosPairSideFilled(data[valorKey])
+      if (cantFilled === valorFilled) {
+        continue
+      }
+      errors.push(
+        `${section.title}: ${label} — si indica cantidad, complete el valor unitario (y viceversa); o deje ambos vacíos.`,
+      )
+      if (!invalidFieldKeys.includes(cantidadKey)) {
+        invalidFieldKeys.push(cantidadKey)
+      }
+      if (!invalidFieldKeys.includes(valorKey)) {
+        invalidFieldKeys.push(valorKey)
+      }
+    }
+    return
+  }
+
+  if (layout === 'ingresosGastosOperacionalesTable') {
+    return
+  }
+
+  if (layout === 'eggsTable' && section.tableRows?.length) {
+    for (const row of section.tableRows) {
+      const pk = `precio_cubeta_${row.suffix}`
+      const ck = `cantidad_diaria_${row.suffix}`
+      const precioFilled = isEggClasificacionPairSideFilled(data[pk])
+      const cantidadFilled = isEggClasificacionPairSideFilled(data[ck])
+      if (precioFilled === cantidadFilled) {
+        continue
+      }
+      errors.push(
+        `${section.title}: ${row.label} — si indica precio por cubeta, complete la cantidad diaria (y viceversa); o deje ambos vacíos.`,
+      )
+      if (!invalidFieldKeys.includes(pk)) {
+        invalidFieldKeys.push(pk)
+      }
+      if (!invalidFieldKeys.includes(ck)) {
+        invalidFieldKeys.push(ck)
+      }
+    }
+    return
+  }
+
+  if (layout === 'transporteCargaGastosTable') {
+    return
+  }
+
+  if (layout === 'transportePasajerosPasajesTable') {
+    const rows = section.pasajesTableRows?.length ? section.pasajesTableRows : TRANSPORTE_PASAJEROS_PASAJES_ROWS
+    for (const row of rows) {
+      if (row.type === 'computed') {
+        continue
+      }
+      if (isMissingRequiredInput(data[row.key])) {
+        pushKeyedError(
+          errors,
+          invalidFieldKeys,
+          row.key,
+          `${section.title}: ${row.label} es obligatorio`,
+        )
+      }
+    }
+    return
+  }
+
+  if (layout === 'transportePasajerosGastosTable') {
+    return
+  }
 }
 
 /** Valida que una plantilla tenga los campos obligatorios completos según su schema. */
@@ -3202,16 +3466,19 @@ export function validateActivityTemplate(
   item: { sector?: string; template?: string; product?: string | null; data?: Record<string, unknown> },
 ): ValidateTemplateResult {
   const errors: string[] = []
+  const invalidFieldKeys: string[] = []
 
   if (!item?.sector?.trim()) {
     errors.push('Selecciona el sector')
+    invalidFieldKeys.push('__sector')
   }
   if (!item?.template?.trim()) {
     errors.push('Selecciona la plantilla')
+    invalidFieldKeys.push('__template')
   }
 
   if (!item?.sector || !item?.template) {
-    return { valid: false, errors }
+    return { valid: false, errors, invalidFieldKeys }
   }
 
   const schema = getTemplateSchema(item.template, {
@@ -3222,27 +3489,33 @@ export function validateActivityTemplate(
   })
 
   if (!schema?.sections) {
-    return { valid: true, errors: [] }
+    return { valid: true, errors: [], invalidFieldKeys: [] }
   }
 
   const data = item.data ?? {}
 
   for (const section of schema.sections) {
+    validateLayoutSectionFields(section, data, errors, invalidFieldKeys)
+
     const fields = section.fields
-    if (!fields?.length) continue
+    if (!fields?.length) {
+      continue
+    }
 
     for (const field of fields) {
-      if (field.type === 'computed' || !field.required) continue
+      if (field.type === 'computed' || !field.required) {
+        continue
+      }
+      if (!isSchemaFieldVisibleForValidation(field, data)) {
+        continue
+      }
 
       const val = data[field.key]
-      const isEmpty =
-        val === undefined ||
-        val === null ||
-        val === '' ||
-        (typeof val === 'number' && Number.isNaN(val))
-
-      if (isEmpty) {
+      if (isMissingRequiredInput(val)) {
         errors.push(`${field.label} es obligatorio`)
+        if (!invalidFieldKeys.includes(field.key)) {
+          invalidFieldKeys.push(field.key)
+        }
       }
     }
   }
@@ -3255,17 +3528,27 @@ export function validateActivityTemplate(
 
   if (item.template === 'ganado-doble-proposito' && isGanadoDobleCriasSuperaVacasCria(data)) {
     errors.push('El número de crías no puede ser superior al número de vacas de cría')
+    if (!invalidFieldKeys.includes('numero_crias')) {
+      invalidFieldKeys.push('numero_crias')
+    }
+    if (!invalidFieldKeys.includes('vacas_cria')) {
+      invalidFieldKeys.push('vacas_cria')
+    }
   }
 
   if (item.template === 'aves-ponedoras' && isAvesTotalCantidadDiariaExceedsCubetas(data)) {
     errors.push(
       'En «Clasificación de huevo y precios», la suma de cantidades diarias (total diario) no puede superar el N° de cubetas diarias de «Cantidad de aves». Reduzca las cantidades o revise cantidad de aves y mortalidad.',
     )
+    if (!invalidFieldKeys.includes('__aves_clasificacion_huevos')) {
+      invalidFieldKeys.push('__aves_clasificacion_huevos')
+    }
   }
 
   return {
     valid: errors.length === 0,
     errors,
+    invalidFieldKeys,
   }
 }
 
@@ -3298,7 +3581,33 @@ export function validateAllActivityTemplates(
       }
     }
   }
-  return { valid: errors.length === 0, errors }
+  return { valid: errors.length === 0, errors, invalidFieldKeys: [] }
+}
+
+/**
+ * Plantillas de referencia del destino del crédito (paso 4): exige al menos una fila con sector y plantilla;
+ * luego aplica {@link validateAllActivityTemplates} al listado completo.
+ */
+export function validateDestinationReferenceActivityTemplates(
+  templates: Array<{ sector?: string; template?: string; product?: string | null; data?: Record<string, unknown> }>,
+): ValidateTemplateResult {
+  const meaningful = templates.filter(
+    (t) =>
+      t
+      && typeof t === 'object'
+      && Boolean(String(t.sector ?? '').trim())
+      && Boolean(String(t.template ?? '').trim()),
+  )
+  if (meaningful.length === 0) {
+    return {
+      valid: false,
+      errors: [
+        'Agregue al menos una plantilla de actividad en «Actividades económicas del destino (referencia)».',
+      ],
+      invalidFieldKeys: [],
+    }
+  }
+  return validateAllActivityTemplates(templates)
 }
 
 /** formulaKey de utilidad mensual por plantilla (para sincronizar con Ingreso cultivos/negocio) */

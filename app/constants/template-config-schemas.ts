@@ -18,8 +18,14 @@ export const GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT = 10
 /** Valor por defecto — duración del ciclo (días), cerdos de cría. */
 export const CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT = 45
 
+/** Valor por defecto — precio cerdo destetado (COP), cerdos de cría. */
+export const CERDOS_CRIA_PRECIO_CERDO_DESTETADO_DEFAULT = 450_000
+
 /** Valor por defecto — duración del ciclo (meses), cerdos de ceba. */
 export const CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT = 4
+
+/** Valor por defecto — precio kg en pie (COP), cerdos de ceba. */
+export const CERDOS_CEBA_PRECIO_KG_PIE_DEFAULT = 9_500
 
 /** Valor por defecto — tiempo ciclo de engorde (días), pollos de engorde. */
 export const POLLOS_ENGORDE_TIEMPO_CICLO_DIAS_DEFAULT = 45
@@ -111,6 +117,7 @@ const schemaCerdosCria: TemplateConfigSchema = {
       fields: [
         { key: 'lechones_destetados', label: 'Lechones destetados', type: 'number' },
         { key: 'peso_final_destete_kg', label: 'Peso final del destete (kg)', type: 'number' },
+        { key: 'precio_cerdo_destetado', label: 'Precio cerdo destetado', type: 'money' },
       ],
     },
     {
@@ -143,6 +150,7 @@ const schemaCerdosCeba: TemplateConfigSchema = {
       title: 'Valores estándar por cerdo',
       fields: [
         { key: 'peso_promedio_kg_ceba', label: 'Peso final para la venta (kg)', type: 'number' },
+        { key: 'precio_kg_pie', label: 'Precio de kg en pie', type: 'money' },
       ],
     },
     {
@@ -511,6 +519,8 @@ export const RADICACION_EDITABLE_CONFIG_KEYS: Record<string, string[]> = {
   'ganado-ceba': ['precio_compra_animal', 'precio_kg_animal', 'peso_kg_final'],
   'peces-tilapia': ['precio_venta_libra'],
   'transporte-carga': ['cantidad_viajes_semana'],
+  'cerdos-cria': ['precio_cerdo_destetado'],
+  'cerdos-ceba': ['precio_kg_pie'],
 }
 
 /** Devuelve las claves de campos que provienen de la configuración (valores estandarizados, etc.). */

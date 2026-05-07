@@ -13,9 +13,28 @@ export interface ProductoRow {
 
 const DEFAULT_INITIAL_ROWS = 6
 
-const props = defineProps<{
-  formData: Record<string, unknown>
-}>()
+const props = withDefaults(
+  defineProps<{
+    formData: Record<string, unknown>
+    invalidFieldKeys?: string[]
+    fieldDomIdPrefix?: string
+  }>(),
+  {
+    invalidFieldKeys: () => [],
+    fieldDomIdPrefix: '',
+  },
+)
+
+function domFieldId(key: string): string {
+  const p = props.fieldDomIdPrefix?.trim()
+  return p ? `${p}-field-${key}` : `field-${key}`
+}
+
+const invalidKeySet = computed(() => new Set(props.invalidFieldKeys ?? []))
+
+function productFieldInvalid(idx: number, part: 'producto' | 'precio_compra' | 'precio_venta'): boolean {
+  return invalidKeySet.value.has(`productos_${idx}_${part}`)
+}
 
 const emit = defineEmits<{
   'update:field': [payload: { key: string; value: unknown }]
@@ -153,13 +172,13 @@ watch(
         <thead>
           <tr>
             <th class="border border-black bg-[#f4d03f] px-3 py-2 text-left font-bold uppercase text-black">
-              PRODUCTO
+              PRODUCTO <span class="text-red-600">*</span>
             </th>
             <th class="border border-black bg-[#f4d03f] px-3 py-2 text-center font-bold uppercase text-black">
-              PRECIO COMPRA
+              PRECIO COMPRA <span class="text-red-600">*</span>
             </th>
             <th class="border border-black bg-[#f4d03f] px-3 py-2 text-center font-bold uppercase text-black">
-              PRECIO DE VENTA
+              PRECIO DE VENTA <span class="text-red-600">*</span>
             </th>
             <th class="border border-black bg-[#f4d03f] px-3 py-2 text-center font-bold uppercase text-black">
               % UTILIDAD
@@ -177,9 +196,13 @@ watch(
           >
             <td class="border border-black p-1">
               <input
+                :id="domFieldId(`productos_${idx}_producto`)"
                 type="text"
                 :value="row.producto"
-                class="h-9 w-full rounded border border-input bg-transparent px-2 py-1 text-sm"
+                :class="[
+                  'h-9 w-full rounded border bg-transparent px-2 py-1 text-sm',
+                  productFieldInvalid(idx, 'producto') ? '!border-destructive ring-2 ring-destructive/50' : 'border-input',
+                ]"
                 placeholder="Nombre producto"
                 @input="updateProducto(idx, 'producto', ($event.target as HTMLInputElement).value)"
               >
@@ -188,6 +211,8 @@ watch(
               <CreditsBaseMoneyInput
                 :model-value="row.precio_compra"
                 placeholder="-"
+                :input-id="domFieldId(`productos_${idx}_precio_compra`)"
+                :invalid="productFieldInvalid(idx, 'precio_compra')"
                 @update:model-value="updateProducto(idx, 'precio_compra', $event)"
               />
             </td>
@@ -195,6 +220,8 @@ watch(
               <CreditsBaseMoneyInput
                 :model-value="row.precio_venta"
                 placeholder="-"
+                :input-id="domFieldId(`productos_${idx}_precio_venta`)"
+                :invalid="productFieldInvalid(idx, 'precio_venta')"
                 @update:model-value="updateProducto(idx, 'precio_venta', $event)"
               />
             </td>

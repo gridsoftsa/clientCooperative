@@ -9,6 +9,7 @@ import {
   sectorsForActivityTemplates,
   getTemplateSchema,
   templateHasProductSelect,
+  validateActivityTemplate,
 } from '~/constants/credits-financial-templates'
 import {
   getRadicacionReadOnlyConfigKeys,
@@ -16,7 +17,9 @@ import {
   CANA_PANELA_DURACION_CICLO_MESES_DEFAULT,
   CANA_PANELA_CANT_KG_HECTAREA_DEFAULT,
   CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT,
+  CERDOS_CEBA_PRECIO_KG_PIE_DEFAULT,
   CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT,
+  CERDOS_CRIA_PRECIO_CERDO_DESTETADO_DEFAULT,
   PESES_TILAPIA_TIEMPO_CICLO_DIAS_DEFAULT,
   POLLOS_ENGORDE_TIEMPO_CICLO_DIAS_DEFAULT,
   GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT,
@@ -34,11 +37,17 @@ const props = withDefaults(
     readOnlyForm?: boolean
     /** Tras guardar la plantilla en el listado: deshabilita sector y plantilla */
     lockSectorAndTemplate?: boolean
+    /** Activo cuando falló «Guardar plantilla» o validación al cambiar de paso: resalta campos obligatorios */
+    showFieldValidationErrors?: boolean
+    /** Prefijo único para ids de campos (varias plantillas en la misma página). */
+    domIdPrefix?: string
   }>(),
   {
     modelValue: undefined,
     readOnlyForm: false,
     lockSectorAndTemplate: false,
+    showFieldValidationErrors: false,
+    domIdPrefix: '',
   },
 )
 
@@ -144,12 +153,20 @@ async function loadFlatDataForTemplate(template: string, product: string | null)
       if (dias === undefined || dias === null || dias === '') {
         d.duracion_ciclo_dias = CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT
       }
+      const precioDest = d.precio_cerdo_destetado
+      if (precioDest === undefined || precioDest === null || precioDest === '') {
+        d.precio_cerdo_destetado = CERDOS_CRIA_PRECIO_CERDO_DESTETADO_DEFAULT
+      }
     }
     if (template === 'cerdos-ceba') {
       const d = formData.value
       const meses = d.duracion_ciclo_meses
       if (meses === undefined || meses === null || meses === '') {
         d.duracion_ciclo_meses = CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT
+      }
+      const pkp = d.precio_kg_pie
+      if (pkp === undefined || pkp === null || pkp === '') {
+        d.precio_kg_pie = CERDOS_CEBA_PRECIO_KG_PIE_DEFAULT
       }
     }
     if (template === 'cultivo-permanente') {
@@ -280,12 +297,20 @@ watch(
       if (dias === undefined || dias === null || dias === '') {
         d.duracion_ciclo_dias = CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT
       }
+      const precioDest = d.precio_cerdo_destetado
+      if (precioDest === undefined || precioDest === null || precioDest === '') {
+        d.precio_cerdo_destetado = CERDOS_CRIA_PRECIO_CERDO_DESTETADO_DEFAULT
+      }
     }
     if (newTemplate === 'cerdos-ceba') {
       const d = formData.value
       const meses = d.duracion_ciclo_meses
       if (meses === undefined || meses === null || meses === '') {
         d.duracion_ciclo_meses = CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT
+      }
+      const pkp = d.precio_kg_pie
+      if (pkp === undefined || pkp === null || pkp === '') {
+        d.precio_kg_pie = CERDOS_CEBA_PRECIO_KG_PIE_DEFAULT
       }
     }
     if (newTemplate === 'cultivo-permanente') {
@@ -333,6 +358,97 @@ const sectorTemplateDisabled = computed(
   () => props.readOnlyForm || props.lockSectorAndTemplate,
 )
 
+const autoActivityDomPrefix = useId().replace(/:/g, '')
+const resolvedFieldDomPrefix = computed(() => props.domIdPrefix?.trim() || autoActivityDomPrefix)
+
+const formDataValidationFingerprint = computed(() => JSON.stringify(formData.value))
+
+const activityInvalidFieldKeys = computed((): string[] => {
+  if (!props.showFieldValidationErrors || props.readOnlyForm) {
+    return []
+  }
+  void formDataValidationFingerprint.value
+  return validateActivityTemplate({
+    sector: sectorSelected.value,
+    template: templateSelected.value,
+    product: (formData.value.tipo_producto as string | undefined) ?? null,
+    data: formData.value,
+  }).invalidFieldKeys ?? []
+})
+
+function activityClasificacionHuevosSectionId(): string {
+  const p = resolvedFieldDomPrefix.value.trim()
+  return p ? `${p}-section-clasificacion-huevos` : 'section-clasificacion-huevos'
+}
+
+function scrollAndFocusControl(el: HTMLElement | null | undefined): boolean {
+  if (!el) {
+    return false
+  }
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) {
+    el.focus({ preventScroll: true })
+    return true
+  }
+  const first = el.querySelector('input, select, textarea')
+  if (first instanceof HTMLElement) {
+    first.focus({ preventScroll: true })
+    return true
+  }
+  return true
+}
+
+function focusFirstInvalidActivityControl(): void {
+  const keys = activityInvalidFieldKeys.value
+  if (keys.length === 0) {
+    return
+  }
+  const p = resolvedFieldDomPrefix.value.trim()
+  const fieldId = (key: string): string => (p ? `${p}-field-${key}` : `field-${key}`)
+  for (const key of keys) {
+    if (key === '__sector') {
+      if (scrollAndFocusControl(document.getElementById(`${p}-sector`))) {
+        return
+      }
+      continue
+    }
+    if (key === '__template') {
+      if (scrollAndFocusControl(document.getElementById(`${p}-template-${sectorSelected.value || 'none'}`))) {
+        return
+      }
+      continue
+    }
+    if (key === '__aves_clasificacion_huevos') {
+      if (scrollAndFocusControl(document.getElementById(activityClasificacionHuevosSectionId()))) {
+        return
+      }
+      continue
+    }
+    const byId = document.getElementById(fieldId(key))
+    if (byId && scrollAndFocusControl(byId)) {
+      return
+    }
+  }
+}
+
+watch(
+  () => props.showFieldValidationErrors,
+  async (show, wasShow) => {
+    if (!show || props.readOnlyForm) {
+      return
+    }
+    if (wasShow === true) {
+      return
+    }
+    await nextTick()
+    await nextTick()
+    if (activityInvalidFieldKeys.value.length === 0) {
+      return
+    }
+    requestAnimationFrame(() => focusFirstInvalidActivityControl())
+  },
+)
+
 onMounted(() => {
   fetchCategories()
 })
@@ -346,12 +462,15 @@ onMounted(() => {
       </h3>
       <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
-            <Label for="sector" class="text-sm font-medium">Sector</Label>
+            <Label :for="`${resolvedFieldDomPrefix}-sector`" class="text-sm font-medium">Sector <span class="text-destructive">*</span></Label>
             <select
-              id="sector"
+              :id="`${resolvedFieldDomPrefix}-sector`"
               v-model="sectorSelected"
               :disabled="sectorTemplateDisabled"
-              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              :class="[
+                'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+                activityInvalidFieldKeys.includes('__sector') ? '!border-destructive ring-2 ring-destructive/50' : '',
+              ]"
             >
               <option value="">
                 Seleccionar sector
@@ -366,13 +485,16 @@ onMounted(() => {
             </select>
           </div>
           <div class="space-y-1.5">
-            <Label :for="`template-${sectorSelected || 'none'}`" class="text-sm font-medium">Plantilla</Label>
+            <Label :for="`${resolvedFieldDomPrefix}-template-${sectorSelected || 'none'}`" class="text-sm font-medium">Plantilla <span class="text-destructive">*</span></Label>
             <select
-              :id="`template-${sectorSelected || 'none'}`"
+              :id="`${resolvedFieldDomPrefix}-template-${sectorSelected || 'none'}`"
               :key="sectorSelected"
               v-model="templateSelected"
               :disabled="sectorTemplateDisabled"
-              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              :class="[
+                'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60',
+                activityInvalidFieldKeys.includes('__template') ? '!border-destructive ring-2 ring-destructive/50' : '',
+              ]"
             >
               <option value="">
                 Seleccionar plantilla
@@ -408,6 +530,8 @@ onMounted(() => {
           :initial-data="formData"
           :read-only-field-keys="configuredFieldKeys"
           :read-only-form="readOnlyForm"
+          :invalid-field-keys="activityInvalidFieldKeys"
+          :field-dom-id-prefix="resolvedFieldDomPrefix"
           @update:form-data="setFormData"
         />
         <template #fallback>

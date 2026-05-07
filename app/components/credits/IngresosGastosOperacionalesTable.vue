@@ -5,9 +5,28 @@
  * TOTAL GASTOS DEL NEGOCIO, TOTAL INGRESOS NETOS NEGOCIO.
  */
 
-const props = defineProps<{
-  formData: Record<string, unknown>
-}>()
+const props = withDefaults(
+  defineProps<{
+    formData: Record<string, unknown>
+    invalidFieldKeys?: string[]
+    fieldDomIdPrefix?: string
+  }>(),
+  {
+    invalidFieldKeys: () => [],
+    fieldDomIdPrefix: '',
+  },
+)
+
+function domFieldId(key: string): string {
+  const p = props.fieldDomIdPrefix?.trim()
+  return p ? `${p}-field-${key}` : `field-${key}`
+}
+
+const invalidKeySet = computed(() => new Set(props.invalidFieldKeys ?? []))
+
+function isInvalidKey(key: string): boolean {
+  return invalidKeySet.value.has(key)
+}
 
 const emit = defineEmits<{
   'update:field': [payload: { key: string; value: unknown }]
@@ -86,6 +105,8 @@ function formatMoney(value: number | null | undefined): string {
               :model-value="(props.formData[row.key] as number | null) ?? null"
               placeholder="0"
               class="w-full"
+              :input-id="domFieldId(row.key)"
+              :invalid="isInvalidKey(row.key)"
               @update:model-value="setField(row.key, $event)"
             />
           </td>

@@ -16,6 +16,11 @@ defineProps<{
   >
     <span>{{ field.label }}</span>
     <span
+      v-if="field.required"
+      class="text-destructive"
+      aria-hidden="true"
+    >*</span>
+    <span
       v-if="field.meta"
       class="text-muted-foreground font-normal"
     >({{ field.meta }})</span>

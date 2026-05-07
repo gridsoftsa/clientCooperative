@@ -9,15 +9,24 @@ const props = withDefaults(
   defineProps<{
     modelValue?: number | string | null
     label?: string
+    /** id estable para el &lt;input&gt; (enfoque / accesibilidad); si no se pasa, se genera uno local */
+    inputId?: string
+    /** Campo obligatorio (asterisco en etiqueta; alineado con CreditsFormFieldLabel) */
+    required?: boolean
     /** Indicador “Solo lectura” (campo fijado por plantilla), alineado con FormFieldLabel */
     showSoloLecturaHint?: boolean
+    /** Borde de error (validación de plantilla / paso actividad) */
+    invalid?: boolean
     disabled?: boolean
     placeholder?: string
   }>(),
   {
     modelValue: null,
     label: '',
+    inputId: '',
     showSoloLecturaHint: false,
+    required: false,
+    invalid: false,
     disabled: false,
     placeholder: '0,00',
   },
@@ -27,7 +36,12 @@ const emit = defineEmits<{
   'update:modelValue': [value: number | null]
 }>()
 
-const inputId = `money-input-${Math.random().toString(36).slice(2, 9)}`
+const generatedMoneyInputId = `money-input-${Math.random().toString(36).slice(2, 9)}`
+const resolvedInputId = computed(() =>
+  (props.inputId && props.inputId.trim() !== '')
+    ? props.inputId.trim()
+    : generatedMoneyInputId,
+)
 const inputRef = ref<HTMLInputElement | null>(null)
 
 /** Valor numérico para display y cálculos */
@@ -69,8 +83,13 @@ function onBlur() {
 
 <template>
   <div class="grid gap-2">
-    <Label v-if="label" :for="inputId" class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium">
+    <Label v-if="label" :for="resolvedInputId" class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium">
       <span>{{ label }}</span>
+      <span
+        v-if="required"
+        class="text-destructive"
+        aria-hidden="true"
+      >*</span>
       <span
         v-if="showSoloLecturaHint"
         class="inline-flex items-center gap-0.5 rounded-md border border-amber-600/40 bg-amber-100/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:border-amber-500/45 dark:bg-amber-950/55 dark:text-amber-100"
@@ -81,15 +100,18 @@ function onBlur() {
     </Label>
     <div class="relative">
       <input
-        :id="inputId"
+        :id="resolvedInputId"
         ref="inputRef"
         type="text"
         inputmode="decimal"
         autocomplete="off"
         :value="displayValue"
-        :placeholder="placeholder"
-        :disabled="disabled"
-        class="flex h-9 w-full rounded-md border border-input bg-transparent py-1 pl-3 pr-3 text-right text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        :aria-invalid="invalid"
+        :aria-required="required"
+        :class="[
+          'flex h-9 w-full rounded-md border border-input bg-transparent py-1 pl-3 pr-3 text-right text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+          invalid ? '!border-destructive ring-2 ring-destructive/50 focus-visible:ring-destructive' : '',
+        ]"
         @input="onInput"
         @blur="onBlur"
         @keydown="onKeydownPesosOnly"
