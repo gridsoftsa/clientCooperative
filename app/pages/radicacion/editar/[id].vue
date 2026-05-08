@@ -44,7 +44,10 @@ const documentsOnlyEditMode = computed(
 )
 const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
 const currentStep = ref(1)
-const radicacionStepOneFormRef = ref<{ validateAuxiliaryDocumentsRequired: () => boolean } | null>(null)
+const radicacionStepOneFormRef = ref<{
+  validateRequiredStepOneFields: () => boolean
+  validateAuxiliaryDocumentsRequired: () => boolean
+} | null>(null)
 const debtorActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
 const destinationActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
 const codeudorActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
@@ -880,7 +883,31 @@ async function uploadAllDocuments(
   }
 }
 
+/** Igual que «Siguiente» en paso 1: obligatorios + checklist auxiliar. Requiere paso 1 montado (v-show). */
+async function validateRadicacionStepOneForPersist(): Promise<boolean> {
+  if (addingCodeudor.value) {
+    return true
+  }
+  await nextTick()
+  const formRef = radicacionStepOneFormRef.value
+  if (!formRef) {
+    toast.error('No se pudo validar los datos del deudor. Vuelva al paso 1 e intente de nuevo.')
+    return false
+  }
+  if (!formRef.validateRequiredStepOneFields()) {
+    toast.error('Completa los campos obligatorios del deudor')
+    return false
+  }
+  if (!formRef.validateAuxiliaryDocumentsRequired()) {
+    return false
+  }
+  return true
+}
+
 async function saveChanges() {
+  if (!(await validateRadicacionStepOneForPersist())) {
+    return
+  }
   if (!canProceedStep1()) {
     toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
     return
@@ -939,6 +966,9 @@ async function saveChanges() {
 }
 
 async function submitToDirectorReview() {
+  if (!(await validateRadicacionStepOneForPersist())) {
+    return
+  }
   if (!canProceedStep1()) {
     toast.error('Completa los datos obligatorios del deudor')
     return
@@ -1009,6 +1039,11 @@ async function confirmSubmitToDirector() {
 
 function nextStep() {
   if (currentStep.value === 1) {
+    const okRequired = radicacionStepOneFormRef.value?.validateRequiredStepOneFields() ?? true
+    if (!okRequired) {
+      toast.error('Completa los campos obligatorios del deudor')
+      return
+    }
     const okAux = radicacionStepOneFormRef.value?.validateAuxiliaryDocumentsRequired() ?? true
     if (!okAux) {
       return
@@ -1327,7 +1362,7 @@ onMounted(() => {
         </CardHeader>
         <CardContent class="space-y-6">
           <div
-            v-if="!addingCodeudor && currentStep === 1"
+            v-show="!addingCodeudor && currentStep === 1"
             class="space-y-4"
           >
             <ApplicantFormFields
@@ -1346,7 +1381,7 @@ onMounted(() => {
           </div>
 
           <div
-            v-else-if="!addingCodeudor && currentStep === 2"
+            v-show="!addingCodeudor && currentStep === 2"
             class="space-y-4"
           >
             <CreditsFinancialActivityFormList
@@ -1358,7 +1393,7 @@ onMounted(() => {
           </div>
 
           <div
-            v-else-if="!addingCodeudor && currentStep === 3"
+            v-show="!addingCodeudor && currentStep === 3"
             class="space-y-4"
           >
             <ApplicantFormFields
@@ -1370,7 +1405,7 @@ onMounted(() => {
             />
           </div>
 
-          <div v-else-if="!addingCodeudor && currentStep === 4" class="space-y-8">
+          <div v-show="!addingCodeudor && currentStep === 4" class="space-y-8">
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div class="space-y-1.5">
                 <Label for="amount">Monto solicitado * (COP)</Label>
@@ -1475,7 +1510,7 @@ onMounted(() => {
           </div>
 
           <div
-            v-else-if="currentStep === 5 && !addingCodeudor"
+            v-show="currentStep === 5 && !addingCodeudor"
             class="space-y-6"
           >
             <div class="flex flex-wrap items-center justify-between gap-4">

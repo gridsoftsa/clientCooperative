@@ -392,6 +392,27 @@ function setActivityTemplatesFor(app: ApplicantForm, val: ActivityTemplateData[]
   fi.income = { ...income, business: sumUtilidad }
 }
 
+/** Mismas reglas que «Siguiente» en paso 1 (deudor): obligatorios + checklist auxiliar). Requiere que el paso 1 siga montado (p. ej. v-show). */
+async function validateDebtorStepOneForRadicacion(): Promise<boolean> {
+  if (mode.value !== 'deudor') {
+    return true
+  }
+  await nextTick()
+  const formRef = debtorStepOneFormRef.value
+  if (!formRef) {
+    toast.error('No se pudo validar los datos del deudor. Vuelva al paso 1 e intente de nuevo.')
+    return false
+  }
+  if (!formRef.validateRequiredStepOneFields()) {
+    toast.error('Completa los campos obligatorios del deudor')
+    return false
+  }
+  if (!formRef.validateAuxiliaryDocumentsRequired()) {
+    return false
+  }
+  return true
+}
+
 /** Valida plantillas de actividad (deudor y codeudores) antes de guardar o enviar solicitud. */
 function validateActivityTemplatesBeforeSave(): string | null {
   const debtorT = getActivityTemplates()
@@ -856,6 +877,9 @@ async function saveDraft() {
     await saveCodeudor()
     return
   }
+  if (!(await validateDebtorStepOneForRadicacion())) {
+    return
+  }
   if (!canProceedStep1()) {
     toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
     return
@@ -917,6 +941,9 @@ async function saveDraft() {
 async function submitApplication() {
   if (mode.value === 'codeudor') {
     await saveCodeudor()
+    return
+  }
+  if (!(await validateDebtorStepOneForRadicacion())) {
     return
   }
   if (!canProceedStep1()) {
@@ -1305,9 +1332,9 @@ onMounted(() => {
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-6">
-        <!-- Paso 1: Datos del Deudor o Codeudor -->
+        <!-- Paso 1: Datos del Deudor o Codeudor (v-show: ref disponible al guardar/enviar desde otros pasos) -->
         <div
-          v-if="(mode === 'deudor' && currentStep === 1) || (mode === 'codeudor' && currentStep === 1)"
+          v-show="(mode === 'deudor' && currentStep === 1) || (mode === 'codeudor' && currentStep === 1)"
           class="space-y-4"
         >
           <ApplicantFormFields
@@ -1326,7 +1353,7 @@ onMounted(() => {
 
         <!-- Paso 2: Actividad económica -->
         <div
-          v-else-if="(mode === 'deudor' && currentStep === 2) || (mode === 'codeudor' && currentStep === 2)"
+          v-show="(mode === 'deudor' && currentStep === 2) || (mode === 'codeudor' && currentStep === 2)"
           class="space-y-4"
         >
           <CreditsFinancialActivityFormList
@@ -1338,7 +1365,7 @@ onMounted(() => {
 
         <!-- Paso 3: Datos financieros -->
         <div
-          v-else-if="(mode === 'deudor' && currentStep === 3) || (mode === 'codeudor' && currentStep === 3)"
+          v-show="(mode === 'deudor' && currentStep === 3) || (mode === 'codeudor' && currentStep === 3)"
           class="space-y-4"
         >
           <ApplicantFormFields
@@ -1349,7 +1376,7 @@ onMounted(() => {
         </div>
 
         <!-- Paso 4 Deudor: Solicitud (solo deudor) -->
-        <div v-else-if="mode === 'deudor' && currentStep === 4" class="space-y-8">
+        <div v-show="mode === 'deudor' && currentStep === 4" class="space-y-8">
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div class="space-y-1.5">
               <Label for="amount">Monto solicitado * (COP)</Label>
@@ -1449,7 +1476,7 @@ onMounted(() => {
 
         <!-- Paso 5 Deudor: Codeudores - subflujo agregar codeudor (3 pasos) -->
         <div
-          v-else-if="mode === 'deudor' && currentStep === 5 && addingCodeudor"
+          v-show="mode === 'deudor' && currentStep === 5 && addingCodeudor"
           class="space-y-6"
         >
           <div class="flex flex-wrap items-center justify-between gap-4">
@@ -1554,7 +1581,7 @@ onMounted(() => {
         </div>
 
         <!-- Paso 5 Deudor: Codeudores - lista y botón -->
-        <div v-else-if="mode === 'deudor' && currentStep === 5" class="space-y-6">
+        <div v-show="mode === 'deudor' && currentStep === 5 && !addingCodeudor" class="space-y-6">
           <div class="flex items-center justify-between">
             <p class="text-sm text-muted-foreground">
               Agrega codeudores si el crédito lo requiere
