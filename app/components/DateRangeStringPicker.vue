@@ -10,10 +10,18 @@ const props = withDefaults(
     id?: string
     label?: string
     placeholderText?: string
+    /** Si es true, el botón ocupa todo el ancho del contenedor (sin `max-w-md`). */
+    fullWidth?: boolean
+    /**
+     * Altura y texto alineados con `SelectTrigger` estándar (`h-9`, `text-sm`).
+     * Por defecto el trigger usa `h-11` / `text-base` (resto de pantallas).
+     */
+    compact?: boolean
   }>(),
   {
-    
     placeholderText: 'Elegir rango de fechas',
+    fullWidth: false,
+    compact: false,
   },
 )
 
@@ -99,12 +107,17 @@ function clearRange() {
             type="button"
             variant="outline"
             :class="cn(
-              'h-11 w-full min-w-0 max-w-md justify-start text-left text-base font-normal',
+              'w-full min-w-0 justify-start text-left font-normal',
+              props.compact ? 'h-9 text-sm' : 'h-11 text-base',
+              !props.fullWidth && 'max-w-md',
               !hasRange && 'text-muted-foreground',
             )"
             :aria-describedby="popoverId"
           >
-            <CalendarIcon class="mr-2 h-5 w-5 shrink-0" />
+            <CalendarIcon
+              class="mr-2 shrink-0"
+              :class="props.compact ? 'h-4 w-4' : 'h-5 w-5'"
+            />
             <span class="truncate">{{ buttonLabel }}</span>
           </Button>
         </PopoverTrigger>

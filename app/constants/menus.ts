@@ -120,6 +120,12 @@ export const navMenu: NavMenu[] = [
         ],
       },
       {
+        title: 'Auditoría',
+        icon: 'i-lucide-clipboard-list',
+        link: '/audits',
+        permission: 'auditoria_ver',
+      },
+      {
         title: 'Configuración',
         icon: 'i-lucide-settings',
         anyPermission: [
@@ -132,7 +138,6 @@ export const navMenu: NavMenu[] = [
           'usuarios_ver',
           'sucursales_ver',
           'roles_ver',
-          'auditoria_ver',
         ],
         children: [
           {
@@ -176,12 +181,6 @@ export const navMenu: NavMenu[] = [
             icon: 'i-lucide-shield-check',
             link: '/settings/roles',
             permission: 'roles_ver',
-          },
-          {
-            title: 'Auditoría',
-            icon: 'i-lucide-clipboard-list',
-            link: '/settings/audit',
-            permission: 'auditoria_ver',
           },
         ],
       },

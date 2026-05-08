@@ -8,7 +8,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'analisis-score': 'Análisis Score',
   'applicants': 'Solicitantes',
   'account': 'Cuenta',
-  'appearance': 'Apariencia',
+  'audits': 'Auditoría',
   'audit': 'Auditoría',
   'company': 'Empresa',
   'components': 'Componentes',

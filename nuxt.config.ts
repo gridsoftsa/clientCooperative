@@ -57,7 +57,7 @@ export default defineNuxtConfig({
 
   routeRules: {
     '/components': { redirect: '/components/accordion' },
-    '/settings': { redirect: '/settings/profile' },
+    '/settings/audit': { redirect: '/audits' },
     // Permisos no se administra en UI (asignación vía roles; definición en API/código)
     '/settings/permissions': { redirect: '/settings/roles' },
     '/settings/permissions/**': { redirect: '/settings/roles' },

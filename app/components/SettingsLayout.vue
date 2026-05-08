@@ -1,4 +1,8 @@
 <script setup lang="ts">
+/**
+ * Contenedor de páginas bajo /settings/*.
+ * La navegación lateral duplicada se eliminó: usa solo el menú principal (AppSidebar).
+ */
 withDefaults(
   defineProps<{
     /** Si true, el contenido usa todo el ancho disponible (sin max-w-2xl) */
@@ -9,7 +13,7 @@ withDefaults(
 </script>
 
 <template>
-  <div class="pb-16 space-y-6">
+  <div class="mx-auto w-full max-w-[1600px] space-y-6 px-4 pb-16 pt-1 sm:px-6 lg:px-8">
     <div class="space-y-0.5">
       <h2 class="text-2xl font-bold tracking-tight">
         Configuración
@@ -19,19 +23,13 @@ withDefaults(
       </p>
     </div>
     <Separator class="my-6" />
-    <div class="flex flex-col lg:flex-row space-y-6 lg:space-x-12 lg:space-y-0">
-      <div class="w-full overflow-x-auto pb-2 lg:w-1/6 lg:pb-0">
-        <SettingsSidebarNav />
-      </div>
-      <div class="flex-1 min-w-0" :class="wide ? 'lg:max-w-none' : 'lg:max-w-2xl'">
-        <div class="space-y-6">
-          <slot />
-        </div>
+    <div
+      class="min-w-0 w-full"
+      :class="wide ? '' : 'mx-auto max-w-2xl'"
+    >
+      <div class="space-y-6">
+        <slot />
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-
-</style>
