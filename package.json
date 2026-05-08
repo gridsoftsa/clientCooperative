@@ -50,7 +50,6 @@
     "release": "release-it"
   },
   "dependencies": {
-    "@vueform/multiselect": "^2.6.11",
     "@iconify-json/lucide": "^1.2.68",
     "@iconify-json/radix-icons": "^1.2.5",
     "@internationalized/date": "^3.10.0",
@@ -60,6 +59,9 @@
     "@unovis/ts": "^1.6.1",
     "@unovis/vue": "^1.6.1",
     "@vercel/analytics": "^1.6.1",
+    "@vueform/multiselect": "^2.6.11",
+    "d3": "^7.9.0",
+    "d3-org-chart": "^3.1.1",
     "embla-carousel": "^8.6.0",
     "embla-carousel-vue": "^8.6.0",
     "nanoid": "^5.1.6",
