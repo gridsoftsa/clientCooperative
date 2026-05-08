@@ -13,13 +13,25 @@ const sections: { heading: string; items: NavItem[] }[] = [
     ],
   },
   {
-    heading: 'Organización',
+    heading: 'Administración',
     items: [
       { label: 'Empresa principal', href: '/settings/company', permission: 'empresa_ver' },
       { label: 'Usuarios', href: '/settings/users', permission: 'usuarios_ver' },
       { label: 'Sucursales', href: '/settings/sucursales', permission: 'sucursales_ver' },
       { label: 'Roles', href: '/settings/roles', permission: 'roles_ver' },
       { label: 'Auditoría', href: '/settings/audit', permission: 'auditoria_ver' },
+    ],
+  },
+  {
+    heading: 'Estructura',
+    items: [
+      { label: 'Resumen', href: '/settings/organizational-structure', permission: 'estructura_org_ver' },
+      { label: 'Oficinas y agencias', href: '/settings/organizational-structure/offices', permission: 'estructura_org_ver' },
+      { label: 'Áreas y dependencias', href: '/settings/organizational-structure/units', permission: 'estructura_org_ver' },
+      { label: 'Cargos', href: '/settings/organizational-structure/positions', permission: 'estructura_org_ver' },
+      { label: 'Funcionarios', href: '/settings/organizational-structure/staff', permission: 'estructura_org_ver' },
+      { label: 'Directorio', href: '/settings/organizational-structure/directory', permission: 'estructura_org_ver' },
+      { label: 'Organigrama', href: '/settings/organizational-structure/tree', permission: 'estructura_org_ver' },
     ],
   },
 ]

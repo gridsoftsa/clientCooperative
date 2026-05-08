@@ -28,6 +28,7 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
   solicitantes: 'Solicitantes',
   radicacion: 'Radicación',
   settings: 'Configuración',
+  estructura: 'Estructura organizacional',
 }
 
 /**
@@ -36,6 +37,7 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
 export const PERMISSION_CATEGORY_SECTION_TITLES: Record<string, string> = {
   radicacion: 'Radicación (Solicitudes de crédito)',
   solicitantes: 'Solicitantes (Deudores/Codeudores)',
+  estructura: 'Estructura organizacional',
 }
 
 /**
@@ -56,6 +58,7 @@ export const PERMISSION_CATEGORY_ORDER: string[] = [
   'display',
   'empresa',
   'sucursales',
+  'estructura',
   'usuarios',
   'roles',
   'permisos',
@@ -199,6 +202,18 @@ export function getPermissionLabel(name: string): string {
   if (override) {
     return override
   }
+
+  /** Prefijo de tres segmentos: `estructura_org_ver`, `estructura_org_editar`, etc. */
+  if (name.startsWith('estructura_org_')) {
+    const suffix = name.slice('estructura_org_'.length)
+    const categoryLabel = PERMISSION_CATEGORY_LABELS.estructura ?? 'Estructura organizacional'
+    const actionLabel =
+      suffix.includes('_')
+        ? capitalizeWords(suffix)
+        : (ACTION_LABELS[suffix] ?? capitalizeWords(suffix))
+    return actionLabel ? `${actionLabel} ${categoryLabel}` : categoryLabel
+  }
+
   const parts = name.split('_')
   const category = parts[0] ?? ''
   const action = parts[1] ?? ''

@@ -1,0 +1,215 @@
+<script setup lang="ts">
+import { toast } from 'vue-sonner'
+import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
+
+definePageMeta({
+  layout: 'default',
+  middleware: 'permission',
+  permissions: 'estructura_org_editar',
+})
+
+const router = useRouter()
+const { $api } = useNuxtApp()
+const orgApi = useOrgStructureApi()
+
+const unitOptions = ref<Array<{ id: number; label: string }>>([])
+const peerPositions = ref<Array<{ id: number; name: string; code: string }>>([])
+
+const form = ref({
+  org_unit_id: null as number | null,
+  name: '',
+  code: '',
+  hierarchy_level: 1,
+  has_subordinates: false,
+  reports_to_position_id: null as number | null,
+  is_active: true,
+})
+
+const saving = ref(false)
+
+async function loadUnits() {
+  const units = await orgApi.fetchUnits({ activeOnly: true })
+  unitOptions.value = units.map((u: OrgUnitRow) => ({
+    id: u.id,
+    label: `${u.name} (${u.org_office?.name ?? '—'})`,
+  }))
+}
+
+watch(() => form.value.org_unit_id, async (id: number | null) => {
+  form.value.reports_to_position_id = null
+  if (id == null) {
+    peerPositions.value = []
+    return
+  }
+  const list = await orgApi.fetchPositions({ activeOnly: true, orgUnitId: id })
+  peerPositions.value = list.map(p => ({ id: p.id, name: p.name, code: p.code }))
+})
+
+async function handleSubmit() {
+  if (form.value.org_unit_id == null || !form.value.name.trim() || !form.value.code.trim()) {
+    toast.error('Área, nombre y código son obligatorios')
+    return
+  }
+  saving.value = true
+  try {
+    await $api('/organizational-structure/org-positions', {
+      method: 'POST',
+      body: {
+        org_unit_id: form.value.org_unit_id,
+        name: form.value.name.trim(),
+        code: form.value.code.trim(),
+        hierarchy_level: form.value.hierarchy_level,
+        has_subordinates: form.value.has_subordinates,
+        reports_to_position_id: form.value.reports_to_position_id ?? undefined,
+        is_active: form.value.is_active,
+      },
+    })
+    toast.success('Cargo creado')
+    router.push('/settings/organizational-structure/positions')
+  } catch (e: any) {
+    toast.error(e?.data?.message || 'Error al crear')
+  } finally {
+    saving.value = false
+  }
+}
+
+onMounted(() => {
+  loadUnits().catch(() => toast.error('Error al cargar áreas'))
+})
+</script>
+
+<template>
+  <SettingsLayout :wide="true">
+    <div class="w-full flex flex-col gap-4">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="space-y-1">
+          <h2 class="text-2xl font-bold tracking-tight">
+            Nuevo cargo
+          </h2>
+          <p class="text-muted-foreground leading-relaxed">
+            El jefe inmediato (reporta a) debe ser otro cargo del mismo área, si aplica.
+          </p>
+        </div>
+        <Button variant="outline" class="shrink-0" @click="router.back()">
+          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
+          Volver
+        </Button>
+      </div>
+
+      <form @submit.prevent="handleSubmit">
+        <div class="grid gap-6">
+          <Card>
+            <CardHeader class="gap-2">
+              <CardTitle class="leading-snug">Información del cargo</CardTitle>
+              <CardDescription class="leading-relaxed">
+                Área de adscripción, identificación del puesto y relación jerárquica dentro del mismo área.
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-6">
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
+                <div class="space-y-3 md:col-span-2">
+                  <Label for="unit_p" class="leading-snug">Área *</Label>
+                  <Select
+                    :model-value="form.org_unit_id == null ? undefined : String(form.org_unit_id)"
+                    @update:model-value="(v) => { form.org_unit_id = v ? Number(v) : null }"
+                  >
+                    <SelectTrigger id="unit_p">
+                      <SelectValue placeholder="Seleccione área" />
+                    </SelectTrigger>
+                    <SelectContent class="max-h-72">
+                      <SelectItem
+                        v-for="u in unitOptions"
+                        :key="u.id"
+                        :value="String(u.id)"
+                      >
+                        {{ u.label }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6">
+                  <div class="space-y-3">
+                    <Label for="name_p" class="leading-snug">Nombre *</Label>
+                    <Input id="name_p" v-model="form.name" required />
+                  </div>
+                  <div class="space-y-3">
+                    <Label for="code_p" class="leading-snug">Código *</Label>
+                    <Input id="code_p" v-model="form.code" required />
+                  </div>
+                </div>
+
+                <div class="space-y-3">
+                  <Label for="hl" class="leading-snug">Nivel jerárquico</Label>
+                  <Input id="hl" v-model.number="form.hierarchy_level" type="number" min="1" max="127" />
+                </div>
+
+                <div class="space-y-3 rounded-lg border p-4">
+                  <div class="flex items-start gap-3 pt-1">
+                    <Checkbox id="sub" v-model:checked="form.has_subordinates" class="mt-0.5" />
+                    <div class="space-y-1.5">
+                      <Label for="sub" class="text-base leading-snug">Personal a cargo</Label>
+                      <p class="text-sm text-muted-foreground leading-relaxed">
+                        Active si desde este cargo existe subordinación directa sobre otros cargos o personas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="space-y-3 md:col-span-2">
+                  <Label for="rep" class="leading-snug">Reporta a (opcional)</Label>
+                  <Select
+                    :model-value="form.reports_to_position_id == null ? 'none' : String(form.reports_to_position_id)"
+                    :disabled="!form.org_unit_id"
+                    @update:model-value="(v) => { form.reports_to_position_id = v === 'none' ? null : Number(v) }"
+                  >
+                    <SelectTrigger id="rep">
+                      <SelectValue placeholder="Sin jefe inmediato en catálogo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        (Ninguno)
+                      </SelectItem>
+                      <SelectItem
+                        v-for="r in peerPositions"
+                        :key="r.id"
+                        :value="String(r.id)"
+                      >
+                        {{ r.name }} — {{ r.code }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div class="space-y-3 rounded-lg border p-4 md:col-span-2">
+                  <div class="space-y-1.5">
+                    <Label for="position_active_toggle_create" class="text-base leading-snug">Estado</Label>
+                    <p class="text-sm text-muted-foreground leading-relaxed">
+                      Los cargos inactivos no se ofrecen al asignar funcionarios ni en flujos de alta.
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2 pt-1">
+                    <Checkbox id="position_active_toggle_create" v-model:checked="form.is_active" />
+                    <Label for="position_active_toggle_create" class="font-normal leading-snug">
+                      Cargo activo
+                    </Label>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div class="flex justify-end gap-4">
+            <Button type="button" variant="outline" @click="router.back()">
+              Cancelar
+            </Button>
+            <Button type="submit" :disabled="saving">
+              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              {{ saving ? 'Guardando...' : 'Crear cargo' }}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </SettingsLayout>
+</template>

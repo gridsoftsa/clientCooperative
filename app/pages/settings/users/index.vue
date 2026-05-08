@@ -118,22 +118,24 @@ watch(searchQuery, () => {
 <template>
   <SettingsLayout :wide="true">
     <div class="w-full flex flex-col gap-4">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <h2 class="text-2xl font-bold tracking-tight">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <h2 class="text-2xl font-bold tracking-tight leading-snug">
         Gestión de Usuarios
       </h2>
-      <PermissionGate permission="usuarios_crear">
-        <Button @click="router.push('/settings/users/create')">
+      <div class="shrink-0">
+        <PermissionGate permission="usuarios_crear">
+          <Button @click="router.push('/settings/users/create')">
           <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
           Nuevo Usuario
         </Button>
-      </PermissionGate>
+        </PermissionGate>
+      </div>
     </div>
 
     <Card>
-      <CardHeader>
-        <CardTitle>Lista de Usuarios</CardTitle>
-        <CardDescription>
+      <CardHeader class="gap-2">
+        <CardTitle class="leading-snug">Lista de Usuarios</CardTitle>
+        <CardDescription class="leading-relaxed">
           Gestiona los usuarios del sistema
         </CardDescription>
       </CardHeader>
@@ -152,11 +154,11 @@ watch(searchQuery, () => {
           </div>
 
           <!-- Tabla -->
-          <div v-if="loading" class="flex items-center justify-center py-8">
-            <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
+          <div v-if="loading" class="flex items-center justify-center py-12">
+            <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
           
-          <div v-else-if="users.length === 0" class="text-center py-8 text-muted-foreground">
+          <div v-else-if="users.length === 0" class="text-center py-12 text-muted-foreground leading-relaxed">
             No hay usuarios registrados
           </div>
 

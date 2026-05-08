@@ -40,6 +40,53 @@ export const navMenu: NavMenu[] = [
     ],
   },
   {
+    heading: 'Organización',
+    items: [
+      {
+        title: 'Estructura',
+        icon: 'i-lucide-file-text',
+        permission: 'estructura_org_ver',
+        children: [
+          {
+            title: 'Resumen',
+            link: '/settings/organizational-structure',
+            permission: 'estructura_org_ver',
+          },
+          {
+            title: 'Oficinas y agencias',
+            link: '/settings/organizational-structure/offices',
+            permission: 'estructura_org_ver',
+          },
+          {
+            title: 'Áreas y dependencias',
+            link: '/settings/organizational-structure/units',
+            permission: 'estructura_org_ver',
+          },
+          {
+            title: 'Cargos',
+            link: '/settings/organizational-structure/positions',
+            permission: 'estructura_org_ver',
+          },
+          {
+            title: 'Funcionarios',
+            link: '/settings/organizational-structure/staff',
+            permission: 'estructura_org_ver',
+          },
+          {
+            title: 'Directorio',
+            link: '/settings/organizational-structure/directory',
+            permission: 'estructura_org_ver',
+          },
+          {
+            title: 'Organigrama',
+            link: '/settings/organizational-structure/tree',
+            permission: 'estructura_org_ver',
+          },
+        ],
+      },
+    ],
+  },
+  {
     heading: 'Sistema',
     items: [
       {

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import type { SidebarMenuButtonVariants } from '~/components/ui/sidebar'
-import type { NavGroup } from '~/types/nav'
+import type { NavGroup, NavLink } from '~/types/nav'
 import { useSidebar } from '~/components/ui/sidebar'
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   item: NavGroup
   size?: SidebarMenuButtonVariants['size']
 }>(), {
@@ -11,8 +11,27 @@ withDefaults(defineProps<{
 })
 
 const { setOpenMobile } = useSidebar()
+const route = useRoute()
+
+/** Marca activo el subítem si la ruta coincide o es una ruta hija (p. ej. formularios de edición). */
+function isSubRouteActive(link: string): boolean {
+  if (route.path === link)
+    return true
+  if (link === '/')
+    return false
+  return route.path.startsWith(`${link}/`)
+}
 
 const openCollapsible = ref(false)
+
+watch(
+  () => route.path,
+  () => {
+    if (props.item.children.some((c: NavLink) => isSubRouteActive(c.link)))
+      openCollapsible.value = true
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -40,7 +59,7 @@ const openCollapsible = ref(false)
               v-for="subItem in item.children"
               :key="subItem.title"
             >
-              <SidebarMenuSubButton as-child :data-active="subItem.link === $route.path">
+              <SidebarMenuSubButton as-child :data-active="isSubRouteActive(subItem.link)">
                 <NuxtLink :to="subItem.link" @click="setOpenMobile(false)">
                   <span>{{ subItem.title }}</span>
                   <span v-if="subItem.new" class="rounded-md bg-[#adfa1d] px-1.5 py-0.5 text-xs text-black leading-none no-underline group-hover:no-underline">

@@ -209,25 +209,25 @@ onMounted(async () => {
 <template>
   <SettingsLayout :wide="true">
     <div class="w-full flex flex-col gap-4">
-    <div class="flex items-center justify-between">
-      <div>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="space-y-1">
         <h2 class="text-2xl font-bold tracking-tight">
           Editar Usuario
         </h2>
-        <p class="text-muted-foreground" v-if="user">
+        <p v-if="user" class="text-muted-foreground leading-relaxed">
           Modifica el usuario: {{ user.name }}
         </p>
       </div>
-      <Button variant="outline" @click="router.back()">
+      <Button variant="outline" class="shrink-0" @click="router.back()">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>
     </div>
 
     <Card v-if="loading">
-      <CardContent class="p-6">
-        <div class="flex items-center justify-center">
-          <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
+      <CardContent>
+        <div class="flex items-center justify-center py-12">
+          <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </CardContent>
     </Card>
@@ -235,9 +235,9 @@ onMounted(async () => {
     <form v-else-if="user" @submit.prevent="handleSubmit">
       <div class="grid gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle>Información del Usuario</CardTitle>
-            <CardDescription>
+          <CardHeader class="gap-2">
+            <CardTitle class="leading-snug">Información del Usuario</CardTitle>
+            <CardDescription class="leading-relaxed">
               Información básica del usuario
             </CardDescription>
           </CardHeader>
@@ -364,9 +364,9 @@ onMounted(async () => {
         </Card>
 
         <Card v-if="showAllowedSucursales">
-          <CardHeader>
-            <CardTitle>Sucursales permitidas (admin)</CardTitle>
-            <CardDescription>
+          <CardHeader class="gap-2">
+            <CardTitle class="leading-snug">Sucursales permitidas (admin)</CardTitle>
+            <CardDescription class="leading-relaxed">
               Sucursales que este admin puede ver y gestionar
             </CardDescription>
           </CardHeader>
@@ -390,9 +390,9 @@ onMounted(async () => {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Roles</CardTitle>
-            <CardDescription>
+          <CardHeader class="gap-2">
+            <CardTitle class="leading-snug">Roles</CardTitle>
+            <CardDescription class="leading-relaxed">
               Selecciona los roles que tendrá este usuario
             </CardDescription>
           </CardHeader>

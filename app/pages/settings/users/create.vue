@@ -142,16 +142,16 @@ watch(selectedRole, (role) => {
 <template>
   <SettingsLayout :wide="true">
     <div class="w-full flex flex-col gap-4">
-    <div class="flex items-center justify-between">
-      <div>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div class="space-y-1">
         <h2 class="text-2xl font-bold tracking-tight">
           Crear Nuevo Usuario
         </h2>
-        <p class="text-muted-foreground">
+        <p class="text-muted-foreground leading-relaxed">
           Crea un nuevo usuario y asigna sus roles
         </p>
       </div>
-      <Button variant="outline" @click="router.back()">
+      <Button variant="outline" class="shrink-0" @click="router.back()">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>
@@ -160,9 +160,9 @@ watch(selectedRole, (role) => {
     <form @submit.prevent="handleSubmit">
       <div class="grid gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle>Información del Usuario</CardTitle>
-            <CardDescription>
+          <CardHeader class="gap-2">
+            <CardTitle class="leading-snug">Información del Usuario</CardTitle>
+            <CardDescription class="leading-relaxed">
               Nombre de usuario para el acceso, datos de contacto opcionales y estado de la cuenta.
             </CardDescription>
           </CardHeader>
@@ -274,9 +274,9 @@ watch(selectedRole, (role) => {
         </Card>
 
         <Card v-if="showAllowedSucursales">
-          <CardHeader>
-            <CardTitle>Sucursales permitidas (admin)</CardTitle>
-            <CardDescription>
+          <CardHeader class="gap-2">
+            <CardTitle class="leading-snug">Sucursales permitidas (admin)</CardTitle>
+            <CardDescription class="leading-relaxed">
               Sucursales que este admin puede ver y gestionar
             </CardDescription>
           </CardHeader>
@@ -300,9 +300,9 @@ watch(selectedRole, (role) => {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Roles</CardTitle>
-            <CardDescription>
+          <CardHeader class="gap-2">
+            <CardTitle class="leading-snug">Roles</CardTitle>
+            <CardDescription class="leading-relaxed">
               Selecciona los roles que tendrá este usuario
             </CardDescription>
           </CardHeader>
