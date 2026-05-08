@@ -4,9 +4,28 @@
  * Estructura como en imagen: cantidad, valor unitario, total venta, venta semanal/mensual, % utilidad, % costos.
  */
 
-const props = defineProps<{
-  formData: Record<string, unknown>
-}>()
+const props = withDefaults(
+  defineProps<{
+    formData: Record<string, unknown>
+    invalidFieldKeys?: string[]
+    fieldDomIdPrefix?: string
+  }>(),
+  {
+    invalidFieldKeys: () => [],
+    fieldDomIdPrefix: '',
+  },
+)
+
+function domFieldId(key: string): string {
+  const p = props.fieldDomIdPrefix?.trim()
+  return p ? `${p}-field-${key}` : `field-${key}`
+}
+
+const invalidKeySet = computed(() => new Set(props.invalidFieldKeys ?? []))
+
+function isInvalidKey(key: string): boolean {
+  return invalidKeySet.value.has(key)
+}
 
 const emit = defineEmits<{
   'update:field': [payload: { key: string; value: unknown }]
@@ -325,6 +344,7 @@ function formatMoney(value: number | null | undefined): string {
     <div class="overflow-x-auto">
       <p class="mb-2 text-xs text-muted-foreground">
         Semanas (cantidades enteras): la suma no puede superar las <strong>semanas al mes</strong> de la plantilla ({{ semanasMesDisplay }}). Cada fila respeta ese tope.
+        Por fila: si indica cantidad, debe indicar valor unitario (y viceversa), o deje ambos vacíos.
       </p>
       <table class="w-full min-w-[560px] table-fixed border-collapse text-sm">
         <colgroup>
@@ -368,12 +388,16 @@ function formatMoney(value: number | null | undefined): string {
             </td>
             <td class="border border-black p-1">
               <input
+                :id="domFieldId(row.cantidadKey)"
                 type="text"
                 inputmode="numeric"
                 maxlength="2"
                 autocomplete="off"
                 :value="formData[row.cantidadKey] ?? ''"
-                class="h-9 w-full max-w-[3rem] rounded border border-input bg-transparent px-2 py-1 text-center text-sm tabular-nums"
+                :class="[
+                  'h-9 w-full max-w-[3rem] rounded border bg-transparent px-2 py-1 text-center text-sm tabular-nums',
+                  isInvalidKey(row.cantidadKey) ? '!border-destructive ring-2 ring-destructive/50' : 'border-black',
+                ]"
                 placeholder="0"
                 @input="aplicarSemanaCantidad(row.cantidadKey, $event.target as HTMLInputElement)"
               >
@@ -382,6 +406,8 @@ function formatMoney(value: number | null | undefined): string {
               <CreditsBaseMoneyInput
                 :model-value="(formData[row.valorKey] as number | null) ?? null"
                 placeholder="-"
+                :input-id="domFieldId(row.valorKey)"
+                :invalid="isInvalidKey(row.valorKey)"
                 @update:model-value="setField(row.valorKey, $event)"
               />
             </td>
@@ -447,6 +473,9 @@ function formatMoney(value: number | null | undefined): string {
         <span class="block mt-1">
           Semanas al mes (fila siguiente): si la suma de días es <strong>7</strong> se usa la semana completa de plantilla (típ. 4,75); si es <strong>menor a 7</strong>, semana parcial (típ. 4).
         </span>
+        <span class="block mt-1">
+          Por fila: si indica cantidad, debe indicar valor unitario (y viceversa), o deje ambos vacíos.
+        </span>
       </p>
       <table class="w-full min-w-[560px] table-fixed border-collapse text-sm">
         <colgroup>
@@ -490,12 +519,16 @@ function formatMoney(value: number | null | undefined): string {
             </td>
             <td class="border border-black p-1">
               <input
+                :id="domFieldId(row.cantidadKey)"
                 type="text"
                 inputmode="numeric"
                 maxlength="2"
                 autocomplete="off"
                 :value="formData[row.cantidadKey] ?? ''"
-                class="h-9 w-full max-w-[3rem] rounded border border-input bg-transparent px-2 py-1 text-center text-sm tabular-nums"
+                :class="[
+                  'h-9 w-full max-w-[3rem] rounded border bg-transparent px-2 py-1 text-center text-sm tabular-nums',
+                  isInvalidKey(row.cantidadKey) ? '!border-destructive ring-2 ring-destructive/50' : 'border-black',
+                ]"
                 placeholder="0"
                 @input="aplicarDiaCantidad(row.cantidadKey, $event.target as HTMLInputElement)"
               >
@@ -504,6 +537,8 @@ function formatMoney(value: number | null | undefined): string {
               <CreditsBaseMoneyInput
                 :model-value="(formData[row.valorKey] as number | null) ?? null"
                 placeholder="-"
+                :input-id="domFieldId(row.valorKey)"
+                :invalid="isInvalidKey(row.valorKey)"
                 @update:model-value="setField(row.valorKey, $event)"
               />
             </td>

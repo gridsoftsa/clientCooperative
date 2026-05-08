@@ -6,10 +6,29 @@
 import type { EggsTableRowSchema } from '~/types/credits'
 import { computeFormula } from '~/constants/credits-financial-templates'
 
-defineProps<{
-  formData: Record<string, unknown>
-  tableRows: EggsTableRowSchema[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    formData: Record<string, unknown>
+    tableRows: EggsTableRowSchema[]
+    invalidFieldKeys?: string[]
+    fieldDomIdPrefix?: string
+  }>(),
+  {
+    invalidFieldKeys: () => [],
+    fieldDomIdPrefix: '',
+  },
+)
+
+function domFieldId(key: string): string {
+  const p = props.fieldDomIdPrefix?.trim()
+  return p ? `${p}-field-${key}` : `field-${key}`
+}
+
+const invalidKeySet = computed(() => new Set(props.invalidFieldKeys ?? []))
+
+function isInvalidKey(key: string): boolean {
+  return invalidKeySet.value.has(key)
+}
 
 const emit = defineEmits<{
   'update:field': [payload: { key: string; value: unknown }]
@@ -40,6 +59,9 @@ function getComputedTotal(formData: Record<string, unknown>, suffix: string): nu
 
 <template>
   <div class="overflow-x-auto rounded-lg border border-border">
+    <p class="mb-2 text-xs text-muted-foreground">
+      Por cada clasificación puede dejar la fila vacía; si indica precio por cubeta o cantidad diaria, debe completar ambos en la misma fila.
+    </p>
     <table class="w-full min-w-[420px] table-fixed border-collapse text-sm">
       <colgroup>
         <col>
@@ -76,15 +98,21 @@ function getComputedTotal(formData: Record<string, unknown>, suffix: string): nu
             <CreditsBaseMoneyInput
               :model-value="(formData[`precio_cubeta_${row.suffix}`] as number | null) ?? null"
               :placeholder="'0'"
+              :input-id="domFieldId(`precio_cubeta_${row.suffix}`)"
+              :invalid="isInvalidKey(`precio_cubeta_${row.suffix}`)"
               @update:model-value="setField(`precio_cubeta_${row.suffix}`, $event)"
             />
           </td>
           <td class="border border-border bg-yellow-50 p-1 dark:bg-yellow-950/20">
             <input
+              :id="domFieldId(`cantidad_diaria_${row.suffix}`)"
               type="number"
               step="any"
               :value="formData[`cantidad_diaria_${row.suffix}`] ?? ''"
-              class="h-8 w-full rounded border border-input bg-transparent px-2 py-1 text-right text-sm"
+              :class="[
+                'h-8 w-full rounded border bg-transparent px-2 py-1 text-right text-sm',
+                isInvalidKey(`cantidad_diaria_${row.suffix}`) ? '!border-destructive ring-2 ring-destructive/50' : 'border-input',
+              ]"
               @input="setField(`cantidad_diaria_${row.suffix}`, ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
             >
           </td>

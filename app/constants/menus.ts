@@ -10,6 +10,12 @@ export const navMenu: NavMenu[] = [
         link: '/',
         permission: 'dashboard_ver',
       },
+      {
+        title: 'Reportes',
+        icon: 'i-lucide-chart-column',
+        link: '/reportes',
+        permission: 'reportes_ver',
+      },
       /* {
         title: 'Email',
         icon: 'i-lucide-mail',
@@ -130,14 +136,14 @@ export const navMenu: NavMenu[] = [
         ],
         children: [
           {
-            title: 'Perfil',
+            title: 'Datos personales',
             icon: 'i-lucide-user',
             link: '/settings/profile',
             permission: 'perfil_ver',
           },
           {
-            title: 'Cuenta',
-            icon: 'i-lucide-id-card',
+            title: 'Contraseña',
+            icon: 'i-lucide-key',
             link: '/settings/account',
             permission: 'cuenta_ver',
           },

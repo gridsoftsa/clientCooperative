@@ -6,10 +6,29 @@
 import type { TransportePasajerosPasajesRow } from '~/constants/transporte-pasajeros-pasajes-table'
 import { computeFormula } from '~/constants/credits-financial-templates'
 
-const props = defineProps<{
-  formData: Record<string, unknown>
-  tableRows: TransportePasajerosPasajesRow[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    formData: Record<string, unknown>
+    tableRows: TransportePasajerosPasajesRow[]
+    invalidFieldKeys?: string[]
+    fieldDomIdPrefix?: string
+  }>(),
+  {
+    invalidFieldKeys: () => [],
+    fieldDomIdPrefix: '',
+  },
+)
+
+function domFieldId(key: string): string {
+  const p = props.fieldDomIdPrefix?.trim()
+  return p ? `${p}-field-${key}` : `field-${key}`
+}
+
+const invalidKeySet = computed(() => new Set(props.invalidFieldKeys ?? []))
+
+function isInvalidKey(key: string): boolean {
+  return invalidKeySet.value.has(key)
+}
 
 const emit = defineEmits<{
   'update:field': [payload: { key: string; value: unknown }]
@@ -62,16 +81,22 @@ function formatComputed(formulaKey: string): string {
               v-if="row.type === 'money'"
               :model-value="(formData[row.key] as number | null) ?? null"
               placeholder="0"
+              :input-id="domFieldId(row.key)"
+              :invalid="isInvalidKey(row.key)"
               @update:model-value="setField(row.key, $event)"
             />
             <input
               v-else-if="row.type === 'number'"
+              :id="domFieldId(row.key)"
               type="number"
               step="1"
               min="0"
               max="100"
               :value="formData[row.key] ?? ''"
-              class="h-9 w-full rounded border border-input bg-transparent px-2 py-1 text-right text-sm"
+              :class="[
+                'h-9 w-full rounded border bg-transparent px-2 py-1 text-right text-sm',
+                isInvalidKey(row.key) ? '!border-destructive ring-2 ring-destructive/50' : 'border-input',
+              ]"
               placeholder="Ej: 80"
               @input="setField(row.key, ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
             >

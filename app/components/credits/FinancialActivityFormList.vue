@@ -24,13 +24,19 @@ const props = withDefaults(
     readOnlyForm?: boolean
     /** Texto bajo el título (por defecto: actividades del deudor) */
     listHint?: string
+    /** Alcance para ids de campos; distingue listados múltiples en la misma página. */
+    domIdScope?: string
   }>(),
   {
     modelValue: () => [],
     readOnlyForm: false,
     listHint: '',
+    domIdScope: '',
   },
 )
+
+const autoListDomScope = useId().replace(/:/g, '')
+const resolvedListDomScope = computed(() => props.domIdScope?.trim() || autoListDomScope)
 
 const emit = defineEmits<{
   'update:modelValue': [value: ActivityTemplateData[]]
@@ -50,6 +56,8 @@ const openItems = ref<string[]>([])
 
 const deleteDialogOpen = ref(false)
 const pendingDeleteIndex = ref<number | null>(null)
+/** Índice de plantilla en la que se muestran errores de validación (Guardar / siguiente paso) */
+const templateValidationShownIndex = ref<number | null>(null)
 
 function openDeleteDialog(index: number) {
   pendingDeleteIndex.value = index
@@ -90,9 +98,15 @@ function saveTemplate(index: number) {
   }
   const result = validateActivityTemplate(item)
   if (!result.valid) {
+    templateValidationShownIndex.value = index
+    const key = `activity-${index}`
+    if (!openItems.value.includes(key)) {
+      openItems.value = [...openItems.value, key]
+    }
     toast.error(result.errors.join('. '))
     return
   }
+  templateValidationShownIndex.value = null
   emitUpdate()
   const key = `activity-${index}`
   openItems.value = openItems.value.filter((v) => v !== key)
@@ -110,6 +124,11 @@ function saveTemplate(index: number) {
 function removeTemplate(index: number) {
   templates.value.splice(index, 1)
   sectorTemplateLocked.value.splice(index, 1)
+  if (templateValidationShownIndex.value === index) {
+    templateValidationShownIndex.value = null
+  } else if (templateValidationShownIndex.value != null && templateValidationShownIndex.value > index) {
+    templateValidationShownIndex.value = templateValidationShownIndex.value - 1
+  }
   openItems.value = openItems.value
     .map((v) => {
       const num = Number(v.replace('activity-', ''))
@@ -127,8 +146,40 @@ function updateTemplate(index: number, val: ActivityTemplateData | null) {
     // Mantener slot vacío; el usuario elimina con el botón de papelera
     templates.value[index] = { sector: '', template: '', product: null, data: {} }
   }
+  if (templateValidationShownIndex.value === index) {
+    const cur = templates.value[index]
+    if (cur) {
+      const r = validateActivityTemplate(cur)
+      if (r.valid) {
+        templateValidationShownIndex.value = null
+      }
+    }
+  }
   emitUpdate()
 }
+
+function highlightFirstInvalidFromList(items: ActivityTemplateData[]) {
+  templateValidationShownIndex.value = null
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i]
+    if (!it) {
+      continue
+    }
+    const r = validateActivityTemplate(it)
+    if (!r.valid) {
+      templateValidationShownIndex.value = i
+      const key = `activity-${i}`
+      if (!openItems.value.includes(key)) {
+        openItems.value = [...openItems.value, key]
+      }
+      return
+    }
+  }
+}
+
+defineExpose({
+  highlightFirstInvalidFromList,
+})
 
 function emitUpdate() {
   emit('update:modelValue', [...templates.value])
@@ -217,6 +268,8 @@ watch(
               :model-value="item"
               :read-only-form="readOnlyForm"
               :lock-sector-and-template="sectorTemplateLocked[idx] === true"
+              :show-field-validation-errors="templateValidationShownIndex === idx"
+              :dom-id-prefix="`${resolvedListDomScope}-activity-${idx}`"
               @update:model-value="(v) => updateTemplate(idx, v)"
             />
             <div v-if="!readOnlyForm" class="mt-4 flex justify-end">

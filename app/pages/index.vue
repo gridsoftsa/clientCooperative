@@ -29,6 +29,7 @@ interface CreditSummaryRow {
   code: string | null
   status: string
   skip_next_director_review?: boolean
+  resubmit_to_analyst_after_return?: boolean
   amount_requested: string
   created_at: string | null
   sucursal: { id: number; name: string; code: string | null } | null

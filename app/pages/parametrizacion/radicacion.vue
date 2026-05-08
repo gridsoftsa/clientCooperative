@@ -14,7 +14,7 @@ const sectors = sectorsForParametrizacionRadicacion()
   <ParametrizacionTemplateParametrizacionPlanoView
     :sectors="sectors"
     page-title="Radicación (catálogos del formulario)"
-    page-description="Género, tipo de documento, vivienda, actividad económica y estado civil del solicitante. Misma parametrización plana que antes, separada de las plantillas de actividad."
+    page-description="Catálogos del formulario: solicitante (género, documento, vivienda, actividad, estado civil, documentos auxiliares), aprobadores (niveles parametrizables) y Análisis y Score (bancos, ING)."
     breadcrumb-label="Radicación"
     :show-categories-tab="false"
     :sister-link="{ to: '/parametrizacion/plantillas', label: 'Plantillas' }"

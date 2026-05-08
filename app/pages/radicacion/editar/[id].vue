@@ -5,6 +5,7 @@ import CreditsFinancialActivityFormList from '~/components/credits/FinancialActi
 import {
   sumUtilidadMensualFromTemplates,
   validateAllActivityTemplates,
+  validateDestinationReferenceActivityTemplates,
 } from '~/constants/credits-financial-templates'
 import {
   extractItemsByActivityFromCatalogResponse,
@@ -43,7 +44,13 @@ const documentsOnlyEditMode = computed(
 )
 const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
 const currentStep = ref(1)
-const radicacionStepOneFormRef = ref<{ validateAuxiliaryDocumentsRequired: () => boolean } | null>(null)
+const radicacionStepOneFormRef = ref<{
+  validateRequiredStepOneFields: () => boolean
+  validateAuxiliaryDocumentsRequired: () => boolean
+} | null>(null)
+const debtorActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
+const destinationActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
+const codeudorActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
 
 const addingCodeudor = ref(false)
 const codeudorStep = ref(1)
@@ -532,9 +539,11 @@ function hasDocumentsWithoutTitleInApplicant(app: ApplicantForm): boolean {
 
 function nextCodeudorStep() {
   if (codeudorStep.value === 2) {
-    const r = validateAllActivityTemplates(getActivityTemplatesFor(codeudorWizardApplicant.value))
+    const templates = getActivityTemplatesFor(codeudorWizardApplicant.value)
+    const r = validateAllActivityTemplates(templates)
     if (!r.valid) {
       toast.error(r.errors.join('. '))
+      nextTick(() => codeudorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
       return
     }
   }
@@ -610,7 +619,7 @@ function validateActivityTemplatesBeforeSave(): string | null {
     }
   }
   const destT = form.value.destination_activity_templates ?? []
-  r = validateAllActivityTemplates(destT)
+  r = validateDestinationReferenceActivityTemplates(destT)
   if (!r.valid) {
     return `Destino del crédito (actividades de referencia): ${r.errors.join(' ')}`
   }
@@ -706,9 +715,16 @@ function canProceedStep1(): boolean {
 }
 
 function canProceedStep2(): boolean {
-  return form.value.amount_requested > 0
-    && form.value.term_months > 0
-    && form.value.agency_id > 0
+  if (
+    form.value.amount_requested <= 0
+    || form.value.term_months <= 0
+    || form.value.agency_id <= 0
+    || !form.value.destination?.trim()
+  ) {
+    return false
+  }
+  const destR = validateDestinationReferenceActivityTemplates(form.value.destination_activity_templates ?? [])
+  return destR.valid
 }
 
 function hasDocumentsWithoutTitle(): boolean {
@@ -867,13 +883,37 @@ async function uploadAllDocuments(
   }
 }
 
+/** Igual que «Siguiente» en paso 1: obligatorios + checklist auxiliar. Requiere paso 1 montado (v-show). */
+async function validateRadicacionStepOneForPersist(): Promise<boolean> {
+  if (addingCodeudor.value) {
+    return true
+  }
+  await nextTick()
+  const formRef = radicacionStepOneFormRef.value
+  if (!formRef) {
+    toast.error('No se pudo validar los datos del deudor. Vuelva al paso 1 e intente de nuevo.')
+    return false
+  }
+  if (!formRef.validateRequiredStepOneFields()) {
+    toast.error('Completa los campos obligatorios del deudor')
+    return false
+  }
+  if (!formRef.validateAuxiliaryDocumentsRequired()) {
+    return false
+  }
+  return true
+}
+
 async function saveChanges() {
+  if (!(await validateRadicacionStepOneForPersist())) {
+    return
+  }
   if (!canProceedStep1()) {
     toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
     return
   }
   if (!documentsOnlyEditMode.value && !canProceedStep2()) {
-    toast.error('Completa monto, plazo y agencia')
+    toast.error('Completa monto, plazo, sucursal, destino del crédito y al menos una plantilla de actividad en el destino')
     return
   }
   if (hasDocumentsWithoutTitle()) {
@@ -926,12 +966,15 @@ async function saveChanges() {
 }
 
 async function submitToDirectorReview() {
+  if (!(await validateRadicacionStepOneForPersist())) {
+    return
+  }
   if (!canProceedStep1()) {
     toast.error('Completa los datos obligatorios del deudor')
     return
   }
   if (!documentsOnlyEditMode.value && !canProceedStep2()) {
-    toast.error('Completa monto, plazo y agencia')
+    toast.error('Completa monto, plazo, sucursal, destino del crédito y al menos una plantilla de actividad en el destino')
     return
   }
   if (hasDocumentsWithoutTitle()) {
@@ -996,23 +1039,47 @@ async function confirmSubmitToDirector() {
 
 function nextStep() {
   if (currentStep.value === 1) {
+    const okRequired = radicacionStepOneFormRef.value?.validateRequiredStepOneFields() ?? true
+    if (!okRequired) {
+      toast.error('Completa los campos obligatorios del deudor')
+      return
+    }
     const okAux = radicacionStepOneFormRef.value?.validateAuxiliaryDocumentsRequired() ?? true
     if (!okAux) {
       return
     }
   }
   if (!documentsOnlyEditMode.value && currentStep.value === 2) {
-    const r = validateAllActivityTemplates(getActivityTemplates())
+    const templates = getActivityTemplates()
+    const r = validateAllActivityTemplates(templates)
     if (!r.valid) {
       toast.error(r.errors.join('. '))
+      nextTick(() => debtorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
       return
     }
   }
   if (!documentsOnlyEditMode.value && currentStep.value === 4) {
+    if (form.value.amount_requested <= 0) {
+      toast.error('Indique el monto solicitado')
+      return
+    }
+    if (form.value.term_months <= 0) {
+      toast.error('Indique el plazo en meses')
+      return
+    }
+    if (form.value.agency_id <= 0) {
+      toast.error('Seleccione la sucursal')
+      return
+    }
+    if (!form.value.destination?.trim()) {
+      toast.error('Indique el destino del crédito')
+      return
+    }
     const destT = form.value.destination_activity_templates ?? []
-    const r = validateAllActivityTemplates(destT)
-    if (!r.valid) {
-      toast.error(`Destino del crédito: ${r.errors.join('. ')}`)
+    const rDest = validateDestinationReferenceActivityTemplates(destT)
+    if (!rDest.valid) {
+      toast.error(rDest.errors.join('. '))
+      nextTick(() => destinationActivityTemplatesListRef.value?.highlightFirstInvalidFromList(destT))
       return
     }
   }
@@ -1295,7 +1362,7 @@ onMounted(() => {
         </CardHeader>
         <CardContent class="space-y-6">
           <div
-            v-if="!addingCodeudor && currentStep === 1"
+            v-show="!addingCodeudor && currentStep === 1"
             class="space-y-4"
           >
             <ApplicantFormFields
@@ -1314,10 +1381,11 @@ onMounted(() => {
           </div>
 
           <div
-            v-else-if="!addingCodeudor && currentStep === 2"
+            v-show="!addingCodeudor && currentStep === 2"
             class="space-y-4"
           >
             <CreditsFinancialActivityFormList
+              ref="debtorActivityTemplatesListRef"
               :model-value="getActivityTemplates()"
               :read-only-form="documentsOnlyEditMode"
               @update:model-value="setActivityTemplates"
@@ -1325,7 +1393,7 @@ onMounted(() => {
           </div>
 
           <div
-            v-else-if="!addingCodeudor && currentStep === 3"
+            v-show="!addingCodeudor && currentStep === 3"
             class="space-y-4"
           >
             <ApplicantFormFields
@@ -1337,7 +1405,7 @@ onMounted(() => {
             />
           </div>
 
-          <div v-else-if="!addingCodeudor && currentStep === 4" class="space-y-8">
+          <div v-show="!addingCodeudor && currentStep === 4" class="space-y-8">
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div class="space-y-1.5">
                 <Label for="amount">Monto solicitado * (COP)</Label>
@@ -1383,7 +1451,7 @@ onMounted(() => {
                 </Select>
               </div>
               <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
-                <Label for="destination">Destino del crédito</Label>
+                <Label for="destination">Destino del crédito *</Label>
                 <Input
                   id="destination"
                   v-model="form.destination"
@@ -1426,13 +1494,14 @@ onMounted(() => {
             <div class="space-y-4 border-t border-border pt-6">
               <div>
                 <p class="text-sm font-medium">
-                  Actividades económicas del destino (referencia)
+                  Actividades económicas del destino (referencia) *
                 </p>
                 <p class="mt-1 text-xs text-muted-foreground">
-                  Los valores aquí son solo informativos y no alteran ingresos ni datos financieros del deudor.
+                  Añada al menos una plantilla con la herramienta de abajo; los valores son solo referencia y no alteran ingresos ni datos financieros del deudor.
                 </p>
               </div>
               <CreditsFinancialActivityFormList
+                ref="destinationActivityTemplatesListRef"
                 v-model="form.destination_activity_templates"
                 :read-only-form="documentsOnlyEditMode"
                 list-hint="Añade plantillas que ilustren cómo se invertirá o destinará el crédito. No se sincronizan con el paso 2 ni el 3."
@@ -1441,7 +1510,7 @@ onMounted(() => {
           </div>
 
           <div
-            v-else-if="currentStep === 5 && !addingCodeudor"
+            v-show="currentStep === 5 && !addingCodeudor"
             class="space-y-6"
           >
             <div class="flex flex-wrap items-center justify-between gap-4">
@@ -1556,6 +1625,7 @@ onMounted(() => {
             </div>
             <div v-else-if="codeudorStep === 2" class="space-y-4">
               <CreditsFinancialActivityFormList
+                ref="codeudorActivityTemplatesListRef"
                 :model-value="getActivityTemplatesFor(codeudorWizardApplicant)"
                 :read-only-form="documentsOnlyEditMode"
                 @update:model-value="(v) => setActivityTemplatesFor(codeudorWizardApplicant, v)"

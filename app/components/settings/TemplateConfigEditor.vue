@@ -6,7 +6,9 @@ import {
   computeFormulaForConfig,
   EXCLUDED_CONFIG_KEYS,
   CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT,
+  CERDOS_CEBA_PRECIO_KG_PIE_DEFAULT,
   CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT,
+  CERDOS_CRIA_PRECIO_CERDO_DESTETADO_DEFAULT,
   CULTIVO_PERMANENTE_DURACION_MESES_DEFAULT,
   GANADO_DOBLE_CICLO_LECHE_MESES_DEFAULT,
   GANADO_DOBLE_CICLO_TERNEROS_MESES_DEFAULT,
@@ -79,11 +81,19 @@ watch(() => props.record.config_data, (newVal) => {
     if (dd === undefined || dd === null || dd === '') {
       editedData.value.duracion_ciclo_dias = CERDOS_CRIA_DURACION_CICLO_DIAS_DEFAULT
     }
+    const pcd = editedData.value.precio_cerdo_destetado
+    if (pcd === undefined || pcd === null || pcd === '') {
+      editedData.value.precio_cerdo_destetado = CERDOS_CRIA_PRECIO_CERDO_DESTETADO_DEFAULT
+    }
   }
   if (props.record.template_key === 'cerdos-ceba') {
     const dm = editedData.value.duracion_ciclo_meses
     if (dm === undefined || dm === null || dm === '') {
       editedData.value.duracion_ciclo_meses = CERDOS_CEBA_DURACION_CICLO_MESES_DEFAULT
+    }
+    const pkp = editedData.value.precio_kg_pie
+    if (pkp === undefined || pkp === null || pkp === '') {
+      editedData.value.precio_kg_pie = CERDOS_CEBA_PRECIO_KG_PIE_DEFAULT
     }
   }
   if (props.record.template_key === 'cultivo-permanente') {
@@ -349,6 +359,7 @@ function onAuxiliaryDocumentsChecklistField(payload: { key: string, value: unkno
           class="h-9 pl-9"
           placeholder="Buscar banco…"
           autocomplete="off"
+          :disabled="!editing || !canEdit"
         />
       </div>
       <div class="overflow-x-auto rounded-md border bg-background">

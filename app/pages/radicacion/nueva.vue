@@ -4,6 +4,7 @@ import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue
 import {
   sumUtilidadMensualFromTemplates,
   validateAllActivityTemplates,
+  validateDestinationReferenceActivityTemplates,
 } from '~/constants/credits-financial-templates'
 import {
   clearLocalDraft,
@@ -17,6 +18,7 @@ import {
 } from '~/constants/auxiliary-documents-checklist'
 import { mergeApplicantFromApi } from '~/utils/merge-applicant-search'
 import { messageFromFetchError } from '~/utils/http-error-message'
+import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
 
 definePageMeta({
   layout: 'default',
@@ -32,7 +34,13 @@ const { user: authUser } = useAuth()
 const mode = ref<'deudor' | 'codeudor'>('deudor')
 const currentStep = ref(1)
 /** Paso 1 deudor: validación checklist auxiliar antes de «Siguiente». */
-const debtorStepOneFormRef = ref<{ validateAuxiliaryDocumentsRequired: () => boolean } | null>(null)
+const debtorStepOneFormRef = ref<{
+  validateRequiredStepOneFields: () => boolean
+  validateAuxiliaryDocumentsRequired: () => boolean
+} | null>(null)
+const debtorActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
+const destinationActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
+const codeudorActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
 const saving = ref(false)
 const loadingSearch = ref(false)
 const loadingApplication = ref(false)
@@ -302,9 +310,11 @@ function hasDocumentsWithoutTitleInApplicant(app: ApplicantForm): boolean {
 
 function nextCodeudorStep() {
   if (codeudorStep.value === 2) {
-    const r = validateAllActivityTemplates(getActivityTemplatesFor(codeudorWizardApplicant.value))
+    const templates = getActivityTemplatesFor(codeudorWizardApplicant.value)
+    const r = validateAllActivityTemplates(templates)
     if (!r.valid) {
       toast.error(r.errors.join('. '))
+      nextTick(() => codeudorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
       return
     }
   }
@@ -382,6 +392,27 @@ function setActivityTemplatesFor(app: ApplicantForm, val: ActivityTemplateData[]
   fi.income = { ...income, business: sumUtilidad }
 }
 
+/** Mismas reglas que «Siguiente» en paso 1 (deudor): obligatorios + checklist auxiliar). Requiere que el paso 1 siga montado (p. ej. v-show). */
+async function validateDebtorStepOneForRadicacion(): Promise<boolean> {
+  if (mode.value !== 'deudor') {
+    return true
+  }
+  await nextTick()
+  const formRef = debtorStepOneFormRef.value
+  if (!formRef) {
+    toast.error('No se pudo validar los datos del deudor. Vuelva al paso 1 e intente de nuevo.')
+    return false
+  }
+  if (!formRef.validateRequiredStepOneFields()) {
+    toast.error('Completa los campos obligatorios del deudor')
+    return false
+  }
+  if (!formRef.validateAuxiliaryDocumentsRequired()) {
+    return false
+  }
+  return true
+}
+
 /** Valida plantillas de actividad (deudor y codeudores) antes de guardar o enviar solicitud. */
 function validateActivityTemplatesBeforeSave(): string | null {
   const debtorT = getActivityTemplates()
@@ -399,7 +430,7 @@ function validateActivityTemplatesBeforeSave(): string | null {
     }
   }
   const destT = form.value.destination_activity_templates ?? []
-  r = validateAllActivityTemplates(destT)
+  r = validateDestinationReferenceActivityTemplates(destT)
   if (!r.valid) {
     return `Destino del crédito (actividades de referencia): ${r.errors.join(' ')}`
   }
@@ -513,9 +544,16 @@ function canProceedStep2(): boolean {
   if (mode.value === 'codeudor') {
     return !!(form.value.numero_radicado_externo?.trim())
   }
-  return form.value.amount_requested > 0
-    && form.value.term_months > 0
-    && form.value.agency_id > 0
+  if (
+    form.value.amount_requested <= 0
+    || form.value.term_months <= 0
+    || form.value.agency_id <= 0
+    || !form.value.destination?.trim()
+  ) {
+    return false
+  }
+  const destR = validateDestinationReferenceActivityTemplates(form.value.destination_activity_templates ?? [])
+  return destR.valid
 }
 
 /** Carga la solicitud existente por numero_radicado_externo o código (para flujo codeudor) */
@@ -839,12 +877,15 @@ async function saveDraft() {
     await saveCodeudor()
     return
   }
+  if (!(await validateDebtorStepOneForRadicacion())) {
+    return
+  }
   if (!canProceedStep1()) {
     toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
     return
   }
   if (!canProceedStep2()) {
-    toast.error('Completa monto, plazo y agencia')
+    toast.error('Completa monto, plazo, sucursal, destino del crédito y al menos una plantilla de actividad en el destino')
     return
   }
   if (hasDocumentsWithoutTitle()) {
@@ -902,12 +943,15 @@ async function submitApplication() {
     await saveCodeudor()
     return
   }
+  if (!(await validateDebtorStepOneForRadicacion())) {
+    return
+  }
   if (!canProceedStep1()) {
     toast.error('Completa los datos obligatorios del deudor')
     return
   }
   if (!canProceedStep2()) {
-    toast.error('Completa monto, plazo y agencia')
+    toast.error('Completa monto, plazo, sucursal, destino del crédito y al menos una plantilla de actividad en el destino')
     return
   }
   if (hasDocumentsWithoutTitle()) {
@@ -980,6 +1024,11 @@ async function nextStep() {
     if (!ok) return
   }
   if (mode.value === 'deudor' && currentStep.value === 1) {
+    const okRequired = debtorStepOneFormRef.value?.validateRequiredStepOneFields() ?? true
+    if (!okRequired) {
+      toast.error('Completa los campos obligatorios del deudor')
+      return
+    }
     const okAux = debtorStepOneFormRef.value?.validateAuxiliaryDocumentsRequired() ?? true
     if (!okAux) {
       return
@@ -989,17 +1038,36 @@ async function nextStep() {
     (mode.value === 'deudor' && currentStep.value === 2)
     || (mode.value === 'codeudor' && currentStep.value === 2)
   ) {
-    const r = validateAllActivityTemplates(getActivityTemplates())
+    const templates = getActivityTemplates()
+    const r = validateAllActivityTemplates(templates)
     if (!r.valid) {
       toast.error(r.errors.join('. '))
+      nextTick(() => debtorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
       return
     }
   }
   if (mode.value === 'deudor' && currentStep.value === 4) {
+    if (form.value.amount_requested <= 0) {
+      toast.error('Indique el monto solicitado')
+      return
+    }
+    if (form.value.term_months <= 0) {
+      toast.error('Indique el plazo en meses')
+      return
+    }
+    if (form.value.agency_id <= 0) {
+      toast.error('Seleccione la sucursal')
+      return
+    }
+    if (!form.value.destination?.trim()) {
+      toast.error('Indique el destino del crédito')
+      return
+    }
     const destT = form.value.destination_activity_templates ?? []
-    const r = validateAllActivityTemplates(destT)
-    if (!r.valid) {
-      toast.error(`Destino del crédito: ${r.errors.join('. ')}`)
+    const rDest = validateDestinationReferenceActivityTemplates(destT)
+    if (!rDest.valid) {
+      toast.error(rDest.errors.join('. '))
+      nextTick(() => destinationActivityTemplatesListRef.value?.highlightFirstInvalidFromList(destT))
       return
     }
   }
@@ -1264,9 +1332,9 @@ onMounted(() => {
         </CardDescription>
       </CardHeader>
       <CardContent class="space-y-6">
-        <!-- Paso 1: Datos del Deudor o Codeudor -->
+        <!-- Paso 1: Datos del Deudor o Codeudor (v-show: ref disponible al guardar/enviar desde otros pasos) -->
         <div
-          v-if="(mode === 'deudor' && currentStep === 1) || (mode === 'codeudor' && currentStep === 1)"
+          v-show="(mode === 'deudor' && currentStep === 1) || (mode === 'codeudor' && currentStep === 1)"
           class="space-y-4"
         >
           <ApplicantFormFields
@@ -1285,10 +1353,11 @@ onMounted(() => {
 
         <!-- Paso 2: Actividad económica -->
         <div
-          v-else-if="(mode === 'deudor' && currentStep === 2) || (mode === 'codeudor' && currentStep === 2)"
+          v-show="(mode === 'deudor' && currentStep === 2) || (mode === 'codeudor' && currentStep === 2)"
           class="space-y-4"
         >
           <CreditsFinancialActivityFormList
+            ref="debtorActivityTemplatesListRef"
             :model-value="getActivityTemplates()"
             @update:model-value="setActivityTemplates"
           />
@@ -1296,7 +1365,7 @@ onMounted(() => {
 
         <!-- Paso 3: Datos financieros -->
         <div
-          v-else-if="(mode === 'deudor' && currentStep === 3) || (mode === 'codeudor' && currentStep === 3)"
+          v-show="(mode === 'deudor' && currentStep === 3) || (mode === 'codeudor' && currentStep === 3)"
           class="space-y-4"
         >
           <ApplicantFormFields
@@ -1307,7 +1376,7 @@ onMounted(() => {
         </div>
 
         <!-- Paso 4 Deudor: Solicitud (solo deudor) -->
-        <div v-else-if="mode === 'deudor' && currentStep === 4" class="space-y-8">
+        <div v-show="mode === 'deudor' && currentStep === 4" class="space-y-8">
           <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div class="space-y-1.5">
               <Label for="amount">Monto solicitado * (COP)</Label>
@@ -1351,7 +1420,7 @@ onMounted(() => {
               </Select>
             </div>
             <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
-              <Label for="destination">Destino del crédito</Label>
+              <Label for="destination">Destino del crédito *</Label>
               <Input
                 id="destination"
                 v-model="form.destination"
@@ -1391,13 +1460,14 @@ onMounted(() => {
           <div class="space-y-4 border-t border-border pt-6">
             <div>
               <p class="text-sm font-medium">
-                Actividades económicas del destino (referencia)
+                Actividades económicas del destino (referencia) *
               </p>
               <p class="mt-1 text-xs text-muted-foreground">
-                Misma herramienta que en el paso 2 para describir en detalle el proyecto o rubro; los ingresos y cifras aquí son solo informativos y no alteran el perfil financiero del deudor.
+                Añada al menos una plantilla con la herramienta de abajo; los ingresos aquí son solo referencia y no alteran el perfil financiero del deudor.
               </p>
             </div>
             <CreditsFinancialActivityFormList
+              ref="destinationActivityTemplatesListRef"
               v-model="form.destination_activity_templates"
               list-hint="Añade plantillas que ilustren cómo se invertirá o destinará el crédito. Valores referenciales: no se sincronizan con ingresos del paso 2 ni con el paso 3."
             />
@@ -1406,7 +1476,7 @@ onMounted(() => {
 
         <!-- Paso 5 Deudor: Codeudores - subflujo agregar codeudor (3 pasos) -->
         <div
-          v-else-if="mode === 'deudor' && currentStep === 5 && addingCodeudor"
+          v-show="mode === 'deudor' && currentStep === 5 && addingCodeudor"
           class="space-y-6"
         >
           <div class="flex flex-wrap items-center justify-between gap-4">
@@ -1459,6 +1529,7 @@ onMounted(() => {
           <!-- Paso 2: Actividad económica -->
           <div v-else-if="codeudorStep === 2" class="space-y-4">
             <CreditsFinancialActivityFormList
+              ref="codeudorActivityTemplatesListRef"
               :model-value="getActivityTemplatesFor(codeudorWizardApplicant)"
               @update:model-value="(v) => setActivityTemplatesFor(codeudorWizardApplicant, v)"
             />
@@ -1510,7 +1581,7 @@ onMounted(() => {
         </div>
 
         <!-- Paso 5 Deudor: Codeudores - lista y botón -->
-        <div v-else-if="mode === 'deudor' && currentStep === 5" class="space-y-6">
+        <div v-show="mode === 'deudor' && currentStep === 5 && !addingCodeudor" class="space-y-6">
           <div class="flex items-center justify-between">
             <p class="text-sm text-muted-foreground">
               Agrega codeudores si el crédito lo requiere

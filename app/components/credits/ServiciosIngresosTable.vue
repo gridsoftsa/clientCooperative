@@ -11,10 +11,29 @@ const MAX_DIAS_SEMANA_TOTAL = 7
 /** La semana tiene 7 días: como mucho 2 cifras al escribir (p. ej. 10 se ajusta a 7). */
 const MAX_DIGITOS_CANTIDAD = 2
 
-const props = defineProps<{
-  formData: Record<string, unknown>
-  tableRows: ServiciosIngresosRow[]
-}>()
+const props = withDefaults(
+  defineProps<{
+    formData: Record<string, unknown>
+    tableRows: ServiciosIngresosRow[]
+    invalidFieldKeys?: string[]
+    fieldDomIdPrefix?: string
+  }>(),
+  {
+    invalidFieldKeys: () => [],
+    fieldDomIdPrefix: '',
+  },
+)
+
+function domFieldId(key: string): string {
+  const p = props.fieldDomIdPrefix?.trim()
+  return p ? `${p}-field-${key}` : `field-${key}`
+}
+
+const invalidKeySet = computed(() => new Set(props.invalidFieldKeys ?? []))
+
+function isInvalidKey(key: string): boolean {
+  return invalidKeySet.value.has(key)
+}
 
 const emit = defineEmits<{
   'update:field': [payload: { key: string; value: unknown }]
@@ -154,6 +173,7 @@ const totalDiasSemana = computed(() => {
     <p class="mb-2 text-xs text-muted-foreground">
       Días por semana: cada tipo admite como máximo 7 y entre los tres no pueden sumar más de 7.
       Solo se permiten hasta {{ MAX_DIGITOS_CANTIDAD }} cifras por celda.
+      Por fila: si indica valor ($), debe indicar cantidad por semana (y viceversa), o deje ambos vacíos.
     </p>
     <table class="w-full min-w-[520px] table-fixed border-collapse text-sm">
       <colgroup>
@@ -196,18 +216,24 @@ const totalDiasSemana = computed(() => {
             <CreditsBaseMoneyInput
               :model-value="(formData[getValorKey(row.suffix)] as number | null) ?? null"
               placeholder="0"
+              :input-id="domFieldId(getValorKey(row.suffix))"
+              :invalid="isInvalidKey(getValorKey(row.suffix))"
               @update:model-value="setField(getValorKey(row.suffix), $event)"
             />
           </td>
           <td class="border border-border p-1">
             <input
+              :id="domFieldId(getCantidadKey(row.suffix))"
               type="text"
               inputmode="numeric"
               autocomplete="off"
               maxlength="2"
               enterkeyhint="done"
               :value="formData[getCantidadKey(row.suffix)] ?? ''"
-              class="h-8 w-full max-w-[3.25rem] min-w-0 rounded border border-input bg-transparent px-2 py-1 text-right text-sm tabular-nums"
+              :class="[
+                'h-8 w-full max-w-[3.25rem] min-w-0 rounded border bg-transparent px-2 py-1 text-right text-sm tabular-nums',
+                isInvalidKey(getCantidadKey(row.suffix)) ? '!border-destructive ring-2 ring-destructive/50' : 'border-input',
+              ]"
               placeholder="0"
               @input="aplicarCantidad(row.suffix, $event.target as HTMLInputElement)"
             >

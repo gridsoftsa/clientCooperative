@@ -3,11 +3,30 @@
  * Tabla editable de Gastos (plantilla transporte-pasajeros).
  * GASTOS VIAJE + OTROS GASTOS (SOAT, Tecnomecánica, Llantas, Repuestos, # Cambios aceite, Precio c/u, Bajadas rueda, Seguro todo riesgos, Rodamiento).
  */
-const props = defineProps<{
-  formData: Record<string, unknown>
-}>()
+const props = withDefaults(
+  defineProps<{
+    formData: Record<string, unknown>
+    invalidFieldKeys?: string[]
+    fieldDomIdPrefix?: string
+  }>(),
+  {
+    invalidFieldKeys: () => [],
+    fieldDomIdPrefix: '',
+  },
+)
+
+function domFieldId(key: string): string {
+  const p = props.fieldDomIdPrefix?.trim()
+  return p ? `${p}-field-${key}` : `field-${key}`
+}
 
 const formData = toRef(props, 'formData')
+
+const invalidKeySet = computed(() => new Set(props.invalidFieldKeys ?? []))
+
+function isInvalidKey(key: string): boolean {
+  return invalidKeySet.value.has(key)
+}
 
 const emit = defineEmits<{
   'update:field': [payload: { key: string; value: unknown }]
@@ -152,6 +171,8 @@ const totalGastosMensuales = computed(() => {
               <CreditsBaseMoneyInput
                 :model-value="(formData[row.key] as number | null) ?? null"
                 placeholder="0"
+                :input-id="domFieldId(row.key)"
+                :invalid="isInvalidKey(row.key)"
                 @update:model-value="setField(row.key, $event)"
               />
             </td>
@@ -189,6 +210,8 @@ const totalGastosMensuales = computed(() => {
               <CreditsBaseMoneyInput
                 :model-value="(formData[row.key] as number | null) ?? null"
                 placeholder="0"
+                :input-id="domFieldId(row.key)"
+                :invalid="isInvalidKey(row.key)"
                 @update:model-value="setField(row.key, $event)"
               />
             </td>
@@ -209,6 +232,8 @@ const totalGastosMensuales = computed(() => {
               <CreditsBaseMoneyInput
                 :model-value="(formData.conductor_vuelta as number | null) ?? null"
                 placeholder="0"
+                :input-id="domFieldId('conductor_vuelta')"
+                :invalid="isInvalidKey('conductor_vuelta')"
                 @update:model-value="setField('conductor_vuelta', $event)"
               />
             </td>
@@ -257,6 +282,8 @@ const totalGastosMensuales = computed(() => {
               <CreditsBaseMoneyInput
                 :model-value="(formData[row.key] as number | null) ?? null"
                 placeholder="0"
+                :input-id="domFieldId(row.key)"
+                :invalid="isInvalidKey(row.key)"
                 @update:model-value="setField(row.key, $event)"
               />
             </td>
@@ -267,11 +294,15 @@ const totalGastosMensuales = computed(() => {
             </td>
             <td class="border border-black p-1">
               <input
+                :id="domFieldId('cambios_aceite_cantidad')"
                 type="number"
                 step="1"
                 min="0"
                 :value="formData.cambios_aceite_cantidad ?? ''"
-                class="h-9 w-full rounded border border-input bg-transparent px-2 py-1 text-right text-sm"
+                :class="[
+                  'h-9 w-full rounded border bg-transparent px-2 py-1 text-right text-sm',
+                  isInvalidKey('cambios_aceite_cantidad') ? '!border-destructive ring-2 ring-destructive/50' : 'border-input',
+                ]"
                 placeholder="0"
                 @input="setField('cambios_aceite_cantidad', ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
               >
@@ -291,6 +322,8 @@ const totalGastosMensuales = computed(() => {
               <CreditsBaseMoneyInput
                 :model-value="(formData.precio_cambio_aceite as number | null) ?? null"
                 placeholder="0"
+                :input-id="domFieldId('precio_cambio_aceite')"
+                :invalid="isInvalidKey('precio_cambio_aceite')"
                 @update:model-value="setField('precio_cambio_aceite', $event)"
               />
             </td>
@@ -307,6 +340,8 @@ const totalGastosMensuales = computed(() => {
               <CreditsBaseMoneyInput
                 :model-value="(formData[row.key] as number | null) ?? null"
                 placeholder="0"
+                :input-id="domFieldId(row.key)"
+                :invalid="isInvalidKey(row.key)"
                 @update:model-value="setField(row.key, $event)"
               />
             </td>
@@ -337,6 +372,8 @@ const totalGastosMensuales = computed(() => {
               <CreditsBaseMoneyInput
                 :model-value="(formData.rodamiento_mensual as number | null) ?? null"
                 placeholder="0"
+                :input-id="domFieldId('rodamiento_mensual')"
+                :invalid="isInvalidKey('rodamiento_mensual')"
                 @update:model-value="setField('rodamiento_mensual', $event)"
               />
             </td>

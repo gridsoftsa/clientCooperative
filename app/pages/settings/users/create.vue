@@ -142,209 +142,212 @@ watch(selectedRole, (role) => {
 <template>
   <SettingsLayout :wide="true">
     <div class="w-full flex flex-col gap-4">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div class="space-y-1">
-        <h2 class="text-2xl font-bold tracking-tight">
-          Crear Nuevo Usuario
-        </h2>
-        <p class="text-muted-foreground leading-relaxed">
-          Crea un nuevo usuario y asigna sus roles
-        </p>
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="space-y-1">
+          <h2 class="text-2xl font-bold tracking-tight">
+            Crear Nuevo Usuario
+          </h2>
+          <p class="text-muted-foreground leading-relaxed">
+            Crea un nuevo usuario y asigna sus roles
+          </p>
+        </div>
+        <Button variant="outline" class="shrink-0" @click="router.back()">
+          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
+          Volver
+        </Button>
       </div>
-      <Button variant="outline" class="shrink-0" @click="router.back()">
-        <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
-        Volver
-      </Button>
-    </div>
 
-    <form @submit.prevent="handleSubmit">
-      <div class="grid gap-6">
-        <Card>
-          <CardHeader class="gap-2">
-            <CardTitle class="leading-snug">Información del Usuario</CardTitle>
-            <CardDescription class="leading-relaxed">
-              Nombre de usuario para el acceso, datos de contacto opcionales y estado de la cuenta.
-            </CardDescription>
-          </CardHeader>
-          <CardContent class="space-y-6">
-            <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
-              <div class="space-y-3">
-                <Label for="name" class="leading-snug">Nombre de usuario *</Label>
-                <Input
-                  id="name"
-                  v-model="form.name"
-                  required
-                  placeholder="Identificador o alias de acceso"
-                  autocomplete="username"
+      <form @submit.prevent="handleSubmit">
+        <div class="grid gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Información del Usuario</CardTitle>
+              <CardDescription>
+                <span class="font-medium text-foreground">Nombre de usuario</span> es el identificador de acceso (campo
+                <code class="rounded bg-muted px-1 py-0.5 text-xs">name</code>).
+                <span class="font-medium text-foreground">Nombre completo</span> y teléfono los verá el propio usuario en
+                <span class="font-medium text-foreground">Configuración → Datos personales</span>; puedes dejarlos vacíos y completarlos allí después.
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-6">
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
+                <div class="space-y-3">
+                  <Label for="name" class="leading-snug">Nombre de usuario *</Label>
+                  <Input
+                    id="name"
+                    v-model="form.name"
+                    required
+                    placeholder="Identificador o alias de acceso"
+                    autocomplete="username"
+                  />
+                </div>
+
+                <div class="space-y-3">
+                  <Label for="full_name" class="leading-snug">Nombre completo</Label>
+                  <Input
+                    id="full_name"
+                    v-model="form.full_name"
+                    placeholder="Opcional — nombre y apellidos"
+                    autocomplete="name"
+                  />
+                </div>
+
+                <div class="space-y-3">
+                  <Label for="phone" class="leading-snug">Teléfono de contacto</Label>
+                  <Input
+                    id="phone"
+                    v-model="form.phone"
+                    type="tel"
+                    placeholder="Opcional"
+                    autocomplete="tel"
+                  />
+                </div>
+
+                <div class="space-y-3">
+                  <Label for="email" class="leading-snug">Email *</Label>
+                  <Input
+                    id="email"
+                    v-model="form.email"
+                    type="email"
+                    required
+                    placeholder="usuario@ejemplo.com"
+                  />
+                </div>
+
+                <div class="space-y-3 md:col-span-2">
+                  <Label for="sucursal" class="leading-snug">Sucursal (pertenencia) *</Label>
+                  <Select v-model="form.sucursal_id">
+                    <SelectTrigger id="sucursal">
+                      <SelectValue placeholder="Seleccionar sucursal" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="s in sucursales" :key="s.id" :value="s.id">
+                        {{ s.name }}{{ s.is_main ? ' (Principal)' : '' }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div class="space-y-3 md:col-span-2 rounded-lg border p-4">
+                <div class="space-y-1.5">
+                  <Label for="account_status_create" class="text-base leading-snug">Estado de la cuenta</Label>
+                  <p class="text-sm text-muted-foreground leading-relaxed">
+                    Los usuarios inactivos no pueden iniciar sesión.
+                  </p>
+                </div>
+                <Multiselect
+                  id="account_status_create"
+                  v-model="accountStatus"
+                  mode="single"
+                  :object="false"
+                  :options="accountStatusOptions"
+                  value-prop="value"
+                  label="label"
+                  :searchable="false"
+                  :can-clear="false"
+                  placeholder="Seleccione estado"
+                  no-options-text="Sin opciones"
+                  class="multiselect-roles max-w-md"
                 />
               </div>
 
-              <div class="space-y-3">
-                <Label for="full_name" class="leading-snug">Nombre completo</Label>
-                <Input
-                  id="full_name"
-                  v-model="form.full_name"
-                  placeholder="Opcional — nombre y apellidos"
-                  autocomplete="name"
-                />
-              </div>
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div class="space-y-3">
+                  <Label for="password" class="leading-snug">Contraseña *</Label>
+                  <PasswordInput
+                    id="password"
+                    v-model="form.password"
+                    required
+                    placeholder="Mínimo 8 caracteres"
+                  />
+                </div>
 
-              <div class="space-y-3">
-                <Label for="phone" class="leading-snug">Teléfono de contacto</Label>
-                <Input
-                  id="phone"
-                  v-model="form.phone"
-                  type="tel"
-                  placeholder="Opcional"
-                  autocomplete="tel"
-                />
+                <div class="space-y-3">
+                  <Label for="password_confirmation" class="leading-snug">Confirmar Contraseña *</Label>
+                  <PasswordInput
+                    id="password_confirmation"
+                    v-model="form.password_confirmation"
+                    required
+                    placeholder="Repite la contraseña"
+                  />
+                </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <div class="space-y-3">
-                <Label for="email" class="leading-snug">Email *</Label>
-                <Input
-                  id="email"
-                  v-model="form.email"
-                  type="email"
-                  required
-                  placeholder="usuario@ejemplo.com"
-                />
-              </div>
-
-              <div class="space-y-3 md:col-span-2">
-                <Label for="sucursal" class="leading-snug">Sucursal (pertenencia) *</Label>
-                <Select v-model="form.sucursal_id">
-                  <SelectTrigger id="sucursal">
-                    <SelectValue placeholder="Seleccionar sucursal" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="s in sucursales" :key="s.id" :value="s.id">
-                      {{ s.name }}{{ s.is_main ? ' (Principal)' : '' }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div class="space-y-3 md:col-span-2 rounded-lg border p-4">
-              <div class="space-y-1.5">
-                <Label for="account_status_create" class="text-base leading-snug">Estado de la cuenta</Label>
-                <p class="text-sm text-muted-foreground leading-relaxed">
-                  Los usuarios inactivos no pueden iniciar sesión.
-                </p>
-              </div>
+          <Card v-if="showAllowedSucursales">
+            <CardHeader class="gap-2">
+              <CardTitle class="leading-snug">Sucursales permitidas (admin)</CardTitle>
+              <CardDescription class="leading-relaxed">
+                Sucursales que este admin puede ver y gestionar
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
               <Multiselect
-                id="account_status_create"
-                v-model="accountStatus"
-                mode="single"
+                v-model="form.allowed_sucursal_ids"
+                mode="multiple"
                 :object="false"
-                :options="accountStatusOptions"
-                value-prop="value"
-                label="label"
-                :searchable="false"
-                :can-clear="false"
-                placeholder="Seleccione estado"
-                no-options-text="Sin opciones"
-                class="multiselect-roles max-w-md"
-              />
-            </div>
-
-            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div class="space-y-3">
-                <Label for="password" class="leading-snug">Contraseña *</Label>
-                <PasswordInput
-                  id="password"
-                  v-model="form.password"
-                  required
-                  placeholder="Mínimo 8 caracteres"
-                />
-              </div>
-
-              <div class="space-y-3">
-                <Label for="password_confirmation" class="leading-snug">Confirmar Contraseña *</Label>
-                <PasswordInput
-                  id="password_confirmation"
-                  v-model="form.password_confirmation"
-                  required
-                  placeholder="Repite la contraseña"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card v-if="showAllowedSucursales">
-          <CardHeader class="gap-2">
-            <CardTitle class="leading-snug">Sucursales permitidas (admin)</CardTitle>
-            <CardDescription class="leading-relaxed">
-              Sucursales que este admin puede ver y gestionar
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Multiselect
-              v-model="form.allowed_sucursal_ids"
-              mode="multiple"
-              :object="false"
-              :options="sucursalSelectOptions"
-              value-prop="value"
-              label="label"
-              :searchable="true"
-              :close-on-select="false"
-              :hide-selected="false"
-              placeholder="Seleccione sucursales permitidas"
-              no-options-text="No hay sucursales configuradas"
-              no-results-text="Sin coincidencias"
-              class="multiselect-roles"
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader class="gap-2">
-            <CardTitle class="leading-snug">Roles</CardTitle>
-            <CardDescription class="leading-relaxed">
-              Selecciona los roles que tendrá este usuario
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div v-if="loading" class="flex items-center justify-center py-8">
-              <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
-            </div>
-
-            <div v-else class="space-y-2">
-              <Label class="leading-snug">Roles asignados</Label>
-              <Multiselect
-                v-model="selectedRole"
-                mode="single"
-                :object="false"
-                :options="roleSelectOptions"
+                :options="sucursalSelectOptions"
                 value-prop="value"
                 label="label"
                 :searchable="true"
-                :close-on-select="true"
-                placeholder="Seleccione…"
-                no-options-text="No hay roles configurados"
+                :close-on-select="false"
+                :hide-selected="false"
+                placeholder="Seleccione sucursales permitidas"
+                no-options-text="No hay sucursales configuradas"
                 no-results-text="Sin coincidencias"
                 class="multiselect-roles"
               />
-              <p v-if="roles.length === 0" class="text-center py-4 text-sm text-muted-foreground">
-                No hay roles disponibles
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <div class="flex justify-end gap-4">
-          <Button type="button" variant="outline" @click="router.back()">
-            Cancelar
-          </Button>
-          <Button type="submit" :disabled="saving">
-            <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-            {{ saving ? 'Guardando...' : 'Crear Usuario' }}
-          </Button>
+          <Card>
+            <CardHeader class="gap-2">
+              <CardTitle class="leading-snug">Roles</CardTitle>
+              <CardDescription class="leading-relaxed">
+                Selecciona los roles que tendrá este usuario
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div v-if="loading" class="flex items-center justify-center py-8">
+                <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
+              </div>
+
+              <div v-else class="space-y-2">
+                <Label class="leading-snug">Roles asignados</Label>
+                <Multiselect
+                  v-model="selectedRole"
+                  mode="single"
+                  :object="false"
+                  :options="roleSelectOptions"
+                  value-prop="value"
+                  label="label"
+                  :searchable="true"
+                  :close-on-select="true"
+                  placeholder="Seleccione…"
+                  no-options-text="No hay roles configurados"
+                  no-results-text="Sin coincidencias"
+                  class="multiselect-roles"
+                />
+                <p v-if="roles.length === 0" class="text-center py-4 text-sm text-muted-foreground">
+                  No hay roles disponibles
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div class="flex justify-end gap-4">
+            <Button type="button" variant="outline" @click="router.back()">
+              Cancelar
+            </Button>
+            <Button type="submit" :disabled="saving">
+              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              {{ saving ? 'Guardando...' : 'Crear Usuario' }}
+            </Button>
+          </div>
         </div>
-      </div>
-    </form>
+      </form>
     </div>
   </SettingsLayout>
 </template>
