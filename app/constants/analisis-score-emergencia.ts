@@ -330,6 +330,36 @@ export function mergeEmergenciaFromSnapshot(saved: unknown): EmergenciaState {
 }
 
 /**
+ * Aplica un snapshot de EMERGENCIA sobre un estado ya hidratado (p. ej. monto, ingresos, egresos y activos desde la solicitud).
+ * Importante: `deepMerge` fusiona arrays de `filas` por índice; por eso, si el snapshot trae `activos`, se reemplazan
+ * las personas indicadas con `normalizarPersonaActivo` para que los activos guardados en análisis no se mezclen con la radicación.
+ */
+export function mergeEmergenciaSnapshotOverBase(base: EmergenciaState, saved: unknown): EmergenciaState {
+  if (saved == null || typeof saved !== 'object' || Array.isArray(saved)) {
+    return base
+  }
+  const patch = saved as Record<string, unknown>
+  const merged = deepMerge(base, saved) as EmergenciaState
+  if (patch.activos != null && typeof patch.activos === 'object' && !Array.isArray(patch.activos)) {
+    const pa = patch.activos as Record<string, unknown>
+    for (const key of ['deudor', 'codeudor1', 'codeudor2', 'codeudor3'] as const) {
+      if (Object.prototype.hasOwnProperty.call(pa, key)) {
+        merged.activos[key] = normalizarPersonaActivo(pa[key])
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(pa, 'totalActivos') && typeof pa.totalActivos === 'string') {
+      merged.activos.totalActivos = pa.totalActivos
+    }
+  }
+  ensureCuotasFinMinimo(merged.capacidadBloque1.a)
+  ensureCuotasFinMinimo(merged.capacidadBloque1.b)
+  ensureCuotasFinMinimo(merged.capacidadBloque2.a)
+  ensureCuotasFinMinimo(merged.capacidadBloque2.b)
+  normalizarBloqueActivos(merged.activos)
+  return merged
+}
+
+/**
  * Clon estructural completo de EMERGENCIA para el snapshot (API, PDF, histórico).
  * Sin recortar cadenas vacías ni claves: misma fidelidad que en pantalla.
  */

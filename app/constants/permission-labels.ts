@@ -114,6 +114,7 @@ const RADICACION_SUBGROUP_DEFINITIONS: Array<{ key: string; label: string; names
       'radicacion_descargar_pdf',
       'radicacion_enviar_analisis',
       'radicacion_ver_resumen_financiero',
+      'radicacion_marcar_privilegiado',
     ]),
   },
   {
@@ -141,6 +142,7 @@ const RADICACION_SUBGROUP_DEFINITIONS: Array<{ key: string; label: string; names
     names: new Set([
       'radicacion_director_decidir',
       'radicacion_director_credito_decidir',
+      'radicacion_cancelar',
     ]),
   },
   {
@@ -185,6 +187,8 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   radicacion_analisis_guardar: 'Guardar análisis y SCORE',
   radicacion_director_decidir: 'Decidir como director de agencia',
   radicacion_director_credito_decidir: 'Decisión director de crédito',
+  radicacion_cancelar: 'Cancelar solicitud de radicación',
+  radicacion_marcar_privilegiado: 'Marcar privilegiado',
   radicacion_documentos_decidir: 'Decidir revisión documental',
   radicacion_descargar_documentos: 'Ver y descargar adjuntos',
   radicacion_documentos_subir: 'Subir adjuntos',

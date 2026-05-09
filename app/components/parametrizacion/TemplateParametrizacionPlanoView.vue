@@ -83,6 +83,7 @@ const templateLabels: Record<string, string> = {
   'auxiliary-documents': 'Documentos módulo auxiliar (por actividad económica)',
   'estado-civil': 'Estado civil (solicitante)',
   aprobadores: 'Aprobadores (niveles de aprobación)',
+  excepciones: 'Excepciones (motivos — director de crédito)',
   bancos: 'Bancos (Análisis y Score)',
   ing: 'ING — % reserva (Análisis y Score)',
 }

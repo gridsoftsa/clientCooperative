@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { useDebounceFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
 import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
+import RadicacionResumenFinancieroDeudorComparacion from '~/components/radicacion/RadicacionResumenFinancieroDeudorComparacion.vue'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
 import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
@@ -23,6 +25,14 @@ const id = computed(() => route.params.id as string)
 const application = ref<any>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
+
+/** Revisión documental: checklist auxiliar y tipo de actividad con permiso de subida, sin edición completa. */
+const documentationUploadMode = computed(
+  () =>
+    application.value?.status === 'Documentation_Review'
+    && hasPermission('radicacion_documentos_subir'),
+)
+const skipDocumentationFinancialPatch = ref(true)
 
 /** Borradores editables: redirige a /editar (también si el permiso llega un tick después del fetch). */
 const shouldRedirectDraftToEdit = computed(() =>
@@ -80,6 +90,8 @@ const downloadingPdf = ref(false)
 const downloadingId = ref<number | null>(null)
 const deactivating = ref(false)
 const deactivateDialogOpen = ref(false)
+const cancelling = ref(false)
+const cancelRequestDialogOpen = ref(false)
 const deleteWithReason = useApiDeleteWithReason()
 const timelineEvents = computed(() => Array.isArray(application.value?.timeline) ? application.value.timeline : [])
 const timelineExpanded = ref(false)
@@ -151,7 +163,15 @@ const creditDirectorExceptionOptions = [
   { value: 'yes', label: 'Sí' },
 ]
 const creditDirectorIsExceptionChoice = ref<'yes' | 'no'>('no')
+const creditDirectorPrivilegedOptions = [
+  { value: 'no', label: 'No' },
+  { value: 'yes', label: 'Sí' },
+]
+const creditDirectorIsPrivilegedChoice = ref<'yes' | 'no'>('no')
+const creditDirectorPrivilegedJustification = ref('')
 const creditDirectorExceptionJustification = ref('')
+const creditDirectorExceptionReasonOptions = ref<Array<{ value: string, label: string }>>([])
+const creditDirectorExceptionReasonsSelected = ref<string[]>([])
 const creditDirectorApproverValue = ref('')
 const creditDirectorApproverOptions = ref<Array<{ value: string, label: string }>>([])
 const creditDirectorDecisionDialogOpen = ref(false)
@@ -162,6 +182,16 @@ const creditDirectorDecisionOptions = [
 ]
 const canCreditDirectorDecide = computed(
   () => hasPermission('radicacion_director_credito_decidir') && application.value?.status === 'Credit_Director_Review',
+)
+const creditDirectorUseExceptionReasonCatalog = computed(
+  () => creditDirectorExceptionReasonOptions.value.length > 0,
+)
+/** Dos columnas en la fila de justificaciones solo cuando excepción y privilegiado requieren campo a la vez. */
+const creditDirectorJustificationRowTwoColumns = computed(
+  () =>
+    hasPermission('radicacion_marcar_privilegiado')
+    && creditDirectorIsExceptionChoice.value === 'yes'
+    && creditDirectorIsPrivilegedChoice.value === 'yes',
 )
 const analisisSnapshotForDirector = computed((): Record<string, unknown> | null => {
   const s = application.value?.analisis_score_snapshot
@@ -179,6 +209,15 @@ const showCreditDirectorFinalConcept = computed(() => {
 })
 
 const isTerminalImmutable = computed(() => isCreditApplicationTerminalImmutable(application.value?.status))
+
+const cancellationActorDisplay = computed((): string => {
+  const raw = application.value?.cancelled_by
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const o = raw as { full_name?: string | null, name?: string | null }
+    return String(o.full_name || o.name || '').trim()
+  }
+  return ''
+})
 
 function onDirectorDecisionUpdate(value: string | null) {
   if (value === 'approved' || value === 'returned') {
@@ -207,6 +246,9 @@ function onAnalystDecisionUpdate(value: string | null) {
 function onCreditDirectorDecisionUpdate(value: string | null) {
   if (value === 'approved' || value === 'rejected') {
     creditDirectorDecision.value = value
+    if (value === 'rejected') {
+      creditDirectorApproverValue.value = ''
+    }
     return
   }
   creditDirectorDecision.value = ''
@@ -217,21 +259,52 @@ function onCreditDirectorExceptionUpdate(value: string | null) {
     creditDirectorIsExceptionChoice.value = value
     if (value === 'no') {
       creditDirectorExceptionJustification.value = ''
+      creditDirectorExceptionReasonsSelected.value = []
       creditDirectorApproverValue.value = ''
+    } else {
+      creditDirectorExceptionReasonsSelected.value = []
     }
     return
   }
   creditDirectorIsExceptionChoice.value = 'no'
   creditDirectorExceptionJustification.value = ''
+  creditDirectorExceptionReasonsSelected.value = []
   creditDirectorApproverValue.value = ''
 }
 
-function approverLabelForValue(value: string | null | undefined): string {
-  if (value == null || value === '') {
+function onCreditDirectorPrivilegedUpdate(value: string | null) {
+  if (value === 'yes' || value === 'no') {
+    creditDirectorIsPrivilegedChoice.value = value
+    if (value === 'no') {
+      creditDirectorPrivilegedJustification.value = ''
+    }
+    return
+  }
+  creditDirectorIsPrivilegedChoice.value = 'no'
+  creditDirectorPrivilegedJustification.value = ''
+}
+
+function exceptionReasonLabelForValue(value: string): string {
+  const o = creditDirectorExceptionReasonOptions.value.find(x => x.value === value)
+  return o?.label ?? value
+}
+
+function creditDirectorExceptionJustificationDisplay(stored: string | null | undefined): string {
+  if (stored == null || stored === '') {
     return ''
   }
-  const o = creditDirectorApproverOptions.value.find(x => x.value === value)
-  return o?.label ?? value
+  const t = stored.trim()
+  if (t.startsWith('[')) {
+    try {
+      const arr = JSON.parse(t) as unknown
+      if (Array.isArray(arr) && arr.every(x => typeof x === 'string')) {
+        return (arr as string[]).map(v => exceptionReasonLabelForValue(v)).join(', ')
+      }
+    } catch {
+      /* texto libre o JSON inválido */
+    }
+  }
+  return stored
 }
 
 async function loadAprobadoresCatalog(): Promise<void> {
@@ -245,6 +318,27 @@ async function loadAprobadoresCatalog(): Promise<void> {
     console.error('Error cargando catálogo aprobadores:', e)
     creditDirectorApproverOptions.value = []
   }
+}
+
+async function loadExcepcionesCatalog(): Promise<void> {
+  try {
+    const res = await $api<{ data: { options?: Array<{ value: string, label: string }> } }>(
+      '/catalogs/template-flat-data/excepciones',
+    )
+    const opts = res.data?.options
+    creditDirectorExceptionReasonOptions.value = Array.isArray(opts) ? opts : []
+  } catch (e) {
+    console.error('Error cargando catálogo excepciones:', e)
+    creditDirectorExceptionReasonOptions.value = []
+  }
+}
+
+function approverLabelForValue(value: string | null | undefined): string {
+  if (value == null || value === '') {
+    return ''
+  }
+  const o = creditDirectorApproverOptions.value.find(x => x.value === value)
+  return o?.label ?? value
 }
 
 function onCreditDirectorApproverUpdate(value: string | null): void {
@@ -345,6 +439,7 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
     ? api.residence_city_name
     : (api?.residence_city as { name?: string } | null)?.name ?? ''
   return {
+    id: typeof api?.id === 'number' ? api.id : undefined,
     document_type: api?.document_type ?? 'CC',
     document_number: api?.document_number ?? '',
     expedition_date: toDateInputFormat(api?.expedition_date) ?? api?.expedition_date,
@@ -501,10 +596,44 @@ function openDeactivateDialog() {
   if (!application.value?.id || deactivating.value)
     return
   if (isCreditApplicationTerminalImmutable(application.value?.status)) {
-    toast.error('Las solicitudes en desembolso o rechazado no se pueden desactivar.')
+    toast.error('Las solicitudes en desembolso, rechazadas o canceladas no se pueden desactivar.')
     return
   }
   deactivateDialogOpen.value = true
+}
+
+function openCancelRequestDialog() {
+  if (!application.value?.id || cancelling.value)
+    return
+  if (isCreditApplicationTerminalImmutable(application.value?.status)) {
+    toast.error('Esta solicitud ya está en un estado cerrado y no admite cancelación.')
+    return
+  }
+  cancelRequestDialogOpen.value = true
+}
+
+async function onCancelRequestConfirm(reason: string) {
+  if (!application.value?.id || cancelling.value)
+    return
+  cancelling.value = true
+  try {
+    await $csrf()
+    await $api(`/credit-applications/${application.value.id}/cancel`, {
+      method: 'PATCH',
+      body: { reason },
+    })
+    cancelRequestDialogOpen.value = false
+    toast.success('Solicitud cancelada', {
+      description: 'El proceso de radicación quedó detenido.',
+      duration: 5000,
+    })
+    await fetchApplication()
+  } catch (e: any) {
+    console.error('Error cancelando solicitud:', e)
+    toast.error(e?.data?.message ?? 'No se pudo cancelar la solicitud.')
+  } finally {
+    cancelling.value = false
+  }
 }
 
 async function onDeactivateConfirm(reason: string) {
@@ -666,12 +795,24 @@ function openCreditDirectorDecisionDialog() {
     return
   }
   if (creditDirectorIsExceptionChoice.value === 'yes') {
-    if (creditDirectorExceptionJustification.value.trim().length < 10) {
+    if (creditDirectorUseExceptionReasonCatalog.value) {
+      if (creditDirectorExceptionReasonsSelected.value.length < 1) {
+        toast.error('Seleccione al menos un motivo de excepción.')
+        return
+      }
+    } else if (creditDirectorExceptionJustification.value.trim().length < 10) {
       toast.error('Si marca excepción, la justificación debe tener al menos 10 caracteres.')
       return
     }
+  } else if (creditDirectorDecision.value === 'approved') {
     if (creditDirectorApproverValue.value.trim() === '') {
-      toast.error('Si marca excepción, seleccione el aprobador.')
+      toast.error('Seleccione el ente aprobador.')
+      return
+    }
+  }
+  if (hasPermission('radicacion_marcar_privilegiado') && creditDirectorIsPrivilegedChoice.value === 'yes') {
+    if (creditDirectorPrivilegedJustification.value.trim().length < 10) {
+      toast.error('Indique la justificación por la cual la solicitud es privilegiada (mínimo 10 caracteres).')
       return
     }
   }
@@ -685,19 +826,32 @@ async function confirmCreditDirectorDecision() {
   submittingCreditDirectorDecision.value = true
   try {
     await $csrf()
+    const isEx = creditDirectorIsExceptionChoice.value === 'yes'
+    let exceptionJustificationPayload: string | string[] | null = null
+    if (isEx) {
+      if (creditDirectorUseExceptionReasonCatalog.value) {
+        exceptionJustificationPayload = [...creditDirectorExceptionReasonsSelected.value]
+      } else {
+        exceptionJustificationPayload = creditDirectorExceptionJustification.value.trim()
+      }
+    }
+    const body: Record<string, unknown> = {
+      decision: creditDirectorDecision.value,
+      concept: creditDirectorConcept.value.trim(),
+      is_exception: isEx,
+      exception_justification: exceptionJustificationPayload,
+      approver_value: !isEx && creditDirectorDecision.value === 'approved'
+        ? creditDirectorApproverValue.value.trim()
+        : null,
+    }
+    if (hasPermission('radicacion_marcar_privilegiado')) {
+      const isPriv = creditDirectorIsPrivilegedChoice.value === 'yes'
+      body.is_privileged = isPriv
+      body.privileged_justification = isPriv ? creditDirectorPrivilegedJustification.value.trim() : null
+    }
     await $api(`/credit-applications/${application.value.id}/credit-director-decision`, {
       method: 'PATCH',
-      body: {
-        decision: creditDirectorDecision.value,
-        concept: creditDirectorConcept.value.trim(),
-        is_exception: creditDirectorIsExceptionChoice.value === 'yes',
-        exception_justification: creditDirectorIsExceptionChoice.value === 'yes'
-          ? creditDirectorExceptionJustification.value.trim()
-          : null,
-        approver_value: creditDirectorIsExceptionChoice.value === 'yes'
-          ? creditDirectorApproverValue.value.trim()
-          : null,
-      },
+      body,
     })
     creditDirectorDecisionDialogOpen.value = false
     toast.success('Decisión del director de crédito registrada correctamente.')
@@ -800,13 +954,18 @@ async function fetchApplication() {
       await navigateTo(`/radicacion/editar/${id.value}`, { replace: true })
       return
     }
+    skipDocumentationFinancialPatch.value = true
     syncFormFromApplication()
     syncAnalystFieldsFromApplication()
+    syncCreditDirectorPrivilegedFromApplication()
+    await nextTick()
+    skipDocumentationFinancialPatch.value = false
     if (
       application.value?.status === 'Credit_Director_Review'
       || application.value?.credit_director_is_exception
     ) {
       await loadAprobadoresCatalog()
+      await loadExcepcionesCatalog()
     }
   } catch (e) {
     console.error('Error cargando solicitud:', e)
@@ -833,6 +992,171 @@ function syncAnalystFieldsFromApplication(): void {
   analystDecision.value = 'approved'
 }
 
+function syncCreditDirectorPrivilegedFromApplication(): void {
+  if (!application.value) {
+    return
+  }
+  creditDirectorIsPrivilegedChoice.value = application.value.is_privileged === true ? 'yes' : 'no'
+  creditDirectorPrivilegedJustification.value = typeof application.value.privileged_justification === 'string'
+    ? application.value.privileged_justification
+    : ''
+}
+
+function buildDocumentationFinancialPatch(fi: unknown): {
+  activity_type?: string
+  auxiliaryDocuments?: Record<string, number | null>
+} {
+  if (!fi || typeof fi !== 'object') {
+    return {}
+  }
+  const o = fi as Record<string, unknown>
+  const patch: {
+    activity_type?: string
+    auxiliaryDocuments?: Record<string, number | null>
+  } = {}
+  if ('activity_type' in o) {
+    const at = o.activity_type
+    if (at == null || at === '') {
+      patch.activity_type = ''
+    } else {
+      patch.activity_type = typeof at === 'string' ? at : String(at)
+    }
+  }
+  if (
+    'auxiliaryDocuments' in o
+    && o.auxiliaryDocuments
+    && typeof o.auxiliaryDocuments === 'object'
+    && !Array.isArray(o.auxiliaryDocuments)
+  ) {
+    const raw = o.auxiliaryDocuments as Record<string, unknown>
+    const clean: Record<string, number | null> = {}
+    for (const [k, v] of Object.entries(raw)) {
+      if (v == null || v === '') {
+        clean[k] = null
+      } else if (typeof v === 'number' && Number.isFinite(v)) {
+        clean[k] = v
+      } else if (typeof v === 'string' && /^\d+$/.test(v)) {
+        clean[k] = parseInt(v, 10)
+      }
+    }
+    patch.auxiliaryDocuments = clean
+  }
+  return patch
+}
+
+function patchApplicationDebtorFinancialCache(fi: Record<string, unknown>): void {
+  const app = application.value
+  if (!app) {
+    return
+  }
+  const rows = app.application_applicants ?? app.applicationApplicants ?? []
+  const pivot = rows.find((r: any) => (r.role ?? r.Role) === 'DEUDOR')
+  if (pivot) {
+    pivot.financial_info = fi
+  }
+  if (app.debtor && typeof app.debtor === 'object') {
+    (app.debtor as { financial_info?: unknown }).financial_info = fi
+  }
+}
+
+function patchApplicationCodeudorFinancialCache(applicantId: number, fi: Record<string, unknown>): void {
+  const app = application.value
+  if (!app) {
+    return
+  }
+  const rows = app.application_applicants ?? app.applicationApplicants ?? []
+  const pivot = rows.find(
+    (r: any) => (r.role ?? r.Role) === 'CODEUDOR' && Number(r.applicant_id) === applicantId,
+  )
+  if (pivot) {
+    pivot.financial_info = fi
+  }
+  const coList = app.coDebtors ?? app.co_debtors ?? []
+  const coRow = coList.find((c: any) => Number(c.applicant_id ?? c.applicantId) === applicantId)
+  if (coRow && typeof coRow === 'object') {
+    (coRow as { financial_info?: unknown }).financial_info = fi
+  }
+}
+
+const pushDebtorDocumentationFinancial = useDebounceFn(async () => {
+  if (skipDocumentationFinancialPatch.value || !documentationUploadMode.value || !application.value?.id) {
+    return
+  }
+  const patch = buildDocumentationFinancialPatch(form.value.debtor.financial_info)
+  if (Object.keys(patch).length === 0) {
+    return
+  }
+  try {
+    await $csrf()
+    await $api(`/credit-applications/${application.value.id}/documentation-applicant-financial`, {
+      method: 'PATCH',
+      body: { role: 'DEUDOR', financial_info: patch },
+    })
+    const fi = form.value.debtor.financial_info
+    if (fi && typeof fi === 'object') {
+      patchApplicationDebtorFinancialCache(fi as Record<string, unknown>)
+    }
+  } catch (e: any) {
+    console.error(e)
+    toast.error(e?.data?.message ?? 'No se pudo guardar el tipo de actividad o documentos auxiliares del deudor')
+  }
+}, 500)
+
+const pushCodeudorDocumentationFinancial = useDebounceFn(async (applicantId: number) => {
+  if (skipDocumentationFinancialPatch.value || !documentationUploadMode.value || !application.value?.id) {
+    return
+  }
+  const idx = selectedCoDebtorIndex.value
+  if (idx == null) {
+    return
+  }
+  const co = form.value.co_debtors[idx]
+  if (!co || Number(co.id) !== applicantId) {
+    return
+  }
+  const patch = buildDocumentationFinancialPatch(co.financial_info)
+  if (Object.keys(patch).length === 0) {
+    return
+  }
+  try {
+    await $csrf()
+    await $api(`/credit-applications/${application.value.id}/documentation-applicant-financial`, {
+      method: 'PATCH',
+      body: { role: 'CODEUDOR', applicant_id: applicantId, financial_info: patch },
+    })
+    const fi = co.financial_info
+    if (fi && typeof fi === 'object') {
+      patchApplicationCodeudorFinancialCache(applicantId, fi as Record<string, unknown>)
+    }
+  } catch (e: any) {
+    console.error(e)
+    toast.error(e?.data?.message ?? 'No se pudo guardar el tipo de actividad o documentos auxiliares del codeudor')
+  }
+}, 500)
+
+watch(
+  () => form.value.debtor.financial_info,
+  () => {
+    void pushDebtorDocumentationFinancial()
+  },
+  { deep: true },
+)
+
+watch(
+  () => ({
+    idx: selectedCoDebtorIndex.value,
+    id: selectedCoDebtorIndex.value != null ? form.value.co_debtors[selectedCoDebtorIndex.value]?.id : null,
+    fi: selectedCoDebtorIndex.value != null ? form.value.co_debtors[selectedCoDebtorIndex.value]?.financial_info : null,
+  }),
+  (state) => {
+    if (state.id == null || typeof state.id !== 'number') {
+      return
+    }
+    void pushCodeudorDocumentationFinancial(state.id)
+  },
+  { deep: true },
+)
+
 async function fetchCatalogs() {
   try {
     const agenciesRes = await $api<{ data: typeof agencies.value }>('/catalogs/agencies')
@@ -846,10 +1170,6 @@ onMounted(() => {
   fetchApplication()
   fetchCatalogs()
 })
-
-watch([application, debtor, coDebtors], () => {
-  if (application.value && debtor.value) syncFormFromApplication()
-}, { deep: true })
 </script>
 
 <template>
@@ -860,10 +1180,15 @@ watch([application, debtor, coDebtors], () => {
           Ver Radicación
         </h2>
         <p class="text-muted-foreground">
-          Solicitud de crédito — solo lectura
+          <template v-if="documentationUploadMode">
+            Revisión de documentación: puede ajustar el tipo de actividad económica y el checklist auxiliar de documentos (deudor y codeudores).
+          </template>
+          <template v-else>
+            Solicitud de crédito — solo lectura
+          </template>
         </p>
         <p v-if="isTerminalImmutable" class="mt-1 text-sm font-medium text-amber-900 dark:text-amber-100">
-          Estado cerrado (desembolso o rechazado): no se permiten cambios ni desactivación; cualquier rol solo puede consultar.
+          Estado cerrado (desembolso, rechazada o cancelada): no se permiten cambios ni desactivación; cualquier rol solo puede consultar.
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
@@ -898,6 +1223,18 @@ watch([application, debtor, coDebtors], () => {
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>
+        <PermissionGate permission="radicacion_cancelar">
+          <Button
+            v-if="!isTerminalImmutable"
+            variant="outline"
+            class="border-destructive/40 text-destructive hover:bg-destructive/10"
+            :disabled="cancelling"
+            @click="openCancelRequestDialog"
+          >
+            <Icon :name="cancelling ? 'i-lucide-loader-2' : 'i-lucide-circle-x'" class="mr-2 h-4 w-4" :class="{ 'animate-spin': cancelling }" />
+            {{ cancelling ? 'Cancelando…' : 'Cancelar solicitud' }}
+          </Button>
+        </PermissionGate>
         <PermissionGate permission="radicacion_desactivar">
           <Button
             v-if="!isTerminalImmutable"
@@ -924,6 +1261,34 @@ watch([application, debtor, coDebtors], () => {
     </div>
 
     <template v-else-if="application && debtor">
+      <Card
+        v-if="application.status === 'Cancelled'"
+        class="border-destructive/40 bg-destructive/5"
+      >
+        <CardHeader>
+          <CardTitle class="text-destructive">
+            Solicitud cancelada
+          </CardTitle>
+          <CardDescription>
+            El proceso de radicación fue detenido. Los datos permanecen consultables.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-2 text-sm">
+          <p>
+            <span class="font-medium text-foreground">Motivo:</span>
+            {{ application.cancellation_reason || '—' }}
+          </p>
+          <p>
+            <span class="font-medium text-foreground">Fecha:</span>
+            {{ application.cancelled_at ? formatEventDate(application.cancelled_at) : '—' }}
+          </p>
+          <p v-if="cancellationActorDisplay">
+            <span class="font-medium text-foreground">Canceló:</span>
+            {{ cancellationActorDisplay }}
+          </p>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <div class="flex items-center justify-between gap-3">
@@ -976,6 +1341,17 @@ watch([application, debtor, coDebtors], () => {
           <p v-if="application?.credit_director_decision_at" class="text-muted-foreground">
             Fecha: {{ formatEventDate(application.credit_director_decision_at) }}
           </p>
+          <p>
+            <span class="text-muted-foreground">Es privilegiado:</span>
+            {{ application?.is_privileged === true ? 'Sí' : 'No' }}
+          </p>
+          <p
+            v-if="application?.is_privileged === true && application?.privileged_justification"
+            class="whitespace-pre-wrap rounded-md border bg-muted/20 p-3"
+          >
+            <span class="text-muted-foreground">Justificación (privilegiado):</span>
+            {{ application.privileged_justification }}
+          </p>
           <div
             v-if="application?.credit_director_is_exception"
             class="space-y-2 rounded-md border border-amber-200 bg-amber-50/80 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"
@@ -983,13 +1359,16 @@ watch([application, debtor, coDebtors], () => {
             <p class="font-medium text-foreground">
               Excepción: Sí
             </p>
-            <p v-if="application?.credit_director_approver_value">
-              <span class="text-muted-foreground">Aprobador:</span>
+            <p
+              v-if="!application?.credit_director_is_exception && application?.credit_director_approver_value"
+              class="text-sm"
+            >
+              <span class="text-muted-foreground">Ente aprobador:</span>
               {{ approverLabelForValue(application.credit_director_approver_value) }}
             </p>
             <p class="whitespace-pre-wrap">
               <span class="text-muted-foreground">Justificación:</span>
-              {{ application?.credit_director_exception_justification }}
+              {{ creditDirectorExceptionJustificationDisplay(application?.credit_director_exception_justification) }}
             </p>
           </div>
           <p class="whitespace-pre-wrap rounded-md border bg-muted/30 p-3">
@@ -1063,56 +1442,133 @@ watch([application, debtor, coDebtors], () => {
               @update:model-value="onCreditDirectorDecisionUpdate"
             />
           </div>
-          <div class="space-y-1.5">
-            <Label for="credit_director_exception">¿Es una excepción? *</Label>
-            <Multiselect
-              id="credit_director_exception"
-              :model-value="creditDirectorIsExceptionChoice"
-              :options="creditDirectorExceptionOptions"
-              value-prop="value"
-              label="label"
-              mode="single"
-              :can-clear="false"
-              :searchable="false"
-              placeholder="Seleccionar"
-              class="multiselect-director"
-              @update:model-value="onCreditDirectorExceptionUpdate"
-            />
-            <p class="text-xs text-muted-foreground">
-              Por defecto «No». Si elige «Sí», debe justificar y seleccionar un aprobador del catálogo parametrizado.
-            </p>
-          </div>
-          <template v-if="creditDirectorIsExceptionChoice === 'yes'">
+          <div
+            class="grid gap-4"
+            :class="hasPermission('radicacion_marcar_privilegiado') ? 'sm:grid-cols-2' : ''"
+          >
             <div class="space-y-1.5">
-              <Label for="credit_director_exception_justification">Justificación de la excepción *</Label>
+              <Label for="credit_director_exception">¿Es una excepción? *</Label>
+              <Multiselect
+                id="credit_director_exception"
+                :model-value="creditDirectorIsExceptionChoice"
+                :options="creditDirectorExceptionOptions"
+                value-prop="value"
+                label="label"
+                mode="single"
+                :can-clear="false"
+                :searchable="false"
+                placeholder="Seleccionar"
+                class="multiselect-director"
+                @update:model-value="onCreditDirectorExceptionUpdate"
+              />
+              <p class="text-xs text-muted-foreground">
+                Por defecto «No». Si elige «Sí», debe indicar la justificación según la parametrización (lista de motivos o texto libre si el catálogo está vacío). Si no es excepción y aprueba, seleccione el ente aprobador.
+              </p>
+            </div>
+            <div
+              v-if="hasPermission('radicacion_marcar_privilegiado')"
+              class="space-y-1.5"
+            >
+              <Label for="credit_director_privileged">¿Es privilegiado? *</Label>
+              <Multiselect
+                id="credit_director_privileged"
+                :model-value="creditDirectorIsPrivilegedChoice"
+                :options="creditDirectorPrivilegedOptions"
+                value-prop="value"
+                label="label"
+                mode="single"
+                :can-clear="false"
+                :searchable="false"
+                placeholder="Seleccionar"
+                class="multiselect-director"
+                @update:model-value="onCreditDirectorPrivilegedUpdate"
+              />
+              <p class="text-xs text-muted-foreground">
+                Queda guardado en la solicitud para informes y seguimiento.
+              </p>
+            </div>
+          </div>
+          <div
+            v-if="creditDirectorIsExceptionChoice === 'yes' || (hasPermission('radicacion_marcar_privilegiado') && creditDirectorIsPrivilegedChoice === 'yes')"
+            class="grid gap-4 items-start"
+            :class="creditDirectorJustificationRowTwoColumns ? 'sm:grid-cols-2' : ''"
+          >
+            <div
+              v-if="creditDirectorIsExceptionChoice === 'yes'"
+              class="space-y-1.5 min-w-0"
+            >
+              <div v-if="creditDirectorUseExceptionReasonCatalog" class="space-y-1.5">
+                <Label for="credit_director_exception_reasons">Justificación de la excepción *</Label>
+                <Multiselect
+                  id="credit_director_exception_reasons"
+                  v-model="creditDirectorExceptionReasonsSelected"
+                  mode="multiple"
+                  :object="false"
+                  :options="creditDirectorExceptionReasonOptions"
+                  value-prop="value"
+                  label="label"
+                  :searchable="true"
+                  :close-on-select="false"
+                  :hide-selected="false"
+                  placeholder="Seleccione uno o más motivos"
+                  no-options-text="No hay motivos parametrizados"
+                  no-results-text="Sin coincidencias"
+                  class="multiselect-director"
+                />
+                <p class="text-xs text-muted-foreground">
+                  Puede elegir más de un motivo.
+                </p>
+              </div>
+              <div v-else class="space-y-1.5">
+                <Label for="credit_director_exception_justification">Justificación de la excepción *</Label>
+                <textarea
+                  id="credit_director_exception_justification"
+                  v-model="creditDirectorExceptionJustification"
+                  rows="4"
+                  class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  placeholder="Explique por qué esta operación se considera excepción."
+                />
+                <p class="text-xs text-muted-foreground">
+                  Mínimo 10 caracteres (catálogo de excepciones sin opciones).
+                </p>
+              </div>
+            </div>
+            <div
+              v-if="hasPermission('radicacion_marcar_privilegiado') && creditDirectorIsPrivilegedChoice === 'yes'"
+              class="space-y-1.5 min-w-0"
+            >
+              <Label for="credit_director_privileged_justification">Justificación (privilegiado) *</Label>
               <textarea
-                id="credit_director_exception_justification"
-                v-model="creditDirectorExceptionJustification"
+                id="credit_director_privileged_justification"
+                v-model="creditDirectorPrivilegedJustification"
                 rows="4"
                 class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                placeholder="Explique por qué esta operación se considera excepción."
+                placeholder="Explique por qué esta solicitud se considera privilegiada."
               />
               <p class="text-xs text-muted-foreground">
                 Mínimo 10 caracteres.
               </p>
             </div>
-            <div class="space-y-1.5">
-              <Label for="credit_director_approver">Aprobador (excepción) *</Label>
-              <Multiselect
-                id="credit_director_approver"
-                :model-value="creditDirectorApproverValue === '' ? null : creditDirectorApproverValue"
-                :options="creditDirectorApproverOptions"
-                value-prop="value"
-                label="label"
-                mode="single"
-                :can-clear="false"
-                :searchable="true"
-                placeholder="Seleccionar aprobador"
-                class="multiselect-director"
-                @update:model-value="onCreditDirectorApproverUpdate"
-              />
-            </div>
-          </template>
+          </div>
+          <div
+            v-if="creditDirectorIsExceptionChoice === 'no' && creditDirectorDecision === 'approved'"
+            class="space-y-1.5"
+          >
+            <Label for="credit_director_approver">Ente aprobador *</Label>
+            <Multiselect
+              id="credit_director_approver"
+              :model-value="creditDirectorApproverValue === '' ? null : creditDirectorApproverValue"
+              :options="creditDirectorApproverOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="true"
+              placeholder="Seleccionar aprobador"
+              class="multiselect-director"
+              @update:model-value="onCreditDirectorApproverUpdate"
+            />
+          </div>
           <div class="space-y-1.5">
             <Label for="credit_director_concept">Concepto estructurado *</Label>
             <textarea
@@ -1324,9 +1780,10 @@ watch([application, debtor, coDebtors], () => {
 
       <!-- Resumen financiero del deudor (requiere permiso; oculto p. ej. para asesor) -->
       <PermissionGate permission="radicacion_ver_resumen_financiero" strict>
-        <RadicacionResumenFinancieroDeudor
+        <RadicacionResumenFinancieroDeudorComparacion
           :financial-info="debtor?.financial_info"
           :amount-requested="Number(application?.amount_requested) || 0"
+          :analisis-score-snapshot="analisisSnapshotForDirector"
         />
       </PermissionGate>
 
@@ -1381,6 +1838,10 @@ watch([application, debtor, coDebtors], () => {
               :hide-financial-section="true"
               :show-co-debtor-concept="false"
               :read-only-form="true"
+              :documents-editable-only="documentationUploadMode"
+              :show-documentos-auxiliar-checklist="documentationUploadMode"
+              :credit-application-id="application?.id ?? null"
+              :credit-application-documents="application?.documents ?? []"
             />
             <div v-if="getDocumentsForApplicant(debtor.id).length > 0" class="space-y-3 border-t pt-4">
               <p class="text-sm font-semibold">Documentos adjuntos</p>
@@ -1438,11 +1899,12 @@ watch([application, debtor, coDebtors], () => {
 
           <!-- Paso 3: Datos financieros -->
           <div v-else-if="currentStep === 3" class="space-y-4">
-            <div class="pointer-events-none">
+            <div :class="documentationUploadMode ? '' : 'pointer-events-none'">
               <ApplicantFormFields
                 v-model="form.debtor"
                 :show-only-financial="true"
                 :read-only-form="true"
+                :documents-editable-only="documentationUploadMode"
               />
             </div>
           </div>
@@ -1583,12 +2045,15 @@ watch([application, debtor, coDebtors], () => {
 
               <div v-if="selectedCoDebtorStep === 1" class="space-y-4">
                 <ApplicantFormFields
-                  :model-value="form.co_debtors[selectedCoDebtorIndex]!"
+                  v-model="form.co_debtors[selectedCoDebtorIndex]!"
                   :show-co-debtor-concept="true"
                   :hide-financial-section="true"
-                  :hide-documents-section="true"
+                  :hide-documents-section="!documentationUploadMode"
                   :read-only-form="true"
-                  @update:model-value="() => {}"
+                  :documents-editable-only="documentationUploadMode"
+                  :show-documentos-auxiliar-checklist="documentationUploadMode"
+                  :credit-application-id="application?.id ?? null"
+                  :credit-application-documents="application?.documents ?? []"
                 />
                 <div
                   v-if="getDocumentsForApplicant(coDebtors[selectedCoDebtorIndex]?.id ?? coDebtors[selectedCoDebtorIndex]?.applicant_id).length > 0"
@@ -1651,12 +2116,12 @@ watch([application, debtor, coDebtors], () => {
               </div>
 
               <div v-else class="space-y-4">
-                <div class="pointer-events-none">
+                <div :class="documentationUploadMode ? '' : 'pointer-events-none'">
                   <ApplicantFormFields
-                    :model-value="form.co_debtors[selectedCoDebtorIndex]!"
+                    v-model="form.co_debtors[selectedCoDebtorIndex]!"
                     :show-only-financial="true"
                     :read-only-form="true"
-                    @update:model-value="() => {}"
+                    :documents-editable-only="documentationUploadMode"
                   />
                 </div>
               </div>
@@ -1674,6 +2139,19 @@ watch([application, debtor, coDebtors], () => {
       cancel-text="Cancelar"
       :loading="deactivating"
       @confirm="onDeactivateConfirm"
+    />
+
+    <ConfirmWithReasonDialog
+      v-model:open="cancelRequestDialogOpen"
+      title="Cancelar solicitud"
+      description="La radicación pasará a estado cancelado y el proceso quedará detenido. Esta acción no se revierte desde aquí."
+      reason-label="Motivo de la cancelación"
+      reason-placeholder="Indique el motivo con el detalle suficiente para auditoría…"
+      confirm-text="Confirmar cancelación"
+      cancel-text="Volver"
+      :min-length="10"
+      :loading="cancelling"
+      @confirm="onCancelRequestConfirm"
     />
 
     <AlertDialog v-model:open="creditDirectorDecisionDialogOpen">

@@ -42,11 +42,12 @@ export const REPORTS_CATALOG: ReportCatalogItem[] = [
   {
     slug: 'analisis',
     title: 'Análisis',
-    summary: 'Cantidad de radicaciones que tienen estado Análisis (In_Analysis), con sumatoria de montos por sucursal y mes.',
+    summary:
+      'Por mes de creación (tramitadas): total de radicaciones frente a las enviadas desde análisis a revisión del director de crédito (paso tras SCORE), con sumatorias de montos.',
     excelSheet: 'ANALISIS',
     status: 'available',
     dataSource: 'applications',
-    note: 'Filtro por estado actual In_Analysis; fechas sobre created_at.',
+    note: '«A director» = evento de transición In_Analysis → Credit_Director_Review; fechas sobre created_at del total.',
   },
   {
     slug: 'devueltas-negadas',
@@ -76,6 +77,16 @@ export const REPORTS_CATALOG: ReportCatalogItem[] = [
     status: 'available',
     dataSource: 'applications',
     note: 'Solo radicaciones creadas en el rango; cada columna promedia tramos completos observados (N).',
+  },
+  {
+    slug: 'indicador',
+    title: 'Indicador',
+    summary:
+      'Total de solicitudes radicadas en el rango (fecha de creación) y, al elegir un estado del flujo, cuántas llegaron a ese estado (actual o por trazabilidad) con el porcentaje sobre el total.',
+    excelSheet: 'INDICADOR',
+    status: 'available',
+    dataSource: 'applications',
+    note: 'Denominador = radicaciones creadas en el período; numerador = estado actual o evento con llegada a ese estado.',
   },
   {
     slug: 'excepciones',

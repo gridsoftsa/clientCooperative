@@ -31,6 +31,10 @@ import {
   formatTotalActivosGlobalVista,
   totalActivosGlobalDesdeBloque,
 } from '~/utils/radicacion-financial-activos'
+import {
+  sumCuotasFinEmergencia,
+  totalGastosCapacidadConCuotasFin,
+} from '~/utils/analisis-emergencia-capacidad'
 
 const state = defineModel<EmergenciaState>({ required: true })
 
@@ -65,8 +69,10 @@ const props = withDefaults(
     syncPaso3Radicacion?: () => Promise<void>
     /** true mientras se llama a la API de sincronización. */
     syncPaso3RadicacionBloqueado?: boolean
+    /** Toda la hoja en solo lectura (consulta cuando la radicación no está en análisis). */
+    readOnly?: boolean
   }>(),
-  { lockDeudorFields: true, lockGastosDesdeRadicacion: false, lockVrCuotaVar: false, pctReservaDeudor: 30, pctReservaCodeudor: 10, company: null, loadingCompany: false, codeudores: () => [], opcionesGarantia: () => [], syncPaso3Radicacion: undefined, syncPaso3RadicacionBloqueado: false },
+  { lockDeudorFields: true, lockGastosDesdeRadicacion: false, lockVrCuotaVar: false, pctReservaDeudor: 30, pctReservaCodeudor: 10, company: null, loadingCompany: false, codeudores: () => [], opcionesGarantia: () => [], syncPaso3Radicacion: undefined, syncPaso3RadicacionBloqueado: false, readOnly: false },
 )
 
 type FilaCapB1 = { key: 'a' | 'b', label: string, reserva: string, codIdx?: number }
@@ -267,16 +273,15 @@ function formatPesosDiferencia(n: number): string {
   return sign + formatPesos(Math.abs(n))
 }
 
-/** Total ingresos − Total gastos (total egresos). Solo se escribe vía `watch`. */
+/** Total ingresos − (gastos radicación + suma cuotas entidades financieras). Solo se escribe vía `watch`. */
 function syncIngresosDisponiblesBloque(b: EmergenciaCapacidadBloque) {
   const noTi = !String(b.totalIngresos ?? '').trim()
-  const noTe = !String(b.totalEgresos ?? '').trim()
-  if (noTi && noTe) {
+  const te = totalGastosCapacidadConCuotasFin(b)
+  if (noTi && te === 0) {
     b.ingDisponibles = ''
     return
   }
   const ti = parsePesosFlexible(b.totalIngresos)
-  const te = parsePesosFlexible(b.totalEgresos)
   b.ingDisponibles = formatPesosDiferencia(ti - te)
 }
 
@@ -362,6 +367,10 @@ watch(
     state.value.capacidadBloque1.b.totalEgresos,
     state.value.capacidadBloque2.a.totalEgresos,
     state.value.capacidadBloque2.b.totalEgresos,
+    ...(state.value.capacidadBloque1.a.cuotasFin ?? []).map(l => l.cuota),
+    ...(state.value.capacidadBloque1.b.cuotasFin ?? []).map(l => l.cuota),
+    ...(state.value.capacidadBloque2.a.cuotasFin ?? []).map(l => l.cuota),
+    ...(state.value.capacidadBloque2.b.cuotasFin ?? []).map(l => l.cuota),
     state.value.capacidadBloque1.a.ingDisponibles,
     state.value.capacidadBloque1.b.ingDisponibles,
     state.value.capacidadBloque2.a.ingDisponibles,
@@ -417,10 +426,7 @@ watch(
   { deep: true, immediate: true },
 )
 
-const sumaCuotasEntidadesDeudor = computed(() => {
-  const lines = state.value.capacidadBloque1.a.cuotasFin ?? []
-  return lines.reduce((s, l) => s + parsePesosFlexible(l.cuota), 0)
-})
+const sumaCuotasEntidadesDeudor = computed(() => sumCuotasFinEmergencia(state.value.capacidadBloque1.a))
 
 const vrCuotaVarNumDeudor = computed(() => parsePesosFlexible(state.value.credito.vrCuotaVar))
 const totalIngresosDeudorNum = computed(() => parsePesosFlexible(state.value.capacidadBloque1.a.totalIngresos))
@@ -554,7 +560,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6" :class="{ 'pointer-events-none': props.readOnly }">
     <div class="rounded-md border border-border/80 bg-card/60 px-3 py-2 text-sm sm:px-3 sm:py-2.5">
       <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div class="min-w-0 text-left">
@@ -1004,7 +1010,7 @@ defineExpose({
                 readonly
                 :class="deudorReadonlyClass"
                 :tabindex="-1"
-                title="Total ingresos − Total gastos. No editable."
+                title="Total ingresos menos gastos de radicación y cuotas de otras entidades financieras. No editable."
               />
             </div>
             <div :class="campoStack">
@@ -1201,7 +1207,7 @@ defineExpose({
                 readonly
                 :class="deudorReadonlyClass"
                 :tabindex="-1"
-                title="Total ingresos − Total gastos. No editable."
+                title="Total ingresos menos gastos de radicación y cuotas de otras entidades financieras. No editable."
               />
             </div>
             <div :class="campoStack">

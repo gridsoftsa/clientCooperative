@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Company } from '~/types/company'
 import { emergenciaStateToSnapshotObject, type EmergenciaState } from '~/constants/analisis-score-emergencia'
+import { buildResumenFinancieroDeudorAnalisisPersistido } from '~/utils/analisis-resumen-financiero-merge'
 import type { AnalisisScorePerfilValue } from '~/constants/analisis-score'
 import type { ImprimirMeta, ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
 import type { ScoreMatrixLine } from '~/constants/analisis-score-matrix'
@@ -34,9 +35,15 @@ const props = defineProps<{
   perfilDeudor?: AnalisisScorePerfilValue
   /** Hoja análisis EMERGENCIA (mismo guardado en snapshot) */
   emergencia?: EmergenciaState | null
+  /** `financial_info` base del deudor (radicación); para `resumen_financiero_deudor_analisis` en el snapshot. */
+  debtorFinancialInfoBaseline?: Record<string, unknown> | null
+  /** Monto solicitado de la solicitud (coherente con el resumen financiero). */
+  amountRequested?: number | null
   /** Empresa principal (misma fuente que Configuración → Empresa) */
   company?: Company | null
   loadingCompany?: boolean
+  /** Solo consulta: no editar cabecera, puntajes ni observaciones. */
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -195,6 +202,9 @@ const puedeGuardarScore = computed(() => hasPermission('radicacion_analisis_guar
 const guardandoScore = ref(false)
 
 async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null }): Promise<{ sentToCreditDirectorReview: boolean }> {
+  if (props.readOnly) {
+    return { sentToCreditDirectorReview: false }
+  }
   if (!puedeGuardarScore.value) {
     toast.error('No tienes permiso para guardar análisis y SCORE.')
     return { sentToCreditDirectorReview: false }
@@ -240,6 +250,17 @@ async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null
         emergencia: props.emergencia != null
         ? emergenciaStateToSnapshotObject(props.emergencia)
         : null,
+    }
+    if (
+      props.debtorFinancialInfoBaseline != null
+      && props.emergencia != null
+      && props.amountRequested != null
+    ) {
+      body.resumen_financiero_deudor_analisis = buildResumenFinancieroDeudorAnalisisPersistido(
+        props.debtorFinancialInfoBaseline,
+        props.emergencia,
+        Number(props.amountRequested) || 0,
+      )
     }
     if (options && 'conceptoAnalista' in options) {
       const c = options.conceptoAnalista
@@ -324,15 +345,15 @@ defineExpose({
       <div class="grid gap-3 sm:grid-cols-3">
         <div class="space-y-1.5">
           <Label for="imp-fecha">FECHA</Label>
-          <Input id="imp-fecha" v-model="cabecera.fecha" placeholder="DD/MM/AAAA" class="font-mono" />
+          <Input id="imp-fecha" v-model="cabecera.fecha" placeholder="DD/MM/AAAA" class="font-mono" :readonly="props.readOnly" :disabled="props.readOnly" />
         </div>
         <div class="space-y-1.5">
           <Label for="imp-cedula">CÉDULA</Label>
-          <Input id="imp-cedula" v-model="cabecera.cedula" placeholder="" class="font-mono" />
+          <Input id="imp-cedula" v-model="cabecera.cedula" placeholder="" class="font-mono" :readonly="props.readOnly" :disabled="props.readOnly" />
         </div>
         <div class="space-y-1.5">
           <Label for="imp-nombre">NOMBRE</Label>
-          <Input id="imp-nombre" v-model="cabecera.nombre" placeholder="" />
+          <Input id="imp-nombre" v-model="cabecera.nombre" placeholder="" :readonly="props.readOnly" :disabled="props.readOnly" />
         </div>
       </div>
 
@@ -393,6 +414,7 @@ defineExpose({
                 <template v-else-if="!isSectionRow(row)">
                   <Select
                     v-if="isMatrixDataRow(row)"
+                    :disabled="props.readOnly"
                     :model-value="selectedMatrixOptionValue(row)"
                     @update:model-value="(v) => onMatrixOptionChange(row, v == null ? '__none__' : String(v))"
                   >
@@ -401,6 +423,7 @@ defineExpose({
                       :aria-invalid="erroresValidacionVisibles && isFilaPuntajeIncompleta(row)"
                       class="h-auto min-h-8 w-full whitespace-normal py-1 text-left font-mono text-sm"
                       :class="erroresValidacionVisibles && isFilaPuntajeIncompleta(row) ? 'ring-2 ring-destructive' : ''"
+                      :disabled="props.readOnly"
                     >
                       <SelectValue placeholder="Seleccionar…" />
                     </SelectTrigger>
@@ -423,6 +446,8 @@ defineExpose({
                     v-model="row.caracteristica"
                     class="h-8 font-mono text-sm"
                     placeholder="—"
+                    :readonly="props.readOnly"
+                    :disabled="props.readOnly"
                   />
                 </template>
               </TableCell>
@@ -456,6 +481,8 @@ defineExpose({
                     class="h-8 font-mono text-sm text-right"
                     :class="erroresValidacionVisibles && isFilaPuntajeIncompleta(row) ? 'ring-2 ring-destructive' : ''"
                     placeholder="—"
+                    :readonly="props.readOnly"
+                    :disabled="props.readOnly"
                   />
                 </template>
               </TableCell>
@@ -478,6 +505,8 @@ defineExpose({
           rows="4"
           class="min-h-24 w-full resize-y"
           placeholder="Escriba observaciones sobre este SCORE (opcional)…"
+          :readonly="props.readOnly"
+          :disabled="props.readOnly"
         />
         <p class="text-xs text-muted-foreground">
           Visible al guardar y en el PDF del análisis SCORE si hay texto.

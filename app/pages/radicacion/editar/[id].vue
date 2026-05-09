@@ -17,7 +17,7 @@ import { parseActivityTemplateList } from '~/types/credit-application'
 import { mergeApplicantFromApi, normalizeFinancialInfoAliases } from '~/utils/merge-applicant-search'
 import { messageFromFetchError } from '~/utils/http-error-message'
 import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
-import { validateDebtorMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
+import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
 import { isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
 
 definePageMeta({
@@ -30,6 +30,7 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const { $api, $csrf } = useNuxtApp()
+const { hasPermission } = usePermissions()
 const id = computed(() => route.params.id as string)
 const application = ref<any>(null)
 const loading = ref(true)
@@ -37,6 +38,8 @@ const error = ref<string | null>(null)
 const saving = ref(false)
 const loadingSearch = ref(false)
 const submitDirectorDialogOpen = ref(false)
+/** Error visual si intenta enviar al director sin radicado externo (no aplica al reenvío solo a revisión de documentación). */
+const radicadoExternoDirectorError = ref(false)
 /** Tras devolución desde revisión documental: el backend envía directo a esa revisión sin pasar por el director. */
 const skipNextDirectorReview = computed(() => Boolean(application.value?.skip_next_director_review))
 /** Devolución por revisión de documentos: solo adjuntos; el resto queda bloqueado en UI y el API ignora otros cambios. */
@@ -53,6 +56,10 @@ const radicacionStepOneFormRef = ref<{
 const debtorActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
 const destinationActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
 const codeudorActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
+const codeudorWizardStepOneFormRef = ref<{
+  validateRequiredStepOneFields: () => boolean
+  validateAuxiliaryDocumentsRequired: () => boolean
+} | null>(null)
 
 const addingCodeudor = ref(false)
 const codeudorStep = ref(1)
@@ -108,7 +115,28 @@ const form = ref<CreditApplicationForm>({
   status: 'Draft',
   co_debtors: [],
   numero_radicado_externo: '',
+  is_privileged: false,
+  privileged_justification: '',
 })
+
+watch(
+  () => form.value.numero_radicado_externo,
+  (v) => {
+    if (radicadoExternoDirectorError.value && typeof v === 'string' && v.trim() !== '') {
+      radicadoExternoDirectorError.value = false
+    }
+  },
+)
+
+function focusNumeroRadicadoExternoInput(): void {
+  nextTick(() => {
+    const el = document.getElementById('numero_radicado_externo')
+    if (el instanceof HTMLElement) {
+      el.focus()
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  })
+}
 
 const stepsDeudor = [
   { num: 1, title: 'Datos del Deudor' },
@@ -340,6 +368,8 @@ function syncFormFromApplication() {
       const docs = getDocumentsForApplicant(c.id)
       return apiApplicantToForm(c, docs)
     }),
+    is_privileged: app.is_privileged === true,
+    privileged_justification: typeof app.privileged_justification === 'string' ? app.privileged_justification : '',
   }
 }
 
@@ -403,6 +433,28 @@ async function searchApplicant() {
   } finally {
     loadingSearch.value = false
   }
+}
+
+function onIsPrivilegedSelectUpdate(value: unknown): void {
+  form.value.is_privileged = value === 'yes'
+  if (value !== 'yes') {
+    form.value.privileged_justification = ''
+  }
+}
+
+function validatePrivilegedFieldsForSave(): boolean {
+  if (!hasPermission('radicacion_marcar_privilegiado')) {
+    return true
+  }
+  if (form.value.is_privileged !== true) {
+    return true
+  }
+  const j = String(form.value.privileged_justification ?? '').trim()
+  if (j.length < 10) {
+    toast.error('Indique la justificación por la cual la solicitud es privilegiada (mínimo 10 caracteres).')
+    return false
+  }
+  return true
 }
 
 async function searchApplicantForCodeudor() {
@@ -502,7 +554,7 @@ function searchApplicantForWizard() {
   }
 }
 
-function finalizeCodeudorWizard() {
+async function finalizeCodeudorWizard() {
   if (documentsOnlyEditMode.value && codeudorEditIndex.value === null) {
     toast.error('No puede agregar codeudores en una devolución solo por documentos.')
     return
@@ -517,6 +569,17 @@ function finalizeCodeudorWizard() {
   const docErr = validateColombianDocumentNumber(app.document_type ?? '', app.document_number ?? '')
   if (docErr) {
     toast.error(docErr)
+    return
+  }
+  await nextTick()
+  const stepRef = codeudorWizardStepOneFormRef.value
+  if (!stepRef?.validateRequiredStepOneFields()) {
+    toast.error('Completa los campos obligatorios del codeudor')
+    codeudorStep.value = 1
+    return
+  }
+  if (!stepRef.validateAuxiliaryDocumentsRequired()) {
+    codeudorStep.value = 1
     return
   }
   const rTemplates = validateAllActivityTemplates(getActivityTemplatesFor(app))
@@ -544,7 +607,18 @@ function hasDocumentsWithoutTitleInApplicant(app: ApplicantForm): boolean {
   return false
 }
 
-function nextCodeudorStep() {
+async function nextCodeudorStep() {
+  await nextTick()
+  if (codeudorStep.value === 1) {
+    const ref = codeudorWizardStepOneFormRef.value
+    if (!ref?.validateRequiredStepOneFields()) {
+      toast.error('Completa los campos obligatorios del codeudor')
+      return
+    }
+    if (!ref.validateAuxiliaryDocumentsRequired()) {
+      return
+    }
+  }
   if (codeudorStep.value === 2) {
     const templates = getActivityTemplatesFor(codeudorWizardApplicant.value)
     const r = validateAllActivityTemplates(templates)
@@ -717,7 +791,7 @@ function onKeydownNumeric(e: KeyboardEvent, allowDecimal = false) {
 }
 
 function canProceedStep1(): boolean {
-  const d = form.value.debtor
+  const d = addingCodeudor.value ? codeudorWizardApplicant.value : form.value.debtor
   if (!d.document_number?.trim() || !d.first_name?.trim() || !d.first_last_name?.trim()) {
     return false
   }
@@ -738,6 +812,9 @@ function canProceedStep2(): boolean {
 }
 
 function hasDocumentsWithoutTitle(): boolean {
+  if (addingCodeudor.value && hasDocumentsWithoutTitleInApplicant(codeudorWizardApplicant.value)) {
+    return true
+  }
   const debtorDocs = form.value.debtor.documents ?? []
   for (const d of debtorDocs) {
     if (d.file && !d.title?.trim()) return true
@@ -754,12 +831,16 @@ function hasDocumentsWithoutTitle(): boolean {
 function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
   const { debtor, co_debtors, ...rest } = form.value
   const { documents: _d, auxiliaryDocumentFiles: _aux, ...debtorWithoutDocs } = debtor
-  const coDebtorsWithoutDocs = (co_debtors ?? []).map(({ documents: _doc, ...co }) => co)
+  const coDebtorsWithoutDocs = (co_debtors ?? []).map(
+    ({ documents: _doc, auxiliaryDocumentFiles: _auxCo, ...co }) => co,
+  )
+  const privileged = form.value.is_privileged === true
   return {
     ...rest,
     debtor: debtorWithoutDocs,
     co_debtors: coDebtorsWithoutDocs,
     status,
+    privileged_justification: privileged ? String(form.value.privileged_justification ?? '').trim() : null,
   }
 }
 
@@ -797,6 +878,13 @@ function validateAllDocumentsBeforeUpload(): string | null {
   for (const f of Object.values(form.value.debtor.auxiliaryDocumentFiles ?? {})) {
     if (f instanceof File && f.size > MAX_DOCUMENT_SIZE) {
       return `"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`
+    }
+  }
+  for (const co of form.value.co_debtors ?? []) {
+    for (const f of Object.values(co.auxiliaryDocumentFiles ?? {})) {
+      if (f instanceof File && f.size > MAX_DOCUMENT_SIZE) {
+        return `"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`
+      }
     }
   }
   return null
@@ -904,12 +992,84 @@ async function uploadAllDocuments(
       fd.append('applicant_id', String(applicantId))
       await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
     }
+
+    let labelByKeyCo: Record<string, string> = {}
+    const auxFilesCo = co.auxiliaryDocumentFiles
+    const fiRawCo = co.financial_info
+    const activityTypeCo = fiRawCo && typeof fiRawCo === 'object'
+      ? String((fiRawCo as { activity_type?: string }).activity_type ?? '').trim()
+      : ''
+    if (auxFilesCo && Object.keys(auxFilesCo).length > 0 && activityTypeCo) {
+      try {
+        const cfgCo = await $api<unknown>('/catalogs/template-flat-data/auxiliary-documents')
+        const ibaCo = extractItemsByActivityFromCatalogResponse(cfgCo)
+        const rowsCo = resolveAuxiliaryChecklistRows(ibaCo, activityTypeCo)
+        labelByKeyCo = Object.fromEntries(rowsCo.map(r => [r.key, r.label]))
+      } catch {
+        labelByKeyCo = {}
+      }
+    }
+
+    let didAuxCo = false
+    if (auxFilesCo) {
+      const fiCo = { ...(typeof fiRawCo === 'object' && fiRawCo ? fiRawCo : {}) } as Record<string, unknown>
+      const docMapCo = { ...(typeof fiCo.auxiliaryDocuments === 'object' && fiCo.auxiliaryDocuments
+        ? fiCo.auxiliaryDocuments as Record<string, number | null>
+        : {}) }
+
+      for (const [key, file] of Object.entries(auxFilesCo)) {
+        if (!(file instanceof File)) continue
+        const prevId = docMapCo[key]
+        if (typeof prevId === 'number' && prevId > 0) {
+          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+        }
+        const labelCo = labelByKeyCo[key] ?? key
+        const fdAux = new FormData()
+        fdAux.append('title', titleForAuxiliaryDocumentUpload(labelCo))
+        fdAux.append('file', file)
+        fdAux.append('auxiliary_checklist', '1')
+        fdAux.append('applicant_id', String(applicantId))
+        const resCo = await $api<{ data: { id: number } }>(
+          `/credit-applications/${applicationId}/documents`,
+          { method: 'POST', body: fdAux },
+        )
+        docMapCo[key] = resCo.data.id
+        didAuxCo = true
+      }
+
+      if (didAuxCo) {
+        const cos = form.value.co_debtors ?? []
+        const rowCo = cos[i]
+        if (rowCo) {
+          rowCo.financial_info = { ...fiCo, auxiliaryDocuments: docMapCo }
+          rowCo.auxiliaryDocumentFiles = {}
+        }
+        await $csrf()
+        await $api(`/credit-applications/${applicationId}`, {
+          method: 'PUT',
+          body: payloadWithoutDocuments('Draft'),
+        })
+      }
+    }
   }
 }
 
 /** Igual que «Siguiente» en paso 1: obligatorios + checklist auxiliar. Requiere paso 1 montado (v-show). */
 async function validateRadicacionStepOneForPersist(): Promise<boolean> {
   if (addingCodeudor.value) {
+    await nextTick()
+    const formRef = codeudorWizardStepOneFormRef.value
+    if (!formRef) {
+      toast.error('No se pudo validar los datos del codeudor. Complete el paso 1 del asistente.')
+      return false
+    }
+    if (!formRef.validateRequiredStepOneFields()) {
+      toast.error('Completa los campos obligatorios del codeudor')
+      return false
+    }
+    if (!formRef.validateAuxiliaryDocumentsRequired()) {
+      return false
+    }
     return true
   }
   await nextTick()
@@ -934,11 +1094,18 @@ async function saveChanges() {
       return
     }
     if (!canProceedStep1()) {
-      toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
+      toast.error(
+        addingCodeudor.value
+          ? 'Completa al menos documento, primer nombre y primer apellido del codeudor'
+          : 'Completa al menos documento, primer nombre y primer apellido del deudor',
+      )
       return
     }
     if (hasDocumentsWithoutTitle()) {
       toast.error('Todos los documentos adjuntos deben tener un título')
+      return
+    }
+    if (!validatePrivilegedFieldsForSave()) {
       return
     }
 
@@ -970,13 +1137,19 @@ async function saveChanges() {
     return
   }
 
-  const identityErr = validateDebtorMinimalIdentityForDraftSave(form.value.debtor)
+  const identityErr = validateApplicantMinimalIdentityForDraftSave(
+    addingCodeudor.value ? codeudorWizardApplicant.value : form.value.debtor,
+    addingCodeudor.value ? 'co_debtor' : 'debtor',
+  )
   if (identityErr) {
     toast.error(identityErr)
     return
   }
   if (!agencies.value.length) {
     toast.error('No hay sucursales disponibles. Espere a que carguen los datos o contacte al administrador.')
+    return
+  }
+  if (!validatePrivilegedFieldsForSave()) {
     return
   }
 
@@ -1009,11 +1182,21 @@ async function saveChanges() {
 }
 
 async function submitToDirectorReview() {
+  if (!skipNextDirectorReview.value && !form.value.numero_radicado_externo?.trim()) {
+    radicadoExternoDirectorError.value = true
+    toast.error('Indique el número de radicado externo para enviar al director de agencia.')
+    focusNumeroRadicadoExternoInput()
+    return
+  }
   if (!(await validateRadicacionStepOneForPersist())) {
     return
   }
   if (!canProceedStep1()) {
-    toast.error('Completa los datos obligatorios del deudor')
+    toast.error(
+      addingCodeudor.value
+        ? 'Completa los datos obligatorios del codeudor'
+        : 'Completa los datos obligatorios del deudor',
+    )
     return
   }
   if (!documentsOnlyEditMode.value && !canProceedStep2()) {
@@ -1030,6 +1213,9 @@ async function submitToDirectorReview() {
       toast.error(errTemplates)
       return
     }
+  }
+  if (!validatePrivilegedFieldsForSave()) {
+    return
   }
 
   saving.value = true
@@ -1089,6 +1275,9 @@ function nextStep() {
     }
     const okAux = radicacionStepOneFormRef.value?.validateAuxiliaryDocumentsRequired() ?? true
     if (!okAux) {
+      return
+    }
+    if (!validatePrivilegedFieldsForSave()) {
       return
     }
   }
@@ -1246,17 +1435,37 @@ onMounted(() => {
       <div class="rounded-xl border bg-card p-4">
         <div class="space-y-1.5 max-w-2xl">
           <Label for="numero_radicado_externo" class="text-sm font-semibold">
-            Número de radicado externo
+            Número de radicado externo *
           </Label>
           <Input
             id="numero_radicado_externo"
             v-model="form.numero_radicado_externo"
             type="text"
             maxlength="100"
-            placeholder="Ej: RAD-EXT-2025-001234 (se asigna al pasar a análisis)"
+            placeholder="Ej: RAD-EXT-2025-001234"
             class="max-w-2xl font-mono"
             :readonly="documentsOnlyEditMode"
+            :aria-invalid="radicadoExternoDirectorError ? true : undefined"
+            :class="
+              radicadoExternoDirectorError
+                ? 'border-destructive ring-2 ring-destructive/30 focus-visible:ring-destructive'
+                : ''
+            "
           />
+          <p
+            v-if="radicadoExternoDirectorError"
+            class="text-sm text-destructive"
+            role="alert"
+          >
+            Indique el número de radicado externo para enviar al director de agencia.
+          </p>
+          <p class="text-xs text-muted-foreground">
+            {{
+              skipNextDirectorReview
+                ? 'No es obligatorio para el reenvío solo a revisión de documentación.'
+                : 'Obligatorio para enviar la solicitud al director de agencia.'
+            }}
+          </p>
         </div>
       </div>
 
@@ -1421,6 +1630,44 @@ onMounted(() => {
               :credit-application-documents="application?.documents ?? []"
               @search="searchApplicant"
             />
+            <div
+              v-if="hasPermission('radicacion_marcar_privilegiado')"
+              class="space-y-1.5 rounded-md border border-dashed border-muted-foreground/25 bg-muted/10 p-4"
+            >
+              <Label for="form_is_privileged_trigger">¿Es privilegiado? *</Label>
+              <Select
+                :model-value="form.is_privileged === true ? 'yes' : 'no'"
+                @update:model-value="onIsPrivilegedSelectUpdate"
+              >
+                <SelectTrigger id="form_is_privileged_trigger">
+                  <SelectValue placeholder="Seleccionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no">
+                    No
+                  </SelectItem>
+                  <SelectItem value="yes">
+                    Sí
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <div v-if="form.is_privileged === true" class="space-y-1.5">
+                <Label for="form_privileged_justification">Justificación (privilegiado) *</Label>
+                <textarea
+                  id="form_privileged_justification"
+                  v-model="form.privileged_justification"
+                  rows="4"
+                  class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  placeholder="Explique por qué esta solicitud se considera privilegiada."
+                />
+                <p class="text-xs text-muted-foreground">
+                  Mínimo 10 caracteres. Queda guardado con la solicitud para informes.
+                </p>
+              </div>
+              <p class="text-xs text-muted-foreground">
+                Queda guardado con la solicitud para informes. El director de crédito puede confirmarlo o cambiarlo al registrar la decisión final.
+              </p>
+            </div>
           </div>
 
           <div
@@ -1653,8 +1900,9 @@ onMounted(() => {
               </div>
             </div>
 
-            <div v-if="codeudorStep === 1" class="space-y-4">
+            <div v-show="codeudorStep === 1" class="space-y-4">
               <ApplicantFormFields
+                ref="codeudorWizardStepOneFormRef"
                 v-model="codeudorWizardApplicant"
                 :credit-application-id="application?.id"
                 :show-search="true"
@@ -1663,10 +1911,12 @@ onMounted(() => {
                 :hide-financial-section="true"
                 :read-only-form="false"
                 :documents-editable-only="documentsOnlyEditMode"
+                :show-documentos-auxiliar-checklist="true"
+                :credit-application-documents="application?.documents ?? []"
                 @search="searchApplicantForWizard"
               />
             </div>
-            <div v-else-if="codeudorStep === 2" class="space-y-4">
+            <div v-show="codeudorStep === 2" class="space-y-4">
               <CreditsFinancialActivityFormList
                 ref="codeudorActivityTemplatesListRef"
                 :model-value="getActivityTemplatesFor(codeudorWizardApplicant)"
@@ -1674,7 +1924,7 @@ onMounted(() => {
                 @update:model-value="(v) => setActivityTemplatesFor(codeudorWizardApplicant, v)"
               />
             </div>
-            <div v-else-if="codeudorStep === 3" class="space-y-4">
+            <div v-show="codeudorStep === 3" class="space-y-4">
               <ApplicantFormFields
                 v-model="codeudorWizardApplicant"
                 :credit-application-id="application?.id"

@@ -21,6 +21,8 @@ interface PeriodColumn {
 interface PeriodCellData {
   count: number
   amount_sum: string
+  passed_count: number
+  passed_amount_sum: string
 }
 
 interface ReportRow {
@@ -32,6 +34,8 @@ interface ReportRow {
   by_period: Record<string, PeriodCellData>
   total_count: number
   total_amount_sum: string
+  total_passed_count: number
+  total_passed_amount_sum: string
 }
 
 interface AnalisisResponse {
@@ -47,6 +51,8 @@ interface AnalisisResponse {
     totals: {
       count: number
       amount_sum: string
+      passed_count: number
+      passed_amount_sum: string
     }
   }
 }
@@ -99,7 +105,12 @@ function amountFromString(value: string | number | null | undefined): number {
 }
 
 function periodCell(row: ReportRow, periodKey: string): PeriodCellData {
-  return row.by_period?.[periodKey] ?? { count: 0, amount_sum: '0' }
+  return row.by_period?.[periodKey] ?? {
+    count: 0,
+    amount_sum: '0',
+    passed_count: 0,
+    passed_amount_sum: '0',
+  }
 }
 
 const hasActiveDateFilters = computed(() => {
@@ -280,10 +291,10 @@ onUnmounted(() => {
 
     <div>
       <h2 class="text-2xl font-bold tracking-tight">
-        Análisis (estado In_Analysis)
+        Análisis y envío a director de crédito
       </h2>
       <p class="text-sm text-muted-foreground">
-        Cantidad de radicaciones cuyo estado actual es «In_Analysis» en el rango seleccionado, por sucursal y mes. El rango aplica a la fecha de creación de la radicación.
+        Por mes de creación de la radicación: total de radicaciones en el rango y, dentro de ese mismo criterio, las que pasaron de «Análisis» a «Revisión director de crédito» (cuando el analista envía el SCORE al director).
       </p>
     </div>
 
@@ -378,7 +389,7 @@ onUnmounted(() => {
             se actualiza sola al cambiar fechas o sucursal (tras un breve momento al escribir fechas).
           </p>
           <p class="mt-2 text-xs text-muted-foreground">
-            Sin fechas, el servidor usa el año calendario actual. Criterio de fecha: creación de la radicación (<code class="rounded bg-muted px-1 py-0.5 text-[11px]">created_at</code>); la tabla solo incluye estado In_Analysis.
+            Sin fechas, el servidor usa el año calendario actual. Criterio de fecha: creación de la radicación (<code class="rounded bg-muted px-1 py-0.5 text-[11px]">created_at</code>). El total incluye todas las radicaciones del rango; «enviadas a director» son las que registraron ese paso de estado tras el análisis.
           </p>
         </div>
 
@@ -390,17 +401,29 @@ onUnmounted(() => {
           <p v-if="rangeSummaryText" class="text-sm text-muted-foreground">
             Período del reporte: <span class="font-medium text-foreground">{{ rangeSummaryText }}</span>
           </p>
-          <div class="grid gap-3 sm:grid-cols-2">
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader class="space-y-1 px-4 py-4">
-                <CardDescription>Total radicaciones en Análisis</CardDescription>
+                <CardDescription>Total radicaciones</CardDescription>
                 <CardTitle class="text-3xl">{{ reportData.totals.count }}</CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader class="space-y-1 px-4 py-4">
-                <CardDescription>Suma montos solicitados</CardDescription>
+                <CardDescription>Enviadas a revisión director (tras análisis)</CardDescription>
+                <CardTitle class="text-3xl">{{ reportData.totals.passed_count }}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader class="space-y-1 px-4 py-4">
+                <CardDescription>Suma montos solicitados (total)</CardDescription>
                 <CardTitle class="text-2xl">{{ formatCurrency(amountFromString(reportData.totals.amount_sum)) }}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader class="space-y-1 px-4 py-4">
+                <CardDescription>Suma montos (enviadas a director)</CardDescription>
+                <CardTitle class="text-2xl">{{ formatCurrency(amountFromString(reportData.totals.passed_amount_sum)) }}</CardTitle>
               </CardHeader>
             </Card>
           </div>
@@ -446,19 +469,35 @@ onUnmounted(() => {
                       :key="`${row.sucursal.id}-${p.key}`"
                       class="align-top"
                     >
-                      <div class="text-sm font-medium">
-                        {{ periodCell(row, p.key).count }} radicaciones
-                      </div>
-                      <div class="text-xs text-muted-foreground">
-                        {{ formatCurrency(amountFromString(periodCell(row, p.key).amount_sum)) }}
+                      <div class="space-y-1.5">
+                        <div class="text-sm font-medium">
+                          {{ periodCell(row, p.key).count }} total
+                        </div>
+                        <div class="text-xs text-muted-foreground">
+                          {{ formatCurrency(amountFromString(periodCell(row, p.key).amount_sum)) }}
+                        </div>
+                        <div class="text-sm font-medium text-teal-800 dark:text-teal-200">
+                          {{ periodCell(row, p.key).passed_count }} a director de crédito
+                        </div>
+                        <div class="text-xs text-muted-foreground">
+                          {{ formatCurrency(amountFromString(periodCell(row, p.key).passed_amount_sum)) }}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell class="align-top">
-                      <div class="text-sm font-medium">
-                        {{ row.total_count }} radicaciones
-                      </div>
-                      <div class="text-xs text-muted-foreground">
-                        {{ formatCurrency(amountFromString(row.total_amount_sum)) }}
+                      <div class="space-y-1.5">
+                        <div class="text-sm font-medium">
+                          {{ row.total_count }} total
+                        </div>
+                        <div class="text-xs text-muted-foreground">
+                          {{ formatCurrency(amountFromString(row.total_amount_sum)) }}
+                        </div>
+                        <div class="text-sm font-medium text-teal-800 dark:text-teal-200">
+                          {{ row.total_passed_count }} a director de crédito
+                        </div>
+                        <div class="text-xs text-muted-foreground">
+                          {{ formatCurrency(amountFromString(row.total_passed_amount_sum)) }}
+                        </div>
                       </div>
                     </TableCell>
                   </TableRow>

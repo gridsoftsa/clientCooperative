@@ -3,6 +3,14 @@ import Multiselect from '@vueform/multiselect'
 import type { TipoValorCuota } from '~/utils/analisis-emergencia-cuota'
 import { TIPO_VALOR_CUOTA_OPCIONES } from '~/utils/analisis-emergencia-cuota'
 
+const props = withDefaults(
+  defineProps<{
+    /** Solo consulta (p. ej. radicación fuera de «En análisis»). */
+    disabled?: boolean
+  }>(),
+  { disabled: false },
+)
+
 const model = defineModel<TipoValorCuota>({ required: true })
 </script>
 
@@ -11,6 +19,7 @@ const model = defineModel<TipoValorCuota>({ required: true })
     <Label for="as-tipo-vc" class="text-sm font-medium">Tipo de Valor de cuota</Label>
     <Multiselect
       id="as-tipo-vc"
+      :disabled="props.disabled"
       :model-value="model && (model === 'Corriente' || model === 'Emergencia') ? model : null"
       mode="single"
       :object="false"

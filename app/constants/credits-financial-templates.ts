@@ -132,6 +132,7 @@ export const sectorsConfig: SectorConfig[] = [
       { value: 'actividad-economica', label: 'Tipo de actividad económica' },
       { value: 'estado-civil', label: 'Estado civil' },
       { value: 'aprobadores', label: 'Aprobadores' },
+      { value: 'excepciones', label: 'Excepciones' },
       { value: 'auxiliary-documents', label: 'Documentos (módulo auxiliar)' },
       { value: 'bancos', label: 'Bancos' },
       { value: 'ing', label: 'ING' },
@@ -143,6 +144,9 @@ const SECTOR_RADICACION_KEY = 'radicacion'
 
 /** Plantillas agrupadas bajo «Aprobadores» en /parametrizacion/radicacion. */
 const RADICACION_APROBADORES_TEMPLATE_VALUES = new Set<string>(['aprobadores'])
+
+/** Plantillas agrupadas bajo «Excepciones» en /parametrizacion/radicacion. */
+const RADICACION_EXCEPCIONES_TEMPLATE_VALUES = new Set<string>(['excepciones'])
 
 /** Plantillas agrupadas bajo «Análisis y Score» en /parametrizacion/radicacion. */
 const RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES = new Set<string>(['bancos', 'ing'])
@@ -158,7 +162,7 @@ export function sectorsForActivityTemplates(): SectorConfig[] {
 }
 
 /**
- * Parametrización de radicación: Solicitante, Aprobadores y Análisis y Score.
+ * Parametrización de radicación: Solicitante, Aprobadores, Excepciones y Análisis y Score.
  */
 export function sectorsForParametrizacionRadicacion(): SectorConfig[] {
   const r = sectorsConfig.find(s => s.value === SECTOR_RADICACION_KEY)
@@ -167,10 +171,14 @@ export function sectorsForParametrizacionRadicacion(): SectorConfig[] {
   }
   const solicitanteTemplates = r.templates.filter(
     t => !RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES.has(t.value)
-      && !RADICACION_APROBADORES_TEMPLATE_VALUES.has(t.value),
+      && !RADICACION_APROBADORES_TEMPLATE_VALUES.has(t.value)
+      && !RADICACION_EXCEPCIONES_TEMPLATE_VALUES.has(t.value),
   )
   const aprobadoresTemplates = r.templates.filter(
     t => RADICACION_APROBADORES_TEMPLATE_VALUES.has(t.value),
+  )
+  const excepcionesTemplates = r.templates.filter(
+    t => RADICACION_EXCEPCIONES_TEMPLATE_VALUES.has(t.value),
   )
   const analisisTemplates = r.templates.filter(
     t => RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES.has(t.value),
@@ -178,6 +186,7 @@ export function sectorsForParametrizacionRadicacion(): SectorConfig[] {
   return [
     { value: SECTOR_RADICACION_KEY, label: 'Solicitante', templates: solicitanteTemplates },
     { value: 'radicacion-aprobadores', label: 'Aprobadores', templates: aprobadoresTemplates },
+    { value: 'radicacion-excepciones', label: 'Excepciones', templates: excepcionesTemplates },
     { value: 'radicacion-analisis-score', label: 'Análisis y Score', templates: analisisTemplates },
   ]
 }

@@ -1,6 +1,14 @@
 <script setup lang="ts">
-import { formatPesosConSimboloDesdeTexto } from '~/composables/usePesosFormat'
+import { computed } from 'vue'
+import {
+  formatPesosConSimbolo,
+  formatPesosConSimboloDesdeTexto,
+} from '~/composables/usePesosFormat'
 import type { EmergenciaCapacidadBloque } from '~/constants/analisis-score-emergencia'
+import {
+  sumCuotasFinEmergencia,
+  totalGastosCapacidadConCuotasFin,
+} from '~/utils/analisis-emergencia-capacidad'
 
 const props = withDefaults(
   defineProps<{
@@ -20,6 +28,17 @@ const editableMontoClass = 'h-8 w-full max-w-[15rem] min-w-0 font-mono'
 function displayPesosStored(s: string | undefined | null): string {
   return formatPesosConSimboloDesdeTexto(s)
 }
+
+/** Total gastos radicación + suma de cuotas en «Cuota entidades financieras» (paso 2). */
+const totalGastosCapacidadVista = computed(() => {
+  const n = totalGastosCapacidadConCuotasFin(props.bloque)
+  const baseVacío = !String(props.bloque.totalEgresos ?? '').trim()
+  const sinCuotas = sumCuotasFinEmergencia(props.bloque) === 0
+  if (n === 0 && baseVacío && sinCuotas) {
+    return ''
+  }
+  return formatPesosConSimbolo(n)
+})
 </script>
 
 <template>
@@ -134,14 +153,12 @@ function displayPesosStored(s: string | undefined | null): string {
     <div class="space-y-1">
       <Label class="text-xs">Total gastos</Label>
       <Input
-        v-if="lock"
-        :model-value="displayPesosStored(bloque.totalEgresos)"
+        :model-value="totalGastosCapacidadVista"
         readonly
         :class="roClass"
         :tabindex="-1"
-        title="Desde Datos financieros de la radicación. No editable."
+        title="Suma de gastos del paso 3 de radicación más las cuotas registradas arriba en «Cuota entidades financieras». No editable."
       />
-      <Input v-else v-model="bloque.totalEgresos" :class="editableMontoClass" />
     </div>
   </div>
 </template>

@@ -70,6 +70,14 @@ const { hasAnyPermission } = usePermissions()
 
 const personalReadOnly = computed(() => props.readOnlyForm || props.documentsEditableOnly)
 
+/** Permite cambiar tipo de actividad en modo solo documentos (checklist auxiliar en revisión documental). */
+const activityTypeReadOnly = computed(() => {
+  if (!personalReadOnly.value) {
+    return false
+  }
+  return !(props.documentsEditableOnly && docCanSubir.value)
+})
+
 /** Alta/edición de documentos (título, archivo, quitar, agregar). */
 const docActionsEnabled = computed(() => !props.readOnlyForm || props.documentsEditableOnly)
 
@@ -1074,7 +1082,7 @@ function formatFileSize(bytes: number): string {
             id="activity_type"
             :model-value="financial.activity_type ? financial.activity_type : null"
             :options="economicActivityOptions"
-            :disabled="personalReadOnly"
+            :disabled="activityTypeReadOnly"
             mode="single"
             value-prop="value"
             label="label"

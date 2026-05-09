@@ -132,6 +132,10 @@ export interface CreditApplicationForm {
   co_debtors: ApplicantForm[]
   /** Número de radicado externo (sistema externo, ej. Finagro) - obligatorio */
   numero_radicado_externo: string
+  /** Marca de solicitud privilegiada (informes); editable con permiso `radicacion_marcar_privilegiado`. */
+  is_privileged?: boolean
+  /** Obligatoria si `is_privileged` es true; texto libre en español. */
+  privileged_justification?: string | null
 }
 
 /** Normaliza lista de plantillas desde API (JSON string o arreglo). */

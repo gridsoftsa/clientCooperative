@@ -28,10 +28,6 @@ const deactivatingId = ref<number | null>(null)
 
 const applications = ref<any[]>([])
 const loading = ref(false)
-const movingToAnalysisId = ref<number | null>(null)
-const toAnalysisRadicado = ref('')
-const toAnalysisDialogOpen = ref(false)
-const applicationToMove = ref<{ id: number; code?: string } | null>(null)
 const pagination = ref({
   current_page: 1,
   last_page: 1,
@@ -57,26 +53,6 @@ function buildListQuery(): Record<string, string | number> {
   const q: Record<string, string | number> = {
     per_page: pagination.value.per_page,
     page: pagination.value.current_page,
-  }
-  if (isDirectorAgencia.value) {
-    if (filterStatus.value !== 'all') {
-      q.status = filterStatus.value
-    }
-    return q
-  }
-  if (isDirectorCredito.value) {
-    if (filterStatus.value !== 'all') {
-      q.status = filterStatus.value
-    }
-    return q
-  }
-  if (isRevisionDocumentos.value) {
-    q.status = filterStatus.value !== 'all' ? filterStatus.value : 'Documentation_Review'
-    return q
-  }
-  if (isAnalista.value) {
-    q.status = filterStatus.value !== 'all' ? filterStatus.value : 'In_Analysis'
-    return q
   }
   if (filterStatus.value !== 'all') {
     q.status = filterStatus.value
@@ -206,43 +182,6 @@ async function onDeactivateConfirm(reason: string) {
   } finally {
     deactivatingId.value = null
     setTimeout(() => { deactivateSuccess.value = false }, 3000)
-  }
-}
-
-function openToAnalysisDialog(app: { id: number; code?: string }) {
-  applicationToMove.value = app
-  toAnalysisRadicado.value = ''
-  toAnalysisDialogOpen.value = true
-}
-
-function closeToAnalysisDialog() {
-  applicationToMove.value = null
-  toAnalysisRadicado.value = ''
-  toAnalysisDialogOpen.value = false
-}
-
-async function confirmMoveToAnalysis() {
-  const app = applicationToMove.value
-  if (!app || !toAnalysisRadicado.value?.trim()) {
-    toast.error('Ingresa el número de radicado externo')
-    return
-  }
-  movingToAnalysisId.value = app.id
-  try {
-    const { $api, $csrf } = useNuxtApp()
-    await $csrf()
-    await $api(`/credit-applications/${app.id}/to-analysis`, {
-      method: 'PATCH',
-      body: { numero_radicado_externo: toAnalysisRadicado.value.trim() },
-    })
-    toast.success('Solicitud pasada a análisis correctamente')
-    closeToAnalysisDialog()
-    await fetchApplications()
-  } catch (e: any) {
-    console.error('Error pasando a análisis:', e)
-    toast.error(e?.data?.message ?? 'No se pudo pasar a análisis')
-  } finally {
-    movingToAnalysisId.value = null
   }
 }
 
@@ -413,7 +352,7 @@ watch(deactivateDialogOpen, (v) => {
                 <TableCell>{{ formatCurrency(Number(app.amount_requested)) }}</TableCell>
                 <TableCell>{{ app.term_months }} meses</TableCell>
                 <TableCell>
-                  <Badge :variant="getStatusBadgeVariant(app.status) as any">
+                  <Badge :variant="getStatusBadgeVariant(app.status)">
                     {{ getStatusLabel(app.status, {
                       skipNextDirectorReview: app.skip_next_director_review,
                       resubmitToAnalystAfterReturn: app.resubmit_to_analyst_after_return,
@@ -492,19 +431,6 @@ watch(deactivateDialogOpen, (v) => {
                       >
                         <Icon name="i-lucide-file-check-2" class="h-4 w-4 shrink-0" aria-hidden="true" />
                         <span>Revisión documentos</span>
-                      </Button>
-                    </PermissionGate>
-                    <PermissionGate permission="radicacion_enviar_analisis">
-                      <Button
-                        v-if="app.status === 'Draft'"
-                        variant="default"
-                        size="sm"
-                        class="gap-1.5"
-                        title="Pasar a análisis"
-                        @click="openToAnalysisDialog(app)"
-                      >
-                        <Icon name="i-lucide-send" class="h-3.5 w-3.5 shrink-0" />
-                        Enviar
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_descargar_pdf">
@@ -608,43 +534,5 @@ watch(deactivateDialogOpen, (v) => {
       :loading="deactivatingId !== null"
       @confirm="onDeactivateConfirm"
     />
-
-    <Dialog :open="toAnalysisDialogOpen" @update:open="(v) => { if (!v) closeToAnalysisDialog() }">
-      <DialogContent class="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Pasar a análisis</DialogTitle>
-          <DialogDescription>
-            Ingresa el número de radicado que devolvió el sistema externo (Finagro, etc.) al enviar la solicitud. La solicitud pasará de Borrador a En análisis.
-          </DialogDescription>
-        </DialogHeader>
-        <div class="space-y-4 py-2">
-          <div v-if="applicationToMove" class="rounded-md bg-muted/50 px-3 py-2 text-sm">
-            Solicitud: <strong>{{ applicationToMove.code }}</strong>
-          </div>
-          <div class="space-y-2">
-            <Label for="to-analysis-radicado">Número de radicado externo *</Label>
-            <Input
-              id="to-analysis-radicado"
-              v-model="toAnalysisRadicado"
-              placeholder="Ej: RAD-EXT-2025-001234"
-              class="font-mono"
-              @keyup.enter="confirmMoveToAnalysis"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" @click="closeToAnalysisDialog">
-            Cancelar
-          </Button>
-          <Button
-            :disabled="!toAnalysisRadicado?.trim() || movingToAnalysisId !== null"
-            @click="confirmMoveToAnalysis"
-          >
-            <Icon v-if="movingToAnalysisId" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-            Pasar a análisis
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   </div>
 </template>

@@ -2,7 +2,7 @@ import type { BadgeVariants } from '~/components/ui/badge'
 
 /** Cierre del flujo: sin edición ni desactivación (API y UI alineados). */
 export function isCreditApplicationTerminalImmutable(status: string | null | undefined): boolean {
-  return status === 'Disbursement' || status === 'Rejected'
+  return status === 'Disbursement' || status === 'Rejected' || status === 'Cancelled'
 }
 
 /** Estados de solicitud alineados con `App\Models\CreditApplication` (API). */
@@ -20,7 +20,16 @@ export const creditApplicationStatusFilterOptions = [
   { value: 'Approved', label: 'Aprobada' },
   { value: 'Disbursement', label: 'Desembolso' },
   { value: 'Rejected', label: 'Rechazada' },
+  { value: 'Cancelled', label: 'Cancelada' },
 ] as const
+
+/** Estados para reporte indicador (una sola selección; sin «Todos»). */
+export const creditApplicationStatusReportIndicatorOptions: Array<{ value: string, label: string }> =
+  creditApplicationStatusFilterOptions
+    .filter((o): o is Exclude<(typeof creditApplicationStatusFilterOptions)[number], { readonly value: 'all' }> =>
+      o.value !== 'all',
+    )
+    .map(o => ({ value: o.value, label: o.label }))
 
 const STATUS_LABELS: Record<string, string> = {
   Draft: 'Borrador',
@@ -33,6 +42,7 @@ const STATUS_LABELS: Record<string, string> = {
   Approved: 'Aprobada',
   Disbursement: 'Desembolso',
   Rejected: 'Rechazada',
+  Cancelled: 'Cancelada',
 }
 
 export type CreditApplicationStatusLabelOptions = {
@@ -84,8 +94,9 @@ const BADGE_VARIANTS: Record<string, string> = {
   Documentation_Review: 'secondary',
   Returned: 'destructive',
   Approved: 'default',
-  Disbursement: 'default',
+  Disbursement: 'success',
   Rejected: 'destructive',
+  Cancelled: 'destructive',
 }
 
 export function getCreditApplicationStatusLabel(
@@ -135,4 +146,5 @@ export const creditApplicationStatusOrder = [
   'Approved',
   'Disbursement',
   'Rejected',
+  'Cancelled',
 ] as const
