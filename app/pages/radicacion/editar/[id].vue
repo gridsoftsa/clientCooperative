@@ -16,6 +16,8 @@ import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from 
 import { parseActivityTemplateList } from '~/types/credit-application'
 import { mergeApplicantFromApi, normalizeFinancialInfoAliases } from '~/utils/merge-applicant-search'
 import { messageFromFetchError } from '~/utils/http-error-message'
+import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
+import { validateDebtorMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
 import { isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
 
 definePageMeta({
@@ -512,6 +514,11 @@ function finalizeCodeudorWizard() {
     toast.error('Completa documento, primer nombre y primer apellido del codeudor')
     return
   }
+  const docErr = validateColombianDocumentNumber(app.document_type ?? '', app.document_number ?? '')
+  if (docErr) {
+    toast.error(docErr)
+    return
+  }
   const rTemplates = validateAllActivityTemplates(getActivityTemplatesFor(app))
   if (!rTemplates.valid) {
     toast.error(rTemplates.errors.join('. '))
@@ -711,7 +718,10 @@ function onKeydownNumeric(e: KeyboardEvent, allowDecimal = false) {
 
 function canProceedStep1(): boolean {
   const d = form.value.debtor
-  return !!(d.document_number?.trim() && d.first_name?.trim() && d.first_last_name?.trim())
+  if (!d.document_number?.trim() || !d.first_name?.trim() || !d.first_last_name?.trim()) {
+    return false
+  }
+  return validateColombianDocumentNumber(d.document_type ?? '', d.document_number ?? '') === null
 }
 
 function canProceedStep2(): boolean {
@@ -750,6 +760,20 @@ function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
     debtor: debtorWithoutDocs,
     co_debtors: coDebtorsWithoutDocs,
     status,
+  }
+}
+
+/** Para «Guardar borrador»: defaults de monto, plazo y sucursal si el formulario aún no los tiene. */
+function payloadForDraftPersist(): Record<string, unknown> {
+  const base = payloadWithoutDocuments('Draft')
+  const agencyId = form.value.agency_id > 0
+    ? form.value.agency_id
+    : (agencies.value[0]?.id ?? 0)
+  return {
+    ...base,
+    amount_requested: form.value.amount_requested > 0 ? form.value.amount_requested : 1,
+    term_months: form.value.term_months > 0 ? form.value.term_months : 12,
+    agency_id: agencyId,
   }
 }
 
@@ -905,44 +929,63 @@ async function validateRadicacionStepOneForPersist(): Promise<boolean> {
 }
 
 async function saveChanges() {
-  if (!(await validateRadicacionStepOneForPersist())) {
-    return
-  }
-  if (!canProceedStep1()) {
-    toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
-    return
-  }
-  if (!documentsOnlyEditMode.value && !canProceedStep2()) {
-    toast.error('Completa monto, plazo, sucursal, destino del crédito y al menos una plantilla de actividad en el destino')
-    return
-  }
-  if (hasDocumentsWithoutTitle()) {
-    toast.error('Todos los documentos adjuntos deben tener un título')
-    return
-  }
-  if (!documentsOnlyEditMode.value) {
-    const errTemplates = validateActivityTemplatesBeforeSave()
-    if (errTemplates) {
-      toast.error(errTemplates)
+  if (documentsOnlyEditMode.value) {
+    if (!(await validateRadicacionStepOneForPersist())) {
       return
     }
-  }
+    if (!canProceedStep1()) {
+      toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
+      return
+    }
+    if (hasDocumentsWithoutTitle()) {
+      toast.error('Todos los documentos adjuntos deben tener un título')
+      return
+    }
 
-  saving.value = true
-  try {
-    await $csrf()
-    if (documentsOnlyEditMode.value) {
+    saving.value = true
+    try {
+      await $csrf()
       if (!application.value?.id) {
         return
       }
       await uploadAllDocuments(application.value.id, application.value)
       toast.success('Documentos guardados correctamente')
       router.push('/radicacion')
-      return
+    } catch (e: any) {
+      console.error('Error guardando:', e)
+      let msg = 'Error al guardar'
+      if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
+        msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
+      } else if (e?.data?.errors && typeof e.data.errors === 'object') {
+        msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
+      } else if (e?.data?.message) {
+        msg = e.data.message
+      } else if (e?.message) {
+        msg = e.message
+      }
+      toast.error(msg)
+    } finally {
+      saving.value = false
     }
+    return
+  }
+
+  const identityErr = validateDebtorMinimalIdentityForDraftSave(form.value.debtor)
+  if (identityErr) {
+    toast.error(identityErr)
+    return
+  }
+  if (!agencies.value.length) {
+    toast.error('No hay sucursales disponibles. Espere a que carguen los datos o contacte al administrador.')
+    return
+  }
+
+  saving.value = true
+  try {
+    await $csrf()
     const { data: updated } = await $api<{ data: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> } }>(
       `/credit-applications/${id.value}`,
-      { method: 'PUT', body: payloadWithoutDocuments('Draft') },
+      { method: 'PUT', body: payloadForDraftPersist() },
     )
     await uploadAllDocuments(updated.id, updated)
     toast.success('Cambios guardados correctamente')

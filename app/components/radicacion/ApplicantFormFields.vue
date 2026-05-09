@@ -4,6 +4,16 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/component
 import Multiselect from '@vueform/multiselect'
 import type { ApplicantForm, ApplicantDocumentForm, FinancialInfoForm } from '~/types/credit-application'
 import { normalizeStoredActivityType } from '~/constants/auxiliary-documents-checklist'
+import {
+  compareYmd,
+  expeditionBeforeEighteenthBirthday,
+  isAtLeastAgeYears,
+  maxBirthYmdForMinAge,
+  MIN_APPLICANT_AGE_YEARS,
+  ymdAddCalendarYears,
+  ymdLocalToday,
+} from '~/utils/applicant-dates'
+import { documentNumberLengthHint, validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 /** Import explícito: Nuxt auto-importa como `RadicacionAuxiliaryDocumentsSection`, no como `AuxiliaryDocumentsSection`. */
 import AuxiliaryDocumentsSection from '~/components/radicacion/AuxiliaryDocumentsSection.vue'
 
@@ -214,6 +224,8 @@ type AuxiliaryDocumentsSectionExpose = {
 
 const auxiliaryDocumentsSectionRef = ref<AuxiliaryDocumentsSectionExpose | null>(null)
 const submitValidationAttempted = ref(false)
+/** Tras cualquier cambio en fecha de nacimiento o expedición: validación en vivo (sin esperar blur ni envío). */
+const liveApplicantDateCheckRequested = ref(false)
 
 const requiredFieldIds = {
   document_type: 'doc_type',
@@ -242,6 +254,14 @@ function isRequiredFieldMissing(field: RequiredFieldKey): boolean {
   return !hasValue(local.value[field as keyof ApplicantForm])
 }
 
+function documentNumberFormatInvalid(): boolean {
+  const num = local.value.document_number?.trim() ?? ''
+  if (!num) {
+    return false
+  }
+  return validateColombianDocumentNumber(local.value.document_type ?? '', num) !== null
+}
+
 function firstMissingRequiredField(): RequiredFieldKey | null {
   const ordered: RequiredFieldKey[] = [
     'document_type',
@@ -259,6 +279,53 @@ function firstMissingRequiredField(): RequiredFieldKey | null {
   return ordered.find(field => isRequiredFieldMissing(field)) ?? null
 }
 
+/** Expedición anterior al nacimiento o sin al menos 18 años calendario entre ambas fechas. */
+function expeditionVersusBirthRulesInvalid(): boolean {
+  const exp = local.value.expedition_date?.trim() ?? ''
+  const birth = local.value.birth_date?.trim() ?? ''
+  if (!hasValue(exp) || !hasValue(birth)) {
+    return false
+  }
+  const order = compareYmd(exp, birth)
+  if (order !== null && order < 0) {
+    return true
+  }
+  return expeditionBeforeEighteenthBirthday(exp, birth)
+}
+
+/** Menor de edad respecto a la fecha actual (segunda validación; solo si la primera ya cumple). */
+function birthUnder18VersusToday(): boolean {
+  const b = local.value.birth_date?.trim() ?? ''
+  if (!hasValue(b)) {
+    return false
+  }
+  return !isAtLeastAgeYears(b, MIN_APPLICANT_AGE_YEARS, ymdLocalToday())
+}
+
+function applicantDateRulesBroken(): boolean {
+  return expeditionVersusBirthRulesInvalid() || birthUnder18VersusToday()
+}
+
+function showApplicantDateRuleFeedback(): boolean {
+  return submitValidationAttempted.value || liveApplicantDateCheckRequested.value
+}
+
+function allStepOneValid(): boolean {
+  if (firstMissingRequiredField()) {
+    return false
+  }
+  if (documentNumberFormatInvalid()) {
+    return false
+  }
+  if (expeditionVersusBirthRulesInvalid()) {
+    return false
+  }
+  if (birthUnder18VersusToday()) {
+    return false
+  }
+  return true
+}
+
 function focusField(field: RequiredFieldKey): void {
   const id = requiredFieldIds[field]
   const root = document.getElementById(id)
@@ -274,42 +341,155 @@ function focusField(field: RequiredFieldKey): void {
 function validateRequiredStepOneFields(): boolean {
   submitValidationAttempted.value = true
   const firstMissing = firstMissingRequiredField()
-  if (!firstMissing) {
-    return true
+  if (firstMissing) {
+    nextTick(() => focusField(firstMissing))
+    return false
   }
-  nextTick(() => focusField(firstMissing))
-  return false
+  if (documentNumberFormatInvalid()) {
+    nextTick(() => focusField('document_number'))
+    toast.error(
+      validateColombianDocumentNumber(local.value.document_type ?? '', local.value.document_number ?? '')
+        ?? 'Revise el número de documento según el tipo.',
+    )
+    return false
+  }
+  if (expeditionVersusBirthRulesInvalid()) {
+    nextTick(() => focusField('expedition_date'))
+    const exp = local.value.expedition_date?.trim() ?? ''
+    const birth = local.value.birth_date?.trim() ?? ''
+    if (hasValue(exp) && hasValue(birth)) {
+      const order = compareYmd(exp, birth)
+      if (order !== null && order < 0) {
+        toast.error('La fecha de expedición no puede ser anterior a la fecha de nacimiento.')
+      } else {
+        toast.error('Entre la fecha de expedición y la de nacimiento debe haber al menos 18 años (documento de mayor de edad). Revise si hubo error de digitación.')
+      }
+    }
+    return false
+  }
+  if (birthUnder18VersusToday()) {
+    nextTick(() => focusField('birth_date'))
+    toast.error('El solicitante debe tener al menos 18 años cumplidos hoy (revise la fecha de nacimiento).')
+    return false
+  }
+  return true
 }
 
+const documentNumberHintDisplay = computed(() => documentNumberLengthHint(local.value.document_type ?? ''))
+
+/** Con dígitos pero longitud inválida para CC/CE/NIT: feedback en vivo (como fechas). */
+const documentNumberRuleFeedbackVisible = computed(
+  () => documentNumberFormatInvalid() && hasValue(local.value.document_number),
+)
+
+const documentNumberErrorDisplay = computed(() => {
+  if (documentNumberRuleFeedbackVisible.value) {
+    return validateColombianDocumentNumber(local.value.document_type ?? '', local.value.document_number ?? '') ?? ''
+  }
+  if (submitValidationAttempted.value && documentNumberFormatInvalid()) {
+    return validateColombianDocumentNumber(local.value.document_type ?? '', local.value.document_number ?? '') ?? ''
+  }
+  return ''
+})
+
 function fieldErrorClass(field: RequiredFieldKey): string {
-  if (!submitValidationAttempted.value || !isRequiredFieldMissing(field)) {
+  const destructive = 'border-destructive focus-visible:ring-destructive'
+  if (
+    (field === 'birth_date' || field === 'expedition_date')
+    && showApplicantDateRuleFeedback()
+    && applicantDateRulesBroken()
+  ) {
+    return destructive
+  }
+  if (field === 'document_number' && documentNumberRuleFeedbackVisible.value) {
+    return destructive
+  }
+  if (!submitValidationAttempted.value) {
     return ''
   }
-  return 'border-destructive focus-visible:ring-destructive'
+  if (field === 'document_number' && documentNumberFormatInvalid()) {
+    return destructive
+  }
+  if (isRequiredFieldMissing(field)) {
+    return destructive
+  }
+  return ''
 }
 
 function multiselectErrorClass(field: RequiredFieldKey): string {
+  if (field === 'document_type' && documentNumberRuleFeedbackVisible.value) {
+    return 'multiselect-municipality multiselect-danger'
+  }
   if (!submitValidationAttempted.value || !isRequiredFieldMissing(field)) {
     return 'multiselect-municipality'
   }
   return 'multiselect-municipality multiselect-danger'
 }
 
-watch(local, () => {
-  if (!submitValidationAttempted.value) {
-    return
+const maxBirthDateYmd = computed(() => maxBirthYmdForMinAge(MIN_APPLICANT_AGE_YEARS, ymdLocalToday()) ?? undefined)
+
+const todayYmdMax = computed(() => ymdLocalToday())
+
+const minExpeditionDateInput = computed(() => {
+  const b = local.value.birth_date?.trim()
+  if (!b) {
+    return undefined
   }
-  if (!firstMissingRequiredField()) {
+  return ymdAddCalendarYears(b, MIN_APPLICANT_AGE_YEARS) ?? undefined
+})
+
+const expeditionDateFeedbackMessage = computed(() => {
+  if (!(submitValidationAttempted.value || liveApplicantDateCheckRequested.value)) {
+    return ''
+  }
+  if (!expeditionVersusBirthRulesInvalid()) {
+    return ''
+  }
+  const exp = local.value.expedition_date?.trim() ?? ''
+  const birth = local.value.birth_date?.trim() ?? ''
+  if (!hasValue(exp) || !hasValue(birth)) {
+    return ''
+  }
+  const order = compareYmd(exp, birth)
+  if (order !== null && order < 0) {
+    return 'No puede ser anterior a la fecha de nacimiento.'
+  }
+  return 'Entre expedición y nacimiento debe haber al menos 18 años (mayor de edad). Revise digitación.'
+})
+
+const showBirthMinimumAgeError = computed(
+  () =>
+    (submitValidationAttempted.value || liveApplicantDateCheckRequested.value)
+    && birthUnder18VersusToday()
+    && !expeditionVersusBirthRulesInvalid(),
+)
+
+watch(
+  () => [local.value.birth_date, local.value.expedition_date],
+  () => {
+    if (personalReadOnly.value) {
+      return
+    }
+    liveApplicantDateCheckRequested.value = true
+    nextTick(() => {
+      if (!applicantDateRulesBroken()) {
+        liveApplicantDateCheckRequested.value = false
+      }
+    })
+  },
+)
+
+watch(local, () => {
+  if (allStepOneValid()) {
     submitValidationAttempted.value = false
+    liveApplicantDateCheckRequested.value = false
   }
 }, { deep: true })
 
 watch(financial, () => {
-  if (!submitValidationAttempted.value) {
-    return
-  }
-  if (!firstMissingRequiredField()) {
+  if (allStepOneValid()) {
     submitValidationAttempted.value = false
+    liveApplicantDateCheckRequested.value = false
   }
 }, { deep: true })
 
@@ -498,6 +678,25 @@ function onDocumentDragOver(e: DragEvent) {
   e.dataTransfer!.dropEffect = 'copy'
 }
 
+function freeDocumentFileInputId(index: number): string {
+  return `doc_file_${index}`
+}
+
+/** Misma razón que AuxiliaryDocumentsSection: evitar `<label>` envolviendo controles interactivos (iOS Safari). */
+function onDocumentUploadZoneActivate(index: number, event?: MouseEvent | KeyboardEvent): void {
+  const doc = documents.value[index]
+  if (!doc || !canPickDocumentFile(doc)) {
+    return
+  }
+  if (event && 'target' in event && event.target instanceof Element) {
+    if (event.target.closest('a[href], button')) {
+      return
+    }
+  }
+  const el = document.getElementById(freeDocumentFileInputId(index)) as HTMLInputElement | null
+  el?.click()
+}
+
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const VALID_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
 
@@ -528,32 +727,40 @@ function formatFileSize(bytes: number): string {
     <section v-if="!showOnlyFinancial && showSearch && !personalReadOnly" :class="sectionClass">
       <h3 :class="sectionTitleClass">Buscar por documento</h3>
       <div class="rounded-lg border border-border bg-muted/30 p-4">
-        <div class="flex flex-wrap items-end gap-3">
-          <div :class="fieldClass" class="min-w-0 flex-1 sm:max-w-[280px]">
-            <Input
-              id="search_doc"
-              v-model="local.document_number"
-              placeholder="Ej: 1234567890"
-              inputmode="numeric"
-              autocomplete="off"
-            :class="['h-9 w-full', fieldErrorClass('document_number')]"
-              @input="onDigitsOnlyInput($event, v => (local.document_number = v))"
-              @keyup.enter="runSearch"
-            />
+          <div class="flex flex-wrap items-end gap-3">
+            <div :class="fieldClass" class="min-w-0 flex-1 sm:max-w-[280px]">
+              <Label for="search_doc" class="text-foreground">Número de documento</Label>
+              <Input
+                id="search_doc"
+                v-model="local.document_number"
+                placeholder="Ej: 1234567890"
+                inputmode="numeric"
+                autocomplete="off"
+                :class="['h-9 w-full', fieldErrorClass('document_number')]"
+                :aria-invalid="!!documentNumberErrorDisplay"
+                @input="onDigitsOnlyInput($event, v => (local.document_number = v))"
+                @keyup.enter="runSearch"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="default"
+              class="h-9 shrink-0"
+              :disabled="loadingSearch || !local.document_number?.trim()"
+              @click="runSearch"
+            >
+              <Icon v-if="loadingSearch" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              <Icon v-else name="i-lucide-search" class="mr-2 h-4 w-4" />
+              Buscar
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="default"
-            class="h-9 shrink-0"
-            :disabled="loadingSearch || !local.document_number?.trim()"
-            @click="runSearch"
-          >
-            <Icon v-if="loadingSearch" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-            <Icon v-else name="i-lucide-search" class="mr-2 h-4 w-4" />
-            Buscar
-          </Button>
-        </div>
+          <p v-if="documentNumberHintDisplay" class="mt-2 text-xs text-muted-foreground">
+            {{ documentNumberHintDisplay }}
+          </p>
+          <p v-if="documentNumberErrorDisplay" class="mt-1 text-xs text-destructive">
+            {{ documentNumberErrorDisplay }}
+          </p>
       </div>
     </section>
 
@@ -590,8 +797,15 @@ function formatFileSize(bytes: number): string {
             :disabled="personalReadOnly"
             :readonly="personalReadOnly"
             :class="fieldErrorClass('document_number')"
+            :aria-invalid="!!documentNumberErrorDisplay"
             @input="onDigitsOnlyInput($event, v => updateField('document_number', v))"
           />
+          <p v-if="documentNumberHintDisplay" class="text-xs text-muted-foreground">
+            {{ documentNumberHintDisplay }}
+          </p>
+          <p v-if="documentNumberErrorDisplay" class="text-xs text-destructive">
+            {{ documentNumberErrorDisplay }}
+          </p>
         </div>
         <div :class="fieldClass">
           <Label for="exp_date">Fecha expedición *</Label>
@@ -600,9 +814,14 @@ function formatFileSize(bytes: number): string {
             :model-value="local.expedition_date"
             type="date"
             :disabled="personalReadOnly"
+            :min="minExpeditionDateInput"
+            :max="todayYmdMax"
             :class="fieldErrorClass('expedition_date')"
             @update:model-value="updateField('expedition_date', $event ?? '')"
           />
+          <p v-if="expeditionDateFeedbackMessage" class="text-xs text-destructive">
+            {{ expeditionDateFeedbackMessage }}
+          </p>
         </div>
         <div :class="fieldClass">
           <Label for="exp_place">Lugar de expedición *</Label>
@@ -678,9 +897,13 @@ function formatFileSize(bytes: number): string {
             :model-value="local.birth_date"
             type="date"
             :disabled="personalReadOnly"
+            :max="maxBirthDateYmd"
             :class="fieldErrorClass('birth_date')"
             @update:model-value="updateField('birth_date', String($event ?? ''))"
           />
+          <p v-if="showBirthMinimumAgeError" class="text-xs text-destructive">
+            Debe tener al menos 18 años cumplidos.
+          </p>
         </div>
         <div :class="fieldClass">
           <Label for="gender">Género *</Label>
@@ -1400,12 +1623,13 @@ function formatFileSize(bytes: number): string {
         </CollapsibleTrigger>
         <CollapsibleContent class="space-y-3 pt-3">
           <template v-if="!showOnlyFinancial && (showSearch || showCoDebtorConcept)">
-            <div class="space-y-3">
-              <div
-                v-for="(doc, idx) in documents"
-                :key="idx"
-                class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
-              >
+            <ScrollArea class="h-[min(55vh,26rem)] w-full rounded-lg border border-border bg-muted/10 p-2">
+              <div class="space-y-3 pr-3">
+                <div
+                  v-for="(doc, idx) in documents"
+                  :key="idx"
+                  class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
+                >
                 <div class="border-b border-border bg-muted/40 px-4 py-3">
                   <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     Documento adjunto {{ idx + 1 }}
@@ -1424,22 +1648,27 @@ function formatFileSize(bytes: number): string {
                 </div>
                 <div class="p-4">
                   <input
-                    :id="`doc_file_${idx}`"
+                    :id="freeDocumentFileInputId(idx)"
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                     class="sr-only"
                     @change="onDocumentFileChange(idx, $event)"
                   >
-                  <label
-                    :for="`doc_file_${idx}`"
-                    class="flex min-h-[6.5rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 px-4 py-4 text-center transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
-                    :class="canPickDocumentFile(doc) ? 'hover:border-primary/45 hover:bg-muted/35' : 'cursor-not-allowed opacity-60 pointer-events-none'"
+                  <div
+                    role="button"
+                    tabindex="0"
+                    aria-label="Seleccionar archivo para este documento"
+                    class="flex min-h-[6.5rem] touch-manipulation flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 px-4 py-4 text-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    :class="canPickDocumentFile(doc) ? 'cursor-pointer hover:border-primary/45 hover:bg-muted/35 active:bg-muted/40' : 'cursor-not-allowed opacity-60 pointer-events-none'"
+                    @click="onDocumentUploadZoneActivate(idx, $event)"
+                    @keydown.enter.prevent="onDocumentUploadZoneActivate(idx, $event)"
+                    @keydown.space.prevent="onDocumentUploadZoneActivate(idx, $event)"
                     @dragover="onDocumentDragOver"
                     @drop="onDocumentDrop(idx, $event)"
                   >
                     <template v-if="doc.file">
                       <Icon name="i-lucide-file-check" class="h-7 w-7 text-green-600 dark:text-green-500" />
-                      <span class="max-w-full truncate text-center text-sm font-medium text-foreground">
+                      <span class="w-full max-w-full whitespace-normal break-words text-center text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere]">
                         {{ doc.file.name }}
                       </span>
                       <span class="text-xs text-muted-foreground">
@@ -1449,7 +1678,7 @@ function formatFileSize(bytes: number): string {
                     </template>
                     <template v-else-if="doc.original_name">
                       <Icon name="i-lucide-file-text" class="h-7 w-7 text-primary" />
-                      <span class="max-w-full truncate text-center text-sm font-medium text-foreground">
+                      <span class="w-full max-w-full whitespace-normal break-words text-center text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere]">
                         {{ doc.original_name }}
                       </span>
                       <span
@@ -1460,7 +1689,7 @@ function formatFileSize(bytes: number): string {
                       </span>
                       <span
                         v-if="doc.review_comment"
-                        class="max-w-full truncate text-center text-xs text-amber-700 dark:text-amber-300"
+                        class="max-w-full break-words text-center text-xs text-amber-700 dark:text-amber-300"
                         :title="doc.review_comment"
                       >
                         Nota revisión: {{ doc.review_comment }}
@@ -1477,7 +1706,7 @@ function formatFileSize(bytes: number): string {
                       </span>
                       <span class="text-xs text-muted-foreground">PDF, JPG, PNG, DOC · máx. 10 MB</span>
                     </template>
-                  </label>
+                  </div>
                 </div>
                 <div v-if="canRemoveDocumentRow(doc)" class="flex justify-end border-t border-border px-4 py-3">
                   <Button
@@ -1491,12 +1720,13 @@ function formatFileSize(bytes: number): string {
                     Quitar
                   </Button>
                 </div>
+                </div>
               </div>
-              <Button v-if="docCanSubir" type="button" variant="outline" size="sm" @click="addDocument">
-                <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-                Agregar documento
-              </Button>
-            </div>
+            </ScrollArea>
+            <Button v-if="docCanSubir" type="button" variant="outline" size="sm" @click="addDocument">
+              <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+              Agregar documento
+            </Button>
           </template>
         </CollapsibleContent>
       </Collapsible>

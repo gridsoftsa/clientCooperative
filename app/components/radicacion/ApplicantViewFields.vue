@@ -410,22 +410,26 @@ onMounted(() => {
 
     <section :class="sectionClass">
       <h3 :class="sectionTitleClass">Documentos adjuntos</h3>
-      <div v-if="documents?.length" class="flex flex-wrap gap-2">
+      <div v-if="documents?.length" class="flex min-w-0 flex-wrap gap-2">
         <Button
           v-for="doc in documents"
           :key="doc.id"
           variant="outline"
           size="sm"
-          class="h-auto gap-2 py-2"
+          class="h-auto min-w-0 max-w-full w-full justify-start gap-2 whitespace-normal py-2 text-left [&>span]:text-left"
           :disabled="downloadingId === doc.id"
           @click="handleViewDocument(doc)"
         >
           <Icon
             :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'"
-            class="h-4 w-4 shrink-0"
+            class="mt-0.5 h-4 w-4 shrink-0"
             :class="{ 'animate-spin': downloadingId === doc.id }"
           />
-          {{ doc.title || doc.original_name || 'Documento' }}
+          <span
+            class="min-w-0 flex-1 text-left text-sm font-medium leading-snug break-words [overflow-wrap:anywhere]"
+          >
+            {{ doc.title || doc.original_name || 'Documento' }}
+          </span>
           <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </div>

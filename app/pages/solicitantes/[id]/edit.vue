@@ -29,6 +29,11 @@ const applicant = ref<Applicant | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 
+const applicantFormRef = ref<{
+  validateRequiredStepOneFields: () => boolean
+  validateAuxiliaryDocumentsRequired: () => boolean
+} | null>(null)
+
 function applicantToForm(a: Applicant): ApplicantForm {
   const cityLabel = a.residence_city
     ? `${a.residence_city.name}${a.residence_city.department ? ` (${a.residence_city.department})` : ''}`
@@ -120,12 +125,9 @@ async function fetchApplicant() {
 }
 
 async function handleSubmit() {
-  if (!form.value.first_name?.trim() || !form.value.first_last_name?.trim()) {
-    toast.error('Nombre y apellido son requeridos')
-    return
-  }
-  if (!form.value.document_number?.trim()) {
-    toast.error('Número de documento es requerido')
+  await nextTick()
+  if (!applicantFormRef.value?.validateRequiredStepOneFields()) {
+    toast.error('Revise los campos obligatorios y el formato del número de documento.')
     return
   }
 
@@ -177,6 +179,7 @@ onMounted(() => {
         <CardContent>
           <form class="space-y-6" @submit.prevent="handleSubmit">
             <ApplicantFormFields
+              ref="applicantFormRef"
               v-model="form"
               :hide-financial-section="true"
               :read-only-form="false"

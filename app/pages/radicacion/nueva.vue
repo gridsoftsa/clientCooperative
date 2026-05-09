@@ -19,6 +19,8 @@ import {
 import { mergeApplicantFromApi } from '~/utils/merge-applicant-search'
 import { messageFromFetchError } from '~/utils/http-error-message'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
+import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
+import { validateDebtorMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
 
 definePageMeta({
   layout: 'default',
@@ -283,6 +285,11 @@ function finalizeCodeudorWizard() {
     toast.error('Completa documento, primer nombre y primer apellido del codeudor')
     return
   }
+  const docErr = validateColombianDocumentNumber(app.document_type ?? '', app.document_number ?? '')
+  if (docErr) {
+    toast.error(docErr)
+    return
+  }
   const rTemplates = validateAllActivityTemplates(getActivityTemplatesFor(app))
   if (!rTemplates.valid) {
     toast.error(rTemplates.errors.join('. '))
@@ -537,7 +544,10 @@ function onKeydownNumeric(e: KeyboardEvent, allowDecimal = false) {
 
 function canProceedStep1(): boolean {
   const d = form.value.debtor
-  return !!(d.document_number?.trim() && d.first_name?.trim() && d.first_last_name?.trim())
+  if (!d.document_number?.trim() || !d.first_name?.trim() || !d.first_last_name?.trim()) {
+    return false
+  }
+  return validateColombianDocumentNumber(d.document_type ?? '', d.document_number ?? '') === null
 }
 
 function canProceedStep2(): boolean {
@@ -877,41 +887,31 @@ async function saveDraft() {
     await saveCodeudor()
     return
   }
-  if (!(await validateDebtorStepOneForRadicacion())) {
+  const identityErr = validateDebtorMinimalIdentityForDraftSave(form.value.debtor)
+  if (identityErr) {
+    toast.error(identityErr)
     return
   }
-  if (!canProceedStep1()) {
-    toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
-    return
-  }
-  if (!canProceedStep2()) {
-    toast.error('Completa monto, plazo, sucursal, destino del crédito y al menos una plantilla de actividad en el destino')
-    return
-  }
-  if (hasDocumentsWithoutTitle()) {
-    toast.error('Todos los documentos adjuntos deben tener un título')
-    return
-  }
-  const errTemplates = validateActivityTemplatesBeforeSave()
-  if (errTemplates) {
-    toast.error(errTemplates)
+  if (!agencies.value.length) {
+    toast.error('No hay sucursales disponibles. Espere a que carguen los datos o contacte al administrador.')
     return
   }
 
   saving.value = true
   try {
     await $csrf()
+    const body = payloadForAutoSave()
     let application: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> }
     if (draftId.value) {
       const { data } = await $api<{ data: typeof application }>(`/credit-applications/${draftId.value}`, {
         method: 'PUT',
-        body: payloadWithoutDocuments('Draft'),
+        body,
       })
       application = data
     } else {
       const { data } = await $api<{ data: typeof application }>('/credit-applications', {
         method: 'POST',
-        body: payloadWithoutDocuments('Draft'),
+        body,
       })
       application = data
     }

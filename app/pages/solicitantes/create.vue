@@ -26,6 +26,12 @@ const form = ref<ApplicantForm>({
 const loadingSearch = ref(false)
 const saving = ref(false)
 
+/** Ref del mismo tipo que expone `ApplicantFormFields` (validación paso 1 / documento). */
+const applicantFormRef = ref<{
+  validateRequiredStepOneFields: () => boolean
+  validateAuxiliaryDocumentsRequired: () => boolean
+} | null>(null)
+
 function formToPayload(): Record<string, unknown> {
   const f = form.value
   const municipality = getByLabel(f.residence_city_name)
@@ -93,12 +99,9 @@ async function searchApplicant() {
 }
 
 async function handleSubmit() {
-  if (!form.value.first_name?.trim() || !form.value.first_last_name?.trim()) {
-    toast.error('Nombre y apellido son requeridos')
-    return
-  }
-  if (!form.value.document_number?.trim()) {
-    toast.error('Número de documento es requerido')
+  await nextTick()
+  if (!applicantFormRef.value?.validateRequiredStepOneFields()) {
+    toast.error('Revise los campos obligatorios y el formato del número de documento.')
     return
   }
   saving.value = true
@@ -144,6 +147,7 @@ async function handleSubmit() {
       <CardContent>
         <form class="space-y-6" @submit.prevent="handleSubmit">
           <ApplicantFormFields
+            ref="applicantFormRef"
             v-model="form"
             :show-search="true"
             :loading-search="loadingSearch"

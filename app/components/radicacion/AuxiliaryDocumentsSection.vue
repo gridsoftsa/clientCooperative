@@ -223,6 +223,23 @@ function safeInputId(key: string, index: number): string {
   return `aux_doc_${index}_${slug}`
 }
 
+/** Safari iOS no abre bien el file picker si hay `<button>`/`<a>` dentro de `<label for="file">`; usamos click programático. */
+function onAuxiliaryUploadZoneActivate(key: string, idx: number, event?: MouseEvent | KeyboardEvent): void {
+  if (props.disabled) {
+    return
+  }
+  if (event && 'target' in event && event.target instanceof Element) {
+    if (event.target.closest('a[href], button')) {
+      return
+    }
+  }
+  const input = document.getElementById(safeInputId(key, idx)) as HTMLInputElement | null
+  if (!input || input.disabled) {
+    return
+  }
+  input.click()
+}
+
 function pendingFileFor(key: string): File | undefined {
   const f = props.applicant.auxiliaryDocumentFiles?.[key]
   return f instanceof File ? f : undefined
@@ -271,7 +288,8 @@ defineExpose({
       <p v-else-if="checklistRows.length === 0" class="text-sm text-muted-foreground">
         No hay documentos parametrizados para «{{ activityType }}». Revise Parametrización → Radicación → Documentos (módulo auxiliar).
       </p>
-      <ul v-else class="list-none space-y-4 p-0">
+      <ScrollArea v-else class="h-[min(65vh,28rem)] w-full rounded-lg border border-border bg-muted/15 p-2 sm:p-3">
+        <ul class="list-none space-y-4 p-0 pr-3">
         <li
           v-for="(row, idx) in checklistRows"
           :key="`${row.key}-${idx}`"
@@ -299,7 +317,7 @@ defineExpose({
                 Checklist
               </span>
             </div>
-            <p class="mt-2.5 text-sm font-medium leading-snug text-foreground">
+            <p class="mt-2.5 min-w-0 break-words text-sm font-medium leading-snug text-foreground">
               {{ row.label }}
             </p>
             <p
@@ -321,21 +339,26 @@ defineExpose({
               :disabled="disabled"
               @change="onFileInput(row.key, $event)"
             >
-            <label
-              :for="safeInputId(row.key, idx)"
-              class="flex min-h-[6.5rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-4 text-center transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+            <div
+              role="button"
+              tabindex="0"
+              :aria-label="`Adjuntar archivo: ${row.label}`"
+              class="flex min-h-[6.5rem] touch-manipulation flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-4 text-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               :class="[
-                disabled ? 'cursor-not-allowed opacity-60 pointer-events-none' : 'hover:border-primary/45 hover:bg-muted/30',
+                disabled ? 'cursor-not-allowed opacity-60 pointer-events-none' : 'cursor-pointer hover:border-primary/45 hover:bg-muted/30 active:bg-muted/35',
                 rowMissingRequired(row)
                   ? 'border-destructive/50 bg-destructive/[0.04]'
                   : 'border-muted-foreground/25 bg-muted/20',
               ]"
+              @click="onAuxiliaryUploadZoneActivate(row.key, idx, $event)"
+              @keydown.enter.prevent="onAuxiliaryUploadZoneActivate(row.key, idx, $event)"
+              @keydown.space.prevent="onAuxiliaryUploadZoneActivate(row.key, idx, $event)"
               @dragover="onAuxiliaryDragOver"
               @drop="onAuxiliaryDrop(row.key, $event)"
             >
               <template v-if="pendingFileFor(row.key)">
                 <Icon name="i-lucide-file-check" class="size-7 text-green-600 dark:text-green-500" />
-                <span class="max-w-full truncate text-sm font-medium text-foreground">
+                <span class="w-full max-w-full whitespace-normal break-words px-2 text-center text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere]">
                   {{ pendingFileFor(row.key)!.name }}
                 </span>
                 <span class="text-xs text-muted-foreground">
@@ -348,7 +371,7 @@ defineExpose({
                   v-if="!disabled"
                   type="button"
                   class="text-xs font-medium text-primary underline underline-offset-2"
-                  @click.prevent="clearPending(row.key)"
+                  @click.stop.prevent="clearPending(row.key)"
                 >
                   Quitar selección
                 </button>
@@ -359,7 +382,7 @@ defineExpose({
                   :href="docMetaForKey(row.key)!.download_url"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="max-w-full truncate text-sm font-medium text-primary underline underline-offset-2"
+                  class="inline-block w-full max-w-full whitespace-normal break-words px-2 text-center text-sm font-medium leading-snug text-primary underline underline-offset-2 [overflow-wrap:anywhere]"
                   @click.stop
                 >
                   {{ docMetaForKey(row.key)?.original_name || 'Ver archivo' }}
@@ -369,7 +392,7 @@ defineExpose({
                   v-if="!disabled && creditApplicationId"
                   type="button"
                   class="text-xs font-medium text-destructive underline underline-offset-2"
-                  @click.prevent="removeUploaded(row.key)"
+                  @click.stop.prevent="removeUploaded(row.key)"
                 >
                   Eliminar
                 </button>
@@ -390,10 +413,11 @@ defineExpose({
                 </span>
                 <span class="text-xs text-muted-foreground">PDF, ZIP o imagen · máximo 10 MB</span>
               </template>
-            </label>
+            </div>
           </div>
         </li>
-      </ul>
+        </ul>
+      </ScrollArea>
     </template>
   </div>
 </template>

@@ -1384,21 +1384,25 @@ watch([application, debtor, coDebtors], () => {
             />
             <div v-if="getDocumentsForApplicant(debtor.id).length > 0" class="space-y-3 border-t pt-4">
               <p class="text-sm font-semibold">Documentos adjuntos</p>
-              <div class="flex flex-wrap gap-2">
+              <div class="flex min-w-0 flex-wrap gap-2">
                 <PermissionGate v-for="doc in getDocumentsForApplicant(debtor.id)" :key="doc.id" permission="radicacion_descargar_documentos">
-                  <div class="rounded-md border p-2 space-y-2">
+                  <div class="min-w-0 max-w-full space-y-2 rounded-md border p-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      class="h-auto gap-2 py-2"
+                      class="h-auto min-w-0 max-w-full w-full justify-start gap-2 whitespace-normal py-2 text-left [&>span]:text-left"
                       :disabled="downloadingId === doc.id"
                       @click="handleViewDocument(doc)"
                     >
-                      <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
-                      {{ doc.title || doc.original_name || 'Documento' }}
+                      <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="mt-0.5 h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
+                      <span
+                        class="min-w-0 flex-1 text-left text-sm font-medium leading-snug break-words [overflow-wrap:anywhere]"
+                      >
+                        {{ doc.title || doc.original_name || 'Documento' }}
+                      </span>
                       <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     </Button>
-                    <p v-if="doc.review_comment" class="text-xs text-amber-700 dark:text-amber-300">
+                    <p v-if="doc.review_comment" class="break-words text-xs text-amber-700 dark:text-amber-300">
                       Nota revisión: {{ doc.review_comment }}
                     </p>
                     <div v-if="canDocumentationDecide" class="flex flex-col gap-2">
@@ -1591,25 +1595,29 @@ watch([application, debtor, coDebtors], () => {
                   class="space-y-3"
                 >
                   <p class="text-sm font-semibold">Documentos adjuntos</p>
-                  <div class="flex flex-wrap gap-2">
+                  <div class="flex min-w-0 flex-wrap gap-2">
                     <PermissionGate
                       v-for="doc in getDocumentsForApplicant(coDebtors[selectedCoDebtorIndex]?.id ?? coDebtors[selectedCoDebtorIndex]?.applicant_id)"
                       :key="doc.id"
                       permission="radicacion_descargar_documentos"
                     >
-                      <div class="rounded-md border p-2 space-y-2">
+                      <div class="min-w-0 max-w-full space-y-2 rounded-md border p-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          class="h-auto gap-2 py-2"
+                          class="h-auto min-w-0 max-w-full w-full justify-start gap-2 whitespace-normal py-2 text-left [&>span]:text-left"
                           :disabled="downloadingId === doc.id"
                           @click="handleViewDocument(doc)"
                         >
-                          <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
-                          {{ doc.title || doc.original_name || 'Documento' }}
+                          <Icon :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'" class="mt-0.5 h-4 w-4 shrink-0" :class="{ 'animate-spin': downloadingId === doc.id }" />
+                          <span
+                            class="min-w-0 flex-1 text-left text-sm font-medium leading-snug break-words [overflow-wrap:anywhere]"
+                          >
+                            {{ doc.title || doc.original_name || 'Documento' }}
+                          </span>
                           <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         </Button>
-                        <p v-if="doc.review_comment" class="text-xs text-amber-700 dark:text-amber-300">
+                        <p v-if="doc.review_comment" class="break-words text-xs text-amber-700 dark:text-amber-300">
                           Nota revisión: {{ doc.review_comment }}
                         </p>
                         <div v-if="canDocumentationDecide" class="flex flex-col gap-2">
