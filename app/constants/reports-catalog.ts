@@ -62,11 +62,12 @@ export const REPORTS_CATALOG: ReportCatalogItem[] = [
   {
     slug: 'negadas-retiradas',
     title: 'Negadas o retiradas',
-    summary: 'Detalle de solicitudes negadas o retiradas con identificación y montos.',
+    summary:
+      'Vista consolidada (totales rechazadas vs canceladas) o detalle por radicación: código, radicado externo, monto, sucursal, decisión, fecha/hora, usuario y concepto o motivo.',
     excelSheet: 'NEGADAS O RETIRADAS',
-    status: 'planned',
+    status: 'available',
     dataSource: 'applications',
-    note: 'Listado desde estados finales; validar pagaré y códigos.',
+    note: 'Cohorte por fecha de creación. Rechazada / cancelada con actor desde trazabilidad o campos de radicación.',
   },
   {
     slug: 'promedio-demora',
@@ -91,20 +92,22 @@ export const REPORTS_CATALOG: ReportCatalogItem[] = [
   {
     slug: 'excepciones',
     title: 'Excepciones',
-    summary: 'Casos con excepción (SCORE, RCI, analista, aprobador).',
+    summary:
+      'Radicaciones con excepción «Sí» en decisión del director: consolidado por estado actual o detalle con justificación (todas las opciones), fecha/hora y usuario.',
     excelSheet: 'EXPECIONES',
-    status: 'planned',
-    dataSource: 'manual',
-    note: 'Marcar excepciones en BD o módulo de registro.',
+    status: 'available',
+    dataSource: 'applications',
+    note: 'Campo credit_director_is_exception; justificación en catálogo o texto.',
   },
   {
     slug: 'privilegiados',
     title: 'Privilegiados',
-    summary: 'Casos con atribuciones del consejo, actas y condiciones especiales.',
+    summary:
+      'Radicaciones marcadas como privilegiadas: consolidado (total y suma montos) o detalle con justificación (fragmentos), origen del registro, fecha/hora y usuario.',
     excelSheet: 'PRIVILEGIADOS',
-    status: 'planned',
-    dataSource: 'manual',
-    note: 'Registro manual o flujo dedicado.',
+    status: 'available',
+    dataSource: 'applications',
+    note: 'Campo is_privileged; actor desde evento de director o asesor.',
   },
 ]
 

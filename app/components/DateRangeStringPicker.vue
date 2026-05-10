@@ -88,7 +88,7 @@ function clearRange() {
 
 <template>
   <div class="grid w-full min-w-0 gap-1.5">
-    <Label v-if="label" :for="id" class="text-sm text-muted-foreground">
+    <Label v-if="label" :for="id" class="text-balance text-sm font-medium leading-snug text-muted-foreground">
       {{ label }}
     </Label>
     <div class="flex min-w-0 flex-wrap items-center gap-2">
