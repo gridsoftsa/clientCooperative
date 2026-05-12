@@ -41,6 +41,7 @@ const emit = defineEmits<{
 }>()
 
 const { $api } = useNuxtApp()
+const { viewDocumentInNewTab } = useDocumentDownload()
 
 const loadingConfig = ref(false)
 const itemsByActivity = ref<Record<string, AuxiliaryChecklistItem[]>>({})
@@ -223,6 +224,20 @@ function safeInputId(key: string, index: number): string {
   return `aux_doc_${index}_${slug}`
 }
 
+async function openAuxiliaryDocumentInPreview(key: string): Promise<void> {
+  const meta = docMetaForKey(key)
+  const appId = props.creditApplicationId
+  if (!meta?.id || !appId) {
+    toast.error('No hay documento para abrir.')
+    return
+  }
+  try {
+    await viewDocumentInNewTab(appId, meta.id)
+  } catch (e: unknown) {
+    toast.error(messageFromFetchError(e, 'No se pudo abrir el archivo.'))
+  }
+}
+
 /** Safari iOS no abre bien el file picker si hay `<button>`/`<a>` dentro de `<label for="file">`; usamos click programático. */
 function onAuxiliaryUploadZoneActivate(key: string, idx: number, event?: MouseEvent | KeyboardEvent): void {
   if (props.disabled) {
@@ -378,15 +393,13 @@ defineExpose({
               </template>
               <template v-else-if="docMetaForKey(row.key)">
                 <Icon name="i-lucide-file-text" class="size-7 text-primary" />
-                <a
-                  :href="docMetaForKey(row.key)!.download_url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-block w-full max-w-full whitespace-normal break-words px-2 text-center text-sm font-medium leading-snug text-primary underline underline-offset-2 [overflow-wrap:anywhere]"
-                  @click.stop
+                <button
+                  type="button"
+                  class="inline-block w-full max-w-full cursor-pointer whitespace-normal break-words bg-transparent px-2 text-center text-sm font-medium leading-snug text-primary underline underline-offset-2 [overflow-wrap:anywhere]"
+                  @click.stop="void openAuxiliaryDocumentInPreview(row.key)"
                 >
                   {{ docMetaForKey(row.key)?.original_name || 'Ver archivo' }}
-                </a>
+                </button>
                 <span class="text-xs text-muted-foreground">Archivo en la solicitud</span>
                 <button
                   v-if="!disabled && creditApplicationId"
