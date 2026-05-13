@@ -11,8 +11,11 @@ const props = withDefaults(
     /** Si true, modelValue es number (id). Si false, es string (label). */
     emitId?: boolean
     class?: string
+    /** `id` del botón disparador (asociar con `<Label for>`). */
+    triggerId?: string
+    disabled?: boolean
   }>(),
-  { placeholder: 'Buscar municipio...', emitId: true },
+  { placeholder: 'Buscar municipio...', emitId: true, disabled: false },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [number | string] }>()
@@ -52,8 +55,10 @@ function onOpenChange(isOpen: boolean) {
   <Popover :open="open" @update:open="onOpenChange">
     <PopoverTrigger as-child>
       <Button
+        :id="triggerId"
         variant="outline"
         role="combobox"
+        :disabled="disabled"
         :aria-expanded="open"
         :class="['min-h-9 w-full justify-between font-normal', !displayValue && 'text-muted-foreground', props.class]"
       >
