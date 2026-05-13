@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { User, PaginatedUsers } from '~/types/user'
+import { accountStatusBadgeVariant, labelForAccountStatus } from '~/utils/accountStatus'
 
 definePageMeta({
   layout: 'default',
@@ -201,8 +202,8 @@ watch(searchQuery, () => {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge :variant="normalizeIsActive(user.is_active) ? 'default' : 'secondary'">
-                      {{ normalizeIsActive(user.is_active) ? 'Activo' : 'Inactivo' }}
+                    <Badge :variant="accountStatusBadgeVariant(user.account_status, normalizeIsActive(user.is_active))">
+                      {{ labelForAccountStatus(user.account_status, normalizeIsActive(user.is_active)) }}
                     </Badge>
                   </TableCell>
                   <TableCell>

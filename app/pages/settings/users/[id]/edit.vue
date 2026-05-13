@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
-import type { User } from '~/types/user'
+import type { User, UserAccountStatus } from '~/types/user'
+import { ACCOUNT_STATUS_FORM_OPTIONS } from '~/utils/accountStatus'
 import { normalizeRoleNames } from '~/utils/userRoles'
 import type { Role } from '~/types/role'
 
@@ -27,6 +28,7 @@ const form = ref({
   password: '',
   password_confirmation: '',
   sucursal_id: null as number | null,
+  org_staff_id: null as number | null,
   allowed_sucursal_ids: [] as number[],
   roles: [] as string[],
 })
@@ -59,16 +61,29 @@ const showAllowedSucursales = computed(() => form.value.roles.includes('admin') 
 
 const isOwnUser = computed(() => authUser.value?.id === parseInt(userId))
 
-/** Estado de cuenta (multiselect single), alineado con `is_active` del API */
-const accountStatus = ref<'active' | 'inactive'>('active')
+/** Estado de cuenta (multiselect single), alineado con `account_status` del API */
+const accountStatus = ref<UserAccountStatus>('active')
 
 /** Evita toast al hidratar desde API (p. ej. cuenta propia inactiva en BD) */
 const isHydratingAccountStatus = ref(false)
 
-const accountStatusOptions = [
-  { value: 'active' as const, label: 'Activo' },
-  { value: 'inactive' as const, label: 'Inactivo' },
-]
+const accountStatusOptions = ACCOUNT_STATUS_FORM_OPTIONS
+
+const statusChangeReason = ref('')
+
+const clearLoginLockout = ref(false)
+
+const linkableStaff = ref<Array<{ id: number; full_name: string; email?: string | null }>>([])
+
+const staffSelectOptions = computed(() =>
+  linkableStaff.value.map(s => ({
+    value: s.id,
+    label: s.email ? `${s.full_name} · ${s.email}` : s.full_name,
+  })),
+)
+
+const lockedUntilDisplay = ref<string | null>(null)
+const lastLoginDisplay = ref<string | null>(null)
 
 function normalizeIsActive(value: unknown): boolean {
   if (value === true || value === 1 || value === '1' || value === 'true') {
@@ -83,13 +98,31 @@ function normalizeIsActive(value: unknown): boolean {
 }
 
 watch(accountStatus, (next) => {
-  if (isOwnUser.value && next === 'inactive' && !isHydratingAccountStatus.value) {
-    toast.error('No puedes desactivar tu propia cuenta desde aquí.')
+  if (isOwnUser.value && (next === 'inactive' || next === 'blocked' || next === 'suspended') && !isHydratingAccountStatus.value) {
+    toast.error('No puedes restringir tu propia cuenta desde aquí.')
     accountStatus.value = 'active'
     return
   }
-  form.value.is_active = next === 'active'
+  form.value.is_active = next === 'active' || next === 'pending'
 })
+
+function normalizeAccountStatus(value: unknown): UserAccountStatus {
+  if (value === 'pending' || value === 'active' || value === 'inactive' || value === 'blocked' || value === 'suspended') {
+    return value
+  }
+  return 'active'
+}
+
+const fetchLinkableStaff = async () => {
+  try {
+    const res = await $api<{ data: typeof linkableStaff.value }>('/users/linkable-org-staff', {
+      query: { limit: 500, active_only: true, for_user_id: userId },
+    })
+    linkableStaff.value = res.data
+  } catch {
+    linkableStaff.value = []
+  }
+}
 
 const fetchUser = async () => {
   loading.value = true
@@ -106,13 +139,19 @@ const fetchUser = async () => {
       password: '',
       password_confirmation: '',
       sucursal_id: response.data.sucursal_id ?? null,
+      org_staff_id: response.data.org_staff_id ?? null,
       allowed_sucursal_ids: response.data.allowed_sucursal_ids ?? [],
       roles: normalizeRoleNames(response.data.roles),
     }
+    lockedUntilDisplay.value = response.data.locked_until ?? null
+    lastLoginDisplay.value = response.data.last_login_at ?? null
+    statusChangeReason.value = ''
+    clearLoginLockout.value = false
     isHydratingAccountStatus.value = true
-    accountStatus.value = active ? 'active' : 'inactive'
+    accountStatus.value = normalizeAccountStatus(response.data.account_status ?? (active ? 'active' : 'inactive'))
     await nextTick()
     isHydratingAccountStatus.value = false
+    await fetchLinkableStaff()
   } catch (error) {
     console.error('Error fetching user:', error)
     toast.error('Error al cargar el usuario')
@@ -164,17 +203,33 @@ const handleSubmit = async () => {
     }
   }
 
+  if (!form.value.roles.length) {
+    toast.error('Debe haber al menos un rol asignado')
+    return
+  }
+
+  if (form.value.org_staff_id == null) {
+    toast.error('Selecciona el funcionario organizacional vinculado a esta cuenta')
+    return
+  }
+
   saving.value = true
   try {
-    const body: any = {
+    const body: Record<string, unknown> = {
       name: form.value.name,
       full_name: form.value.full_name?.trim() || undefined,
       phone: form.value.phone?.trim() || undefined,
-      is_active: accountStatus.value === 'active',
+      account_status: accountStatus.value,
+      status_change_reason: statusChangeReason.value.trim() || undefined,
       email: form.value.email,
       sucursal_id: form.value.sucursal_id || undefined,
+      org_staff_id: form.value.org_staff_id,
       allowed_sucursal_ids: form.value.allowed_sucursal_ids,
       roles: form.value.roles,
+    }
+
+    if (clearLoginLockout.value) {
+      body.clear_login_lockout = true
     }
 
     if (changePassword.value && form.value.password) {
@@ -301,13 +356,35 @@ onMounted(async () => {
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div class="space-y-3 md:col-span-2">
+                  <Label for="org_staff_edit" class="leading-snug">Funcionario organizacional *</Label>
+                  <p class="text-sm text-muted-foreground leading-relaxed">
+                    Vinculación requerida para cuentas de acceso. Puedes cambiar el funcionario si la política lo permite.
+                  </p>
+                  <Multiselect
+                    id="org_staff_edit"
+                    v-model="form.org_staff_id"
+                    mode="single"
+                    :object="false"
+                    :options="staffSelectOptions"
+                    value-prop="value"
+                    label="label"
+                    :searchable="true"
+                    :can-clear="false"
+                    placeholder="Seleccione funcionario…"
+                    no-options-text="Sin funcionarios disponibles"
+                    no-results-text="Sin coincidencias"
+                    class="multiselect-roles"
+                  />
+                </div>
               </div>
 
               <div class="space-y-3 md:col-span-2 rounded-lg border p-4">
                 <div class="space-y-1.5">
                   <Label for="account_status_edit" class="text-base leading-snug">Estado de la cuenta</Label>
                   <p class="text-sm text-muted-foreground leading-relaxed">
-                    Los usuarios inactivos no pueden iniciar sesión.
+                    Los estados restringidos impiden el inicio de sesión. Indica un motivo si aplica (auditoría en servidor).
                   </p>
                 </div>
                 <Multiselect
@@ -324,8 +401,33 @@ onMounted(async () => {
                   no-options-text="Sin opciones"
                   class="multiselect-roles max-w-md"
                 />
+                <div class="space-y-2 pt-2">
+                  <Label for="status_reason" class="text-sm">Motivo del cambio de estado (opcional)</Label>
+                  <Textarea
+                    id="status_reason"
+                    v-model="statusChangeReason"
+                    rows="2"
+                    placeholder="Ej.: solicitud de RR.HH., revisión de seguridad…"
+                    class="max-w-2xl"
+                  />
+                </div>
+                <p v-if="lastLoginDisplay" class="text-xs text-muted-foreground pt-1">
+                  Último acceso: {{ new Date(lastLoginDisplay).toLocaleString() }}
+                </p>
+                <p v-if="lockedUntilDisplay" class="text-sm text-destructive font-medium pt-2">
+                  Bloqueo temporal por intentos fallidos hasta {{ new Date(lockedUntilDisplay).toLocaleString() }}.
+                </p>
+                <div v-if="lockedUntilDisplay" class="flex items-center gap-3 pt-2">
+                  <Switch
+                    id="clearLockout"
+                    v-model:checked="clearLoginLockout"
+                  />
+                  <Label for="clearLockout" class="font-normal leading-snug">
+                    Quitar bloqueo temporal y reiniciar contador de intentos
+                  </Label>
+                </div>
                 <p v-if="isOwnUser" class="text-xs text-muted-foreground">
-                  No puedes dejar tu propia cuenta como inactiva.
+                  No puedes restringir tu propia cuenta desde aquí.
                 </p>
               </div>
 
@@ -378,7 +480,7 @@ onMounted(async () => {
                   <Checkbox
                     :id="`suc-${s.id}`"
                     :checked="form.allowed_sucursal_ids.includes(s.id)"
-                    @update:checked="(checked: boolean) => {
+                    @update:checked="(checked) => {
                       if (checked) form.allowed_sucursal_ids.push(s.id)
                       else form.allowed_sucursal_ids = form.allowed_sucursal_ids.filter(id => id !== s.id)
                     }"

@@ -2,6 +2,8 @@
 import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import type { Role } from '~/types/role'
+import type { UserAccountStatus } from '~/types/user'
+import { ACCOUNT_STATUS_FORM_OPTIONS } from '~/utils/accountStatus'
 
 definePageMeta({
   layout: 'default',
@@ -21,6 +23,7 @@ const form = ref({
   password: '',
   password_confirmation: '',
   sucursal_id: null as number | null,
+  org_staff_id: null as number | null,
   allowed_sucursal_ids: [] as number[],
   roles: [] as string[],
 })
@@ -49,15 +52,21 @@ const sucursalSelectOptions = computed(() =>
 
 const showAllowedSucursales = computed(() => selectedRole.value === 'admin')
 
-const accountStatus = ref<'active' | 'inactive'>('active')
+const accountStatus = ref<UserAccountStatus>('active')
 
-const accountStatusOptions = [
-  { value: 'active' as const, label: 'Activo' },
-  { value: 'inactive' as const, label: 'Inactivo' },
-]
+const accountStatusOptions = ACCOUNT_STATUS_FORM_OPTIONS
+
+const linkableStaff = ref<Array<{ id: number; full_name: string; email?: string | null }>>([])
+
+const staffSelectOptions = computed(() =>
+  linkableStaff.value.map(s => ({
+    value: s.id,
+    label: s.email ? `${s.full_name} · ${s.email}` : s.full_name,
+  })),
+)
 
 watch(accountStatus, (next) => {
-  form.value.is_active = next === 'active'
+  form.value.is_active = next === 'active' || next === 'pending'
 })
 
 const fetchSucursales = async () => {
@@ -82,9 +91,21 @@ const fetchRoles = async () => {
   }
 }
 
+const fetchLinkableStaff = async () => {
+  try {
+    const res = await $api<{ data: typeof linkableStaff.value }>('/users/linkable-org-staff', {
+      query: { limit: 500, active_only: true },
+    })
+    linkableStaff.value = res.data
+  } catch {
+    linkableStaff.value = []
+    toast.error('No se pudo cargar el directorio de funcionarios. Verifica permisos y que existan funcionarios sin usuario vinculado.')
+  }
+}
+
 const handleSubmit = async () => {
-  if (!form.value.name.trim() || !form.value.email.trim() || !form.value.password || !form.value.sucursal_id) {
-    toast.error('Completa todos los campos requeridos')
+  if (!form.value.name.trim() || !form.value.email.trim() || !form.value.password || !form.value.sucursal_id || form.value.org_staff_id == null) {
+    toast.error('Completa todos los campos requeridos, incluido el funcionario organizacional')
     return
   }
 
@@ -98,6 +119,11 @@ const handleSubmit = async () => {
     return
   }
 
+  if (!form.value.roles.length) {
+    toast.error('Debes asignar al menos un rol')
+    return
+  }
+
   saving.value = true
   try {
     await $api('/users', {
@@ -106,11 +132,12 @@ const handleSubmit = async () => {
         name: form.value.name,
         full_name: form.value.full_name?.trim() || undefined,
         phone: form.value.phone?.trim() || undefined,
-        is_active: accountStatus.value === 'active',
+        account_status: accountStatus.value,
         email: form.value.email,
         password: form.value.password,
         password_confirmation: form.value.password_confirmation,
         sucursal_id: form.value.sucursal_id,
+        org_staff_id: form.value.org_staff_id,
         allowed_sucursal_ids: form.value.allowed_sucursal_ids,
         roles: form.value.roles,
       },
@@ -128,7 +155,7 @@ const handleSubmit = async () => {
 }
 
 onMounted(() => {
-  Promise.all([fetchRoles(), fetchSucursales()])
+  Promise.all([fetchRoles(), fetchSucursales(), fetchLinkableStaff()])
 })
 
 watch(selectedRole, (role) => {
@@ -227,13 +254,35 @@ watch(selectedRole, (role) => {
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div class="space-y-3 md:col-span-2">
+                  <Label for="org_staff" class="leading-snug">Funcionario organizacional *</Label>
+                  <p class="text-sm text-muted-foreground leading-relaxed">
+                    Cada usuario debe corresponder a un funcionario del módulo de estructura organizacional (solo aparecen los que aún no tienen cuenta).
+                  </p>
+                  <Multiselect
+                    id="org_staff"
+                    v-model="form.org_staff_id"
+                    mode="single"
+                    :object="false"
+                    :options="staffSelectOptions"
+                    value-prop="value"
+                    label="label"
+                    :searchable="true"
+                    :can-clear="false"
+                    placeholder="Seleccione funcionario…"
+                    no-options-text="No hay funcionarios sin usuario — cree uno en Estructura organizacional"
+                    no-results-text="Sin coincidencias"
+                    class="multiselect-roles"
+                  />
+                </div>
               </div>
 
               <div class="space-y-3 md:col-span-2 rounded-lg border p-4">
                 <div class="space-y-1.5">
                   <Label for="account_status_create" class="text-base leading-snug">Estado de la cuenta</Label>
                   <p class="text-sm text-muted-foreground leading-relaxed">
-                    Los usuarios inactivos no pueden iniciar sesión.
+                    Pendiente, inactivo, bloqueado o suspendido no puede iniciar sesión (salvo política de «pendiente» en servidor). Bloqueado suele usarse tras intentos fallidos o decisión manual.
                   </p>
                 </div>
                 <Multiselect
