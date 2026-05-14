@@ -2,7 +2,6 @@ import type { OrgInstitutionalProcess, OrgOffice, OrgStaffListItem } from '~/typ
 
 export interface OrgUnitRow {
   id: number
-  tenant_id: number
   org_office_id: number
   parent_id: number | null
   name: string
@@ -21,7 +20,6 @@ export interface OrgUnitRow {
 
 export interface OrgPositionRow {
   id: number
-  tenant_id: number
   org_unit_id: number
   name: string
   code: string

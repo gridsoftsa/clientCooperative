@@ -1,10 +1,9 @@
-/** Tipos API: estructura organizacional (tenant = empresa principal). */
+/** Tipos API: estructura organizacional. */
 
 export type OrgOfficeType = 'main' | 'branch' | 'headquarters'
 
 export interface OrgOffice {
   id: number
-  tenant_id: number
   name: string
   code: string
   office_type: OrgOfficeType
@@ -34,7 +33,6 @@ export interface OrgStructureValidation {
 
 export interface OrgStaffListItem {
   id: number
-  tenant_id: number
   first_name: string
   second_name?: string | null
   first_last_name: string
