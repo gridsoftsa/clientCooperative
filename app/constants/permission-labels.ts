@@ -30,6 +30,7 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
   radicacion: 'Radicación',
   settings: 'Configuración',
   estructura: 'Estructura organizacional',
+  trd: 'Gestión archivística / TRD',
 }
 
 /**
@@ -39,6 +40,7 @@ export const PERMISSION_CATEGORY_SECTION_TITLES: Record<string, string> = {
   radicacion: 'Radicación (Solicitudes de crédito)',
   solicitantes: 'Solicitantes (Deudores/Codeudores)',
   estructura: 'Estructura organizacional',
+  trd: 'Gestión archivística y tablas de retención (TRD)',
 }
 
 /**
@@ -61,6 +63,7 @@ export const PERMISSION_CATEGORY_ORDER: string[] = [
   'empresa',
   'sucursales',
   'estructura',
+  'trd',
   'usuarios',
   'roles',
   'permisos',
@@ -198,6 +201,10 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   radicacion_catalogos_editar: 'Editar catálogos',
   plantilla_score_ver: 'Ver plantilla SCORE',
   plantilla_score_editar: 'Editar plantilla SCORE',
+  trd_catalogo_ver: 'Ver catálogo documental (TRD)',
+  trd_catalogo_editar: 'Editar catálogo documental (TRD)',
+  trd_tablas_ver: 'Ver tablas de retención (TRD)',
+  trd_tablas_editar: 'Editar tablas de retención (TRD)',
 }
 
 export function getPermissionLabel(name: string): string {

@@ -90,6 +90,28 @@ export const navMenu: NavMenu[] = [
           },
         ],
       },
+      {
+        title: 'TRD y archivo',
+        icon: 'i-lucide-archive',
+        anyPermission: ['trd_catalogo_ver', 'trd_tablas_ver'],
+        children: [
+          {
+            title: 'Resumen',
+            link: '/settings/archival',
+            anyPermission: ['trd_catalogo_ver', 'trd_tablas_ver'],
+          },
+          {
+            title: 'Catálogo (series)',
+            link: '/settings/archival/catalog/series',
+            permission: 'trd_catalogo_ver',
+          },
+          {
+            title: 'Tablas TRD',
+            link: '/settings/archival/trd',
+            permission: 'trd_tablas_ver',
+          },
+        ],
+      },
     ],
   },
   {
