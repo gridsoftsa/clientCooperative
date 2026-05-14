@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import OrgOfficeMunicipalityField from '~/components/OrgOfficeMunicipalityField.vue'
 import { ORG_OFFICE_TYPE_OPTIONS } from '~/constants/org-structure'
 import type { OrgOffice, OrgOfficeType } from '~/types/org-structure'
 
@@ -13,6 +14,7 @@ const { $api } = useNuxtApp()
 const router = useRouter()
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
+const { labelForForm, apiBodyLocation } = useOrgOfficeMunicipalitySync()
 
 const loading = ref(true)
 const form = ref({
@@ -20,7 +22,6 @@ const form = ref({
   code: '',
   office_type: 'main' as OrgOfficeType,
   city: '',
-  state: '',
   is_active: true,
 })
 
@@ -35,8 +36,7 @@ async function load() {
       name: o.name,
       code: o.code,
       office_type: o.office_type,
-      city: o.city ?? '',
-      state: o.state ?? '',
+      city: labelForForm(o.city, o.state),
       is_active: o.is_active,
     }
   } catch {
@@ -50,14 +50,15 @@ async function load() {
 async function handleSubmit() {
   saving.value = true
   try {
+    const { city, state } = apiBodyLocation(form.value.city)
     await $api(`/organizational-structure/org-offices/${id.value}`, {
       method: 'PUT',
       body: {
         name: form.value.name.trim(),
         code: form.value.code.trim(),
         office_type: form.value.office_type,
-        city: form.value.city.trim() || null,
-        state: form.value.state.trim() || null,
+        city,
+        state,
         is_active: form.value.is_active,
       },
     })
@@ -137,14 +138,12 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <div class="space-y-3">
-                  <Label for="city" class="leading-snug">Ciudad</Label>
-                  <Input id="city" v-model="form.city" />
-                </div>
-
-                <div class="space-y-3">
-                  <Label for="state" class="leading-snug">Departamento / estado</Label>
-                  <Input id="state" v-model="form.state" />
+                <div class="space-y-3 md:col-span-2">
+                  <Label for="org_office_city_edit" class="leading-snug">Ciudad / municipio</Label>
+                  <OrgOfficeMunicipalityField input-id="org_office_city_edit" v-model="form.city" />
+                  <p class="text-xs text-muted-foreground leading-relaxed">
+                    Abre el listado, escribe para filtrar y elige municipio y departamento (DANE), igual que en radicación.
+                  </p>
                 </div>
               </div>
 

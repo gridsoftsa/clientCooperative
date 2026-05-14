@@ -11,11 +11,17 @@ definePageMeta({
 
 const ALL_MODELS = '__all__'
 
+type AuditableTypeOption = {
+  type: string
+  label: string
+}
+
 type AuditRow = {
   id: number
   event: string
   auditable_type: string | null
   auditable_type_short: string | null
+  auditable_label?: string | null
   auditable_id: string | number | null
   old_values: Record<string, unknown> | null
   new_values: Record<string, unknown> | null
@@ -39,7 +45,7 @@ const { $api } = useNuxtApp()
 const audits = ref<AuditRow[]>([])
 const loading = ref(false)
 const loadingAuditableTypes = ref(false)
-const auditableTypes = ref<string[]>([])
+const auditableTypes = ref<AuditableTypeOption[]>([])
 const pagination = ref<AuditMeta>({
   current_page: 1,
   last_page: 1,
@@ -50,11 +56,6 @@ const pagination = ref<AuditMeta>({
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
 const filterAuditableType = ref<string>(ALL_MODELS)
-
-function modelOptionLabel(fullClass: string): string {
-  const short = fullClass.split('\\').pop() ?? fullClass
-  return short
-}
 
 function formatJsonPreview(obj: Record<string, unknown> | null): string {
   if (obj == null || Object.keys(obj).length === 0) {
@@ -89,7 +90,7 @@ function auditQueryParams(): Record<string, string | number> {
 async function fetchAuditableTypes(): Promise<void> {
   loadingAuditableTypes.value = true
   try {
-    const res = await $api<{ data: string[] }>('/audit/auditable-types')
+    const res = await $api<{ data: AuditableTypeOption[] }>('/audit/auditable-types')
     auditableTypes.value = Array.isArray(res.data) ? res.data : []
   } catch (e: unknown) {
     console.error(e)
@@ -214,11 +215,11 @@ onMounted(async () => {
                   Todos los modelos
                 </SelectItem>
                 <SelectItem
-                  v-for="t in auditableTypes"
-                  :key="t"
-                  :value="t"
+                  v-for="opt in auditableTypes"
+                  :key="opt.type"
+                  :value="opt.type"
                 >
-                  {{ modelOptionLabel(t) }}
+                  {{ opt.label }}
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -255,8 +256,8 @@ onMounted(async () => {
                   <span class="mx-1">·</span>
                   <span>{{ row.created_at ? new Date(row.created_at).toLocaleString('es-CO') : '' }}</span>
                 </p>
-                <p class="font-mono text-xs text-muted-foreground">
-                  {{ row.auditable_type_short ?? row.auditable_type }}
+                <p class="text-xs text-muted-foreground">
+                  {{ row.auditable_label ?? row.auditable_type_short ?? row.auditable_type }}
                   <template v-if="row.auditable_id != null">
                     #{{ row.auditable_id }}
                   </template>

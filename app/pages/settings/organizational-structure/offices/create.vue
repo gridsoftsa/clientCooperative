@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import OrgOfficeMunicipalityField from '~/components/OrgOfficeMunicipalityField.vue'
 import { ORG_OFFICE_TYPE_OPTIONS } from '~/constants/org-structure'
 import type { OrgOfficeType } from '~/types/org-structure'
 
@@ -11,13 +12,13 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
+const { apiBodyLocation } = useOrgOfficeMunicipalitySync()
 
 const form = ref({
   name: '',
   code: '',
   office_type: 'main' as OrgOfficeType,
   city: '',
-  state: '',
   is_active: true,
 })
 
@@ -30,14 +31,15 @@ async function handleSubmit() {
   }
   saving.value = true
   try {
+    const { city, state } = apiBodyLocation(form.value.city)
     await $api('/organizational-structure/org-offices', {
       method: 'POST',
       body: {
         name: form.value.name.trim(),
         code: form.value.code.trim(),
         office_type: form.value.office_type,
-        city: form.value.city.trim() || undefined,
-        state: form.value.state.trim() || undefined,
+        city: city ?? undefined,
+        state: state ?? undefined,
         is_active: form.value.is_active,
       },
     })
@@ -109,14 +111,12 @@ async function handleSubmit() {
                   </div>
                 </div>
 
-                <div class="space-y-3">
-                  <Label for="city" class="leading-snug">Ciudad</Label>
-                  <Input id="city" v-model="form.city" placeholder="Opcional" />
-                </div>
-
-                <div class="space-y-3">
-                  <Label for="state" class="leading-snug">Departamento / estado</Label>
-                  <Input id="state" v-model="form.state" placeholder="Opcional" />
+                <div class="space-y-3 md:col-span-2">
+                  <Label for="org_office_city" class="leading-snug">Ciudad / municipio</Label>
+                  <OrgOfficeMunicipalityField input-id="org_office_city" v-model="form.city" />
+                  <p class="text-xs text-muted-foreground leading-relaxed">
+                    Abre el listado, escribe para filtrar y elige municipio y departamento (DANE), igual que en radicación.
+                  </p>
                 </div>
               </div>
 
