@@ -146,30 +146,32 @@ onMounted(() => {
                   </Badge>
                 </TableCell>
                 <TableCell class="text-right flex flex-wrap justify-end gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    @click="router.push(`/settings/organizational-structure/staff/${s.id}`)"
+                  >
+                    Ver
+                  </Button>
                   <PermissionGate permission="estructura_org_editar">
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       @click="router.push(`/settings/organizational-structure/staff/${s.id}/edit`)"
                     >
-                      Datos
+                      Editar
                     </Button>
                     <Button
                       v-if="s.is_active"
-                      variant="secondary"
+                      type="button"
+                      variant="destructive"
                       size="sm"
-                      @click="router.push(`/settings/organizational-structure/staff/${s.id}/assign`)"
-                    >
-                      Ubicación
-                    </Button>
-                    <Button
-                      v-if="s.is_active"
-                      variant="warning"
-                      size="sm"
+                      class="rounded-full gap-1.5 px-4 font-medium shadow-xs"
                       :disabled="deactivatingId === s.id"
                       @click="deactivateStaff(s.id)"
                     >
-                      Inactivar
+                      <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                      Desactivar
                     </Button>
                   </PermissionGate>
                 </TableCell>

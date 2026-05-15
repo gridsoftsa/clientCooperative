@@ -24,6 +24,10 @@ const form = ref({
 
 const saving = ref(false)
 
+function onOfficeActiveChange(value: boolean) {
+  form.value.is_active = value
+}
+
 async function handleSubmit() {
   if (!form.value.name.trim() || !form.value.code.trim()) {
     toast.error('Nombre y código son obligatorios')
@@ -120,20 +124,13 @@ async function handleSubmit() {
                 </div>
               </div>
 
-              <div class="space-y-3 rounded-lg border p-4 md:col-span-2">
-                <div class="space-y-1.5">
-                  <Label for="office_active_toggle" class="text-base leading-snug">Estado</Label>
-                  <p class="text-sm text-muted-foreground leading-relaxed">
-                    Las oficinas inactivas no se sugieren como sede en configuraciones nuevas.
-                  </p>
-                </div>
-                <div class="flex items-center gap-2 pt-1">
-                  <Checkbox id="office_active_toggle" v-model:checked="form.is_active" />
-                  <Label for="office_active_toggle" class="font-normal leading-snug">
-                    Oficina activa
-                  </Label>
-                </div>
-              </div>
+              <OrgStructureActiveMultiselect
+                :model-value="form.is_active"
+                gender="feminine"
+                input-id="office_create_active_ms"
+                helper-text="Las oficinas inactivas no se sugieren como sede en configuraciones nuevas."
+                @update:model-value="onOfficeActiveChange"
+              />
             </CardContent>
           </Card>
 

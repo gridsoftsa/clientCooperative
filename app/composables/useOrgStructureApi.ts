@@ -9,6 +9,8 @@ export interface OrgUnitRow {
   unit_type?: string | null
   is_document_producer: boolean
   manager_staff_id?: number | null
+  /** Nombre del cargo de referencia para jefe de área (p. ej. sincronizado al crear un cargo «a cargo del área»). */
+  manager_position_name?: string | null
   valid_from?: string | null
   valid_to?: string | null
   is_active: boolean
@@ -29,7 +31,7 @@ export interface OrgPositionRow {
   valid_from?: string | null
   valid_to?: string | null
   is_active: boolean
-  org_unit?: { id: number; name: string; code: string }
+  org_unit?: { id: number; name: string; code: string; manager_position_name?: string | null }
   reports_to_position?: { id: number; name: string; code: string } | null
 }
 

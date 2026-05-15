@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import type { OrgYesNoChoice } from '~/constants/org-structure'
 import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureApi'
 
 definePageMeta({
@@ -18,6 +19,8 @@ const unitOptions = ref<Array<{ id: number; label: string }>>([])
 const peerPositions = ref<Array<{ id: number; name: string; code: string }>>([])
 const loading = ref(true)
 
+const chargesSelectedArea = ref<OrgYesNoChoice>('no')
+
 const form = ref({
   org_unit_id: null as number | null,
   name: '',
@@ -29,6 +32,10 @@ const form = ref({
 })
 
 const saving = ref(false)
+
+function onPositionActiveChange(value: boolean) {
+  form.value.is_active = value
+}
 
 const reportsCandidates = computed(() =>
   peerPositions.value.filter((p: { id: number; name: string; code: string }) => p.id !== positionId.value),
@@ -53,8 +60,10 @@ watch(() => form.value.org_unit_id, async (id: number | null, prev: number | nul
     return
   }
   await loadPeersForUnit(id)
-  if (prev != null && prev !== id)
+  if (prev != null && prev !== id) {
     form.value.reports_to_position_id = null
+    chargesSelectedArea.value = 'no'
+  }
 })
 
 async function loadPosition() {
@@ -68,11 +77,14 @@ async function loadPosition() {
       name: p.name,
       code: p.code,
       hierarchy_level: p.hierarchy_level,
-      has_subordinates: p.has_subordinates,
+      has_subordinates: Boolean(p.has_subordinates),
       reports_to_position_id: p.reports_to_position_id,
-      is_active: p.is_active,
+      is_active: Boolean(p.is_active),
     }
     await loadPeersForUnit(p.org_unit_id)
+    const mgrName = p.org_unit?.manager_position_name?.trim() ?? ''
+    const posName = p.name.trim()
+    chargesSelectedArea.value = mgrName !== '' && mgrName === posName ? 'yes' : 'no'
   } catch {
     toast.error('No se encontró el cargo')
     router.push('/settings/organizational-structure/positions')
@@ -98,6 +110,7 @@ async function handleSubmit() {
         has_subordinates: form.value.has_subordinates,
         reports_to_position_id: form.value.reports_to_position_id,
         is_active: form.value.is_active,
+        sync_manager_position_name_to_unit: chargesSelectedArea.value === 'yes',
       },
     })
     toast.success('Cargo actualizado')
@@ -147,25 +160,34 @@ onMounted(() => {
             </CardHeader>
             <CardContent class="space-y-6">
               <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
-                <div class="space-y-3 md:col-span-2">
-                  <Label for="unit_pe" class="leading-snug">Área *</Label>
-                  <Select
-                    :model-value="form.org_unit_id == null ? undefined : String(form.org_unit_id)"
-                    @update:model-value="(v) => { form.org_unit_id = v ? Number(v) : null }"
-                  >
-                    <SelectTrigger id="unit_pe">
-                      <SelectValue placeholder="Área" />
-                    </SelectTrigger>
-                    <SelectContent class="max-h-72">
-                      <SelectItem
-                        v-for="u in unitOptions"
-                        :key="u.id"
-                        :value="String(u.id)"
-                      >
-                        {{ u.label }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6 md:gap-y-5 md:items-start">
+                  <div class="space-y-3">
+                    <Label for="unit_pe" class="leading-snug">Área *</Label>
+                    <Select
+                      :model-value="form.org_unit_id == null ? undefined : String(form.org_unit_id)"
+                      @update:model-value="(v) => { form.org_unit_id = v ? Number(v) : null }"
+                    >
+                      <SelectTrigger id="unit_pe">
+                        <SelectValue placeholder="Área" />
+                      </SelectTrigger>
+                      <SelectContent class="max-h-72">
+                        <SelectItem
+                          v-for="u in unitOptions"
+                          :key="u.id"
+                          :value="String(u.id)"
+                        >
+                          {{ u.label }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <OrgYesNoMultiselect
+                    v-model="chargesSelectedArea"
+                    input-id="position_edit_charges_area_ms"
+                    label="¿Este cargo está a cargo del área elegida?"
+                    helper-text="Si elige Sí, al guardar se guardará el nombre de este cargo en el área (referencia de jefe de área), además del catálogo de cargos."
+                    :disabled="form.org_unit_id == null"
+                  />
                 </div>
 
                 <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6">
@@ -185,15 +207,13 @@ onMounted(() => {
                 </div>
 
                 <div class="space-y-3 rounded-lg border p-4">
-                  <div class="flex items-start gap-3 pt-1">
-                    <Checkbox id="sub_e" v-model:checked="form.has_subordinates" class="mt-0.5" />
-                    <div class="space-y-1.5">
-                      <Label for="sub_e" class="text-base leading-snug">Personal a cargo</Label>
-                      <p class="text-sm text-muted-foreground leading-relaxed">
-                        Active si desde este cargo existe subordinación directa sobre otros cargos o personas.
-                      </p>
-                    </div>
-                  </div>
+                  <OrgYesNoMultiselect
+                    :model-value="form.has_subordinates ? 'yes' : 'no'"
+                    input-id="position_edit_subordinates_ms"
+                    label="¿Tiene personal a cargo?"
+                    helper-text="Elija Sí si desde este cargo existe subordinación directa sobre otros cargos o personas."
+                    @update:model-value="(v: OrgYesNoChoice) => { form.has_subordinates = v === 'yes' }"
+                  />
                 </div>
 
                 <div class="space-y-3 md:col-span-2">
@@ -220,22 +240,15 @@ onMounted(() => {
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div class="space-y-3 rounded-lg border p-4 md:col-span-2">
-                  <div class="space-y-1.5">
-                    <Label for="position_active_toggle_edit" class="text-base leading-snug">Estado</Label>
-                    <p class="text-sm text-muted-foreground leading-relaxed">
-                      Los cargos inactivos no se ofrecen al asignar funcionarios ni en flujos de alta.
-                    </p>
-                  </div>
-                  <div class="flex items-center gap-2 pt-1">
-                    <Checkbox id="position_active_toggle_edit" v-model:checked="form.is_active" />
-                    <Label for="position_active_toggle_edit" class="font-normal leading-snug">
-                      Cargo activo
-                    </Label>
-                  </div>
-                </div>
               </div>
+
+              <OrgStructureActiveMultiselect
+                :model-value="form.is_active"
+                gender="masculine"
+                input-id="position_edit_active_ms"
+                helper-text="Los cargos inactivos no se ofrecen al asignar funcionarios ni en flujos de alta."
+                @update:model-value="onPositionActiveChange"
+              />
             </CardContent>
           </Card>
 

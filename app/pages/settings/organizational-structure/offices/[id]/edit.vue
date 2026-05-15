@@ -27,6 +27,10 @@ const form = ref({
 
 const saving = ref(false)
 
+function onOfficeActiveChange(value: boolean) {
+  form.value.is_active = value
+}
+
 async function load() {
   loading.value = true
   try {
@@ -37,7 +41,7 @@ async function load() {
       code: o.code,
       office_type: o.office_type,
       city: labelForForm(o.city, o.state),
-      is_active: o.is_active,
+      is_active: Boolean(o.is_active),
     }
   } catch {
     toast.error('No se encontró la oficina')
@@ -147,20 +151,13 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="space-y-3 rounded-lg border p-4">
-                <div class="space-y-1.5">
-                  <Label for="office_edit_active_toggle" class="text-base leading-snug">Estado</Label>
-                  <p class="text-sm text-muted-foreground leading-relaxed">
-                    Las oficinas inactivas no se sugieren como sede en configuraciones nuevas.
-                  </p>
-                </div>
-                <div class="flex items-center gap-2 pt-1">
-                  <Checkbox id="office_edit_active_toggle" v-model:checked="form.is_active" />
-                  <Label for="office_edit_active_toggle" class="font-normal leading-snug">
-                    Oficina activa
-                  </Label>
-                </div>
-              </div>
+              <OrgStructureActiveMultiselect
+                :model-value="form.is_active"
+                gender="feminine"
+                input-id="office_edit_active_ms"
+                helper-text="Las oficinas inactivas no se sugieren como sede en configuraciones nuevas."
+                @update:model-value="onOfficeActiveChange"
+              />
             </CardContent>
           </Card>
 

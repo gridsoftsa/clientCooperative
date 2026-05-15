@@ -64,11 +64,6 @@ export const navMenu: NavMenu[] = [
             permission: 'estructura_org_ver',
           },
           {
-            title: 'Funcionarios',
-            link: '/settings/organizational-structure/staff',
-            permission: 'estructura_org_ver',
-          },
-          {
             title: 'Áreas y dependencias',
             link: '/settings/organizational-structure/units',
             permission: 'estructura_org_ver',
@@ -76,6 +71,11 @@ export const navMenu: NavMenu[] = [
           {
             title: 'Cargos',
             link: '/settings/organizational-structure/positions',
+            permission: 'estructura_org_ver',
+          },
+          {
+            title: 'Funcionarios',
+            link: '/settings/organizational-structure/staff',
             permission: 'estructura_org_ver',
           },
           {

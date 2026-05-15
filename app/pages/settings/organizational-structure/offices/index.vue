@@ -133,12 +133,15 @@ onMounted(() => {
                     </Button>
                     <Button
                       v-if="o.is_active"
-                      variant="warning"
+                      type="button"
+                      variant="destructive"
                       size="sm"
+                      class="rounded-full gap-1.5 px-4 font-medium shadow-xs"
                       :disabled="deactivatingId === o.id"
                       @click="deactivateOffice(o.id)"
                     >
-                      Inactivar
+                      <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                      Desactivar
                     </Button>
                   </PermissionGate>
                 </TableCell>

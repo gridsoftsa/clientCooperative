@@ -28,6 +28,10 @@ const form = ref({
 const userOptions = ref<Array<{ id: number; label: string }>>([])
 const saving = ref(false)
 
+function onStaffActiveChange(value: boolean) {
+  form.value.is_active = value
+}
+
 async function loadUsersIfAllowed() {
   if (!hasPermission('usuarios_ver')) {
     userOptions.value = []
@@ -68,7 +72,10 @@ async function handleSubmit() {
     })
     toast.success('Funcionario creado')
     const id = res.data.id
-    router.push(`/settings/organizational-structure/staff/${id}/assign`)
+    router.push({
+      path: `/settings/organizational-structure/staff/${id}/edit`,
+      query: { tab: 'ubicacion' },
+    })
   } catch (e: any) {
     toast.error(e?.data?.message || 'Error al crear')
   } finally {
@@ -185,22 +192,25 @@ onMounted(() => {
                   <Label for="doc" class="leading-snug">Documento</Label>
                   <Input id="doc" v-model="form.document_number" />
                 </div>
-
-                <div class="space-y-3 rounded-lg border p-4 md:col-span-2">
-                  <div class="space-y-1.5">
-                    <Label for="staff_active_toggle_create" class="text-base leading-snug">Estado</Label>
-                    <p class="text-sm text-muted-foreground leading-relaxed">
-                      Las personas inactivas no se proponen para jefatura de área ni filtros vigentes por defecto.
-                    </p>
-                  </div>
-                  <div class="flex items-center gap-2 pt-1">
-                    <Checkbox id="staff_active_toggle_create" v-model:checked="form.is_active" />
-                    <Label for="staff_active_toggle_create" class="font-normal leading-snug">
-                      Funcionario activo
-                    </Label>
-                  </div>
-                </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader class="gap-2">
+              <CardTitle class="leading-snug">Estado del registro</CardTitle>
+              <CardDescription class="leading-relaxed">
+                Por defecto queda <strong>Activo</strong> en el selector; elija <strong>Inactivo</strong> si el alta es provisional.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <OrgStructureActiveMultiselect
+                :model-value="form.is_active"
+                gender="masculine"
+                input-id="staff_create_active_ms"
+                :show-label="false"
+                @update:model-value="onStaffActiveChange"
+              />
             </CardContent>
           </Card>
 

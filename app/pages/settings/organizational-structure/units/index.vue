@@ -171,12 +171,15 @@ onMounted(async () => {
                     </Button>
                     <Button
                       v-if="u.is_active"
-                      variant="warning"
+                      type="button"
+                      variant="destructive"
                       size="sm"
+                      class="rounded-full gap-1.5 px-4 font-medium shadow-xs"
                       :disabled="deactivatingId === u.id"
                       @click="deactivateUnit(u.id)"
                     >
-                      Inactivar
+                      <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                      Desactivar
                     </Button>
                   </PermissionGate>
                 </TableCell>

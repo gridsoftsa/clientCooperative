@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import type { OrgYesNoChoice } from '~/constants/org-structure'
 import type { OrgOffice } from '~/types/org-structure'
 import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
 
@@ -29,11 +30,16 @@ const form = ref({
   unit_type: '',
   is_document_producer: false,
   manager_staff_id: null as number | null,
+  manager_position_name: '',
   is_active: true,
   institutional_process_ids: [] as number[],
 })
 
 const saving = ref(false)
+
+function onUnitActiveChange(value: boolean) {
+  form.value.is_active = value
+}
 
 const parentsFiltered = computed(() =>
   unitsInOffice.value.filter(u => u.id !== unitId.value),
@@ -74,9 +80,10 @@ async function loadUnit() {
       name: u.name,
       code: u.code,
       unit_type: u.unit_type ?? '',
-      is_document_producer: u.is_document_producer,
+      is_document_producer: Boolean(u.is_document_producer),
       manager_staff_id: u.manager_staff_id ?? null,
-      is_active: u.is_active,
+      manager_position_name: u.manager_position_name ?? '',
+      is_active: Boolean(u.is_active),
       institutional_process_ids: (u.institutional_processes ?? []).map(x => x.id),
     }
     await refreshUnitsForOffice(u.org_office_id)
@@ -86,14 +93,6 @@ async function loadUnit() {
   } finally {
     loading.value = false
   }
-}
-
-function toggleProcess(pid: number, checked: boolean) {
-  const set = new Set(form.value.institutional_process_ids)
-  if (checked)
-    set.add(pid)
-  else set.delete(pid)
-  form.value.institutional_process_ids = [...set].sort((a: number, b: number) => a - b)
 }
 
 async function handleSubmit() {
@@ -113,6 +112,7 @@ async function handleSubmit() {
         unit_type: form.value.unit_type.trim() || null,
         is_document_producer: form.value.is_document_producer,
         manager_staff_id: form.value.manager_staff_id ?? null,
+        manager_position_name: form.value.manager_position_name.trim() || null,
         is_active: form.value.is_active,
         institutional_process_ids: form.value.institutional_process_ids,
       },
@@ -239,18 +239,13 @@ onMounted(() => {
             </CardHeader>
             <CardContent class="space-y-6">
               <div class="space-y-3 rounded-lg border p-4">
-                <div class="space-y-1.5">
-                  <Label class="text-base leading-snug">Productora documental</Label>
-                  <p class="text-sm text-muted-foreground leading-relaxed">
-                    Marque si esta dependencia clasifica expedientes conforme TRD/gestión documental.
-                  </p>
-                </div>
-                <div class="flex items-center gap-2 pt-1">
-                  <Checkbox id="producer_e" v-model:checked="form.is_document_producer" />
-                  <Label for="producer_e" class="font-normal leading-snug">
-                    Área productora documental (TRD)
-                  </Label>
-                </div>
+                <OrgYesNoMultiselect
+                  :model-value="form.is_document_producer ? 'yes' : 'no'"
+                  input-id="unit_edit_doc_producer_ms"
+                  label="¿Es área productora documental (TRD)?"
+                  helper-text="Seleccione Sí si esta dependencia clasifica expedientes conforme TRD/gestión documental."
+                  @update:model-value="(v: OrgYesNoChoice) => { form.is_document_producer = v === 'yes' }"
+                />
               </div>
 
               <div class="space-y-3">
@@ -277,40 +272,31 @@ onMounted(() => {
                 </Select>
               </div>
 
-              <div class="space-y-3 rounded-lg border p-4">
-                <Label class="text-base leading-snug">Procesos institucionales</Label>
+              <div class="space-y-3">
+                <Label for="mgr_pos_name_e" class="leading-snug">Nombre del cargo de jefe de área (referencia)</Label>
                 <p class="text-sm text-muted-foreground leading-relaxed">
-                  Opcional: marque los procesos donde participa esta dependencia.
+                  Opcional: texto del puesto que encabeza el área. Puede actualizarse manualmente o al crear un cargo «a cargo del área».
                 </p>
-                <div class="flex flex-wrap gap-x-6 gap-y-3 max-h-40 overflow-y-auto pt-1">
-                  <div
-                    v-for="p in processes"
-                    :key="p.id"
-                    class="flex items-center gap-2"
-                  >
-                    <Checkbox
-                      :checked="form.institutional_process_ids.includes(p.id)"
-                      @update:checked="(c) => toggleProcess(p.id, c === true)"
-                    />
-                    <Label class="font-normal leading-snug">{{ p.label }}</Label>
-                  </div>
-                </div>
+                <Input id="mgr_pos_name_e" v-model="form.manager_position_name" placeholder="Ej: Coordinador de área" />
               </div>
 
-              <div class="space-y-3 rounded-lg border p-4">
-                <div class="space-y-1.5">
-                  <Label for="active_edit_unit" class="text-base leading-snug">Estado</Label>
-                  <p class="text-sm text-muted-foreground leading-relaxed">
-                    Las áreas inactivas no se proponen en asignaciones ni catálogos de alta por defecto.
-                  </p>
-                </div>
-                <div class="flex items-center gap-2 pt-1">
-                  <Checkbox id="active_edit_unit" v-model:checked="form.is_active" />
-                  <Label for="active_edit_unit" class="font-normal leading-snug">
-                    Área activa
-                  </Label>
-                </div>
+              <div class="rounded-lg border p-4">
+                <OrgInstitutionalProcessesMultiselect
+                  v-model="form.institutional_process_ids"
+                  :options="processes"
+                  input-id="unit_edit_inst_proc_ms"
+                  label="Procesos institucionales"
+                  helper-text="Opcional: seleccione los procesos en los que participa esta dependencia."
+                />
               </div>
+
+              <OrgStructureActiveMultiselect
+                :model-value="form.is_active"
+                gender="feminine"
+                input-id="unit_edit_active_ms"
+                helper-text="Las áreas inactivas no se proponen en asignaciones ni catálogos de alta por defecto."
+                @update:model-value="onUnitActiveChange"
+              />
             </CardContent>
           </Card>
 
