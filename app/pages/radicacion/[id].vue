@@ -34,11 +34,11 @@ const documentationUploadMode = computed(
 )
 const skipDocumentationFinancialPatch = ref(true)
 
-/** Borradores editables: redirige a /editar (también si el permiso llega un tick después del fetch). */
+/** Borrador editable: redirige a /editar. Las devoluciones (`Returned`) se quedan aquí para ver trazabilidad y motivo antes de corregir. */
 const shouldRedirectDraftToEdit = computed(() =>
   Boolean(
     !loading.value
-      && ['Draft', 'Returned'].includes(String(application.value?.status ?? ''))
+      && String(application.value?.status ?? '') === 'Draft'
       && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
   ),
 )
@@ -950,7 +950,10 @@ async function fetchApplication() {
       ...data,
       documents: Array.isArray(data?.documents) ? data.documents : [],
     }
-    if (['Draft', 'Returned'].includes(String(application.value?.status ?? '')) && hasAnyPermission(['radicacion_crear', 'radicacion_editar'])) {
+    if (String(application.value?.status ?? '') === 'Returned') {
+      timelineExpanded.value = true
+    }
+    if (String(application.value?.status ?? '') === 'Draft' && hasAnyPermission(['radicacion_crear', 'radicacion_editar'])) {
       await navigateTo(`/radicacion/editar/${id.value}`, { replace: true })
       return
     }
@@ -1194,13 +1197,13 @@ onMounted(() => {
       <div class="flex flex-wrap items-center gap-2">
         <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
           <Button
-            v-if="application?.status === 'Draft' && application?.id"
+            v-if="(application?.status === 'Draft' || application?.status === 'Returned') && application?.id"
             variant="warning"
             as-child
           >
             <NuxtLink :to="`/radicacion/editar/${application.id}`">
               <Icon name="i-lucide-pencil" class="mr-2 h-4 w-4" />
-              Editar
+              {{ application?.status === 'Returned' ? 'Corregir radicación' : 'Editar' }}
             </NuxtLink>
           </Button>
         </PermissionGate>

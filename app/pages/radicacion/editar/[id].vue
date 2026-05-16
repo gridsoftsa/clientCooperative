@@ -18,7 +18,7 @@ import { mergeApplicantFromApi, normalizeFinancialInfoAliases } from '~/utils/me
 import { messageFromFetchError } from '~/utils/http-error-message'
 import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
-import { isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
+import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
 
 definePageMeta({
   layout: 'default',
@@ -47,6 +47,38 @@ const documentsOnlyEditMode = computed(
   () => Boolean(application.value?.skip_next_director_review)
     && ['Returned', 'Draft'].includes(String(application.value?.status ?? '')),
 )
+
+const timelineEvents = computed(() =>
+  Array.isArray(application.value?.timeline) ? application.value.timeline : [],
+)
+/** Devolución: trazabilidad visible por defecto para ver motivo y actor sin salir del formulario. */
+const returnTimelineExpanded = ref(true)
+
+function formatTraceabilityEventDate(iso: string | null | undefined): string {
+  if (!iso) {
+    return '-'
+  }
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) {
+    return '-'
+  }
+  return d.toLocaleString('es-CO')
+}
+
+function timelineEventStatusLabel(
+  status: string | null | undefined,
+  role: 'from' | 'to',
+  event: { event_key?: string | null },
+): string {
+  if (!status) {
+    return '—'
+  }
+  return getCreditApplicationStatusLabel(status, {
+    timelineEventKey: event.event_key ?? null,
+    timelineRole: role,
+    skipNextDirectorReview: application.value?.skip_next_director_review,
+  })
+}
 const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
 const currentStep = ref(1)
 const radicacionStepOneFormRef = ref<{
@@ -1406,6 +1438,49 @@ onMounted(() => {
     </div>
 
     <template v-else-if="application && canEdit">
+      <Card v-if="application.status === 'Returned'">
+        <CardHeader>
+          <div class="flex items-center justify-between gap-3">
+            <CardTitle>Trazabilidad</CardTitle>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              @click="returnTimelineExpanded = !returnTimelineExpanded"
+            >
+              <Icon :name="returnTimelineExpanded ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="mr-2 h-4 w-4" />
+              {{ returnTimelineExpanded ? 'Contraer' : 'Expandir' }}
+            </Button>
+          </div>
+          <CardDescription>
+            Registro de quién devolvió la radicación, el cambio de estado y el concepto. Revise esto antes de corregir el formulario.
+          </CardDescription>
+        </CardHeader>
+        <CardContent v-if="returnTimelineExpanded">
+          <div v-if="timelineEvents.length === 0" class="text-sm text-muted-foreground">
+            Aún no hay eventos de trazabilidad registrados.
+          </div>
+          <div v-else class="space-y-3">
+            <div v-for="event in timelineEvents" :key="event.id" class="rounded-lg border p-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="font-medium">{{ event.title }}</p>
+                <span class="text-xs text-muted-foreground">{{ formatTraceabilityEventDate(event.created_at) }}</span>
+              </div>
+              <p v-if="event.description" class="mt-1 text-sm text-muted-foreground">{{ event.description }}</p>
+              <p v-if="event.from_status || event.to_status" class="mt-2 text-xs text-muted-foreground">
+                Estado:
+                <span class="font-medium text-foreground">{{ event.from_status ? timelineEventStatusLabel(event.from_status, 'from', event) : '—' }}</span>
+                →
+                <span class="font-medium text-foreground">{{ event.to_status ? timelineEventStatusLabel(event.to_status, 'to', event) : '—' }}</span>
+              </p>
+              <p v-if="event.actor?.name" class="mt-1 text-xs text-muted-foreground">
+                Por: <span class="font-medium text-foreground">{{ event.actor.name }}</span>
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div
         v-if="radicacionLastEditedLabel"
         class="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/35 px-3 py-2.5 text-sm text-muted-foreground"
