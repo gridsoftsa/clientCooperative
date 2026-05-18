@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import Multiselect from '@vueform/multiselect'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
 import {
   sumUtilidadMensualFromTemplates,
@@ -21,6 +22,7 @@ import { messageFromFetchError } from '~/utils/http-error-message'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
 import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
+import { RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK } from '~/constants/radicacion-form-catalog-fallbacks'
 
 definePageMeta({
   layout: 'default',
@@ -32,6 +34,11 @@ const { $api, $csrf } = useNuxtApp()
 const router = useRouter()
 const { user: authUser } = useAuth()
 const { hasPermission } = usePermissions()
+
+const { options: creditDestinationOptions, fetchOptions: fetchCreditDestinationOptions } = useTemplateFlatCatalogOptions(
+  'credit-destination',
+  RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK,
+)
 
 /** Siempre inicia en deudor; 'codeudor' solo al agregar codeudor a solicitud existente por URL */
 const mode = ref<'deudor' | 'codeudor'>('deudor')
@@ -1203,7 +1210,7 @@ async function submitApplication() {
     return
   }
   if (!canProceedStep2()) {
-    toast.error('Completa monto, plazo, sucursal, destino del crédito y al menos una plantilla de actividad en el destino')
+    toast.error('Completa monto, plazo, sucursal y destino del crédito')
     return
   }
   if (hasDocumentsWithoutTitle()) {
@@ -1364,7 +1371,8 @@ function selectMode(m: 'deudor' | 'codeudor') {
 
 
 onMounted(() => {
-  fetchCatalogs()
+  void fetchCatalogs()
+  void fetchCreditDestinationOptions()
 })
 </script>
 
@@ -1739,10 +1747,20 @@ onMounted(() => {
             </div>
             <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
               <Label for="destination">Destino del crédito *</Label>
-              <Input
+              <Multiselect
                 id="destination"
-                v-model="form.destination"
-                placeholder="Ej: Capital de trabajo, vivienda..."
+                :model-value="form.destination ? form.destination : null"
+                :options="creditDestinationOptions"
+                mode="single"
+                value-prop="value"
+                label="label"
+                :searchable="true"
+                :can-clear="false"
+                placeholder="Seleccionar destino"
+                no-options-text="Sin opciones. Configure «Destino del crédito» en Parametrización → Radicación."
+                no-results-text="Sin coincidencias"
+                class="multiselect-municipality"
+                @update:model-value="form.destination = ($event != null && $event !== '') ? String($event) : ''"
               />
             </div>
             <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">

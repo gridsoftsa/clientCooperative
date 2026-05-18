@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import {
+  RADICACION_JOB_POSITION_OPTIONS_FALLBACK,
+  RADICACION_OCCUPATION_OPTIONS_FALLBACK,
+} from '~/constants/radicacion-form-catalog-fallbacks'
+
 const props = defineProps<{
   applicant: any
   documents?: any[]
@@ -107,6 +112,14 @@ const { labelForValue: economicActivityLabel, fetchOptions: fetchEconomicActivit
   { value: 'Pensionado', label: 'Pensionado' },
   { value: 'agropecuario', label: 'Agropecuario' },
 ])
+const { labelForValue: occupationLabel, fetchOptions: fetchOccupationOptions } = useTemplateFlatCatalogOptions(
+  'occupation',
+  RADICACION_OCCUPATION_OPTIONS_FALLBACK,
+)
+const { labelForValue: jobPositionLabel, fetchOptions: fetchJobPositionOptions } = useTemplateFlatCatalogOptions(
+  'job-position',
+  RADICACION_JOB_POSITION_OPTIONS_FALLBACK,
+)
 
 onMounted(() => {
   void Promise.all([
@@ -115,6 +128,8 @@ onMounted(() => {
     fetchResidenceTypeOptions(),
     fetchMaritalStatusOptions(),
     fetchEconomicActivityOptions(),
+    fetchOccupationOptions(),
+    fetchJobPositionOptions(),
   ])
 })
 </script>
@@ -218,7 +233,7 @@ onMounted(() => {
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Ocupación</p>
-          <p>{{ applicant.occupation || '-' }}</p>
+          <p>{{ occupationLabel(props.applicant.occupation) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Empresa</p>
@@ -226,7 +241,7 @@ onMounted(() => {
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Cargo</p>
-          <p>{{ applicant.position || '-' }}</p>
+          <p>{{ jobPositionLabel(props.applicant.position) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Tipo contrato</p>

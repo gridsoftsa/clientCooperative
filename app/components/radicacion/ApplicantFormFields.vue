@@ -14,6 +14,10 @@ import {
   ymdLocalToday,
 } from '~/utils/applicant-dates'
 import { documentNumberLengthHint, validateColombianDocumentNumber } from '~/utils/colombian-document-number'
+import {
+  RADICACION_JOB_POSITION_OPTIONS_FALLBACK,
+  RADICACION_OCCUPATION_OPTIONS_FALLBACK,
+} from '~/constants/radicacion-form-catalog-fallbacks'
 /** Import explícito: Nuxt auto-importa como `RadicacionAuxiliaryDocumentsSection`, no como `AuxiliaryDocumentsSection`. */
 import AuxiliaryDocumentsSection from '~/components/radicacion/AuxiliaryDocumentsSection.vue'
 
@@ -176,6 +180,14 @@ const { options: economicActivityOptions, fetchOptions: fetchEconomicActivityOpt
   { value: 'Pensionado', label: 'Pensionado' },
   { value: 'agropecuario', label: 'Agropecuario' },
 ])
+const { options: occupationOptions, fetchOptions: fetchOccupationOptions } = useTemplateFlatCatalogOptions(
+  'occupation',
+  RADICACION_OCCUPATION_OPTIONS_FALLBACK,
+)
+const { options: jobPositionOptions, fetchOptions: fetchJobPositionOptions } = useTemplateFlatCatalogOptions(
+  'job-position',
+  RADICACION_JOB_POSITION_OPTIONS_FALLBACK,
+)
 
 onMounted(() => {
   void Promise.all([
@@ -184,6 +196,8 @@ onMounted(() => {
     fetchResidenceTypeOptions(),
     fetchMaritalStatusOptions(),
     fetchEconomicActivityOptions(),
+    fetchOccupationOptions(),
+    fetchJobPositionOptions(),
   ])
 })
 
@@ -247,6 +261,8 @@ const requiredFieldIds = {
   mobile_phone: 'mobile',
   residence_address: 'address',
   activity_type: 'activity_type',
+  occupation: 'occupation',
+  position: 'position',
 } as const
 
 type RequiredFieldKey = keyof typeof requiredFieldIds
@@ -283,6 +299,8 @@ function firstMissingRequiredField(): RequiredFieldKey | null {
     'mobile_phone',
     'residence_address',
     'activity_type',
+    'occupation',
+    'position',
   ]
   return ordered.find(field => isRequiredFieldMissing(field)) ?? null
 }
@@ -1096,13 +1114,22 @@ function formatFileSize(bytes: number): string {
           />
         </div>
         <div :class="fieldClass">
-          <Label for="occupation">Ocupación</Label>
-          <Input
+          <Label for="occupation">Ocupación *</Label>
+          <Multiselect
             id="occupation"
-            :model-value="local.occupation"
-            placeholder="Ej: Comerciante"
+            :model-value="local.occupation ? local.occupation : null"
+            :options="occupationOptions"
             :disabled="personalReadOnly"
-            @update:model-value="updateField('occupation', String($event ?? ''))"
+            mode="single"
+            value-prop="value"
+            label="label"
+            :searchable="true"
+            :can-clear="false"
+            placeholder="Seleccionar"
+            no-options-text="Sin opciones. Configure «Ocupación» en Parametrización → Radicación."
+            no-results-text="Sin coincidencias"
+            :class="multiselectErrorClass('occupation')"
+            @update:model-value="updateField('occupation', ($event != null && $event !== '') ? String($event) : '')"
           />
         </div>
         <div :class="fieldClass">
@@ -1116,13 +1143,22 @@ function formatFileSize(bytes: number): string {
           />
         </div>
         <div :class="fieldClass">
-          <Label for="position">Cargo</Label>
-          <Input
+          <Label for="position">Cargo *</Label>
+          <Multiselect
             id="position"
-            :model-value="local.position"
-            placeholder="Ej: Vendedor"
+            :model-value="local.position ? local.position : null"
+            :options="jobPositionOptions"
             :disabled="personalReadOnly"
-            @update:model-value="updateField('position', String($event ?? ''))"
+            mode="single"
+            value-prop="value"
+            label="label"
+            :searchable="true"
+            :can-clear="false"
+            placeholder="Seleccionar"
+            no-options-text="Sin opciones. Configure «Cargo» en Parametrización → Radicación."
+            no-results-text="Sin coincidencias"
+            :class="multiselectErrorClass('position')"
+            @update:model-value="updateField('position', ($event != null && $event !== '') ? String($event) : '')"
           />
         </div>
         <div :class="fieldClass">

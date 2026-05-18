@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import Multiselect from '@vueform/multiselect'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
 import {
@@ -19,6 +20,7 @@ import { messageFromFetchError } from '~/utils/http-error-message'
 import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
 import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
+import { RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK } from '~/constants/radicacion-form-catalog-fallbacks'
 
 definePageMeta({
   layout: 'default',
@@ -32,6 +34,11 @@ const router = useRouter()
 const { $api, $csrf } = useNuxtApp()
 const { hasPermission } = usePermissions()
 const id = computed(() => route.params.id as string)
+
+const { options: creditDestinationOptions, fetchOptions: fetchCreditDestinationOptions } = useTemplateFlatCatalogOptions(
+  'credit-destination',
+  RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK,
+)
 const application = ref<any>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -1253,7 +1260,7 @@ async function submitToDirectorReview() {
     return
   }
   if (!documentsOnlyEditMode.value && !canProceedStep2()) {
-    toast.error('Completa monto, plazo, sucursal, destino del crédito y al menos una plantilla de actividad en el destino')
+    toast.error('Completa monto, plazo, sucursal y destino del crédito')
     return
   }
   if (hasDocumentsWithoutTitle()) {
@@ -1382,8 +1389,9 @@ watch([application, debtor, coDebtors], () => {
 }, { deep: true })
 
 onMounted(() => {
-  fetchApplication()
-  fetchCatalogs()
+  void fetchApplication()
+  void fetchCatalogs()
+  void fetchCreditDestinationOptions()
 })
 </script>
 
@@ -1838,11 +1846,21 @@ onMounted(() => {
               </div>
               <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
                 <Label for="destination">Destino del crédito *</Label>
-                <Input
+                <Multiselect
                   id="destination"
-                  v-model="form.destination"
-                  placeholder="Ej: Capital de trabajo, vivienda..."
-                  :readonly="documentsOnlyEditMode"
+                  :model-value="form.destination ? form.destination : null"
+                  :options="creditDestinationOptions"
+                  :disabled="documentsOnlyEditMode"
+                  mode="single"
+                  value-prop="value"
+                  label="label"
+                  :searchable="true"
+                  :can-clear="false"
+                  placeholder="Seleccionar destino"
+                  no-options-text="Sin opciones. Configure «Destino del crédito» en Parametrización → Radicación."
+                  no-results-text="Sin coincidencias"
+                  class="multiselect-municipality"
+                  @update:model-value="form.destination = ($event != null && $event !== '') ? String($event) : ''"
                 />
               </div>
               <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">

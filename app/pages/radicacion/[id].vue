@@ -10,6 +10,7 @@ import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable }
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 import { parseActivityTemplateList } from '~/types/credit-application'
 import { normalizeFinancialInfoAliases } from '~/utils/merge-applicant-search'
+import { RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK } from '~/constants/radicacion-form-catalog-fallbacks'
 
 definePageMeta({
   layout: 'default',
@@ -93,6 +94,10 @@ const deactivateDialogOpen = ref(false)
 const cancelling = ref(false)
 const cancelRequestDialogOpen = ref(false)
 const deleteWithReason = useApiDeleteWithReason()
+const { labelForValue: creditDestinationLabel, fetchOptions: fetchCreditDestinationOptions } = useTemplateFlatCatalogOptions(
+  'credit-destination',
+  RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK,
+)
 const timelineEvents = computed(() => Array.isArray(application.value?.timeline) ? application.value.timeline : [])
 const timelineExpanded = ref(false)
 
@@ -962,6 +967,7 @@ async function fetchApplication() {
       ...data,
       documents: Array.isArray(data?.documents) ? data.documents : [],
     }
+    await fetchCreditDestinationOptions()
     if (String(application.value?.status ?? '') === 'Returned') {
       timelineExpanded.value = true
     } else if (
@@ -1954,7 +1960,7 @@ onMounted(() => {
               <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
                 <p class="text-sm font-medium">Destino del crédito</p>
                 <p class="rounded-md border bg-muted/50 px-3 py-2">
-                  {{ form.destination || '-' }}
+                  {{ creditDestinationLabel(form.destination) }}
                 </p>
               </div>
               <div v-if="form.destination_description" class="space-y-1.5 sm:col-span-2 lg:col-span-3">
