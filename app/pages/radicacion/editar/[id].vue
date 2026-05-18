@@ -21,6 +21,11 @@ import { validateColombianDocumentNumber } from '~/utils/colombian-document-numb
 import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
 import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
 import { RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK } from '~/constants/radicacion-form-catalog-fallbacks'
+import {
+  RADICACION_CREDITO_GARANTIA_FNG_OPTIONS,
+  creditoGarantiaFngBooleanToSelectValue,
+  selectValueToCreditoGarantiaFngBoolean,
+} from '~/constants/radicacion-credito-fng-yes-no'
 
 definePageMeta({
   layout: 'default',
@@ -169,7 +174,7 @@ const form = ref<CreditApplicationForm>({
   term_months: 12,
   destination: '',
   destination_description: '',
-  credito_garantia_fng: null,
+  credito_garantia_fng: false,
   destination_activity_templates: [],
   agency_id: 0,
   status: 'Draft',
@@ -419,7 +424,7 @@ function syncFormFromApplication() {
     term_months: app.term_months ?? 12,
     destination: app.destination ?? '',
     destination_description: app.destination_description ?? '',
-    credito_garantia_fng: app.credito_garantia_fng ?? null,
+    credito_garantia_fng: app.credito_garantia_fng === true,
     destination_activity_templates: parseActivityTemplateList(app.destination_activity_templates),
     agency_id: app.agency_id ?? 0,
     status: 'Draft',
@@ -1874,24 +1879,27 @@ onMounted(() => {
                   :readonly="documentsOnlyEditMode"
                 />
               </div>
-              <div class="space-y-3 sm:col-span-2 lg:col-span-3">
-                <div class="rounded-lg border border-border bg-muted/30 p-4">
-                  <div class="flex items-start gap-3">
-                    <Checkbox
-                      id="credito_garantia_fng"
-                      :model-value="form.credito_garantia_fng === true"
-                      :disabled="documentsOnlyEditMode"
-                      @update:model-value="form.credito_garantia_fng = $event ? true : false"
-                    />
-                    <div class="min-w-0 space-y-1.5">
-                      <Label for="credito_garantia_fng" class="cursor-pointer text-sm font-medium leading-snug">
-                        Créditos con garantía del Fondo Nacional de Garantías (FNG)
-                      </Label>
-                      <p class="text-xs text-muted-foreground leading-relaxed">
-                        Marque si la operación cuenta con cobertura o garantía del FNG. Dato informativo y opcional para la solicitud.
-                      </p>
-                    </div>
-                  </div>
+              <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+                <div class="max-w-md space-y-1.5">
+                  <Label for="credito_garantia_fng">Créditos con garantía del Fondo Nacional de Garantías (FNG) *</Label>
+                  <Multiselect
+                    id="credito_garantia_fng"
+                    :model-value="creditoGarantiaFngBooleanToSelectValue(form.credito_garantia_fng)"
+                    :options="RADICACION_CREDITO_GARANTIA_FNG_OPTIONS"
+                    :disabled="documentsOnlyEditMode"
+                    mode="single"
+                    value-prop="value"
+                    label="label"
+                    :searchable="false"
+                    :can-clear="false"
+                    placeholder="Seleccionar"
+                    no-results-text="Sin coincidencias"
+                    class="multiselect-municipality w-full"
+                    @update:model-value="form.credito_garantia_fng = selectValueToCreditoGarantiaFngBoolean($event)"
+                  />
+                  <p class="text-xs text-muted-foreground leading-relaxed">
+                    Por defecto «No». Elija «Sí» solo si la operación cuenta con cobertura o garantía del FNG. Dato informativo para la solicitud.
+                  </p>
                 </div>
               </div>
             </div>

@@ -119,7 +119,8 @@ export interface CreditApplicationForm {
   destination?: string
   destination_description?: string
   /**
-   * Crédito con garantía del Fondo Nacional de Garantías (FNG). Opcional (null = sin indicar).
+   * Crédito con garantía del Fondo Nacional de Garantías (FNG).
+   * En formularios nuevos/edición el valor por defecto es `false` (No); la API puede devolver `null` en registros antiguos.
    */
   credito_garantia_fng?: boolean | null
   /**
