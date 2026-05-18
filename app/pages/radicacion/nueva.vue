@@ -388,7 +388,7 @@ async function finalizeCodeudorWizard() {
     codeudorStep.value = 1
     return
   }
-  const rTemplates = validateAllActivityTemplates(getActivityTemplatesFor(app))
+  const rTemplates = validateAllActivityTemplates(getActivityTemplatesFor(app), { requireAtLeastOne: true })
   if (!rTemplates.valid) {
     toast.error(rTemplates.errors.join('. '))
     return
@@ -427,7 +427,7 @@ async function nextCodeudorStep() {
   }
   if (codeudorStep.value === 2) {
     const templates = getActivityTemplatesFor(codeudorWizardApplicant.value)
-    const r = validateAllActivityTemplates(templates)
+    const r = validateAllActivityTemplates(templates, { requireAtLeastOne: true })
     if (!r.valid) {
       toast.error(r.errors.join('. '))
       nextTick(() => codeudorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
@@ -533,7 +533,7 @@ async function validateDebtorStepOneForRadicacion(): Promise<boolean> {
 /** Valida plantillas de actividad (deudor y codeudores) antes de guardar o enviar solicitud. */
 function validateActivityTemplatesBeforeSave(): string | null {
   const debtorT = getActivityTemplates()
-  let r = validateAllActivityTemplates(debtorT)
+  let r = validateAllActivityTemplates(debtorT, { requireAtLeastOne: true })
   if (!r.valid) {
     return r.errors.join(' ')
   }
@@ -541,7 +541,7 @@ function validateActivityTemplatesBeforeSave(): string | null {
   for (let i = 0; i < cos.length; i++) {
     const co = cos[i]
     if (!co) continue
-    r = validateAllActivityTemplates(getActivityTemplatesFor(co))
+    r = validateAllActivityTemplates(getActivityTemplatesFor(co), { requireAtLeastOne: true })
     if (!r.valid) {
       return `Codeudor ${i + 1}: ${r.errors.join(' ')}`
     }
@@ -1306,7 +1306,7 @@ async function nextStep() {
     || (mode.value === 'codeudor' && currentStep.value === 2)
   ) {
     const templates = getActivityTemplates()
-    const r = validateAllActivityTemplates(templates)
+    const r = validateAllActivityTemplates(templates, { requireAtLeastOne: true })
     if (!r.valid) {
       toast.error(r.errors.join('. '))
       nextTick(() => debtorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
@@ -1778,10 +1778,10 @@ onMounted(() => {
           <div class="space-y-4 border-t border-border pt-6">
             <div>
               <p class="text-sm font-medium">
-                Actividades económicas del destino (referencia) *
+                Actividades económicas del destino (referencia)
               </p>
               <p class="mt-1 text-xs text-muted-foreground">
-                Añada al menos una plantilla con la herramienta de abajo; los ingresos aquí son solo referencia y no alteran el perfil financiero del deudor.
+                Opcional: puede añadir plantillas con la herramienta de abajo; los ingresos aquí son solo referencia y no alteran el perfil financiero del deudor.
               </p>
             </div>
             <CreditsFinancialActivityFormList
