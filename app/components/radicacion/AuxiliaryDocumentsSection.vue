@@ -23,16 +23,31 @@ const props = withDefaults(
       title?: string
       original_name?: string
       download_url?: string
+      is_reviewed?: boolean
+      review_comment?: string | null
     }>
     /** Mismo catálogo que «Tipo de actividad económica» — alinea valores con las claves de `itemsByActivity`. */
     economicActivityOptions?: EconomicActivityCatalogOption[]
     disabled?: boolean
+    /** `immediate`: el padre sube el archivo al servidor en cuanto se elige (p. ej. revisión documental en detalle). */
+    auxiliaryPendingUploadHint?: 'draftSave' | 'immediate'
+    /**
+     * `full`: alta/edición (subir, quitar pendiente, eliminar persistido).
+     * `uploadOnly`: revisión documental con subida — sin eliminar adjunto ya guardado.
+     * `viewOnly`: solo ver / abrir archivo y (opcional) marcar revisión.
+     */
+    interactionMode?: 'full' | 'uploadOnly' | 'viewOnly'
+    /** Muestra «Revisado» y comentario por documento ya vinculado al ítem del checklist (misma fila que la segunda captura). */
+    showDocumentReviewControls?: boolean
   }>(),
   {
     creditApplicationId: null,
     applicationDocuments: () => [],
     economicActivityOptions: () => [],
     disabled: false,
+    auxiliaryPendingUploadHint: 'draftSave',
+    interactionMode: 'full',
+    showDocumentReviewControls: false,
   },
 )
 
@@ -88,6 +103,46 @@ function docMetaForKey(key: string) {
   ) ?? list.find(d => d.id === id) ?? null
 }
 
+/** Misma fila que `applicationDocuments` del padre (mutación para revisión documental). */
+function documentReviewRowForKey(key: string): {
+  id: number
+  is_reviewed?: boolean
+  review_comment?: string | null
+} | null {
+  const meta = docMetaForKey(key)
+  if (!meta?.id) {
+    return null
+  }
+  const d = props.applicationDocuments?.find(x => x.id === meta.id)
+  if (!d || typeof d !== 'object') {
+    return null
+  }
+  return d as { id: number, is_reviewed?: boolean, review_comment?: string | null }
+}
+
+function auxiliaryReviewDomId(key: string): string {
+  const d = documentReviewRowForKey(key)
+  return d ? `aux_doc_reviewed_${key}_${d.id}` : `aux_doc_reviewed_${key}`
+}
+
+function setDocumentReviewChecked(key: string, v: unknown): void {
+  const d = documentReviewRowForKey(key)
+  if (d) {
+    d.is_reviewed = Boolean(v)
+  }
+}
+
+function setDocumentReviewComment(key: string, v: unknown): void {
+  const d = documentReviewRowForKey(key)
+  if (d) {
+    d.review_comment = String(v ?? '')
+  }
+}
+
+const uploadBlocked = computed(
+  () => props.disabled || props.interactionMode === 'viewOnly',
+)
+
 function hasSatisfiedUploadForKey(key: string): boolean {
   const id = docIdsByKey.value[key]
   if (typeof id === 'number' && id >= 1) {
@@ -102,6 +157,31 @@ function hasSatisfiedUploadForKey(key: string): boolean {
   }
   return false
 }
+
+/** En revisión documental con subida: solo reemplazar; no cargar el primer archivo en una fila vacía. */
+function uploadBlockedForKey(key: string): boolean {
+  if (uploadBlocked.value) {
+    return true
+  }
+  if (props.interactionMode === 'uploadOnly' && !hasSatisfiedUploadForKey(key)) {
+    return true
+  }
+  return false
+}
+
+function showChecklistEmptyReadOnlyState(key: string): boolean {
+  if (props.interactionMode === 'viewOnly') {
+    return true
+  }
+  return props.interactionMode === 'uploadOnly' && !hasSatisfiedUploadForKey(key)
+}
+
+const allowsRemoveUploaded = computed(
+  () =>
+    props.interactionMode === 'full'
+    && !props.disabled
+    && Boolean(props.creditApplicationId),
+)
 
 function rowMissingRequired(row: AuxiliaryChecklistItem): boolean {
   return highlightMissingRequired.value && row.required && !hasSatisfiedUploadForKey(row.key)
@@ -173,6 +253,12 @@ function formatFileSize(bytes: number): string {
 }
 
 function pickAuxiliaryFile(key: string, file: File | undefined): void {
+  if (uploadBlockedForKey(key)) {
+    if (file && props.interactionMode === 'uploadOnly' && !uploadBlocked.value) {
+      toast.error('En revisión documental solo puede reemplazar archivos ya cargados en la solicitud, no adjuntar el primero desde aquí.')
+    }
+    return
+  }
   if (!file) return
   if (!isAuxiliaryUploadFileAllowed(file)) {
     toast.error(auxiliaryUploadRejectReason(file) ?? 'Archivo no permitido.')
@@ -193,6 +279,27 @@ function onAuxiliaryDragOver(e: DragEvent): void {
   if (e.dataTransfer) {
     e.dataTransfer.dropEffect = 'copy'
   }
+}
+
+function onAuxiliaryDragOverWrapper(key: string, e: DragEvent): void {
+  if (uploadBlockedForKey(key)) {
+    return
+  }
+  onAuxiliaryDragOver(e)
+}
+
+function onAuxiliaryDropWrapper(key: string, e: DragEvent): void {
+  if (uploadBlockedForKey(key)) {
+    return
+  }
+  onAuxiliaryDrop(key, e)
+}
+
+function onAuxiliaryKeyActivateWrapper(key: string, idx: number, e: KeyboardEvent): void {
+  if (uploadBlockedForKey(key)) {
+    return
+  }
+  onAuxiliaryUploadZoneActivate(key, idx, e)
 }
 
 function onAuxiliaryDrop(key: string, e: DragEvent): void {
@@ -240,7 +347,7 @@ async function openAuxiliaryDocumentInPreview(key: string): Promise<void> {
 
 /** Safari iOS no abre bien el file picker si hay `<button>`/`<a>` dentro de `<label for="file">`; usamos click programático. */
 function onAuxiliaryUploadZoneActivate(key: string, idx: number, event?: MouseEvent | KeyboardEvent): void {
-  if (props.disabled) {
+  if (uploadBlockedForKey(key)) {
     return
   }
   if (event && 'target' in event && event.target instanceof Element) {
@@ -264,6 +371,10 @@ function pendingFileFor(key: string): File | undefined {
  * Devuelve true si puede avanzar de paso; si faltan obligatorios, activa resaltado danger y false.
  */
 function validateRequiredAuxiliaryUploads(): boolean {
+  if (props.interactionMode === 'viewOnly') {
+    highlightMissingRequired.value = false
+    return true
+  }
   if (props.disabled) {
     highlightMissingRequired.value = false
     return true
@@ -351,25 +462,25 @@ defineExpose({
               type="file"
               accept=".pdf,.zip,.png,.jpg,.jpeg,.gif,.webp,.bmp,application/pdf,application/zip,image/*"
               class="sr-only"
-              :disabled="disabled"
+              :disabled="uploadBlockedForKey(row.key)"
               @change="onFileInput(row.key, $event)"
             >
             <div
-              role="button"
-              tabindex="0"
-              :aria-label="`Adjuntar archivo: ${row.label}`"
+              :role="uploadBlockedForKey(row.key) ? undefined : 'button'"
+              :tabindex="uploadBlockedForKey(row.key) ? undefined : 0"
+              :aria-label="uploadBlockedForKey(row.key) ? undefined : `Adjuntar archivo: ${row.label}`"
               class="flex min-h-[6.5rem] touch-manipulation flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-4 text-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               :class="[
-                disabled ? 'cursor-not-allowed opacity-60 pointer-events-none' : 'cursor-pointer hover:border-primary/45 hover:bg-muted/30 active:bg-muted/35',
+                uploadBlockedForKey(row.key) ? 'cursor-default opacity-95' : 'cursor-pointer hover:border-primary/45 hover:bg-muted/30 active:bg-muted/35',
                 rowMissingRequired(row)
                   ? 'border-destructive/50 bg-destructive/[0.04]'
                   : 'border-muted-foreground/25 bg-muted/20',
               ]"
               @click="onAuxiliaryUploadZoneActivate(row.key, idx, $event)"
-              @keydown.enter.prevent="onAuxiliaryUploadZoneActivate(row.key, idx, $event)"
-              @keydown.space.prevent="onAuxiliaryUploadZoneActivate(row.key, idx, $event)"
-              @dragover="onAuxiliaryDragOver"
-              @drop="onAuxiliaryDrop(row.key, $event)"
+              @keydown.enter.prevent="onAuxiliaryKeyActivateWrapper(row.key, idx, $event)"
+              @keydown.space.prevent="onAuxiliaryKeyActivateWrapper(row.key, idx, $event)"
+              @dragover="onAuxiliaryDragOverWrapper(row.key, $event)"
+              @drop="onAuxiliaryDropWrapper(row.key, $event)"
             >
               <template v-if="pendingFileFor(row.key)">
                 <Icon name="i-lucide-file-check" class="size-7 text-green-600 dark:text-green-500" />
@@ -379,11 +490,15 @@ defineExpose({
                 <span class="text-xs text-muted-foreground">
                   {{ formatFileSize(pendingFileFor(row.key)!.size) }}
                 </span>
-                <span v-if="!disabled" class="text-xs text-amber-700 dark:text-amber-400">
-                  Se subirá al guardar la solicitud
+                <span v-if="!uploadBlockedForKey(row.key)" class="text-xs text-amber-700 dark:text-amber-400">
+                  {{
+                    auxiliaryPendingUploadHint === 'immediate'
+                      ? 'Se sube automáticamente en unos segundos…'
+                      : 'Se subirá al guardar la solicitud'
+                  }}
                 </span>
                 <button
-                  v-if="!disabled"
+                  v-if="!uploadBlockedForKey(row.key)"
                   type="button"
                   class="text-xs font-medium text-primary underline underline-offset-2"
                   @click.stop.prevent="clearPending(row.key)"
@@ -402,13 +517,19 @@ defineExpose({
                 </button>
                 <span class="text-xs text-muted-foreground">Archivo en la solicitud</span>
                 <button
-                  v-if="!disabled && creditApplicationId"
+                  v-if="allowsRemoveUploaded"
                   type="button"
                   class="text-xs font-medium text-destructive underline underline-offset-2"
                   @click.stop.prevent="removeUploaded(row.key)"
                 >
                   Eliminar
                 </button>
+              </template>
+              <template v-else-if="showChecklistEmptyReadOnlyState(row.key)">
+                <Icon name="i-lucide-file-warning" class="size-7 text-muted-foreground" />
+                <span class="max-w-sm text-sm font-medium leading-snug text-muted-foreground">
+                  Sin archivo en la solicitud para este requisito.
+                </span>
               </template>
               <template v-else>
                 <div class="flex size-10 items-center justify-center rounded-full bg-muted">
@@ -426,6 +547,29 @@ defineExpose({
                 </span>
                 <span class="text-xs text-muted-foreground">PDF, ZIP o imagen · máximo 10 MB</span>
               </template>
+            </div>
+            <div
+              v-if="showDocumentReviewControls && documentReviewRowForKey(row.key)"
+              class="mt-4 space-y-3 border-t border-border pt-4"
+            >
+              <div class="flex items-center gap-2">
+                <Checkbox
+                  :id="auxiliaryReviewDomId(row.key)"
+                  :model-value="Boolean(documentReviewRowForKey(row.key)?.is_reviewed)"
+                  @update:model-value="setDocumentReviewChecked(row.key, $event)"
+                />
+                <Label
+                  :for="auxiliaryReviewDomId(row.key)"
+                  class="text-xs font-medium cursor-pointer"
+                >
+                  Revisado
+                </Label>
+              </div>
+              <Input
+                :model-value="documentReviewRowForKey(row.key)?.review_comment ?? ''"
+                placeholder="Descripción corta de revisión"
+                @update:model-value="setDocumentReviewComment(row.key, $event)"
+              />
             </div>
           </div>
         </li>

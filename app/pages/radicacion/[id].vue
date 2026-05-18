@@ -11,6 +11,11 @@ import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from 
 import { parseActivityTemplateList } from '~/types/credit-application'
 import { normalizeFinancialInfoAliases } from '~/utils/merge-applicant-search'
 import { RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK } from '~/constants/radicacion-form-catalog-fallbacks'
+import {
+  extractItemsByActivityFromCatalogResponse,
+  resolveAuxiliaryChecklistRows,
+  titleForAuxiliaryDocumentUpload,
+} from '~/constants/auxiliary-documents-checklist'
 
 definePageMeta({
   layout: 'default',
@@ -128,6 +133,33 @@ const canDirectorDecide = computed(
 const canDocumentationDecide = computed(
   () => hasPermission('radicacion_documentos_decidir') && application.value?.status === 'Documentation_Review',
 )
+
+const documentationReviewFlowActive = computed(
+  () => String(application.value?.status ?? '') === 'Documentation_Review',
+)
+
+const documentationAuxiliaryInteractionMode = computed((): 'full' | 'uploadOnly' | 'viewOnly' => {
+  if (!documentationReviewFlowActive.value) {
+    return 'full'
+  }
+  return documentationUploadMode.value ? 'uploadOnly' : 'viewOnly'
+})
+
+const showDocumentationAuxiliaryChecklist = computed(() => documentationReviewFlowActive.value)
+
+const showAuxiliaryDocumentReviewInChecklist = computed(
+  () => documentationReviewFlowActive.value && canDocumentationDecide.value,
+)
+/** Devolución: el reenvío a revisión documental solo está en /editar (botón «Enviar a revisión de documentación»). */
+const showReturnedCorrectionHint = computed(
+  () =>
+    Boolean(
+      application.value
+        && String(application.value.status ?? '') === 'Returned'
+        && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
+    ),
+)
+const returnedFromDocumentationReview = computed(() => Boolean(application.value?.skip_next_director_review))
 const canAnalystDecide = computed(
   () => hasPermission('radicacion_analisis_guardar') && application.value?.status === 'In_Analysis',
 )
@@ -146,14 +178,6 @@ const analystDecisionDialogTitle = computed(() => {
     return 'Confirmar devolución del analista'
   }
   return 'Confirmar decisión del analista'
-})
-/** Todos los adjuntos (deudor + codeudores) deben estar marcados revisados antes del concepto. */
-const allDocumentsMarkedReviewed = computed(() => {
-  const docs = application.value?.documents ?? []
-  if (docs.length === 0) {
-    return true
-  }
-  return docs.every((d: { is_reviewed?: boolean }) => Boolean(d.is_reviewed))
 })
 const directorDecisionOptions = [
   { value: 'approved', label: 'Aprobar y enviar a revisión de documentación' },
@@ -413,6 +437,74 @@ function parseJsonField(val: unknown): Record<string, unknown> {
   return {}
 }
 
+/**
+ * IDs de `credit_application_documents` referenciados en `financial_info.auxiliaryDocuments`
+ * (deudor, codeudores y pivots de la solicitud cargada).
+ */
+function auxiliaryDocumentIdsLinkedInReview(): Set<number> {
+  const s = new Set<number>()
+  const ingest = (fi: unknown): void => {
+    if (!fi || typeof fi !== 'object') {
+      return
+    }
+    const raw = (fi as { auxiliaryDocuments?: unknown }).auxiliaryDocuments
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return
+    }
+    for (const v of Object.values(raw)) {
+      let n: number
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        n = v
+      } else if (typeof v === 'string' && /^\d+$/.test(String(v).trim())) {
+        n = parseInt(String(v).trim(), 10)
+      } else {
+        continue
+      }
+      if (n > 0) {
+        s.add(n)
+      }
+    }
+  }
+  ingest(form.value.debtor.financial_info)
+  for (const co of form.value.co_debtors ?? []) {
+    ingest(co.financial_info)
+  }
+  const app = application.value
+  if (app) {
+    const rows = app.application_applicants ?? app.applicationApplicants ?? []
+    for (const r of rows as Array<{ financial_info?: unknown }>) {
+      ingest(parseJsonField(r.financial_info))
+    }
+  }
+  return s
+}
+
+/**
+ * En `Documentation_Review` solo exigimos «Revisado» en adjuntos del checklist auxiliar (mapa
+ * `auxiliaryDocuments`). El resto no bloquea el envío — ya no hay rejilla «otros documentos» en esa vista.
+ */
+const allDocumentsMarkedReviewed = computed(() => {
+  const docs = application.value?.documents ?? []
+  if (docs.length === 0) {
+    return true
+  }
+  const st = String(application.value?.status ?? '')
+  if (st !== 'Documentation_Review') {
+    return docs.every((d: { is_reviewed?: boolean }) => Boolean(d.is_reviewed))
+  }
+  const auxIds = auxiliaryDocumentIdsLinkedInReview()
+  if (auxIds.size === 0) {
+    return docs.every((d: { is_reviewed?: boolean }) => Boolean(d.is_reviewed))
+  }
+  return docs.every((d: { id?: unknown, is_reviewed?: boolean }) => {
+    const id = Number(d.id)
+    if (!Number.isFinite(id) || !auxIds.has(id)) {
+      return true
+    }
+    return Boolean(d.is_reviewed)
+  })
+})
+
 function parseReferences(val: unknown): any[] {
   if (Array.isArray(val)) return val
   if (typeof val === 'string') {
@@ -567,11 +659,23 @@ const coDebtors = computed(() => {
 const documentsByApplicant = computed(() => {
   const docs = application.value?.documents ?? []
   const byApplicant: Record<string, any[]> = {}
+  const seenByApplicant: Record<string, Set<number>> = {}
   for (const doc of docs) {
     const aid = doc.applicant_id
     if (aid == null) continue
     const key = String(aid)
-    if (!byApplicant[key]) byApplicant[key] = []
+    const id = Number(doc.id)
+    if (!Number.isFinite(id)) {
+      continue
+    }
+    if (!byApplicant[key]) {
+      byApplicant[key] = []
+      seenByApplicant[key] = new Set()
+    }
+    if (seenByApplicant[key]!.has(id)) {
+      continue
+    }
+    seenByApplicant[key]!.add(id)
     byApplicant[key].push(doc)
   }
   return byApplicant
@@ -1105,7 +1209,188 @@ function patchApplicationCodeudorFinancialCache(applicantId: number, fi: Record<
   }
 }
 
-const pushDebtorDocumentationFinancial = useDebounceFn(async () => {
+const MAX_AUXILIARY_DOCUMENT_BYTES = 10 * 1024 * 1024
+
+function pendingAuxiliaryFileKeys(files: Record<string, File | undefined> | undefined): string {
+  if (!files || typeof files !== 'object') {
+    return ''
+  }
+  return Object.entries(files)
+    .filter(([, f]) => f instanceof File)
+    .map(([k]) => k)
+    .sort()
+    .join(',')
+}
+
+function mergeUploadedDocumentIntoApplication(doc: unknown): void {
+  const app = application.value
+  if (!app || doc == null || typeof doc !== 'object') {
+    return
+  }
+  const row = doc as Record<string, unknown>
+  const docId = Number(row.id)
+  if (!Number.isFinite(docId) || docId < 1) {
+    return
+  }
+  const list = Array.isArray(app.documents) ? app.documents : []
+  if (list.some((d: { id?: unknown }) => Number(d?.id) === docId)) {
+    return
+  }
+  app.documents = [...list, doc]
+}
+
+async function flushDebtorAuxiliaryDocumentUploads(): Promise<void> {
+  const applicationId = application.value?.id
+  if (!documentationUploadMode.value || typeof applicationId !== 'number' || applicationId < 1) {
+    return
+  }
+  const auxFiles = form.value.debtor.auxiliaryDocumentFiles
+  if (!auxFiles) {
+    return
+  }
+  const pending = Object.entries(auxFiles).filter(([, f]) => f instanceof File) as [string, File][]
+  if (pending.length === 0) {
+    return
+  }
+  for (const [, f] of pending) {
+    if (f.size > MAX_AUXILIARY_DOCUMENT_BYTES) {
+      toast.error(`"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`)
+      throw new Error('document_too_large')
+    }
+  }
+  const fiRaw = form.value.debtor.financial_info
+  const activityType = fiRaw && typeof fiRaw === 'object'
+    ? String((fiRaw as { activity_type?: string }).activity_type ?? '').trim()
+    : ''
+  let labelByKey: Record<string, string> = {}
+  if (activityType) {
+    try {
+      const cfg = await $api<unknown>('/catalogs/template-flat-data/auxiliary-documents')
+      const iba = extractItemsByActivityFromCatalogResponse(cfg)
+      const rows = resolveAuxiliaryChecklistRows(iba, activityType)
+      labelByKey = Object.fromEntries(rows.map(r => [r.key, r.label]))
+    } catch {
+      labelByKey = {}
+    }
+  }
+  const fi = { ...(typeof fiRaw === 'object' && fiRaw ? fiRaw : {}) } as Record<string, unknown>
+  const docMap = { ...(typeof fi.auxiliaryDocuments === 'object' && fi.auxiliaryDocuments && !Array.isArray(fi.auxiliaryDocuments)
+    ? (fi.auxiliaryDocuments as Record<string, number | null>)
+    : {}) }
+
+  await $csrf()
+  for (const [key, file] of pending) {
+    const prevId = docMap[key]
+    if (typeof prevId === 'number' && prevId > 0) {
+      try {
+        await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    const label = labelByKey[key] ?? key
+    const fd = new FormData()
+    fd.append('title', titleForAuxiliaryDocumentUpload(label))
+    fd.append('file', file)
+    fd.append('auxiliary_checklist', '1')
+    const res = await $api<{ data: unknown }>(
+      `/credit-applications/${applicationId}/documents`,
+      { method: 'POST', body: fd },
+    )
+    const created = res.data
+    mergeUploadedDocumentIntoApplication(created)
+    const newId = typeof created === 'object' && created !== null && 'id' in (created as object)
+      ? Number((created as { id: unknown }).id)
+      : NaN
+    if (Number.isFinite(newId) && newId > 0) {
+      docMap[key] = newId
+    }
+  }
+  const nextFi = { ...fi, auxiliaryDocuments: docMap }
+  form.value.debtor.financial_info = nextFi as typeof form.value.debtor.financial_info
+  form.value.debtor.auxiliaryDocumentFiles = {}
+  patchApplicationDebtorFinancialCache(nextFi)
+}
+
+async function flushCodeudorAuxiliaryDocumentUploads(applicantId: number): Promise<void> {
+  const applicationId = application.value?.id
+  if (!documentationUploadMode.value || typeof applicationId !== 'number' || applicationId < 1) {
+    return
+  }
+  const co = form.value.co_debtors.find(c => Number(c.id) === applicantId)
+  if (!co) {
+    return
+  }
+  const auxFiles = co.auxiliaryDocumentFiles
+  if (!auxFiles) {
+    return
+  }
+  const pending = Object.entries(auxFiles).filter(([, f]) => f instanceof File) as [string, File][]
+  if (pending.length === 0) {
+    return
+  }
+  for (const [, f] of pending) {
+    if (f.size > MAX_AUXILIARY_DOCUMENT_BYTES) {
+      toast.error(`"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`)
+      throw new Error('document_too_large')
+    }
+  }
+  const fiRaw = co.financial_info
+  const activityType = fiRaw && typeof fiRaw === 'object'
+    ? String((fiRaw as { activity_type?: string }).activity_type ?? '').trim()
+    : ''
+  let labelByKey: Record<string, string> = {}
+  if (activityType) {
+    try {
+      const cfg = await $api<unknown>('/catalogs/template-flat-data/auxiliary-documents')
+      const iba = extractItemsByActivityFromCatalogResponse(cfg)
+      const rows = resolveAuxiliaryChecklistRows(iba, activityType)
+      labelByKey = Object.fromEntries(rows.map(r => [r.key, r.label]))
+    } catch {
+      labelByKey = {}
+    }
+  }
+  const fi = { ...(typeof fiRaw === 'object' && fiRaw ? fiRaw : {}) } as Record<string, unknown>
+  const docMap = { ...(typeof fi.auxiliaryDocuments === 'object' && fi.auxiliaryDocuments && !Array.isArray(fi.auxiliaryDocuments)
+    ? (fi.auxiliaryDocuments as Record<string, number | null>)
+    : {}) }
+
+  await $csrf()
+  for (const [key, file] of pending) {
+    const prevId = docMap[key]
+    if (typeof prevId === 'number' && prevId > 0) {
+      try {
+        await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    const label = labelByKey[key] ?? key
+    const fd = new FormData()
+    fd.append('title', titleForAuxiliaryDocumentUpload(label))
+    fd.append('file', file)
+    fd.append('auxiliary_checklist', '1')
+    fd.append('applicant_id', String(applicantId))
+    const res = await $api<{ data: unknown }>(
+      `/credit-applications/${applicationId}/documents`,
+      { method: 'POST', body: fd },
+    )
+    const created = res.data
+    mergeUploadedDocumentIntoApplication(created)
+    const newId = typeof created === 'object' && created !== null && 'id' in (created as object)
+      ? Number((created as { id: unknown }).id)
+      : NaN
+    if (Number.isFinite(newId) && newId > 0) {
+      docMap[key] = newId
+    }
+  }
+  const nextFi = { ...fi, auxiliaryDocuments: docMap }
+  co.financial_info = nextFi as typeof co.financial_info
+  co.auxiliaryDocumentFiles = {}
+  patchApplicationCodeudorFinancialCache(applicantId, nextFi)
+}
+
+async function patchDebtorDocumentationFinancialToServer(): Promise<void> {
   if (skipDocumentationFinancialPatch.value || !documentationUploadMode.value || !application.value?.id) {
     return
   }
@@ -1113,16 +1398,43 @@ const pushDebtorDocumentationFinancial = useDebounceFn(async () => {
   if (Object.keys(patch).length === 0) {
     return
   }
+  await $csrf()
+  await $api(`/credit-applications/${application.value.id}/documentation-applicant-financial`, {
+    method: 'PATCH',
+    body: { role: 'DEUDOR', financial_info: patch },
+  })
+  const fi = form.value.debtor.financial_info
+  if (fi && typeof fi === 'object') {
+    patchApplicationDebtorFinancialCache(fi as Record<string, unknown>)
+  }
+}
+
+async function patchCodeudorDocumentationFinancialToServer(applicantId: number): Promise<void> {
+  if (skipDocumentationFinancialPatch.value || !documentationUploadMode.value || !application.value?.id) {
+    return
+  }
+  const co = form.value.co_debtors.find(c => Number(c.id) === applicantId)
+  if (!co) {
+    return
+  }
+  const patch = buildDocumentationFinancialPatch(co.financial_info)
+  if (Object.keys(patch).length === 0) {
+    return
+  }
+  await $csrf()
+  await $api(`/credit-applications/${application.value.id}/documentation-applicant-financial`, {
+    method: 'PATCH',
+    body: { role: 'CODEUDOR', applicant_id: applicantId, financial_info: patch },
+  })
+  const fi = co.financial_info
+  if (fi && typeof fi === 'object') {
+    patchApplicationCodeudorFinancialCache(applicantId, fi as Record<string, unknown>)
+  }
+}
+
+const pushDebtorDocumentationFinancial = useDebounceFn(async () => {
   try {
-    await $csrf()
-    await $api(`/credit-applications/${application.value.id}/documentation-applicant-financial`, {
-      method: 'PATCH',
-      body: { role: 'DEUDOR', financial_info: patch },
-    })
-    const fi = form.value.debtor.financial_info
-    if (fi && typeof fi === 'object') {
-      patchApplicationDebtorFinancialCache(fi as Record<string, unknown>)
-    }
+    await patchDebtorDocumentationFinancialToServer()
   } catch (e: any) {
     console.error(e)
     toast.error(e?.data?.message ?? 'No se pudo guardar el tipo de actividad o documentos auxiliares del deudor')
@@ -1130,31 +1442,8 @@ const pushDebtorDocumentationFinancial = useDebounceFn(async () => {
 }, 500)
 
 const pushCodeudorDocumentationFinancial = useDebounceFn(async (applicantId: number) => {
-  if (skipDocumentationFinancialPatch.value || !documentationUploadMode.value || !application.value?.id) {
-    return
-  }
-  const idx = selectedCoDebtorIndex.value
-  if (idx == null) {
-    return
-  }
-  const co = form.value.co_debtors[idx]
-  if (!co || Number(co.id) !== applicantId) {
-    return
-  }
-  const patch = buildDocumentationFinancialPatch(co.financial_info)
-  if (Object.keys(patch).length === 0) {
-    return
-  }
   try {
-    await $csrf()
-    await $api(`/credit-applications/${application.value.id}/documentation-applicant-financial`, {
-      method: 'PATCH',
-      body: { role: 'CODEUDOR', applicant_id: applicantId, financial_info: patch },
-    })
-    const fi = co.financial_info
-    if (fi && typeof fi === 'object') {
-      patchApplicationCodeudorFinancialCache(applicantId, fi as Record<string, unknown>)
-    }
+    await patchCodeudorDocumentationFinancialToServer(applicantId)
   } catch (e: any) {
     console.error(e)
     toast.error(e?.data?.message ?? 'No se pudo guardar el tipo de actividad o documentos auxiliares del codeudor')
@@ -1170,6 +1459,28 @@ watch(
 )
 
 watch(
+  () => pendingAuxiliaryFileKeys(form.value.debtor.auxiliaryDocumentFiles),
+  async (pend, prevPend) => {
+    if (skipDocumentationFinancialPatch.value || !documentationUploadMode.value) {
+      return
+    }
+    if (!pend || pend === prevPend) {
+      return
+    }
+    try {
+      await flushDebtorAuxiliaryDocumentUploads()
+      await patchDebtorDocumentationFinancialToServer()
+    } catch (e: any) {
+      if (e?.message === 'document_too_large') {
+        return
+      }
+      console.error(e)
+      toast.error(e?.data?.message ?? 'No se pudo subir o guardar los documentos auxiliares del deudor')
+    }
+  },
+)
+
+watch(
   () => ({
     idx: selectedCoDebtorIndex.value,
     id: selectedCoDebtorIndex.value != null ? form.value.co_debtors[selectedCoDebtorIndex.value]?.id : null,
@@ -1182,6 +1493,34 @@ watch(
     void pushCodeudorDocumentationFinancial(state.id)
   },
   { deep: true },
+)
+
+watch(
+  () => form.value.co_debtors.map((c) => ({ id: c.id, pend: pendingAuxiliaryFileKeys(c.auxiliaryDocumentFiles) })),
+  async (curr, prev) => {
+    if (skipDocumentationFinancialPatch.value || !documentationUploadMode.value) {
+      return
+    }
+    for (const r of curr) {
+      if (typeof r.id !== 'number' || !r.pend) {
+        continue
+      }
+      const prevPend = prev?.find(p => p.id === r.id)?.pend
+      if (r.pend === prevPend) {
+        continue
+      }
+      try {
+        await flushCodeudorAuxiliaryDocumentUploads(r.id)
+        await patchCodeudorDocumentationFinancialToServer(r.id)
+      } catch (e: any) {
+        if (e?.message === 'document_too_large') {
+          return
+        }
+        console.error(e)
+        toast.error(e?.data?.message ?? 'No se pudo subir o guardar los documentos auxiliares del codeudor')
+      }
+    }
+  },
 )
 
 async function fetchCatalogs() {
@@ -1275,6 +1614,30 @@ onMounted(() => {
         </PermissionGate>
       </div>
     </div>
+
+    <Alert
+      v-if="showReturnedCorrectionHint && application?.id"
+      class="border-amber-600/35 bg-amber-500/[0.08] dark:border-amber-500/35 dark:bg-amber-950/40 [&>svg]:text-amber-700 dark:[&>svg]:text-amber-300"
+    >
+      <Icon name="i-lucide-info" class="h-4 w-4" />
+      <AlertTitle>Solicitud devuelta para corrección</AlertTitle>
+      <AlertDescription class="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <p class="text-sm leading-relaxed">
+          <template v-if="returnedFromDocumentationReview">
+            Esta solicitud volvió desde <span class="font-medium">revisión de documentación</span>. El reenvío no se hace en esta pantalla: abra la edición, cargue o ajuste los documentos y use el botón
+            <span class="font-medium">«Enviar a revisión de documentación»</span> al pie del formulario (guarda los cambios y devuelve la solicitud al revisor).
+          </template>
+          <template v-else>
+            Revise la trazabilidad, abra <span class="font-medium">Corregir radicación</span> y vuelva a enviar según el flujo que corresponda.
+          </template>
+        </p>
+        <Button v-if="application?.id" as-child class="w-full shrink-0 sm:w-auto">
+          <NuxtLink :to="`/radicacion/editar/${application.id}`">
+            Ir a corregir y reenviar
+          </NuxtLink>
+        </Button>
+      </AlertDescription>
+    </Alert>
 
     <div v-if="loading" class="flex justify-center py-12">
       <Icon name="i-lucide-loader-2" class="h-10 w-10 animate-spin text-muted-foreground" />
@@ -1681,7 +2044,12 @@ onMounted(() => {
             v-if="(application?.documents ?? []).length > 0 && !allDocumentsMarkedReviewed"
             class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
           >
-            Marca «Revisado» en todos los documentos del deudor y de cada codeudor (pasos del formulario) antes de enviar el concepto.
+            <template v-if="documentationReviewFlowActive">
+              Marca «Revisado» en cada documento del checklist auxiliar del deudor y de cada codeudor (pasos del formulario) antes de enviar el concepto.
+            </template>
+            <template v-else>
+              Marca «Revisado» en todos los documentos del deudor y de cada codeudor (pasos del formulario) antes de enviar el concepto.
+            </template>
           </p>
           <div class="space-y-1.5">
             <Label for="documentation_decision">Decisión *</Label>
@@ -1863,15 +2231,29 @@ onMounted(() => {
               v-model="form.debtor"
               :show-search="false"
               :hide-financial-section="true"
+              :hide-documents-section="!showDocumentationAuxiliaryChecklist"
               :show-co-debtor-concept="false"
               :read-only-form="true"
               :documents-editable-only="documentationUploadMode"
-              :show-documentos-auxiliar-checklist="documentationUploadMode"
+              :show-documentos-auxiliar-checklist="showDocumentationAuxiliaryChecklist"
+              :auxiliary-pending-upload-hint="documentationUploadMode ? 'immediate' : 'draftSave'"
+              :auxiliary-interaction-mode="documentationAuxiliaryInteractionMode"
+              :show-auxiliary-document-review="showAuxiliaryDocumentReviewInChecklist"
               :credit-application-id="application?.id ?? null"
               :credit-application-documents="application?.documents ?? []"
             />
-            <div v-if="getDocumentsForApplicant(debtor.id).length > 0" class="space-y-3 border-t pt-4">
-              <p class="text-sm font-semibold">Documentos adjuntos</p>
+            <div v-if="!documentationReviewFlowActive && getDocumentsForApplicant(debtor.id).length > 0" class="space-y-3 border-t pt-4">
+              <div class="space-y-1">
+                <p class="text-sm font-semibold">
+                  {{ documentationUploadMode ? 'Archivos de la solicitud (descarga y revisión)' : 'Documentos adjuntos' }}
+                </p>
+                <p
+                  v-if="documentationUploadMode"
+                  class="text-xs text-muted-foreground leading-snug"
+                >
+                  Enlaces a los mismos archivos de la solicitud. Si el checklist de arriba ya muestra la carga, use esta zona para abrir el archivo y, si aplica, registrar la revisión documental.
+                </p>
+              </div>
               <div class="flex min-w-0 flex-wrap gap-2">
                 <PermissionGate v-for="doc in getDocumentsForApplicant(debtor.id)" :key="doc.id" permission="radicacion_descargar_documentos">
                   <div class="min-w-0 max-w-full space-y-2 rounded-md border p-2">
@@ -1930,6 +2312,7 @@ onMounted(() => {
               <ApplicantFormFields
                 v-model="form.debtor"
                 :show-only-financial="true"
+                :hide-documents-section="!documentationUploadMode"
                 :read-only-form="true"
                 :documents-editable-only="documentationUploadMode"
               />
@@ -2067,18 +2450,31 @@ onMounted(() => {
                   v-model="form.co_debtors[selectedCoDebtorIndex]!"
                   :show-co-debtor-concept="true"
                   :hide-financial-section="true"
-                  :hide-documents-section="!documentationUploadMode"
+                  :hide-documents-section="!showDocumentationAuxiliaryChecklist"
                   :read-only-form="true"
                   :documents-editable-only="documentationUploadMode"
-                  :show-documentos-auxiliar-checklist="documentationUploadMode"
+                  :show-documentos-auxiliar-checklist="showDocumentationAuxiliaryChecklist"
+                  :auxiliary-pending-upload-hint="documentationUploadMode ? 'immediate' : 'draftSave'"
+                  :auxiliary-interaction-mode="documentationAuxiliaryInteractionMode"
+                  :show-auxiliary-document-review="showAuxiliaryDocumentReviewInChecklist"
                   :credit-application-id="application?.id ?? null"
                   :credit-application-documents="application?.documents ?? []"
                 />
                 <div
-                  v-if="getDocumentsForApplicant(coDebtors[selectedCoDebtorIndex]?.id ?? coDebtors[selectedCoDebtorIndex]?.applicant_id).length > 0"
+                  v-if="!documentationReviewFlowActive && getDocumentsForApplicant(coDebtors[selectedCoDebtorIndex]?.id ?? coDebtors[selectedCoDebtorIndex]?.applicant_id).length > 0"
                   class="space-y-3"
                 >
-                  <p class="text-sm font-semibold">Documentos adjuntos</p>
+                  <div class="space-y-1">
+                    <p class="text-sm font-semibold">
+                      {{ documentationUploadMode ? 'Archivos de la solicitud (descarga y revisión)' : 'Documentos adjuntos' }}
+                    </p>
+                    <p
+                      v-if="documentationUploadMode"
+                      class="text-xs text-muted-foreground leading-snug"
+                    >
+                      Enlaces a los archivos del codeudor en la solicitud. Complementa el checklist de arriba cuando está en revisión documental.
+                    </p>
+                  </div>
                   <div class="flex min-w-0 flex-wrap gap-2">
                     <PermissionGate
                       v-for="doc in getDocumentsForApplicant(coDebtors[selectedCoDebtorIndex]?.id ?? coDebtors[selectedCoDebtorIndex]?.applicant_id)"

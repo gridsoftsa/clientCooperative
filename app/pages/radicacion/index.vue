@@ -346,6 +346,15 @@ watch(deactivateDialogOpen, (v) => {
                     {{ app.code || '-' }}
                     <span class="text-xs text-muted-foreground ml-1">(concepto final)</span>
                   </NuxtLink>
+                  <NuxtLink
+                    v-else-if="app.status === 'Documentation_Review' && canOpenDraftForm && !isRevisionDocumentos"
+                    :to="`/radicacion/${app.id}`"
+                    class="font-medium text-primary hover:underline"
+                    title="Abrir el detalle de la solicitud: mientras está en revisión documental puede consultar datos y adjuntar o reemplazar archivos (no es lo mismo que «devuelta»: aún está en cola del revisor)."
+                  >
+                    {{ app.code || '-' }}
+                    <span class="text-xs text-muted-foreground ml-1">(detalle y adjuntos)</span>
+                  </NuxtLink>
                   <span v-else>{{ app.code || '-' }}</span>
                 </TableCell>
                 <TableCell class="font-mono text-sm">{{ app.numero_radicado_externo || '-' }}</TableCell>
@@ -471,11 +480,16 @@ watch(deactivateDialogOpen, (v) => {
                         variant="outline"
                         size="sm"
                         class="gap-1.5"
-                        title="Ver solo lectura (no permite cambiar datos)"
+                        :title="app.status === 'Documentation_Review' && canOpenDraftForm
+                          ? 'Abrir el detalle: puede adjuntar o reemplazar documentos mientras la solicitud está en revisión documental (el revisor aún no ha emitido concepto).'
+                          : 'Ver detalle de la solicitud'"
                         @click="router.push(`/radicacion/${app.id}`)"
                       >
-                        <Icon name="i-lucide-eye" class="h-3.5 w-3.5 shrink-0" />
-                        Ver
+                        <Icon
+                          :name="app.status === 'Documentation_Review' && canOpenDraftForm ? 'i-lucide-file-stack' : 'i-lucide-eye'"
+                          class="h-3.5 w-3.5 shrink-0"
+                        />
+                        {{ app.status === 'Documentation_Review' && canOpenDraftForm ? 'Abrir solicitud' : 'Ver' }}
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_desactivar">

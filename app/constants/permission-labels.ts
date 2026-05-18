@@ -94,7 +94,7 @@ export interface PermissionLike {
 
 /**
  * Subsecciones dentro del bloque «Radicación» en crear/editar rol.
- * Orden: operación general → documentos → análisis → dirección → catálogos → otros (nuevos permisos sin clasificar).
+ * Orden: operación general → documentos → análisis → dirección → catálogos → asegurabilidad / sucursal (prefijo) → otros.
  */
 export interface RadicacionPermissionSubgroup {
   key: string
@@ -155,6 +155,15 @@ const RADICACION_SUBGROUP_DEFINITIONS: Array<{ key: string; label: string; names
   },
 ]
 
+/**
+ * Subgrupos por prefijo (`radicacion_insurability_*`, etc.) para no mezclarlos en «Otros».
+ * Orden: después de los bloques con lista fija en {@link RADICACION_SUBGROUP_DEFINITIONS}.
+ */
+const RADICACION_PREFIX_SUBGROUPS: ReadonlyArray<{ key: string; label: string; prefix: string }> = [
+  { key: 'insurability', label: 'Asegurabilidad', prefix: 'radicacion_insurability_' },
+  { key: 'sucursal_solicitud', label: 'Sucursal de la solicitud', prefix: 'radicacion_sucursal_' },
+]
+
 /** Acciones traducidas (primera letra mayúscula) */
 const ACTION_LABELS: Record<string, string> = {
   ver: 'Ver',
@@ -162,6 +171,26 @@ const ACTION_LABELS: Record<string, string> = {
   editar: 'Editar',
   eliminar: 'Eliminar',
   acceso: 'Acceso',
+  guardar: 'Guardar',
+  subir: 'Subir',
+  decidir: 'Decidir',
+  cancelar: 'Cancelar',
+  desactivar: 'Desactivar',
+  marcar: 'Marcar',
+  descargar: 'Descargar',
+}
+
+/** Verbo reconocido como último segmento en `radicacion_<recurso>_<verbo>`. */
+const RADICACION_TRAILING_ACTIONS = new Set(Object.keys(ACTION_LABELS))
+
+/**
+ * Recurso intermedio (snake entre `radicacion` y la acción) → texto UI en español.
+ * Evita etiquetas duplicadas tipo «Insurability Radicación» para `radicacion_insurability_ver`, etc.
+ */
+const PERMISSION_RESOURCE_LABELS: Record<string, string> = {
+  insurability: 'asegurabilidad',
+  insurability_form: 'formato de asegurabilidad',
+  sucursal: 'sucursal de la solicitud',
 }
 
 /** Capitaliza primera letra de cada palabra */
@@ -175,10 +204,8 @@ function capitalizeWords(str: string): string {
 /**
  * Obtener etiqueta legible para un nombre de permiso.
  * Orden español latinoamericano: acción + categoría.
- * Ej: plantillas_ver → "Ver Configuración de plantillas"
- * Ej: usuarios_crear → "Crear Usuarios"
+ * Etiquetas fijas en {@link PERMISSION_LABEL_OVERRIDES} cuando el nombre en varias partes no basta.
  */
-/** Etiquetas fijas cuando el nombre en varias partes no basta (ej. enviar a análisis) */
 const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   settings_ver: 'Ver configuración',
   radicacion_enviar_analisis: 'Enviar solicitud a análisis',
@@ -208,6 +235,19 @@ export function getPermissionLabel(name: string): string {
   }
   const parts = name.split('_')
   const category = parts[0] ?? ''
+
+  if (category === 'radicacion' && parts.length >= 3) {
+    const last = parts[parts.length - 1] ?? ''
+    if (RADICACION_TRAILING_ACTIONS.has(last)) {
+      const resourceKey = parts.slice(1, -1).join('_')
+      const actionLabel = ACTION_LABELS[last] ?? capitalizeWords(last)
+      const resourceLabel
+        = PERMISSION_RESOURCE_LABELS[resourceKey]
+          ?? capitalizeWords(parts.slice(1, -1).join(' '))
+      return `${actionLabel} ${resourceLabel}`
+    }
+  }
+
   const action = parts[1] ?? ''
 
   const categoryLabel = PERMISSION_CATEGORY_LABELS[category] ?? capitalizeWords(category)
@@ -229,6 +269,9 @@ export function groupRadicacionPermissions(list: PermissionLike[]): RadicacionPe
   for (const def of RADICACION_SUBGROUP_DEFINITIONS) {
     buckets.set(def.key, [])
   }
+  for (const psg of RADICACION_PREFIX_SUBGROUPS) {
+    buckets.set(psg.key, [])
+  }
   buckets.set('otros', [])
 
   for (const p of list) {
@@ -238,6 +281,15 @@ export function groupRadicacionPermissions(list: PermissionLike[]): RadicacionPe
         buckets.get(def.key)!.push(p)
         placed = true
         break
+      }
+    }
+    if (!placed) {
+      for (const psg of RADICACION_PREFIX_SUBGROUPS) {
+        if (p.name.startsWith(psg.prefix)) {
+          buckets.get(psg.key)!.push(p)
+          placed = true
+          break
+        }
       }
     }
     if (!placed) {
@@ -254,6 +306,18 @@ export function groupRadicacionPermissions(list: PermissionLike[]): RadicacionPe
     out.push({
       key: def.key,
       label: def.label,
+      items: sortPermissionsByLabelEs(items),
+    })
+  }
+
+  for (const psg of RADICACION_PREFIX_SUBGROUPS) {
+    const items = buckets.get(psg.key) ?? []
+    if (items.length === 0) {
+      continue
+    }
+    out.push({
+      key: psg.key,
+      label: psg.label,
       items: sortPermissionsByLabelEs(items),
     })
   }

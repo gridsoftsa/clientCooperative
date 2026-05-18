@@ -36,3 +36,11 @@ export interface PaginatedPermissions {
     total: number
   }
 }
+
+/** Default permission sets from GET /roles/templates (aligned with seeded roles). */
+export interface RoleTemplate {
+  key: string
+  label: string
+  description: string | null
+  permissions: string[]
+}

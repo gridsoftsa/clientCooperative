@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { Permission } from '~/types/role'
+import type { Permission, RoleTemplate } from '~/types/role'
 import {
   PERMISSION_CATEGORY_LABELS,
   PERMISSION_CATEGORY_SECTION_TITLES,
@@ -24,8 +24,17 @@ const formData = ref({
 })
 
 const permissions = ref<Permission[]>([])
+const templates = ref<RoleTemplate[]>([])
+const selectedTemplateKey = ref<string>('__none__')
 const loading = ref(false)
 const saving = ref(false)
+
+const selectedTemplateDescription = computed(() => {
+  if (selectedTemplateKey.value === '__none__') {
+    return null
+  }
+  return templates.value.find(t => t.key === selectedTemplateKey.value)?.description ?? null
+})
 
 const groupedPermissions = computed(() => {
   const groups: Record<string, Permission[]> = {}
@@ -93,14 +102,37 @@ function countSelectedInList(list: { name: string }[]): number {
   return list.filter(p => formData.value.permissions.includes(p.name)).length
 }
 
-const fetchPermissions = async () => {
+function applyRoleTemplatePermissions(templateKey: string) {
+  const template = templates.value.find(t => t.key === templateKey)
+  if (!template) {
+    return
+  }
+  const allowed = new Set(permissions.value.map(p => p.name))
+  formData.value.permissions = template.permissions.filter(p => allowed.has(p))
+  toast.success(`Permisos cargados desde «${template.label}»`)
+}
+
+function onRoleTemplatePicked(value: unknown) {
+  const key = typeof value === 'string' ? value : String(value ?? '')
+  selectedTemplateKey.value = key
+  if (key === '__none__') {
+    return
+  }
+  applyRoleTemplatePermissions(key)
+}
+
+const fetchPermissionsAndTemplates = async () => {
   loading.value = true
   try {
-    const res = await $api<{ data: Permission[] }>('/roles/permissions')
-    permissions.value = res.data
+    const [permRes, tplRes] = await Promise.all([
+      $api<{ data: Permission[] }>('/roles/permissions'),
+      $api<{ data: RoleTemplate[] }>('/roles/templates'),
+    ])
+    permissions.value = permRes.data
+    templates.value = tplRes.data
   } catch (error) {
-    console.error('Error al cargar permisos:', error)
-    toast.error('Error al cargar permisos')
+    console.error('Error al cargar permisos o plantillas:', error)
+    toast.error('Error al cargar permisos o plantillas')
   } finally {
     loading.value = false
   }
@@ -127,7 +159,7 @@ const handleSubmit = async () => {
   }
 }
 
-onMounted(() => fetchPermissions())
+onMounted(() => fetchPermissionsAndTemplates())
 </script>
 
 <template>
@@ -162,6 +194,38 @@ onMounted(() => fetchPermissions())
               />
               <p class="text-sm text-muted-foreground mt-1">
                 El nombre debe ser único y en minúsculas (ej: moderador, editor)
+              </p>
+            </div>
+
+            <div v-if="!loading && templates.length > 0" class="space-y-2">
+              <Label for="role-template">Plantilla (opcional)</Label>
+              <Select
+                id="role-template"
+                :model-value="selectedTemplateKey"
+                @update:model-value="onRoleTemplatePicked"
+              >
+                <SelectTrigger class="w-full max-w-md">
+                  <SelectValue placeholder="Elegir plantilla de permisos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">
+                    Sin plantilla (elegir permisos manualmente)
+                  </SelectItem>
+                  <SelectItem
+                    v-for="tpl in templates"
+                    :key="tpl.key"
+                    :value="tpl.key"
+                  >
+                    {{ tpl.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p v-if="selectedTemplateDescription" class="text-sm text-muted-foreground leading-relaxed">
+                {{ selectedTemplateDescription }}
+              </p>
+              <p v-else class="text-sm text-muted-foreground leading-relaxed">
+                Al elegir una plantilla se reemplazan los permisos seleccionados por los de esa plantilla
+                (puede ajustarlos después en la lista de abajo). El nombre del rol no cambia.
               </p>
             </div>
           </CardContent>

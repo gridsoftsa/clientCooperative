@@ -45,6 +45,12 @@ const props = withDefaults(
     hideDocumentsSection?: boolean
     /** Checklist documentos módulo auxiliar (según actividad económica); típico solo deudor en radicación. */
     showDocumentosAuxiliarChecklist?: boolean
+    /** Texto para archivos pendientes en checklist auxiliar (`immediate` en detalle con subida automática). */
+    auxiliaryPendingUploadHint?: 'draftSave' | 'immediate'
+    /** `full` en alta/edición; `uploadOnly` / `viewOnly` en revisión documental (detalle). */
+    auxiliaryInteractionMode?: 'full' | 'uploadOnly' | 'viewOnly'
+    /** Checkbox y comentario de revisión por ítem del checklist (documentos ya vinculados). */
+    showAuxiliaryDocumentReview?: boolean
     /** Documentos de la solicitud (enlaces de archivos ya subidos en checklist auxiliar). */
     creditApplicationDocuments?: Array<{
       id: number
@@ -52,6 +58,8 @@ const props = withDefaults(
       title?: string
       original_name?: string
       download_url?: string
+      is_reviewed?: boolean
+      review_comment?: string | null
     }>
     /**
      * Si true, «Ingreso cultivos/negocio» no se edita a mano: lo calculan las plantillas de actividad económica.
@@ -66,6 +74,9 @@ const props = withDefaults(
     hideDocumentsSection: false,
     creditApplicationId: null,
     showDocumentosAuxiliarChecklist: false,
+    auxiliaryPendingUploadHint: 'draftSave',
+    auxiliaryInteractionMode: 'full',
+    showAuxiliaryDocumentReview: false,
     creditApplicationDocuments: () => [],
   },
 )
@@ -93,6 +104,11 @@ const docCanEditar = computed(
 )
 const docCanEliminar = computed(
   () => docActionsEnabled.value && hasAnyPermission(['radicacion_documentos_eliminar']),
+)
+
+/** Bloquea subida en checklist auxiliar si no hay permiso de subida (p. ej. solo «decidir» en revisión documental). */
+const auxiliaryUploadBlockedByPermissions = computed(
+  () => (personalReadOnly.value && !props.documentsEditableOnly) || !docCanSubir.value,
 )
 
 function canEditDocumentTitle(doc: ApplicantDocumentForm): boolean {
@@ -520,7 +536,7 @@ watch(financial, () => {
 }, { deep: true })
 
 function validateAuxiliaryDocumentsRequired(): boolean {
-  if (!props.showDocumentosAuxiliarChecklist || !docCanSubir.value) {
+  if (!props.showDocumentosAuxiliarChecklist || !docCanSubir.value || props.auxiliaryInteractionMode === 'viewOnly') {
     return true
   }
   return auxiliaryDocumentsSectionRef.value?.validateRequiredAuxiliaryUploads() ?? true
@@ -1206,7 +1222,10 @@ function formatFileSize(bytes: number): string {
           :credit-application-id="creditApplicationId ?? undefined"
           :application-documents="creditApplicationDocuments ?? []"
           :economic-activity-options="economicActivityOptions"
-          :disabled="(personalReadOnly && !documentsEditableOnly) || !docCanSubir"
+          :auxiliary-pending-upload-hint="auxiliaryPendingUploadHint"
+          :interaction-mode="auxiliaryInteractionMode"
+          :show-document-review-controls="showAuxiliaryDocumentReview"
+          :disabled="auxiliaryUploadBlockedByPermissions"
           @update:applicant="emit('update:modelValue', $event)"
         />
       </div>
