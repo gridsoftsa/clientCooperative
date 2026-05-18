@@ -95,6 +95,18 @@ const cancelRequestDialogOpen = ref(false)
 const deleteWithReason = useApiDeleteWithReason()
 const timelineEvents = computed(() => Array.isArray(application.value?.timeline) ? application.value.timeline : [])
 const timelineExpanded = ref(false)
+
+function timelineHasReturnedEvent(events: unknown): boolean {
+  if (!Array.isArray(events)) {
+    return false
+  }
+  return events.some(
+    (e: unknown) =>
+      e != null
+      && typeof e === 'object'
+      && String((e as { to_status?: unknown }).to_status ?? '') === 'Returned',
+  )
+}
 const directorDecision = ref<'approved' | 'returned' | ''>('')
 const directorConcept = ref('')
 const directorDecisionDialogOpen = ref(false)
@@ -951,6 +963,12 @@ async function fetchApplication() {
       documents: Array.isArray(data?.documents) ? data.documents : [],
     }
     if (String(application.value?.status ?? '') === 'Returned') {
+      timelineExpanded.value = true
+    } else if (
+      application.value?.skip_next_director_review === true
+      || application.value?.resubmit_to_analyst_after_return === true
+      || timelineHasReturnedEvent(application.value?.timeline)
+    ) {
       timelineExpanded.value = true
     }
     if (String(application.value?.status ?? '') === 'Draft' && hasAnyPermission(['radicacion_crear', 'radicacion_editar'])) {

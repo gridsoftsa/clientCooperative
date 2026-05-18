@@ -51,6 +51,27 @@ const documentsOnlyEditMode = computed(
 const timelineEvents = computed(() =>
   Array.isArray(application.value?.timeline) ? application.value.timeline : [],
 )
+/**
+ * El asesor entra casi siempre por /editar (listado). La trazabilidad no debe ocultarse al pasar a
+ * Borrador tras guardar: devolución documental (skip_next_director_review), reenvío al analista, etc.
+ */
+const showEditTraceability = computed((): boolean => {
+  if (!application.value) {
+    return false
+  }
+  if (String(application.value.status ?? '') === 'Returned') {
+    return true
+  }
+  if (application.value.skip_next_director_review === true) {
+    return true
+  }
+  if (application.value.resubmit_to_analyst_after_return === true) {
+    return true
+  }
+  return timelineEvents.value.some(
+    (e: { to_status?: string | null }) => String(e?.to_status ?? '') === 'Returned',
+  )
+})
 /** Devolución: trazabilidad visible por defecto para ver motivo y actor sin salir del formulario. */
 const returnTimelineExpanded = ref(true)
 
@@ -1438,7 +1459,7 @@ onMounted(() => {
     </div>
 
     <template v-else-if="application && canEdit">
-      <Card v-if="application.status === 'Returned'">
+      <Card v-if="showEditTraceability">
         <CardHeader>
           <div class="flex items-center justify-between gap-3">
             <CardTitle>Trazabilidad</CardTitle>
@@ -1453,7 +1474,7 @@ onMounted(() => {
             </Button>
           </div>
           <CardDescription>
-            Registro de quién devolvió la radicación, el cambio de estado y el concepto. Revise esto antes de corregir el formulario.
+            Historial de estados y conceptos (incluye devoluciones del director, documentación o analista). Revíselo antes de corregir y reenviar.
           </CardDescription>
         </CardHeader>
         <CardContent v-if="returnTimelineExpanded">
