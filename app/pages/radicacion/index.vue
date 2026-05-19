@@ -15,12 +15,55 @@ definePageMeta({
 
 const router = useRouter()
 const { $api } = useNuxtApp()
-const { hasAnyPermission, hasRole } = usePermissions()
+const { hasAnyPermission, hasRole, hasPermission } = usePermissions()
 /** Editar / continuar borrador: crear o editar (nueva solo exige crear) */
 const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
 const isDirectorAgencia = computed(() => hasRole('director_agencia'))
 const isDirectorCredito = computed(() => hasRole('director_credito'))
 const isRevisionDocumentos = computed(() => hasRole('revision_documentos'))
+
+/** Revisión documentos: enlace al detalle en revisión documental o fuera de ella si la solicitud requiere asegurabilidad (p. ej. subir checklist en análisis). */
+function revisionRadicacionDetailLinkEligible(app: { status?: string, documentation_insurability_required?: boolean }): boolean {
+  if (!isRevisionDocumentos.value) {
+    return false
+  }
+  if (String(app.status ?? '') === 'Documentation_Review') {
+    return true
+  }
+  return Boolean(app.documentation_insurability_required)
+    && !isCreditApplicationTerminalImmutable(app.status)
+    && hasPermission('radicacion_insurability_ver')
+}
+
+/** Botón «Ver»: el rol revisión usa «Revisión documentos» en Documentation_Review; en otros estados solo si aplica seguimiento de asegurabilidad. */
+function showVerRadicacionListButton(app: { status?: string, documentation_insurability_required?: boolean }): boolean {
+  if (isDirectorAgencia.value) {
+    return false
+  }
+  if (isDirectorCredito.value && app.status === 'Credit_Director_Review') {
+    return false
+  }
+  if (isRevisionDocumentos.value) {
+    if (String(app.status ?? '') === 'Documentation_Review') {
+      return false
+    }
+    return Boolean(app.documentation_insurability_required)
+      && !isCreditApplicationTerminalImmutable(app.status)
+      && hasPermission('radicacion_insurability_ver')
+  }
+  return true
+}
+
+/** Icono «pila de archivos» cuando el detalle implica adjuntos destacados (revisión documental o asegurabilidad). */
+function verRadicacionListPrefersDocumentActionsIcon(app: { status?: string, documentation_insurability_required?: boolean }): boolean {
+  if (String(app.status ?? '') === 'Documentation_Review' && canOpenDraftForm.value && !isRevisionDocumentos.value) {
+    return true
+  }
+  if (isRevisionDocumentos.value && Boolean(app.documentation_insurability_required) && String(app.status ?? '') !== 'Documentation_Review') {
+    return true
+  }
+  return false
+}
 const isAnalista = computed(() => hasRole('analista'))
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
@@ -347,6 +390,17 @@ watch(deactivateDialogOpen, (v) => {
                     <span class="text-xs text-muted-foreground ml-1">(concepto final)</span>
                   </NuxtLink>
                   <NuxtLink
+                    v-else-if="revisionRadicacionDetailLinkEligible(app)"
+                    :to="`/radicacion/${app.id}`"
+                    class="font-medium text-primary hover:underline"
+                    :title="app.status === 'Documentation_Review' ? 'Revisión y concepto de documentación' : 'Detalle: documentos de asegurabilidad (la solicitud requiere asegurabilidad).'"
+                  >
+                    {{ app.code || '-' }}
+                    <span class="text-xs text-muted-foreground ml-1">{{
+                      app.status === 'Documentation_Review' ? '(revisión documental)' : '(asegurabilidad)'
+                    }}</span>
+                  </NuxtLink>
+                  <NuxtLink
                     v-else-if="app.status === 'Documentation_Review' && canOpenDraftForm && !isRevisionDocumentos"
                     :to="`/radicacion/${app.id}`"
                     class="font-medium text-primary hover:underline"
@@ -476,20 +530,22 @@ watch(deactivateDialogOpen, (v) => {
                     </PermissionGate>
                     <PermissionGate permission="radicacion_ver">
                       <Button
-                        v-if="!isDirectorAgencia && !isRevisionDocumentos && !(isDirectorCredito && app.status === 'Credit_Director_Review')"
+                        v-if="showVerRadicacionListButton(app)"
                         variant="outline"
                         size="sm"
                         class="gap-1.5"
-                        :title="app.status === 'Documentation_Review' && canOpenDraftForm
-                          ? 'Abrir el detalle: puede adjuntar o reemplazar documentos mientras la solicitud está en revisión documental (el revisor aún no ha emitido concepto).'
+                        :title="verRadicacionListPrefersDocumentActionsIcon(app)
+                          ? (isRevisionDocumentos && app.documentation_insurability_required && app.status !== 'Documentation_Review'
+                            ? 'Abrir el detalle para gestionar documentos de asegurabilidad.'
+                            : 'Abrir el detalle: puede adjuntar o reemplazar documentos mientras la solicitud está en revisión documental (el revisor aún no ha emitido concepto).')
                           : 'Ver detalle de la solicitud'"
                         @click="router.push(`/radicacion/${app.id}`)"
                       >
                         <Icon
-                          :name="app.status === 'Documentation_Review' && canOpenDraftForm ? 'i-lucide-file-stack' : 'i-lucide-eye'"
+                          :name="verRadicacionListPrefersDocumentActionsIcon(app) ? 'i-lucide-file-stack' : 'i-lucide-eye'"
                           class="h-3.5 w-3.5 shrink-0"
                         />
-                        {{ app.status === 'Documentation_Review' && canOpenDraftForm ? 'Abrir solicitud' : 'Ver' }}
+                        {{ verRadicacionListPrefersDocumentActionsIcon(app) ? (isRevisionDocumentos ? 'Asegurabilidad' : 'Abrir solicitud') : 'Ver' }}
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_desactivar">

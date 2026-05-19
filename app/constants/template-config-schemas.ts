@@ -66,7 +66,7 @@ export interface TemplateConfigSchema {
     title?: string
     fields: TemplateConfigField[]
     /** Layout alternativo: tabla de desglose de costos (aves-ponedoras, cultivo-ciclo-corto) */
-    layout?: 'avesCostBreakdownTable' | 'cultivoCicloCortoCostBreakdownTable' | 'cultivoPermanenteFinagroTable' | 'cultivoPermanenteReferencia' | 'auxiliaryDocumentsChecklist'
+    layout?: 'avesCostBreakdownTable' | 'cultivoCicloCortoCostBreakdownTable' | 'cultivoPermanenteFinagroTable' | 'cultivoPermanenteReferencia' | 'auxiliaryDocumentsChecklist' | 'documentationInsurabilityDocumentsChecklist'
     /**
      * Si true, en radicación los campos de esta sección no se marcan solo lectura aunque vengan de la plantilla
      * (el deudor puede ajustarlos en radicación mientras no se use esta bandera en esa sección).
@@ -486,6 +486,18 @@ const schemaAuxiliaryDocuments: TemplateConfigSchema = {
   ],
 }
 
+const schemaDocumentationInsurabilityDocuments: TemplateConfigSchema = {
+  template_key: 'documentation-insurability-documents',
+  sections: [
+    {
+      key: 'documentation_insurability_documents',
+      title: 'Documentos de asegurabilidad (revisión documental)',
+      layout: 'documentationInsurabilityDocumentsChecklist',
+      fields: [],
+    },
+  ],
+}
+
 const TEMPLATE_CONFIG_SCHEMAS: Record<string, TemplateConfigSchema> = {
   'ganado-ceba': schemaGanadoCeba,
   'ganado-doble-proposito': schemaGanadoDobleProposito,
@@ -503,6 +515,7 @@ const TEMPLATE_CONFIG_SCHEMAS: Record<string, TemplateConfigSchema> = {
   'transporte-pasajeros': schemaTransportePasajeros,
   ing: schemaIngAnalisisScore,
   'auxiliary-documents': schemaAuxiliaryDocuments,
+  'documentation-insurability-documents': schemaDocumentationInsurabilityDocuments,
 }
 
 export function getTemplateConfigSchema(templateKey: string): TemplateConfigSchema | null {
@@ -539,6 +552,8 @@ export function getConfigFieldKeys(templateKey: string): string[] {
       keys.push('plantas_x_ha', 'anio_inicio_produccion', 'duracion_meses', 'descripcion')
     } else if (section.layout === 'auxiliaryDocumentsChecklist') {
       keys.push('itemsByActivity')
+    } else if (section.layout === 'documentationInsurabilityDocumentsChecklist') {
+      keys.push('items')
     } else if (section.excludeFromRadicacionReadonly) {
       continue
     } else {

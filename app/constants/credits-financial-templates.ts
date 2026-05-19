@@ -137,6 +137,7 @@ export const sectorsConfig: SectorConfig[] = [
       { value: 'aprobadores', label: 'Aprobadores' },
       { value: 'excepciones', label: 'Excepciones' },
       { value: 'auxiliary-documents', label: 'Documentos (módulo auxiliar)' },
+      { value: 'documentation-insurability-documents', label: 'Asegurabilidad (revisión documental)' },
       { value: 'bancos', label: 'Bancos' },
       { value: 'ing', label: 'ING' },
     ],

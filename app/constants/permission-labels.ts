@@ -189,6 +189,7 @@ const RADICACION_TRAILING_ACTIONS = new Set(Object.keys(ACTION_LABELS))
  */
 const PERMISSION_RESOURCE_LABELS: Record<string, string> = {
   insurability: 'asegurabilidad',
+  insurability_documentos: 'documentos de asegurabilidad',
   insurability_form: 'formato de asegurabilidad',
   sucursal: 'sucursal de la solicitud',
 }
@@ -220,7 +221,8 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   radicacion_descargar_documentos: 'Ver y descargar adjuntos',
   radicacion_documentos_subir: 'Subir adjuntos',
   radicacion_documentos_editar: 'Editar títulos de adjuntos',
-  radicacion_documentos_eliminar: 'Eliminar adjuntos',
+  radicacion_insurability_documentos_editar: 'Editar títulos de documentos de asegurabilidad',
+  radicacion_insurability_documentos_eliminar: 'Eliminar documentos de asegurabilidad',
   reportes_ver: 'Ver reportes',
   radicacion_catalogos_ver: 'Ver catálogos',
   radicacion_catalogos_editar: 'Editar catálogos',

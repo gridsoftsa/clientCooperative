@@ -85,6 +85,7 @@ const templateLabels: Record<string, string> = {
   'job-position': 'Cargo',
   'credit-destination': 'Destino del crédito',
   'auxiliary-documents': 'Documentos módulo auxiliar (por actividad económica)',
+  'documentation-insurability-documents': 'Asegurabilidad (revisión documental)',
   aprobadores: 'Aprobadores (niveles de aprobación)',
   excepciones: 'Excepciones (motivos — director de crédito)',
   bancos: 'Bancos (Análisis y Score)',

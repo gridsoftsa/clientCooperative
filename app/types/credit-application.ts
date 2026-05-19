@@ -49,6 +49,11 @@ export interface FinancialInfoForm {
    * Persisted in applicant pivot `financial_info` JSON.
    */
   auxiliaryDocuments?: Record<string, number | null>
+  /**
+   * Document IDs for documentation-insurability checklist (`documentation-insurability-documents`), keyed by item key.
+   * Persisted on debtor pivot `financial_info` JSON (revisión documental).
+   */
+  insurabilityDocuments?: Record<string, number | null>
   solvency?: {
     /** (Pasivos + monto solicitado) ÷ Activos × 100 — se calcula en resumen */
     solvency?: number
@@ -110,6 +115,11 @@ export interface ApplicantForm {
    * then IDs are stored on `financial_info.auxiliaryDocuments`.
    */
   auxiliaryDocumentFiles?: Record<string, File | undefined>
+  /**
+   * Pending files for insurability checklist uploads (revisión documental). Uploaded via multipart; IDs stored in
+   * `financial_info.insurabilityDocuments`.
+   */
+  insurabilityDocumentFiles?: Record<string, File | undefined>
 }
 
 export interface CreditApplicationForm {

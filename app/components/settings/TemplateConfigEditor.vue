@@ -445,6 +445,20 @@ function onAuxiliaryDocumentsChecklistField(payload: { key: string, value: unkno
             @update:field="onAuxiliaryDocumentsChecklistField"
           />
         </div>
+        <div
+          v-else-if="section.layout === 'documentationInsurabilityDocumentsChecklist'"
+          class="space-y-3"
+        >
+          <h5 v-if="section.title" class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {{ section.title }}
+          </h5>
+          <SettingsDocumentationInsurabilityDocumentsConfig
+            :edited-data="editedData"
+            :editing="editing"
+            :can-edit="canEdit"
+            @update:field="onAuxiliaryDocumentsChecklistField"
+          />
+        </div>
         <!-- Tabla FINAGRO (cultivo-permanente) -->
         <div v-else-if="section.layout === 'cultivoPermanenteFinagroTable'" class="space-y-3">
           <h5 v-if="section.title" class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
