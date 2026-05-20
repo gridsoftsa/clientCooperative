@@ -9,6 +9,8 @@ export type EmergenciaCuotaLine = { cuota: string, entidad: string }
 export type EmergenciaCapacidadBloque = {
   ingresos: string
   otrosIngresos: string
+  /** Monto que no cuenta como ingreso sustentado; se resta de ingresos + otros ingresos para el total. */
+  unsustainedIncome: string
   totalIngresos: string
   cuotasFin: EmergenciaCuotaLine[]
   /** Gastos personales / alimentación / otros — mismo criterio que paso 3 radicación (`expenses`). */
@@ -119,6 +121,7 @@ function emptyCapacidad(): EmergenciaCapacidadBloque {
   return {
     ingresos: '',
     otrosIngresos: '',
+    unsustainedIncome: '',
     totalIngresos: '',
     cuotasFin: [{ cuota: '', entidad: '' }],
     gastoPersonal: '',

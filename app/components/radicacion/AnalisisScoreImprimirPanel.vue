@@ -201,36 +201,42 @@ const puedeGuardarScore = computed(() => hasPermission('radicacion_analisis_guar
 
 const guardandoScore = ref(false)
 
-async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null }): Promise<{ sentToCreditDirectorReview: boolean }> {
+type GuardarAnalisisScoreResult = {
+  sentToCreditDirectorReview: boolean
+  pendingSendToCreditDirector?: boolean
+  missingInsurabilityLabels?: string[]
+}
+
+async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null }): Promise<GuardarAnalisisScoreResult> {
   if (props.readOnly) {
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   if (!puedeGuardarScore.value) {
     toast.error('No tienes permiso para guardar análisis y SCORE.')
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   const id = props.creditApplicationId?.trim()
   if (!id) {
     toast.error('Abre el análisis SCORE desde el listado de radicación para vincular una solicitud.')
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   if (!props.perfilDeudor) {
     toast.error('Selecciona el perfil del deudor en el paso 1.')
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   if (props.emergencia == null) {
     toast.error('Faltan datos de la hoja de análisis (EMERGENCIA). Vuelva al paso 2 o recargue la solicitud.')
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   const valCred = validarCreditoEmergenciaCompleto(props.emergencia.credito)
   if (!valCred.ok) {
     emit('credit-validation-failed', valCred)
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   if (!puntajesFormularioValido.value) {
     erroresValidacionVisibles.value = true
     toast.error('Completa el puntaje en todas las variables antes de guardar.')
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
 
   guardandoScore.value = true
@@ -271,11 +277,20 @@ async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null
       data?: { analisis_score_snapshot?: Record<string, unknown> | null }
       message?: string
       sent_to_credit_director_review?: boolean
+      pending_send_to_credit_director?: boolean
+      missing_insurability_documents?: { key?: string, label?: string }[]
     }>(`/credit-applications/${id}/analisis-score`, {
       method: 'PUT',
       body,
     })
     const sent = Boolean(res?.sent_to_credit_director_review)
+    const pending = Boolean(res?.pending_send_to_credit_director)
+    const missingRows = Array.isArray(res?.missing_insurability_documents)
+      ? res.missing_insurability_documents
+      : []
+    const missingLabels = missingRows
+      .map((row: { label?: string, key?: string }) => String(row?.label ?? row?.key ?? '').trim())
+      .filter(Boolean)
     if (sent) {
       toast.success(res?.message ?? 'Solicitud enviada a revisión de director de crédito.', {
         description:
@@ -283,15 +298,36 @@ async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null
         duration: 11000,
       })
     }
+    else if (pending) {
+      const maxLines = 3
+      let desc: string | undefined
+      if (missingLabels.length > 0) {
+        const lines = missingLabels.slice(0, maxLines).map(l => `• ${l}`)
+        const rest = missingLabels.length - maxLines
+        if (rest > 0) {
+          lines.push(`• …y ${rest} más`)
+        }
+        desc = lines.join('\n')
+      }
+      toast.warning('Análisis guardado. Envío al director de crédito pendiente.', {
+        description: desc ?? 'Cargue la documentación de asegurabilidad en la radicación y vuelva a intentar.',
+        duration: 9000,
+      })
+    }
     else {
       toast.success(res?.message ?? 'Análisis y SCORE guardado correctamente.')
     }
     emit('saved', res?.data?.analisis_score_snapshot ?? null)
-    return { sentToCreditDirectorReview: sent }
+    return {
+      sentToCreditDirectorReview: sent,
+      pendingSendToCreditDirector: pending,
+      missingInsurabilityLabels: missingLabels.length > 0 ? missingLabels : undefined,
+    }
   }
   catch (e: any) {
-    toast.error(e?.data?.message ?? 'No se pudo guardar el análisis SCORE.')
-    return { sentToCreditDirectorReview: false }
+    const msg = e?.data?.message ?? 'No se pudo guardar el análisis SCORE.'
+    toast.error(msg)
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   finally {
     guardandoScore.value = false
@@ -532,15 +568,6 @@ defineExpose({
             </TableBody>
           </Table>
         </div>
-      </div>
-
-      <div class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-        <p class="font-medium text-foreground">
-          Firma de analista
-        </p>
-        <p class="mt-2 text-xs">
-          Espacio reservado según plantilla impresa.
-        </p>
       </div>
     </div>
   </div>

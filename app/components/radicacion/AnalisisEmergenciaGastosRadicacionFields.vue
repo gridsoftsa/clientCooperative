@@ -19,11 +19,11 @@ const props = withDefaults(
   { lock: true },
 )
 
-/** Mismo aspecto que Ingresos / Total ingresos; ancho acotado para montos COP. */
+/** Mismo aspecto que Ingresos / Total ingresos; el ancho lo acota el contenedor `max-w-md`. */
 const roClass
-  = 'h-8 w-full max-w-[15rem] min-w-0 text-right font-mono cursor-default bg-muted/50 text-foreground read-only:opacity-100'
+  = 'h-8 w-full min-w-0 text-right font-mono cursor-default bg-muted/50 text-foreground read-only:opacity-100'
 
-const editableMontoClass = 'h-8 w-full max-w-[15rem] min-w-0 font-mono'
+const editableMontoClass = 'h-8 w-full min-w-0 font-mono'
 
 function displayPesosStored(s: string | undefined | null): string {
   return formatPesosConSimboloDesdeTexto(s)
@@ -42,11 +42,11 @@ const totalGastosCapacidadVista = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-2">
+  <div class="w-full max-w-md space-y-2 sm:max-w-lg">
     <p v-if="lock" class="text-xs text-muted-foreground">
       Gastos (mismo criterio que el paso 3 de radicación — solo lectura)
     </p>
-    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <div class="grid grid-cols-2 gap-x-2 gap-y-2">
       <div v-if="lock" class="space-y-1">
         <Label class="text-xs">Gastos personales</Label>
         <Input
@@ -77,7 +77,7 @@ const totalGastosCapacidadVista = computed(() => {
         <Input v-model="bloque.alimentacion" :class="editableMontoClass" />
       </div>
 
-      <div class="sm:col-span-2" :class="lock ? 'space-y-1' : 'space-y-1'">
+      <div class="col-span-2" :class="lock ? 'space-y-1' : 'space-y-1'">
         <Label class="text-xs">Gastos servicios / arriendo</Label>
         <Input
           v-if="lock"

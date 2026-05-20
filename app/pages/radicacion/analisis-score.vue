@@ -89,6 +89,10 @@ const observacionesScore = ref('')
 /** Concepto final del analista (paso 4); se persiste en el snapshot. */
 const conceptoAnalista = ref('')
 
+/** Tras «Guardar cierre»: análisis persistido pero envío a director de crédito bloqueado por documentos de asegurabilidad. */
+const envioDirectorCreditoPendiente = ref(false)
+const pendienteEnvioDirectorCreditoLabels = ref<string[]>([])
+
 const emergenciaState = ref(defaultEmergenciaState())
 
 function sincronizarTasaEfectivaDesdeNominal(): void {
@@ -637,6 +641,8 @@ function resetVistaAnalisisScoreParaSolicitud(): void {
   resumenMontoSolicitado.value = 0
   solicitudStatus.value = null
   analystReviewApprovedAt.value = null
+  envioDirectorCreditoPendiente.value = false
+  pendienteEnvioDirectorCreditoLabels.value = []
 }
 
 type LoadSolicitudParaAnalisisOptions = {
@@ -1096,7 +1102,11 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
 }
 
 type ScorePanelExpose = {
-  guardarAnalisisScore: (options?: { conceptoAnalista?: string | null }) => Promise<{ sentToCreditDirectorReview: boolean }>
+  guardarAnalisisScore: (options?: { conceptoAnalista?: string | null }) => Promise<{
+    sentToCreditDirectorReview: boolean
+    pendingSendToCreditDirector?: boolean
+    missingInsurabilityLabels?: string[]
+  }>
   guardandoScore: boolean
   puedeGuardarScore: boolean
   arePuntajesCompletos: () => boolean
@@ -1146,8 +1156,18 @@ async function ejecutarGuardarScore(): Promise<void> {
 async function ejecutarGuardarCierreAnalista(): Promise<void> {
   const r = await scorePanelRef.value?.guardarAnalisisScore({ conceptoAnalista: conceptoAnalista.value })
   if (r?.sentToCreditDirectorReview) {
+    envioDirectorCreditoPendiente.value = false
+    pendienteEnvioDirectorCreditoLabels.value = []
     await router.push('/radicacion')
+    return
   }
+  if (r?.pendingSendToCreditDirector) {
+    envioDirectorCreditoPendiente.value = true
+    pendienteEnvioDirectorCreditoLabels.value = r.missingInsurabilityLabels ?? []
+    return
+  }
+  envioDirectorCreditoPendiente.value = false
+  pendienteEnvioDirectorCreditoLabels.value = []
 }
 
 async function ejecutarDescargaScorePdf(): Promise<void> {
@@ -1449,6 +1469,53 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
                 </template>
               </p>
             </div>
+
+            <Alert
+              v-if="envioDirectorCreditoPendiente && solicitudId && solicitudStatus === 'In_Analysis'"
+              class="border-amber-500/50 bg-amber-500/10"
+            >
+              <Icon name="i-lucide-file-warning" class="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+              <AlertTitle>Envío al director de crédito pendiente</AlertTitle>
+              <AlertDescription class="mt-2 space-y-3 text-sm">
+                <p>
+                  El análisis y el SCORE <strong>ya están guardados</strong>. Falta documentación de asegurabilidad del deudor en la radicación; cuando la complete, use <strong>Reintentar envío</strong> o <strong>Guardar cierre</strong>.
+                </p>
+                <ul
+                  v-if="pendienteEnvioDirectorCreditoLabels.length > 0"
+                  class="list-inside list-disc space-y-1 text-foreground/90"
+                >
+                  <li v-for="(lab, idx) in pendienteEnvioDirectorCreditoLabels" :key="idx">
+                    {{ lab }}
+                  </li>
+                </ul>
+                <div class="flex flex-wrap gap-2 pt-1">
+                  <Button variant="outline" size="sm" as-child>
+                    <NuxtLink :to="`/radicacion/${solicitudId}`" class="inline-flex items-center gap-2">
+                      <Icon name="i-lucide-upload" class="h-4 w-4 shrink-0" />
+                      Abrir radicación
+                    </NuxtLink>
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    :disabled="!solicitudId || scorePanelRef?.guardandoScore"
+                    @click="ejecutarGuardarCierreAnalista"
+                  >
+                    <Icon
+                      v-if="scorePanelRef?.guardandoScore"
+                      name="i-lucide-loader-2"
+                      class="mr-2 h-4 w-4 animate-spin"
+                    />
+                    <Icon
+                      v-else
+                      name="i-lucide-send"
+                      class="mr-2 h-4 w-4"
+                    />
+                    Reintentar envío al director de crédito
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
           </div>
         </div>
 
