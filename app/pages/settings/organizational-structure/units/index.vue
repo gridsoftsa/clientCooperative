@@ -93,14 +93,14 @@ onMounted(async () => {
 
       <div class="flex flex-wrap items-center gap-4">
         <div class="w-full max-w-xs space-y-2">
-          <Label for="foffice" class="leading-snug">Filtrar por oficina</Label>
+          <Label for="foffice" class="leading-snug">Filtrar por agencia</Label>
           <Select :model-value="filterOfficeId === null ? 'all' : String(filterOfficeId)" @update:model-value="(v) => { filterOfficeId = v === 'all' ? null : Number(v) }">
             <SelectTrigger id="foffice">
               <SelectValue placeholder="Todas" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">
-                Todas las oficinas
+                Todas las agencias
               </SelectItem>
               <SelectItem
                 v-for="o in offices"
@@ -120,7 +120,7 @@ onMounted(async () => {
             Listado de áreas
           </CardTitle>
           <CardDescription class="leading-relaxed">
-            Jerarquía por oficina, indicador TRD/producora documental y estado de cada dependencia.
+            Jerarquía por agencia, indicador TRD/producora documental y estado de cada dependencia.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -128,14 +128,14 @@ onMounted(async () => {
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
           <div v-else-if="units.length === 0" class="py-12 text-center text-muted-foreground leading-relaxed">
-            No hay áreas. Cree antes al menos una oficina.
+            No hay áreas. Cree antes al menos una agencia.
           </div>
           <Table v-else>
             <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Código</TableHead>
-                <TableHead>Oficina</TableHead>
+                <TableHead>Agencia</TableHead>
                 <TableHead>Padre</TableHead>
                 <TableHead>Productora doc.</TableHead>
                 <TableHead>Estado</TableHead>

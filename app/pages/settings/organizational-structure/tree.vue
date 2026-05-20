@@ -58,7 +58,7 @@ function toChartNodes(input: TreeOffice[]): OrgChartNode[] {
       parentId: null,
       kind: 'office',
       label: office.name,
-      subtitle: `Oficina (${office.code})`,
+      subtitle: `Agencia (${office.code})`,
     })
 
     for (const unit of office.org_units ?? []) {
@@ -159,7 +159,7 @@ async function renderChart(): Promise<void> {
       .nodeContent((d: any) => {
         const data = d?.data as OrgChartNode
         const kindStyles: Record<OrgChartNode['kind'], { icon: string, accent: string, label: string }> = {
-          office: { icon: '🏢', accent: palette.officeAccent, label: 'Oficina' },
+          office: { icon: '🏢', accent: palette.officeAccent, label: 'Agencia' },
           unit: { icon: '🧩', accent: palette.unitAccent, label: 'Área' },
           position: { icon: '👤', accent: palette.positionAccent, label: 'Cargo' },
         }
@@ -262,7 +262,7 @@ onBeforeUnmount(() => {
       <Card>
         <CardHeader class="gap-2">
           <CardTitle class="leading-snug">
-            Jerarquía de oficinas, áreas y cargos
+            Jerarquía de agencias, áreas y cargos
           </CardTitle>
           <CardDescription class="leading-relaxed">
             Vista arbórea sólo lectura conforme registros vigentes activos en el sistema.
@@ -273,7 +273,7 @@ onBeforeUnmount(() => {
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
           <div v-else-if="tree.length === 0" class="py-12 text-center text-muted-foreground">
-            Sin datos de estructura. Cree al menos una oficina y áreas.
+            Sin datos de estructura. Cree al menos una agencia y áreas.
           </div>
           <div v-else class="space-y-3">
             <div

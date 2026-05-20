@@ -31,6 +31,6 @@ export const ORG_YES_NO_OPTIONS: { value: OrgYesNoChoice; label: string }[] = [
 
 export const ORG_OFFICE_TYPE_OPTIONS: { value: OrgOfficeType; label: string }[] = [
   { value: 'main', label: 'Principal' },
-  { value: 'branch', label: 'Agencia / sucursal' },
+  { value: 'branch', label: 'Agencia' },
   { value: 'headquarters', label: 'Sede / matriz' },
 ]

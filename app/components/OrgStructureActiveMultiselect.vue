@@ -11,7 +11,7 @@ import {
 const props = withDefaults(
   defineProps<{
     modelValue: boolean
-    /** Etiquetas Activo/Inactivo vs Activa/Inactiva (oficina, área). */
+    /** Etiquetas Activo/Inactivo vs Activa/Inactiva (agencia, área). */
     gender?: 'masculine' | 'feminine'
     inputId: string
     helperText?: string

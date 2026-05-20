@@ -45,7 +45,7 @@ const saving = ref(false)
 const loadingSearch = ref(false)
 const loadingApplication = ref(false)
 const submitDirectorDialogOpen = ref(false)
-const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
+const agencies = ref<Array<{ id: number; sucursal_id: number; name: string; code?: string }>>([])
 /** Solicitud existente cargada para agregar codeudor (por numero_radicado_externo) */
 const existingApplication = ref<Record<string, unknown> | null>(null)
 /** Dentro del paso Codeudores del deudor: mostrando el flujo de 3 pasos para agregar uno */
@@ -122,13 +122,6 @@ const stepsCodeudor = [
 const steps = computed(() => (mode.value === 'codeudor' ? stepsCodeudor : stepsDeudor))
 const maxStep = computed(() => steps.value.length)
 const userSucursalId = computed<number | null>(() => authUser.value?.sucursal_id ?? null)
-const availableAgencies = computed(() => {
-  const userAgencyId = userSucursalId.value
-  if (!userAgencyId) {
-    return agencies.value
-  }
-  return agencies.value.filter(a => a.id === userAgencyId)
-})
 
 async function fetchCatalogs() {
   try {
@@ -136,9 +129,13 @@ async function fetchCatalogs() {
     const agenciesRes = await $api<{ data: typeof agencies.value }>('/catalogs/agencies')
     const list = agenciesRes.data
     agencies.value = Array.isArray(list) ? list : []
-    if (userSucursalId.value && agencies.value.some(a => a.id === userSucursalId.value)) {
-      form.value.agency_id = userSucursalId.value
-    } else if (agencies.value.length && !form.value.agency_id) {
+    const agencyForUserSucursal = userSucursalId.value
+      ? agencies.value.find(a => a.sucursal_id === userSucursalId.value)
+      : undefined
+    if (agencyForUserSucursal) {
+      form.value.agency_id = agencyForUserSucursal.id
+    }
+    else if (agencies.value.length && !form.value.agency_id) {
       form.value.agency_id = agencies.value[0]?.id ?? 0
     }
   } catch (e: unknown) {
@@ -619,7 +616,7 @@ function payloadForAutoSave(): Record<string, unknown> {
   const base = payloadWithoutDocuments('Draft')
   const agencyId = form.value.agency_id > 0
     ? form.value.agency_id
-    : (availableAgencies.value[0]?.id ?? agencies.value[0]?.id ?? 0)
+    : (agencies.value[0]?.id ?? 0)
   return {
     ...base,
     amount_requested: form.value.amount_requested > 0 ? form.value.amount_requested : 1,
@@ -1410,7 +1407,7 @@ onMounted(() => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem
-                    v-for="a in availableAgencies"
+                    v-for="a in agencies"
                     :key="a.id"
                     :value="a.id"
                   >

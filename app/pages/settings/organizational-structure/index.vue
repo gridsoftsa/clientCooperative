@@ -56,7 +56,7 @@ onMounted(() => {
           Estructura organizacional
         </h2>
         <p class="text-muted-foreground leading-relaxed max-w-3xl">
-          Use el menú lateral <strong>Organización → Estructura</strong> para navegar entre oficinas, áreas, cargos, funcionarios y vistas.
+          Use el menú lateral <strong>Organización → Estructura</strong> para navegar entre agencias, áreas, cargos, funcionarios y vistas.
           El aislamiento por entidad usa la empresa principal como tenant.
         </p>
       </div>

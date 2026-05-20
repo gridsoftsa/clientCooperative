@@ -7,7 +7,7 @@ import type { OrgOffice, OrgOfficeType } from '~/types/org-structure'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'estructura_org_editar',
+  permissions: ['estructura_org_editar', 'sucursales_editar'],
 })
 
 const { $api } = useNuxtApp()
@@ -22,6 +22,8 @@ const form = ref({
   code: '',
   office_type: 'main' as OrgOfficeType,
   city: '',
+  address: '',
+  phone: '',
   is_active: true,
 })
 
@@ -41,10 +43,12 @@ async function load() {
       code: o.code,
       office_type: o.office_type,
       city: labelForForm(o.city, o.state),
+      address: o.address ?? '',
+      phone: o.phone ?? '',
       is_active: Boolean(o.is_active),
     }
   } catch {
-    toast.error('No se encontró la oficina')
+    toast.error('No se encontró la agencia')
     router.push('/settings/organizational-structure/offices')
   } finally {
     loading.value = false
@@ -63,10 +67,12 @@ async function handleSubmit() {
         office_type: form.value.office_type,
         city,
         state,
+        address: form.value.address.trim() || null,
+        phone: form.value.phone.trim() || null,
         is_active: form.value.is_active,
       },
     })
-    toast.success('Oficina actualizada')
+    toast.success('Agencia actualizada')
     router.push('/settings/organizational-structure/offices')
   } catch (e: any) {
     toast.error(e?.data?.message || 'Error al guardar')
@@ -86,7 +92,7 @@ onMounted(() => {
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1">
           <h2 class="text-2xl font-bold tracking-tight">
-            Editar oficina
+            Editar agencia
           </h2>
           <p class="text-muted-foreground leading-relaxed">
             Actualice datos de identificación y ubicación.
@@ -106,7 +112,7 @@ onMounted(() => {
         <div class="grid gap-6">
           <Card>
             <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Información de la oficina</CardTitle>
+              <CardTitle class="leading-snug">Información de la agencia</CardTitle>
               <CardDescription class="leading-relaxed">
                 Datos guardados por entidad; el código debe seguir siendo único.
               </CardDescription>
@@ -149,13 +155,21 @@ onMounted(() => {
                     Abre el listado, escribe para filtrar y elige municipio y departamento (DANE), igual que en radicación.
                   </p>
                 </div>
+                <div class="space-y-3 md:col-span-2">
+                  <Label for="org_office_address_edit" class="leading-snug">Dirección</Label>
+                  <Input id="org_office_address_edit" v-model="form.address" />
+                </div>
+                <div class="space-y-3 md:col-span-2">
+                  <Label for="org_office_phone_edit" class="leading-snug">Teléfono</Label>
+                  <Input id="org_office_phone_edit" v-model="form.phone" />
+                </div>
               </div>
 
               <OrgStructureActiveMultiselect
                 :model-value="form.is_active"
                 gender="feminine"
                 input-id="office_edit_active_ms"
-                helper-text="Las oficinas inactivas no se sugieren como sede en configuraciones nuevas."
+                helper-text="Las agencias inactivas no se sugieren como sede en configuraciones nuevas."
                 @update:model-value="onOfficeActiveChange"
               />
             </CardContent>

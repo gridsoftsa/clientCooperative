@@ -1,5 +1,5 @@
 /**
- * Sincroniza el valor del Multiselect de municipio (radicación) con los campos `city` / `state` del API de oficinas.
+ * Sincroniza el valor del Multiselect de municipio (radicación) con los campos `city` / `state` del API de agencias (org-offices).
  */
 export function useOrgOfficeMunicipalitySync() {
   const { getByLabel } = useMunicipalities()

@@ -6,12 +6,12 @@ import type { OrgOffice } from '~/types/org-structure'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'estructura_org_ver',
+  permissions: ['estructura_org_ver', 'sucursales_ver'],
 })
 
 const { $api } = useNuxtApp()
 const router = useRouter()
-const { hasPermission } = usePermissions()
+const { hasAnyPermission } = usePermissions()
 
 function officeTypeLabel(type: string): string {
   return ORG_OFFICE_TYPE_OPTIONS.find(o => o.value === type)?.label ?? type
@@ -30,7 +30,7 @@ async function fetchOffices() {
     )
     offices.value = res.data
   } catch {
-    toast.error('Error al cargar oficinas')
+    toast.error('Error al cargar agencias')
     offices.value = []
   } finally {
     loading.value = false
@@ -38,12 +38,12 @@ async function fetchOffices() {
 }
 
 async function deactivateOffice(id: number) {
-  if (!hasPermission('estructura_org_editar') || deactivatingId.value != null)
+  if (!hasAnyPermission(['estructura_org_editar', 'sucursales_editar']) || deactivatingId.value != null)
     return
   deactivatingId.value = id
   try {
     await $api(`/organizational-structure/org-offices/${id}/deactivate`, { method: 'PATCH' })
-    toast.success('Oficina inactivada')
+    toast.success('Agencia inactivada')
     await fetchOffices()
   } catch (e: any) {
     toast.error(e?.data?.message || 'No se pudo inactivar')
@@ -67,14 +67,14 @@ onMounted(() => {
             Módulo
           </Button>
           <h2 class="text-2xl font-bold tracking-tight">
-            Oficinas y agencias
+            Agencias
           </h2>
         </div>
         <div class="shrink-0">
-          <PermissionGate permission="estructura_org_editar">
+          <PermissionGate :any-permission="['estructura_org_editar', 'sucursales_crear']">
             <Button @click="router.push('/settings/organizational-structure/offices/create')">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-              Nueva oficina
+              Nueva agencia
             </Button>
           </PermissionGate>
         </div>
@@ -83,10 +83,10 @@ onMounted(() => {
       <Card>
         <CardHeader class="gap-2">
           <CardTitle class="leading-snug">
-            Listado de oficinas
+            Listado de agencias
           </CardTitle>
           <CardDescription class="leading-relaxed">
-            Sedes, agencias u oficina principal con su código y ubicación administrativa.
+            Misma sede operativa que en Configuración → Sucursales (nombre, código, ciudad y estado activo se mantienen alineados).
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -94,7 +94,7 @@ onMounted(() => {
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
           <div v-else-if="offices.length === 0" class="py-12 text-center text-muted-foreground leading-relaxed">
-            No hay oficinas registradas.
+            No hay agencias registradas.
           </div>
           <Table v-else>
             <TableHeader>
@@ -123,7 +123,7 @@ onMounted(() => {
                   </Badge>
                 </TableCell>
                 <TableCell class="text-right space-x-2">
-                  <PermissionGate permission="estructura_org_editar">
+                  <PermissionGate :any-permission="['estructura_org_editar', 'sucursales_editar']">
                     <Button
                       variant="outline"
                       size="sm"

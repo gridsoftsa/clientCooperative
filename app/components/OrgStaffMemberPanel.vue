@@ -76,7 +76,7 @@ const savingDatos = ref(false)
 const savingUbicacion = ref(false)
 const loadingCatalogs = ref(false)
 
-/** Evita que los watchers de oficina/área borren unidad y cargo mientras rellenamos desde la asignación vigente. */
+/** Evita que los watchers de agencia/área borren unidad y cargo mientras rellenamos desde la asignación vigente. */
 const ubicacionHydrating = ref(false)
 
 function staffLabel(s: OrgStaffListItem): string {
@@ -324,7 +324,7 @@ async function submitAssignment() {
     || ubicacionForm.value.org_position_id == null
     || !ubicacionForm.value.effective_from
   ) {
-    toast.error('Indique oficina, área, cargo y fecha de vigencia')
+    toast.error('Indique agencia, área, cargo y fecha de vigencia')
     return
   }
   savingUbicacion.value = true
@@ -575,7 +575,7 @@ watch(
                   <CardContent class="space-y-6">
                     <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
                       <div class="space-y-3 md:col-span-2">
-                        <Label for="of_p" class="leading-snug">Oficina principal *</Label>
+                        <Label for="of_p" class="leading-snug">Agencia principal *</Label>
                         <Select
                           :model-value="ubicacionForm.org_office_id == null ? undefined : String(ubicacionForm.org_office_id)"
                           @update:model-value="(v) => { ubicacionForm.org_office_id = v ? Number(v) : null }"

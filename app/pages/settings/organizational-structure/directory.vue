@@ -96,7 +96,7 @@ onMounted(() => {
             Cuadro de ubicación institucional
           </CardTitle>
           <CardDescription class="leading-relaxed">
-            Funcionarios con asignación vigente: cargo, área, oficina y datos de contacto.
+            Funcionarios con asignación vigente: cargo, área, agencia y datos de contacto.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -112,7 +112,7 @@ onMounted(() => {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Cargo</TableHead>
                 <TableHead>Área</TableHead>
-                <TableHead>Oficina</TableHead>
+                <TableHead>Agencia</TableHead>
                 <TableHead>Contacto</TableHead>
                 <TableHead>Jefe inmediato</TableHead>
               </TableRow>

@@ -4,10 +4,13 @@ export type OrgOfficeType = 'main' | 'branch' | 'headquarters'
 
 export interface OrgOffice {
   id: number
+  sucursal_id?: number | null
   name: string
   code: string
   office_type: OrgOfficeType
   city?: string | null
+  address?: string | null
+  phone?: string | null
   state?: string | null
   responsible_staff_id?: number | null
   valid_from?: string | null

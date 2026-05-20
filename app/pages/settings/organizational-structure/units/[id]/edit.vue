@@ -97,7 +97,7 @@ async function loadUnit() {
 
 async function handleSubmit() {
   if (form.value.org_office_id == null || !form.value.name.trim() || !form.value.code.trim()) {
-    toast.error('Oficina, nombre y código son obligatorios')
+    toast.error('Agencia, nombre y código son obligatorios')
     return
   }
   saving.value = true
@@ -159,20 +159,20 @@ onMounted(() => {
             <CardHeader class="gap-2">
               <CardTitle class="leading-snug">Información general</CardTitle>
               <CardDescription class="leading-relaxed">
-                Identificación y jerarquía dentro de una oficina.
+                Identificación y jerarquía dentro de una agencia.
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-6">
               <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
                 <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6">
                   <div class="space-y-3">
-                    <Label for="office_e" class="leading-snug">Oficina *</Label>
+                    <Label for="office_e" class="leading-snug">Agencia *</Label>
                     <Select
                       :model-value="form.org_office_id == null ? undefined : String(form.org_office_id)"
                       @update:model-value="(v) => { form.org_office_id = v ? Number(v) : null }"
                     >
                       <SelectTrigger id="office_e">
-                        <SelectValue placeholder="Seleccione oficina" />
+                        <SelectValue placeholder="Seleccione agencia" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem

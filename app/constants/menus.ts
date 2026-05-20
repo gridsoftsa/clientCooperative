@@ -59,7 +59,7 @@ export const navMenu: NavMenu[] = [
             permission: 'estructura_org_ver',
           },
           {
-            title: 'Oficinas y agencias',
+            title: 'Agencias',
             link: '/settings/organizational-structure/offices',
             permission: 'estructura_org_ver',
           },
@@ -159,6 +159,7 @@ export const navMenu: NavMenu[] = [
           'empresa_ver',
           'usuarios_ver',
           'sucursales_ver',
+          'estructura_org_ver',
           'roles_ver',
         ],
         children: [
@@ -193,10 +194,10 @@ export const navMenu: NavMenu[] = [
             permission: 'usuarios_ver',
           },
           {
-            title: 'Sucursales',
+            title: 'Agencias (sedes)',
             icon: 'i-lucide-building-2',
-            link: '/settings/sucursales',
-            permission: 'sucursales_ver',
+            link: '/settings/organizational-structure/offices',
+            anyPermission: ['estructura_org_ver', 'sucursales_ver'],
           },
           {
             title: 'Roles',

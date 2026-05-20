@@ -28,7 +28,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'template-config': 'Plantillas',
   'notifications': 'Notificaciones',
   'nueva': 'Nueva',
-  'offices': 'Oficinas y agencias',
+  'offices': 'Agencias',
   'organizational-structure': 'Estructura organizacional',
   'parametrizacion': 'Parametrización',
   'permissions': 'Permisos',

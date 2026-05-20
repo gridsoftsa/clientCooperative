@@ -7,7 +7,7 @@ import type { OrgOfficeType } from '~/types/org-structure'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'estructura_org_editar',
+  permissions: ['estructura_org_editar', 'sucursales_crear'],
 })
 
 const { $api } = useNuxtApp()
@@ -19,6 +19,8 @@ const form = ref({
   code: '',
   office_type: 'main' as OrgOfficeType,
   city: '',
+  address: '',
+  phone: '',
   is_active: true,
 })
 
@@ -44,10 +46,12 @@ async function handleSubmit() {
         office_type: form.value.office_type,
         city: city ?? undefined,
         state: state ?? undefined,
+        address: form.value.address.trim() || undefined,
+        phone: form.value.phone.trim() || undefined,
         is_active: form.value.is_active,
       },
     })
-    toast.success('Oficina creada')
+    toast.success('Agencia creada')
     router.push('/settings/organizational-structure/offices')
   } catch (e: any) {
     toast.error(e?.data?.message || e?.data?.errors?.code?.[0] || 'Error al crear')
@@ -63,10 +67,10 @@ async function handleSubmit() {
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1">
           <h2 class="text-2xl font-bold tracking-tight">
-            Nueva oficina
+            Nueva agencia
           </h2>
           <p class="text-muted-foreground leading-relaxed">
-            Código único por entidad. Registre sedes, agencias o la oficina principal.
+            Código único por entidad. Se crea o actualiza la sucursal operativa asociada (usuarios y radicación).
           </p>
         </div>
         <Button variant="outline" class="shrink-0" @click="router.back()">
@@ -79,7 +83,7 @@ async function handleSubmit() {
         <div class="grid gap-6">
           <Card>
             <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Información de la oficina</CardTitle>
+              <CardTitle class="leading-snug">Información de la agencia</CardTitle>
               <CardDescription class="leading-relaxed">
                 Datos de identificación y ubicación operativa.
               </CardDescription>
@@ -122,13 +126,21 @@ async function handleSubmit() {
                     Abre el listado, escribe para filtrar y elige municipio y departamento (DANE), igual que en radicación.
                   </p>
                 </div>
+                <div class="space-y-3 md:col-span-2">
+                  <Label for="org_office_address" class="leading-snug">Dirección</Label>
+                  <Input id="org_office_address" v-model="form.address" placeholder="Dirección completa (opcional)" />
+                </div>
+                <div class="space-y-3 md:col-span-2">
+                  <Label for="org_office_phone" class="leading-snug">Teléfono</Label>
+                  <Input id="org_office_phone" v-model="form.phone" placeholder="Teléfono de contacto (opcional)" />
+                </div>
               </div>
 
               <OrgStructureActiveMultiselect
                 :model-value="form.is_active"
                 gender="feminine"
                 input-id="office_create_active_ms"
-                helper-text="Las oficinas inactivas no se sugieren como sede en configuraciones nuevas."
+                helper-text="Las agencias inactivas no se sugieren como sede en configuraciones nuevas."
                 @update:model-value="onOfficeActiveChange"
               />
             </CardContent>
@@ -140,7 +152,7 @@ async function handleSubmit() {
             </Button>
             <Button type="submit" :disabled="saving">
               <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              {{ saving ? 'Guardando...' : 'Crear oficina' }}
+              {{ saving ? 'Guardando...' : 'Crear agencia' }}
             </Button>
           </div>
         </div>
