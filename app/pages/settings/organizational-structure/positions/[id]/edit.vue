@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import type { OrgYesNoChoice } from '~/constants/org-structure'
 import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureApi'
+import { toDateInputValue } from '~/utils/dateInputValue'
 
 definePageMeta({
   layout: 'default',
@@ -29,6 +30,8 @@ const form = ref({
   has_subordinates: false,
   reports_to_position_id: null as number | null,
   is_active: true,
+  valid_from: '',
+  valid_to: '',
 })
 
 const saving = ref(false)
@@ -50,7 +53,11 @@ async function loadUnits() {
 }
 
 async function loadPeersForUnit(id: number) {
-  const list = await orgApi.fetchPositions({ activeOnly: false, orgUnitId: id })
+  const list = await orgApi.fetchPositions({
+    activeOnly: false,
+    orgUnitId: id,
+    managerOfOrgUnitOnly: true,
+  })
   peerPositions.value = list.map(p => ({ id: p.id, name: p.name, code: p.code }))
 }
 
@@ -80,8 +87,14 @@ async function loadPosition() {
       has_subordinates: Boolean(p.has_subordinates),
       reports_to_position_id: p.reports_to_position_id,
       is_active: Boolean(p.is_active),
+      valid_from: toDateInputValue(p.valid_from),
+      valid_to: toDateInputValue(p.valid_to),
     }
     await loadPeersForUnit(p.org_unit_id)
+    const ids = reportsCandidates.value.map(r => r.id)
+    if (form.value.reports_to_position_id != null && !ids.includes(form.value.reports_to_position_id)) {
+      form.value.reports_to_position_id = null
+    }
     const mgrName = p.org_unit?.manager_position_name?.trim() ?? ''
     const posName = p.name.trim()
     chargesSelectedArea.value = mgrName !== '' && mgrName === posName ? 'yes' : 'no'
@@ -110,6 +123,8 @@ async function handleSubmit() {
         has_subordinates: form.value.has_subordinates,
         reports_to_position_id: form.value.reports_to_position_id,
         is_active: form.value.is_active,
+        valid_from: form.value.valid_from.trim(),
+        valid_to: form.value.valid_to.trim() || null,
         sync_manager_position_name_to_unit: chargesSelectedArea.value === 'yes',
       },
     })
@@ -136,7 +151,7 @@ onMounted(() => {
             Editar cargo
           </h2>
           <p class="text-muted-foreground leading-relaxed">
-            Modifique datos del puesto y la relación jerárquica dentro del mismo área.
+            Modifique datos del puesto y la relación jerárquica. «Reporta a» solo ofrece cargos ya definidos como referencia de jefe de área en ese área.
           </p>
         </div>
         <Button variant="outline" class="shrink-0" @click="router.back()">
@@ -218,6 +233,9 @@ onMounted(() => {
 
                 <div class="space-y-3 md:col-span-2">
                   <Label for="rep_e" class="leading-snug">Reporta a (opcional)</Label>
+                  <p class="text-xs text-muted-foreground leading-relaxed">
+                    Solo cargos con «a cargo del área» en Sí en el mismo área. Si la lista está vacía, cree o marque antes el jefe de área.
+                  </p>
                   <Select
                     :model-value="form.reports_to_position_id == null ? 'none' : String(form.reports_to_position_id)"
                     :disabled="!form.org_unit_id"
@@ -240,12 +258,19 @@ onMounted(() => {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
+                </div>
 
-              <OrgStructureActiveMultiselect
-                :model-value="form.is_active"
-                gender="masculine"
-                input-id="position_edit_active_ms"
+                <OrgStructureValidityPeriodFields
+                  v-model:valid-from="form.valid_from"
+                  v-model:valid-to="form.valid_to"
+                  from-input-id="position_edit_valid_from"
+                  to-input-id="position_edit_valid_to"
+                />
+
+                <OrgStructureActiveMultiselect
+                  :model-value="form.is_active"
+                  gender="masculine"
+                  input-id="position_edit_active_ms"
                 helper-text="Los cargos inactivos no se ofrecen al asignar funcionarios ni en flujos de alta."
                 @update:model-value="onPositionActiveChange"
               />

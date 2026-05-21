@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import OrgOfficeMunicipalityField from '~/components/OrgOfficeMunicipalityField.vue'
 import { ORG_OFFICE_TYPE_OPTIONS } from '~/constants/org-structure'
 import type { OrgOffice, OrgOfficeType } from '~/types/org-structure'
+import { toDateInputValue } from '~/utils/dateInputValue'
 
 definePageMeta({
   layout: 'default',
@@ -24,6 +25,8 @@ const form = ref({
   city: '',
   address: '',
   phone: '',
+  valid_from: '',
+  valid_to: '',
   is_active: true,
 })
 
@@ -45,6 +48,8 @@ async function load() {
       city: labelForForm(o.city, o.state),
       address: o.address ?? '',
       phone: o.phone ?? '',
+      valid_from: toDateInputValue(o.valid_from),
+      valid_to: toDateInputValue(o.valid_to),
       is_active: Boolean(o.is_active),
     }
   } catch {
@@ -69,6 +74,8 @@ async function handleSubmit() {
         state,
         address: form.value.address.trim() || null,
         phone: form.value.phone.trim() || null,
+        valid_from: form.value.valid_from.trim(),
+        valid_to: form.value.valid_to.trim() || null,
         is_active: form.value.is_active,
       },
     })
@@ -163,6 +170,13 @@ onMounted(() => {
                   <Label for="org_office_phone_edit" class="leading-snug">Teléfono</Label>
                   <Input id="org_office_phone_edit" v-model="form.phone" />
                 </div>
+
+                <OrgStructureValidityPeriodFields
+                  v-model:valid-from="form.valid_from"
+                  v-model:valid-to="form.valid_to"
+                  from-input-id="office_edit_valid_from"
+                  to-input-id="office_edit_valid_to"
+                />
               </div>
 
               <OrgStructureActiveMultiselect

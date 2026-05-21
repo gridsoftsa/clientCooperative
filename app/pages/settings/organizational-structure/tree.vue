@@ -3,6 +3,7 @@ import type { OrgOffice } from '~/types/org-structure'
 import * as d3 from 'd3'
 import { OrgChart } from 'd3-org-chart'
 import { toast } from 'vue-sonner'
+import { useOrgStructureApi } from '~/composables/useOrgStructureApi'
 
 type TreeOffice = OrgOffice & {
   org_units?: TreeUnit[]
@@ -19,7 +20,7 @@ interface TreeUnit {
 interface OrgChartNode {
   id: string
   parentId: string | null
-  kind: 'office' | 'unit' | 'position'
+  kind: 'root' | 'office' | 'unit' | 'position'
   label: string
   subtitle: string
   badge?: string
@@ -34,13 +35,22 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const router = useRouter()
 const colorMode = useColorMode()
+const { user, fetchUser } = useAuth()
+const orgApi = useOrgStructureApi()
+
+const isSuperAdmin = computed(() => user.value?.roles?.includes('super_admin') ?? false)
+
+/** null = todas las agencias (solo super administrador puede filtrar por una). */
+const selectedOfficeId = ref<number | null>(null)
+const officeChoices = ref<Array<{ id: number; label: string }>>([])
+const loadingOffices = ref(false)
 
 const tree = ref<TreeOffice[]>([])
 const loading = ref(false)
 const chartContainer = ref<HTMLDivElement | null>(null)
 const chartReady = ref(false)
 
-const INITIAL_EXPAND_LEVEL = 2
+const INITIAL_EXPAND_LEVEL = 3
 /** Altura del lienzo SVG (viewport); el contenedor hace scroll si el árbol es más grande. */
 const CHART_VIEWPORT_HEIGHT = 440
 /** Escala inicial del zoom de D3 (1 = 100%). */
@@ -48,37 +58,105 @@ const INITIAL_ZOOM = 1
 
 let orgChart: any = null
 
+function unitsForOffice(office: TreeOffice): TreeUnit[] {
+  const raw = office as TreeOffice & { orgUnits?: TreeUnit[] }
+  return office.org_units ?? raw.orgUnits ?? []
+}
+
+function positionsForUnit(unit: TreeUnit): Array<{ id: number, name: string, code: string, hierarchy_level: number }> {
+  const raw = unit as TreeUnit & { orgPositions?: Array<{ id: number, name: string, code: string, hierarchy_level: number }> }
+  return unit.org_positions ?? raw.orgPositions ?? []
+}
+
+/**
+ * d3.stratify exige exactamente un raíz (parentId nulo). Varias agencias implican varias raíces reales;
+ * se añade un nodo sintético para colgar todas las oficinas.
+ */
 function toChartNodes(input: TreeOffice[]): OrgChartNode[] {
   const nodes: OrgChartNode[] = []
+  if (input.length === 0) {
+    return nodes
+  }
 
-  for (const office of input) {
+  /** Una sola agencia: raíz real (sin nodo sintético) para vista por sucursal. */
+  if (input.length === 1) {
+    const office = input[0]
     const officeId = `office-${office.id}`
+    const code = office.code != null && String(office.code).trim() !== '' ? String(office.code) : '—'
     nodes.push({
       id: officeId,
       parentId: null,
       kind: 'office',
       label: office.name,
-      subtitle: `Agencia (${office.code})`,
+      subtitle: `Agencia (${code})`,
     })
-
-    for (const unit of office.org_units ?? []) {
+    for (const unit of unitsForOffice(office)) {
       const unitId = `unit-${unit.id}`
+      const unitCode = unit.code != null && String(unit.code).trim() !== '' ? String(unit.code) : '—'
       nodes.push({
         id: unitId,
         parentId: officeId,
         kind: 'unit',
         label: unit.name,
-        subtitle: `Área (${unit.code})`,
+        subtitle: `Área (${unitCode})`,
         badge: unit.is_document_producer ? 'Productora documental' : undefined,
       })
-
-      for (const position of unit.org_positions ?? []) {
+      for (const position of positionsForUnit(unit)) {
+        const posCode = position.code != null && String(position.code).trim() !== '' ? String(position.code) : '—'
         nodes.push({
           id: `position-${position.id}`,
           parentId: unitId,
           kind: 'position',
           label: position.name,
-          subtitle: `Cargo (${position.code})`,
+          subtitle: `Cargo (${posCode})`,
+          badge: `Nivel ${position.hierarchy_level}`,
+        })
+      }
+    }
+
+    return nodes
+  }
+
+  const rootId = 'org-tree-root'
+  nodes.push({
+    id: rootId,
+    parentId: null,
+    kind: 'root',
+    label: 'Estructura organizacional',
+    subtitle: `${input.length} agencia(s) activa(s)`,
+  })
+
+  for (const office of input) {
+    const officeId = `office-${office.id}`
+    const code = office.code != null && String(office.code).trim() !== '' ? String(office.code) : '—'
+    nodes.push({
+      id: officeId,
+      parentId: rootId,
+      kind: 'office',
+      label: office.name,
+      subtitle: `Agencia (${code})`,
+    })
+
+    for (const unit of unitsForOffice(office)) {
+      const unitId = `unit-${unit.id}`
+      const unitCode = unit.code != null && String(unit.code).trim() !== '' ? String(unit.code) : '—'
+      nodes.push({
+        id: unitId,
+        parentId: officeId,
+        kind: 'unit',
+        label: unit.name,
+        subtitle: `Área (${unitCode})`,
+        badge: unit.is_document_producer ? 'Productora documental' : undefined,
+      })
+
+      for (const position of positionsForUnit(unit)) {
+        const posCode = position.code != null && String(position.code).trim() !== '' ? String(position.code) : '—'
+        nodes.push({
+          id: `position-${position.id}`,
+          parentId: unitId,
+          kind: 'position',
+          label: position.name,
+          subtitle: `Cargo (${posCode})`,
           badge: `Nivel ${position.hierarchy_level}`,
         })
       }
@@ -159,6 +237,7 @@ async function renderChart(): Promise<void> {
       .nodeContent((d: any) => {
         const data = d?.data as OrgChartNode
         const kindStyles: Record<OrgChartNode['kind'], { icon: string, accent: string, label: string }> = {
+          root: { icon: '🌐', accent: '#64748b', label: 'Vista' },
           office: { icon: '🏢', accent: palette.officeAccent, label: 'Agencia' },
           unit: { icon: '🧩', accent: palette.unitAccent, label: 'Área' },
           position: { icon: '👤', accent: palette.positionAccent, label: 'Cargo' },
@@ -188,16 +267,47 @@ async function renderChart(): Promise<void> {
   catch (err) {
     chartReady.value = false
     console.error('[organigrama]', err)
-    toast.error('No se pudo renderizar el organigrama')
+    toast.error('No se pudo renderizar el organigrama. Revise la consola del navegador (F12) para el detalle técnico.')
   }
+}
+
+async function loadOfficeChoices(): Promise<void> {
+  if (!isSuperAdmin.value) {
+    officeChoices.value = []
+    return
+  }
+  loadingOffices.value = true
+  try {
+    const offices = await orgApi.fetchOffices({ activeOnly: true })
+    officeChoices.value = offices.map((o) => ({
+      id: o.id,
+      label: o.city ? `${o.name} (${o.code}) — ${o.city}` : `${o.name} (${o.code})`,
+    }))
+  }
+  catch {
+    officeChoices.value = []
+    toast.error('No se pudo cargar el listado de agencias')
+  }
+  finally {
+    loadingOffices.value = false
+  }
+}
+
+async function refreshTree(): Promise<void> {
+  await loadOfficeChoices()
+  await loadTree()
 }
 
 async function loadTree(): Promise<void> {
   loading.value = true
   chartReady.value = false
   try {
+    const query: Record<string, string | number | boolean> = { active_only: true }
+    if (isSuperAdmin.value && selectedOfficeId.value != null) {
+      query.org_office_id = selectedOfficeId.value
+    }
     const res = await $api<{ data: TreeOffice[] }>('/organizational-structure/meta/tree', {
-      query: { active_only: true },
+      query,
     })
     tree.value = res.data
   }
@@ -213,8 +323,17 @@ async function loadTree(): Promise<void> {
   }
 }
 
-onMounted(() => {
-  loadTree()
+onMounted(async () => {
+  if (!user.value) {
+    await fetchUser()
+  }
+  await refreshTree()
+})
+
+watch(selectedOfficeId, () => {
+  if (isSuperAdmin.value) {
+    loadTree()
+  }
 })
 
 watch(
@@ -251,9 +370,12 @@ onBeforeUnmount(() => {
           </h2>
           <p class="text-muted-foreground leading-relaxed">
             Solo elementos activos. La edición se realiza desde cada catálogo.
+            <template v-if="isSuperAdmin">
+              Como super administrador puede acotar el organigrama a una agencia (sede operativa).
+            </template>
           </p>
         </div>
-        <Button variant="outline" size="sm" class="shrink-0" :disabled="loading" @click="loadTree">
+        <Button variant="outline" size="sm" class="shrink-0" :disabled="loading" @click="refreshTree">
           <Icon name="i-lucide-refresh-cw" class="mr-2 h-4 w-4" />
           Actualizar
         </Button>
@@ -268,7 +390,38 @@ onBeforeUnmount(() => {
             Vista arbórea sólo lectura conforme registros vigentes activos en el sistema.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent class="space-y-4">
+          <div
+            v-if="isSuperAdmin && (officeChoices.length > 0 || loadingOffices)"
+            class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end"
+          >
+            <div class="space-y-2 min-w-[min(100%,280px)] sm:max-w-md">
+              <Label for="tree-office-filter" class="text-sm">Agencia</Label>
+              <Select
+                id="tree-office-filter"
+                :disabled="loadingOffices || loading"
+                :model-value="selectedOfficeId == null ? 'all' : String(selectedOfficeId)"
+                @update:model-value="(v) => { selectedOfficeId = v === 'all' ? null : Number(v) }"
+              >
+                <SelectTrigger class="w-full">
+                  <SelectValue placeholder="Todas las agencias" />
+                </SelectTrigger>
+                <SelectContent class="max-h-72">
+                  <SelectItem value="all">
+                    Todas las agencias
+                  </SelectItem>
+                  <SelectItem
+                    v-for="o in officeChoices"
+                    :key="o.id"
+                    :value="String(o.id)"
+                  >
+                    {{ o.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div v-if="loading" class="flex justify-center py-12">
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>

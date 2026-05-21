@@ -51,6 +51,8 @@ export interface OrgStaffListItem {
   updated_at?: string
   user?: { id: number; name: string; email: string } | null
   current_assignment?: {
+    effective_from?: string | null
+    effective_to?: string | null
     org_office?: { id: number; name: string; code: string } | null
     org_unit?: { id: number; name: string; code: string } | null
     org_position?: { id: number; name: string; code: string } | null

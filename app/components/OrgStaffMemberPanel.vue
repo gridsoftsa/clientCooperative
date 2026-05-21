@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import { ORG_ASSIGNMENT_CHANGE_KIND_OPTIONS } from '~/constants/org-structure-assignments'
 import type { OrgOffice, OrgStaffListItem } from '~/types/org-structure'
+import { toDateInputValue } from '~/utils/dateInputValue'
 import type { OrgUnitRow, OrgPositionRow } from '~/composables/useOrgStructureApi'
 import type { PaginatedUsers, User } from '~/types/user'
 
@@ -68,6 +69,7 @@ const ubicacionForm = ref({
   org_position_id: null as number | null,
   immediate_supervisor_staff_id: null as number | null,
   effective_from: todayISO(),
+  effective_to: '',
   change_kind: 'assignment',
   notes: '',
 })
@@ -121,7 +123,15 @@ function parseCurrentAssignmentFromApi(raw: unknown): OrgStaffListItem['current_
     return null
   }
   const sup = (a.immediate_supervisor_staff ?? a.immediateSupervisorStaff) as Record<string, unknown> | undefined
+  const effFromRaw = a.effective_from ?? a.effectiveFrom
+  const effToRaw = a.effective_to ?? a.effectiveTo
+  const effective_from
+    = effFromRaw != null && effFromRaw !== '' ? toDateInputValue(String(effFromRaw)) : null
+  const effective_to = effToRaw != null && effToRaw !== '' ? toDateInputValue(String(effToRaw)) : null
+
   return {
+    effective_from,
+    effective_to,
     org_office: {
       id: Number(office.id),
       name: String(office.name ?? ''),
@@ -208,6 +218,7 @@ async function hydrateUbicacionFormFromCurrentAssignment(): Promise<void> {
       org_position_id: null,
       immediate_supervisor_staff_id: null,
       effective_from: todayISO(),
+      effective_to: '',
       change_kind: 'assignment',
       notes: '',
     }
@@ -227,6 +238,7 @@ async function hydrateUbicacionFormFromCurrentAssignment(): Promise<void> {
     ubicacionForm.value.org_position_id = positionId
     ubicacionForm.value.immediate_supervisor_staff_id = ca.immediate_supervisor_staff?.id ?? null
     ubicacionForm.value.effective_from = todayISO()
+    ubicacionForm.value.effective_to = ''
     ubicacionForm.value.change_kind = 'assignment'
     ubicacionForm.value.notes = ''
   } catch {
@@ -337,6 +349,7 @@ async function submitAssignment() {
         org_position_id: ubicacionForm.value.org_position_id,
         immediate_supervisor_staff_id: ubicacionForm.value.immediate_supervisor_staff_id ?? undefined,
         effective_from: ubicacionForm.value.effective_from,
+        effective_to: ubicacionForm.value.effective_to.trim() || undefined,
         change_kind: ubicacionForm.value.change_kind,
         notes: ubicacionForm.value.notes.trim() || undefined,
       },
@@ -348,6 +361,14 @@ async function submitAssignment() {
   } finally {
     savingUbicacion.value = false
   }
+}
+
+function assignmentVigenciaLabel(iso: string | null | undefined): string {
+  if (iso == null || iso === '') {
+    return '—'
+  }
+
+  return String(iso).slice(0, 10)
 }
 
 function supervisorDisplayName(): string {
@@ -545,6 +566,16 @@ watch(
                 → {{ summary.current_assignment.org_unit?.name ?? '—' }}
                 → {{ summary.current_assignment.org_position?.name ?? '—' }}
               </p>
+              <p>
+                <span class="font-medium text-foreground">Vigencia de la asignación:</span>
+                desde {{ assignmentVigenciaLabel(summary.current_assignment.effective_from) }}
+                <template v-if="summary.current_assignment.effective_to">
+                  · hasta {{ assignmentVigenciaLabel(summary.current_assignment.effective_to) }}
+                </template>
+                <template v-else>
+                  · en curso
+                </template>
+              </p>
               <p v-if="readOnly">
                 <span class="font-medium text-foreground">Jefe inmediato:</span>
                 {{ supervisorDisplayName() }}
@@ -669,22 +700,30 @@ watch(
                           <Input id="eff_p" v-model="ubicacionForm.effective_from" type="date" required />
                         </div>
                         <div class="space-y-3">
-                          <Label for="ck_p" class="leading-snug">Tipo de movimiento</Label>
-                          <Select v-model="ubicacionForm.change_kind">
-                            <SelectTrigger id="ck_p">
-                              <SelectValue placeholder="Seleccione" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem
-                                v-for="opt in ORG_ASSIGNMENT_CHANGE_KIND_OPTIONS"
-                                :key="opt.value"
-                                :value="opt.value"
-                              >
-                                {{ opt.label }}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Label for="eff_to_p" class="leading-snug">Vigente hasta (opcional)</Label>
+                          <Input id="eff_to_p" v-model="ubicacionForm.effective_to" type="date" />
+                          <p class="text-xs text-muted-foreground leading-relaxed">
+                            Si la deja vacía, el tramo queda abierto hasta un nuevo movimiento. Si indica fin, ese tramo no se considera «asignación vigente» en listados que solo muestran la ubicación actual.
+                          </p>
                         </div>
+                      </div>
+
+                      <div class="space-y-3 md:col-span-2">
+                        <Label for="ck_p" class="leading-snug">Tipo de movimiento</Label>
+                        <Select v-model="ubicacionForm.change_kind">
+                          <SelectTrigger id="ck_p">
+                            <SelectValue placeholder="Seleccione" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem
+                              v-for="opt in ORG_ASSIGNMENT_CHANGE_KIND_OPTIONS"
+                              :key="opt.value"
+                              :value="opt.value"
+                            >
+                              {{ opt.label }}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div class="space-y-3 md:col-span-2">

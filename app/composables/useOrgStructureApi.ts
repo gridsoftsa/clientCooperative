@@ -59,12 +59,18 @@ export function useOrgStructureApi() {
     return res.data
   }
 
-  async function fetchPositions(opts?: { activeOnly?: boolean; orgUnitId?: number }): Promise<OrgPositionRow[]> {
+  async function fetchPositions(opts?: {
+    activeOnly?: boolean
+    orgUnitId?: number
+    managerOfOrgUnitOnly?: boolean
+  }): Promise<OrgPositionRow[]> {
     const q: Record<string, string | number | boolean> = { per_page: 500 }
     if (opts?.activeOnly)
       q.active_only = true
     if (opts?.orgUnitId)
       q.org_unit_id = opts.orgUnitId
+    if (opts?.managerOfOrgUnitOnly)
+      q.manager_of_org_unit_only = true
     const res = await $api<{ data: OrgPositionRow[] }>('/organizational-structure/org-positions', { query: q })
     return res.data
   }

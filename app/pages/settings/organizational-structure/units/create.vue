@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import type { OrgYesNoChoice } from '~/constants/org-structure'
 import type { OrgOffice } from '~/types/org-structure'
 import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
+import { todayIsoDateString } from '~/utils/dateInputValue'
 
 definePageMeta({
   layout: 'default',
@@ -29,6 +30,8 @@ const form = ref({
   manager_staff_id: null as number | null,
   manager_position_name: '',
   is_active: true,
+  valid_from: todayIsoDateString(),
+  valid_to: '',
   institutional_process_ids: [] as number[],
 })
 
@@ -85,6 +88,8 @@ async function handleSubmit() {
         manager_staff_id: form.value.manager_staff_id ?? undefined,
         manager_position_name: form.value.manager_position_name.trim() || undefined,
         is_active: form.value.is_active,
+        valid_from: form.value.valid_from.trim(),
+        valid_to: form.value.valid_to.trim() || null,
         institutional_process_ids:
           form.value.institutional_process_ids.length > 0 ? form.value.institutional_process_ids : undefined,
       },
@@ -257,6 +262,13 @@ onMounted(() => {
                   helper-text="Opcional: seleccione los procesos en los que participa esta dependencia."
                 />
               </div>
+
+              <OrgStructureValidityPeriodFields
+                v-model:valid-from="form.valid_from"
+                v-model:valid-to="form.valid_to"
+                from-input-id="unit_create_valid_from"
+                to-input-id="unit_create_valid_to"
+              />
 
               <OrgStructureActiveMultiselect
                 :model-value="form.is_active"
