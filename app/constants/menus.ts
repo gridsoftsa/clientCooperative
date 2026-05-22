@@ -125,6 +125,36 @@ export const navMenu: NavMenu[] = [
             link: '/settings/archival/trd',
             permission: 'trd_tablas_ver',
           },
+          {
+            title: 'TRD vigente',
+            link: '/settings/archival/trd/consult',
+            permission: 'trd_tablas_ver',
+          },
+          {
+            title: 'Reportes archivísticos',
+            link: '/settings/archival/reports',
+            anyPermission: ['trd_catalogo_ver', 'trd_tablas_ver', 'trd_reportes_ver'],
+          },
+          {
+            title: 'Ciclo de vida',
+            link: '/settings/archival/lifecycle',
+            anyPermission: ['trd_ciclo_vida_ver', 'trd_tablas_ver', 'trd_catalogo_ver'],
+          },
+          {
+            title: 'Disposición final',
+            link: '/settings/archival/disposition',
+            anyPermission: ['trd_disposicion_ver', 'trd_tablas_ver', 'trd_catalogo_ver'],
+          },
+          {
+            title: 'Metadatos',
+            link: '/settings/archival/metadata/schemas',
+            permission: 'trd_metadatos_ver',
+          },
+          {
+            title: 'Auditoría catálogo/TRD',
+            link: '/settings/archival/audit',
+            anyPermission: ['trd_auditoria_ver', 'auditoria_ver'],
+          },
         ],
       },
     ],

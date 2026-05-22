@@ -10,13 +10,9 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const router = useRouter()
 
-interface TrdTableRow {
-  id: number
-  org_unit_id: number
-  notes?: string | null
-  org_unit?: { id: number; name: string; code: string }
-}
+import type { TrdTableRow } from '~/types/archival-trd'
 
+const trdApi = useTrdApi()
 const rows = ref<TrdTableRow[]>([])
 const loading = ref(false)
 
@@ -52,6 +48,9 @@ onMounted(fetchTables)
           <Button variant="outline" @click="router.push('/settings/archival')">
             Resumen
           </Button>
+          <Button variant="outline" @click="router.push('/settings/archival/trd/consult')">
+            TRD vigente
+          </Button>
           <PermissionGate permission="trd_tablas_editar">
             <Button @click="router.push('/settings/archival/trd/create')">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
@@ -80,14 +79,24 @@ onMounted(fetchTables)
                 <TableRow>
                   <TableHead>Área productora</TableHead>
                   <TableHead>Código</TableHead>
-                  <TableHead>Id</TableHead>
+                  <TableHead />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                <TableRow v-for="r in rows" :key="r.id">
+                <TableRow
+                  v-for="r in rows"
+                  :key="r.id"
+                  class="cursor-pointer hover:bg-muted/50"
+                  @click="router.push(trdApi.tablePath(r.id))"
+                >
                   <TableCell>{{ r.org_unit?.name ?? '—' }}</TableCell>
                   <TableCell class="font-mono text-sm">{{ r.org_unit?.code ?? '—' }}</TableCell>
-                  <TableCell>{{ r.id }}</TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="sm" @click.stop="router.push(trdApi.tablePath(r.id))">
+                      Ver versiones
+                      <Icon name="i-lucide-chevron-right" class="ml-1 h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               </TableBody>
             </Table>

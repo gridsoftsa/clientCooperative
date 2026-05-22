@@ -205,6 +205,15 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   trd_catalogo_editar: 'Editar catálogo documental (TRD)',
   trd_tablas_ver: 'Ver tablas de retención (TRD)',
   trd_tablas_editar: 'Editar tablas de retención (TRD)',
+  trd_reportes_ver: 'Ver reportes archivísticos (TRD)',
+  trd_reportes_exportar: 'Exportar reportes archivísticos (TRD)',
+  trd_ciclo_vida_ver: 'Ver ciclo de vida documental (TRD)',
+  trd_transferencias_ejecutar: 'Ejecutar transferencias archivísticas (TRD)',
+  trd_disposicion_ver: 'Ver actas de disposición final (TRD)',
+  trd_disposicion_editar: 'Gestionar actas de disposición final (TRD)',
+  trd_metadatos_ver: 'Ver esquemas de metadatos (TRD)',
+  trd_metadatos_editar: 'Editar esquemas de metadatos (TRD)',
+  trd_auditoria_ver: 'Consultar auditoría catálogo y TRD',
 }
 
 export function getPermissionLabel(name: string): string {

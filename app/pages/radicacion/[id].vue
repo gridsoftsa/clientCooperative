@@ -1398,6 +1398,12 @@ watch([application, debtor, coDebtors], () => {
                       {{ doc.title || doc.original_name || 'Documento' }}
                       <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     </Button>
+                    <p
+                      v-if="doc.doc_document_type?.name"
+                      class="text-xs text-muted-foreground"
+                    >
+                      Tipo documental (TRD): {{ doc.doc_document_type.code }} — {{ doc.doc_document_type.name }}
+                    </p>
                     <p v-if="doc.review_comment" class="text-xs text-amber-700 dark:text-amber-300">
                       Nota revisión: {{ doc.review_comment }}
                     </p>
@@ -1474,6 +1480,16 @@ watch([application, debtor, coDebtors], () => {
                 <p class="text-sm font-medium">Descripción del destino</p>
                 <p class="whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2">
                   {{ form.destination_description }}
+                </p>
+              </div>
+              <div
+                v-if="application?.document_producer_org_unit"
+                class="space-y-1.5 sm:col-span-2 lg:col-span-3"
+              >
+                <p class="text-sm font-medium">Área productora documental (TRD)</p>
+                <p class="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                  {{ application.document_producer_org_unit.name }}
+                  ({{ application.document_producer_org_unit.code }})
                 </p>
               </div>
               <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
@@ -1609,6 +1625,12 @@ watch([application, debtor, coDebtors], () => {
                           {{ doc.title || doc.original_name || 'Documento' }}
                           <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         </Button>
+                        <p
+                          v-if="doc.doc_document_type?.name"
+                          class="text-xs text-muted-foreground"
+                        >
+                          Tipo documental (TRD): {{ doc.doc_document_type.code }} — {{ doc.doc_document_type.name }}
+                        </p>
                         <p v-if="doc.review_comment" class="text-xs text-amber-700 dark:text-amber-300">
                           Nota revisión: {{ doc.review_comment }}
                         </p>
