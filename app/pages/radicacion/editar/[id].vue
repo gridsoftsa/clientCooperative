@@ -106,7 +106,59 @@ const form = ref<CreditApplicationForm>({
   status: 'Draft',
   co_debtors: [],
   numero_radicado_externo: '',
+  document_producer_org_unit_id: null,
 })
+
+const {
+  producerUnits,
+  trdTypeOptions,
+  trdRequired,
+  loadProducerUnits,
+  loadTrdTypesForUnit,
+} = useRadicacionTrd()
+
+watch(
+  () => form.value.document_producer_org_unit_id,
+  (unitId) => {
+    loadTrdTypesForUnit(unitId ?? null)
+  },
+)
+
+function appendRadicacionTrdToFormData(fd: FormData, doc: {
+  doc_document_type_id?: number | null
+  metadata_values?: Record<string, unknown>
+}): void {
+  if (doc.doc_document_type_id != null && doc.doc_document_type_id > 0) {
+    fd.append('doc_document_type_id', String(doc.doc_document_type_id))
+  }
+  if (doc.metadata_values && Object.keys(doc.metadata_values).length > 0) {
+    fd.append('metadata_values', JSON.stringify(doc.metadata_values))
+  }
+}
+
+function validateTrdOnFreeDocuments(): string | null {
+  if (!trdRequired.value) {
+    return null
+  }
+  const check = (docs: Array<{ file?: File, doc_document_type_id?: number | null }> | undefined) => {
+    for (const doc of docs ?? []) {
+      if (doc.file && !doc.doc_document_type_id) {
+        return true
+      }
+    }
+    return false
+  }
+  if (check(form.value.debtor.documents)) {
+    return 'Seleccione el tipo documental (TRD) en cada documento adjunto del deudor.'
+  }
+  for (const co of form.value.co_debtors ?? []) {
+    if (check(co.documents)) {
+      return 'Seleccione el tipo documental (TRD) en cada documento adjunto de codeudores.'
+    }
+  }
+
+  return null
+}
 
 const stepsDeudor = [
   { num: 1, title: 'Datos del Deudor' },
@@ -228,6 +280,8 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
       is_reviewed: d.is_reviewed,
       review_comment: d.review_comment,
       reviewed_at: d.reviewed_at,
+      doc_document_type_id: d.doc_document_type_id ?? null,
+      doc_document_type_label: d.doc_document_type?.name ?? null,
     })),
   }
 }
@@ -334,6 +388,7 @@ function syncFormFromApplication() {
     agency_id: app.agency_id ?? 0,
     status: 'Draft',
     numero_radicado_externo: app.numero_radicado_externo ?? '',
+    document_producer_org_unit_id: app.document_producer_org_unit_id ?? null,
     co_debtors: coDebtors.value.map((c: (typeof coDebtors.value)[number]) => {
       const docs = getDocumentsForApplicant(c.id)
       return apiApplicantToForm(c, docs)
@@ -756,6 +811,10 @@ function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024
 
 function validateAllDocumentsBeforeUpload(): string | null {
+  const trdErr = validateTrdOnFreeDocuments()
+  if (trdErr) {
+    return trdErr
+  }
   const check = (docs: Array<{ title?: string; file?: File }>) => {
     for (const doc of docs) {
       if (doc.file && doc.file.size > MAX_DOCUMENT_SIZE) {
@@ -805,6 +864,7 @@ async function uploadAllDocuments(
       const fd = new FormData()
       fd.append('title', doc.title.trim())
       fd.append('file', doc.file)
+      appendRadicacionTrdToFormData(fd, doc)
       await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
     }
 
@@ -878,6 +938,7 @@ async function uploadAllDocuments(
       fd.append('title', doc.title.trim())
       fd.append('file', doc.file)
       fd.append('applicant_id', String(applicantId))
+      appendRadicacionTrdToFormData(fd, doc)
       await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
     }
   }
@@ -1099,6 +1160,7 @@ watch([application, debtor, coDebtors], () => {
 onMounted(() => {
   fetchApplication()
   fetchCatalogs()
+  loadProducerUnits()
 })
 </script>
 
@@ -1376,6 +1438,9 @@ onMounted(() => {
               :documents-editable-only="documentsOnlyEditMode"
               :show-documentos-auxiliar-checklist="!addingCodeudor"
               :credit-application-documents="application?.documents ?? []"
+              :document-producer-org-unit-id="form.document_producer_org_unit_id"
+              :trd-document-type-options="trdTypeOptions"
+              :trd-classification-required="trdRequired"
               @search="searchApplicant"
             />
           </div>
@@ -1469,6 +1534,41 @@ onMounted(() => {
                   rows="4"
                   :readonly="documentsOnlyEditMode"
                 />
+              </div>
+              <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+                <Label for="doc_producer_unit">Área productora documental (TRD)</Label>
+                <div class="flex flex-wrap gap-2 items-center">
+                  <Select
+                    :model-value="form.document_producer_org_unit_id ?? undefined"
+                    :disabled="documentsOnlyEditMode"
+                    @update:model-value="form.document_producer_org_unit_id = $event != null ? Number($event) : null"
+                  >
+                    <SelectTrigger id="doc_producer_unit" class="min-w-[280px]">
+                      <SelectValue placeholder="Opcional: clasificación archivística" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        v-for="u in producerUnits"
+                        :key="u.id"
+                        :value="u.id"
+                      >
+                        {{ u.name }} ({{ u.code }})
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    v-if="form.document_producer_org_unit_id && !documentsOnlyEditMode"
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    @click="form.document_producer_org_unit_id = null"
+                  >
+                    Quitar
+                  </Button>
+                </div>
+                <p class="text-xs text-muted-foreground leading-relaxed">
+                  Si el área tiene TRD vigente, cada documento adjunto (no auxiliar) deberá indicar su tipo documental del catálogo.
+                </p>
               </div>
               <div class="space-y-3 sm:col-span-2 lg:col-span-3">
                 <div class="rounded-lg border border-border bg-muted/30 p-4">
@@ -1620,6 +1720,9 @@ onMounted(() => {
                 :hide-financial-section="true"
                 :read-only-form="false"
                 :documents-editable-only="documentsOnlyEditMode"
+                :document-producer-org-unit-id="form.document_producer_org_unit_id"
+                :trd-document-type-options="trdTypeOptions"
+                :trd-classification-required="trdRequired"
                 @search="searchApplicantForWizard"
               />
             </div>

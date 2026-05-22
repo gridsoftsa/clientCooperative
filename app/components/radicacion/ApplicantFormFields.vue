@@ -43,6 +43,12 @@ const props = withDefaults(
      * Si true, «Ingreso cultivos/negocio» no se edita a mano: lo calculan las plantillas de actividad económica.
      */
     incomeBusinessReadonly?: boolean
+    /** Área productora (paso solicitud) para clasificación TRD en adjuntos */
+    documentProducerOrgUnitId?: number | null
+    /** Tipos documentales permitidos en la TRD vigente del área */
+    trdDocumentTypeOptions?: Array<{ id: number, label: string }>
+    /** Si el área tiene TRD vigente, el tipo documental es obligatorio en adjuntos libres */
+    trdClassificationRequired?: boolean
     onSearch?: () => void
   }>(),
   {
@@ -53,6 +59,9 @@ const props = withDefaults(
     creditApplicationId: null,
     showDocumentosAuxiliarChecklist: false,
     creditApplicationDocuments: () => [],
+    documentProducerOrgUnitId: null,
+    trdDocumentTypeOptions: () => [],
+    trdClassificationRequired: false,
   },
 )
 
@@ -418,7 +427,7 @@ const documents = computed({
 
 function addDocument() {
   if (!docCanSubir.value) return
-  documents.value = [...(documents.value || []), { title: '', file: undefined }]
+  documents.value = [...(documents.value || []), { title: '', file: undefined, doc_document_type_id: null, metadata_values: {} }]
 }
 
 async function removeDocument(index: number) {
@@ -1421,6 +1430,44 @@ function formatFileSize(bytes: number): string {
                       @blur="onDocumentTitleBlur(idx)"
                     />
                   </div>
+                  <div
+                    v-if="trdClassificationRequired && trdDocumentTypeOptions.length"
+                    :class="fieldClass"
+                    class="mt-2"
+                  >
+                    <Label :for="`doc_type_${idx}`" class="text-xs">Tipo documental (TRD) *</Label>
+                    <Select
+                      :model-value="doc.doc_document_type_id ?? undefined"
+                      :disabled="!canPickDocumentFile(doc)"
+                      @update:model-value="updateDocument(idx, { doc_document_type_id: $event != null ? Number($event) : null })"
+                    >
+                      <SelectTrigger :id="`doc_type_${idx}`">
+                        <SelectValue placeholder="Seleccione tipo del catálogo TRD…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          v-for="opt in trdDocumentTypeOptions"
+                          :key="opt.id"
+                          :value="opt.id"
+                        >
+                          {{ opt.label }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <RadicacionArchivalMetadataFields
+                    v-if="doc.doc_document_type_id"
+                    :doc-document-type-id="doc.doc_document_type_id"
+                    :model-value="doc.metadata_values ?? {}"
+                    :disabled="!canPickDocumentFile(doc)"
+                    @update:model-value="updateDocument(idx, { metadata_values: $event })"
+                  />
+                  <p
+                    v-else-if="!documentProducerOrgUnitId"
+                    class="text-xs text-muted-foreground mt-2 leading-relaxed"
+                  >
+                    Indique el área productora documental en el paso «Datos de la solicitud» para clasificar adjuntos con la TRD.
+                  </p>
                 </div>
                 <div class="p-4">
                   <input

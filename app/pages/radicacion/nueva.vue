@@ -103,7 +103,59 @@ const form = ref<CreditApplicationForm>({
   status: 'Draft',
   co_debtors: [],
   numero_radicado_externo: '',
+  document_producer_org_unit_id: null,
 })
+
+const {
+  producerUnits,
+  trdTypeOptions,
+  trdRequired,
+  loadProducerUnits,
+  loadTrdTypesForUnit,
+} = useRadicacionTrd()
+
+watch(
+  () => form.value.document_producer_org_unit_id,
+  (id) => {
+    loadTrdTypesForUnit(id ?? null)
+  },
+)
+
+function appendRadicacionTrdToFormData(fd: FormData, doc: {
+  doc_document_type_id?: number | null
+  metadata_values?: Record<string, unknown>
+}): void {
+  if (doc.doc_document_type_id != null && doc.doc_document_type_id > 0) {
+    fd.append('doc_document_type_id', String(doc.doc_document_type_id))
+  }
+  if (doc.metadata_values && Object.keys(doc.metadata_values).length > 0) {
+    fd.append('metadata_values', JSON.stringify(doc.metadata_values))
+  }
+}
+
+function validateTrdOnFreeDocuments(): string | null {
+  if (!trdRequired.value) {
+    return null
+  }
+  const check = (docs: Array<{ file?: File, doc_document_type_id?: number | null }> | undefined) => {
+    for (const doc of docs ?? []) {
+      if (doc.file && !doc.doc_document_type_id) {
+        return true
+      }
+    }
+    return false
+  }
+  if (check(form.value.debtor.documents)) {
+    return 'Seleccione el tipo documental (TRD) en cada documento adjunto del deudor.'
+  }
+  for (const co of form.value.co_debtors ?? []) {
+    if (check(co.documents)) {
+      return 'Seleccione el tipo documental (TRD) en cada documento adjunto de codeudores.'
+    }
+  }
+
+  return null
+}
 
 const stepsDeudor = [
   { num: 1, title: 'Datos del Deudor' },
@@ -572,6 +624,7 @@ async function fetchApplicationByRadicado(): Promise<boolean> {
     }
     const full = await $api<{ data: any }>(`/credit-applications/${app.id}`)
     existingApplication.value = full.data
+    form.value.document_producer_org_unit_id = full.data?.document_producer_org_unit_id ?? null
     return true
   } catch (e) {
     console.error('Error buscando solicitud:', e)
@@ -651,6 +704,10 @@ const {
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024 // 10 MB
 
 function validateAllDocumentsBeforeUpload(): string | null {
+  const trdErr = validateTrdOnFreeDocuments()
+  if (trdErr) {
+    return trdErr
+  }
   const check = (docs: Array<{ title?: string; file?: File }>) => {
     for (const doc of docs) {
       if (doc.file && doc.file.size > MAX_DOCUMENT_SIZE) {
@@ -698,6 +755,7 @@ async function uploadAllDocuments(
       const fd = new FormData()
       fd.append('title', doc.title.trim())
       fd.append('file', doc.file)
+      appendRadicacionTrdToFormData(fd, doc)
       await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
     }
 
@@ -772,6 +830,7 @@ async function uploadAllDocuments(
       fd.append('title', doc.title.trim())
       fd.append('file', doc.file)
       fd.append('applicant_id', String(applicantId))
+      appendRadicacionTrdToFormData(fd, doc)
       await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
     }
   }
@@ -846,6 +905,7 @@ async function saveCodeudor() {
         fd.append('title', doc.title.trim())
         fd.append('file', doc.file)
         fd.append('applicant_id', String(createdCoDebtor.applicant_id))
+        appendRadicacionTrdToFormData(fd, doc)
         await $api(`/credit-applications/${updated.id}/documents`, { method: 'POST', body: fd })
       }
     }
@@ -1095,6 +1155,7 @@ function selectMode(m: 'deudor' | 'codeudor') {
 
 onMounted(() => {
   fetchCatalogs()
+  loadProducerUnits()
 })
 </script>
 
@@ -1344,6 +1405,9 @@ onMounted(() => {
             :show-co-debtor-concept="mode === 'codeudor'"
             :show-documentos-auxiliar-checklist="mode === 'deudor' && !addingCodeudor"
             :credit-application-documents="[]"
+            :document-producer-org-unit-id="form.document_producer_org_unit_id"
+            :trd-document-type-options="trdTypeOptions"
+            :trd-classification-required="trdRequired"
             @search="searchApplicant"
           />
         </div>
@@ -1398,6 +1462,40 @@ onMounted(() => {
                 inputmode="numeric"
                 @keydown="onKeydownNumeric($event, false)"
               />
+            </div>
+            <div class="space-y-1.5 sm:col-span-2">
+              <Label for="doc_producer_unit">Área productora documental (TRD)</Label>
+              <div class="flex flex-wrap gap-2 items-center">
+                <Select
+                  :model-value="form.document_producer_org_unit_id ?? undefined"
+                  @update:model-value="form.document_producer_org_unit_id = $event != null ? Number($event) : null"
+                >
+                  <SelectTrigger id="doc_producer_unit" class="min-w-[280px]">
+                    <SelectValue placeholder="Opcional: clasificación archivística" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="u in producerUnits"
+                      :key="u.id"
+                      :value="u.id"
+                    >
+                      {{ u.name }} ({{ u.code }})
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  v-if="form.document_producer_org_unit_id"
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  @click="form.document_producer_org_unit_id = null"
+                >
+                  Quitar
+                </Button>
+              </div>
+              <p class="text-xs text-muted-foreground leading-relaxed">
+                Si el área tiene TRD vigente, cada documento adjunto (no auxiliar) deberá indicar su tipo documental del catálogo.
+              </p>
             </div>
             <div class="space-y-1.5">
               <Label for="agency">Sucursal *</Label>
@@ -1520,6 +1618,9 @@ onMounted(() => {
               :loading-search="loadingSearch"
               :show-co-debtor-concept="true"
               :hide-financial-section="true"
+              :document-producer-org-unit-id="form.document_producer_org_unit_id"
+              :trd-document-type-options="trdTypeOptions"
+              :trd-classification-required="trdRequired"
               @search="searchApplicantForWizard"
             />
           </div>

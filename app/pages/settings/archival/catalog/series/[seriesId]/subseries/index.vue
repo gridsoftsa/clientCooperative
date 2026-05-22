@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { DocSeriesRow } from '~/types/archival-catalog'
+import type { DocSeriesRow, DocSubseriesRow } from '~/types/archival-catalog'
 
 definePageMeta({
   layout: 'default',
@@ -8,27 +8,41 @@ definePageMeta({
   permissions: 'trd_catalogo_ver',
 })
 
+const route = useRoute()
 const router = useRouter()
 const catalogApi = useArchivalCatalogApi()
 
-const rows = ref<DocSeriesRow[]>([])
+const seriesId = computed(() => Number(route.params.seriesId))
+
+const series = ref<DocSeriesRow | null>(null)
+const rows = ref<DocSubseriesRow[]>([])
 const loading = ref(false)
 
-async function fetchSeries() {
+async function load() {
+  if (!Number.isFinite(seriesId.value) || seriesId.value <= 0) {
+    toast.error('Serie no válida')
+    await router.push('/settings/archival/catalog/series')
+    return
+  }
+
   loading.value = true
   try {
-    rows.value = await catalogApi.fetchSeries()
+    const [seriesRow, subseries] = await Promise.all([
+      catalogApi.fetchSeriesById(seriesId.value),
+      catalogApi.fetchSubseries(seriesId.value),
+    ])
+    series.value = seriesRow
+    rows.value = subseries
   } catch {
-    toast.error('No se pudo cargar el catálogo de series')
+    toast.error('No se pudieron cargar las subseries')
+    series.value = null
     rows.value = []
   } finally {
     loading.value = false
   }
 }
 
-onMounted(() => {
-  fetchSeries()
-})
+onMounted(load)
 </script>
 
 <template>
@@ -40,23 +54,29 @@ onMounted(() => {
             variant="ghost"
             size="sm"
             class="h-8 w-fit -ml-2 px-2"
-            @click="router.push('/settings/archival')"
+            @click="router.push('/settings/archival/catalog/series')"
           >
             <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
-            TRD y archivo
+            Series
           </Button>
           <h2 class="text-2xl font-bold tracking-tight">
-            Catálogo — Series documentales
+            Subseries documentales
           </h2>
-          <p class="text-muted-foreground leading-relaxed max-w-3xl">
-            Primer nivel del cuadro de clasificación. Abra una serie para administrar sus subseries y, en cada subserie, los tipos documentales.
+          <p v-if="series" class="text-muted-foreground leading-relaxed max-w-3xl">
+            Serie
+            <span class="font-mono text-sm">{{ series.code }}</span>
+            — {{ series.name }}.
+            El siguiente nivel del cuadro de clasificación son los tipos documentales por subserie.
           </p>
         </div>
         <div class="flex shrink-0 flex-wrap gap-2">
+          <Button variant="outline" @click="router.push('/settings/archival')">
+            Resumen TRD
+          </Button>
           <PermissionGate permission="trd_catalogo_editar">
-            <Button @click="router.push('/settings/archival/catalog/series/create')">
+            <Button @click="router.push(catalogApi.subseriesCreatePath(seriesId))">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-              Nueva serie
+              Nueva subserie
             </Button>
           </PermissionGate>
         </div>
@@ -65,18 +85,18 @@ onMounted(() => {
       <Card>
         <CardHeader class="gap-2">
           <CardTitle class="leading-snug">
-            Series
+            Subseries
           </CardTitle>
           <CardDescription class="leading-relaxed">
-            Cuadro de clasificación — nivel serie (módulo 4).
+            Segundo nivel del catálogo documental institucional (módulo TRD).
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div v-if="loading" class="flex justify-center py-10">
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
-          <div v-else-if="rows.length === 0" class="py-8 text-center text-muted-foreground">
-            No hay series registradas.
+          <div v-else-if="rows.length === 0" class="py-8 text-center text-muted-foreground leading-relaxed">
+            No hay subseries en esta serie.
           </div>
           <div v-else class="border rounded-lg overflow-hidden">
             <Table>
@@ -85,7 +105,7 @@ onMounted(() => {
                   <TableHead>Código</TableHead>
                   <TableHead>Nombre</TableHead>
                   <TableHead class="text-right">
-                    Subseries
+                    Tipos doc.
                   </TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead class="w-[200px]" />
@@ -98,7 +118,7 @@ onMounted(() => {
                   </TableCell>
                   <TableCell>{{ r.name }}</TableCell>
                   <TableCell class="text-right tabular-nums text-muted-foreground">
-                    {{ r.subseries_count ?? 0 }}
+                    {{ r.document_types_count ?? 0 }}
                   </TableCell>
                   <TableCell>
                     <Badge :variant="r.is_active ? 'default' : 'secondary'">
@@ -110,15 +130,15 @@ onMounted(() => {
                       <Button
                         variant="ghost"
                         size="sm"
-                        @click="router.push(catalogApi.subseriesListPath(r.id))"
+                        @click="router.push(catalogApi.documentTypesListPath(seriesId, r.id))"
                       >
-                        Subseries
+                        Tipos
                       </Button>
                       <PermissionGate permission="trd_catalogo_editar">
                         <Button
                           variant="ghost"
                           size="sm"
-                          @click="router.push(`/settings/archival/catalog/series/${r.id}/edit`)"
+                          @click="router.push(`/settings/archival/catalog/series/${seriesId}/subseries/${r.id}/edit`)"
                         >
                           Editar
                         </Button>

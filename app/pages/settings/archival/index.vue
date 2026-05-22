@@ -2,7 +2,7 @@
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: ['trd_catalogo_ver', 'trd_tablas_ver'],
+  permissions: ['trd_catalogo_ver', 'trd_tablas_ver', 'trd_metadatos_ver'],
 })
 
 const router = useRouter()
@@ -28,7 +28,7 @@ const router = useRouter()
         </Button>
       </div>
 
-      <div class="grid gap-4 md:grid-cols-2">
+      <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card class="cursor-pointer transition-colors hover:bg-muted/40" @click="router.push('/settings/archival/catalog/series')">
           <CardHeader>
             <CardTitle class="text-base">
@@ -57,6 +57,102 @@ const router = useRouter()
           <CardContent>
             <Button variant="secondary" @click.stop="router.push('/settings/archival/trd')">
               Ir a TRD
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card class="cursor-pointer transition-colors hover:bg-muted/40" @click="router.push('/settings/archival/trd/consult')">
+          <CardHeader>
+            <CardTitle class="text-base">
+              Consultar TRD vigente
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
+              Reglas efectivas por área productora y tipo documental (propias o heredadas).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="secondary" @click.stop="router.push('/settings/archival/trd/consult')">
+              Consultar
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card class="cursor-pointer transition-colors hover:bg-muted/40" @click="router.push('/settings/archival/reports')">
+          <CardHeader>
+            <CardTitle class="text-base">
+              Reportes archivísticos
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
+              Catálogo, versiones TRD, uso del catálogo y retención efectiva (exportación Excel/PDF).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="secondary" @click.stop="router.push('/settings/archival/reports')">
+              Ver reportes
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card class="cursor-pointer transition-colors hover:bg-muted/40" @click="router.push('/settings/archival/lifecycle')">
+          <CardHeader>
+            <CardTitle class="text-base">
+              Ciclo de vida y transferencias
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
+              Gestión → central → histórico; transferencias manuales o automáticas según tiempos TRD.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="secondary" @click.stop="router.push('/settings/archival/lifecycle')">
+              Gestionar ciclo de vida
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card class="cursor-pointer transition-colors hover:bg-muted/40" @click="router.push('/settings/archival/audit')">
+          <CardHeader>
+            <CardTitle class="text-base">
+              Auditoría catálogo y TRD
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
+              Trazabilidad de cambios en catálogo documental y tablas de retención (solo consulta).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="secondary" @click.stop="router.push('/settings/archival/audit')">
+              Ver auditoría
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card class="cursor-pointer transition-colors hover:bg-muted/40" @click="router.push('/settings/archival/metadata/schemas')">
+          <CardHeader>
+            <CardTitle class="text-base">
+              Metadatos configurables
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
+              Esquemas y campos por tipo documental, subserie, serie o tipo de expediente; captura en radicación.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="secondary" @click.stop="router.push('/settings/archival/metadata/schemas')">
+              Configurar esquemas
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card class="cursor-pointer transition-colors hover:bg-muted/40" @click="router.push('/settings/archival/disposition')">
+          <CardHeader>
+            <CardTitle class="text-base">
+              Disposición final
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
+              Actas de eliminación, conservación o selección con aprobación y ejecución auditada.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="secondary" @click.stop="router.push('/settings/archival/disposition')">
+              Ver actas
             </Button>
           </CardContent>
         </Card>

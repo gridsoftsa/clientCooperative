@@ -70,6 +70,24 @@ export interface ApplicantDocumentForm {
   is_reviewed?: boolean
   review_comment?: string
   reviewed_at?: string
+  doc_document_type_id?: number | null
+  doc_document_type_label?: string | null
+  metadata_values?: Record<string, unknown>
+  metadata_ocr_suggestions?: Record<string, unknown>
+  archival_metadata_schema?: {
+    id: number
+    name: string
+    version_number: number
+    fields?: Array<{
+      id: number
+      code: string
+      name: string
+      data_type: string
+      is_required: boolean
+      sort_order: number
+      options?: Array<{ value: string, label: string }> | null
+    }>
+  } | null
 }
 
 export interface ApplicantForm {
@@ -105,6 +123,8 @@ export interface ApplicantForm {
   references?: Array<{ name?: string; phone?: string; relationship?: string }>
   /** Documentos del deudor (título + archivo para subir) */
   documents?: ApplicantDocumentForm[]
+  /** Clasificación archivística (tipo documental TRD) al subir adjunto */
+  doc_document_type_id?: number | null
   /**
    * Pending local files for auxiliary checklist uploads (item key → file). Not sent as JSON; uploaded via multipart
    * then IDs are stored on `financial_info.auxiliaryDocuments`.
@@ -132,6 +152,8 @@ export interface CreditApplicationForm {
   co_debtors: ApplicantForm[]
   /** Número de radicado externo (sistema externo, ej. Finagro) - obligatorio */
   numero_radicado_externo: string
+  /** Área productora documental para aplicar TRD vigente a los adjuntos */
+  document_producer_org_unit_id?: number | null
 }
 
 /** Normaliza lista de plantillas desde API (JSON string o arreglo). */
