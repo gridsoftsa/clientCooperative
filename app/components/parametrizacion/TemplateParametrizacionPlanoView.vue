@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { SectorConfig } from '~/constants/credits-financial-templates'
+import {
+  defaultConfigDataForEstructuraOptionCatalog,
+  isEstructuraOptionCatalogTemplate,
+} from '~/constants/flat-option-catalog-templates'
 import TemplateConfigEditor from '~/components/settings/TemplateConfigEditor.vue'
 import CreateCategoryDialog from '~/components/settings/CreateCategoryDialog.vue'
 
@@ -18,18 +22,28 @@ const props = withDefaults(
     sisterLink?: { to: string, label: string } | null
     /** Destino del botón Volver. */
     backTo?: string
+    /** Permisos adicionales para guardar configuración plana (además de `plantillas_editar`). */
+    configEditPermissions?: string[]
   }>(),
   {
     showCategoriesTab: true,
     sisterLink: null,
     backTo: '/radicacion',
+    configEditPermissions: () => [],
   },
 )
 
 const { $api, $csrf } = useNuxtApp()
-const { hasPermission } = usePermissions()
+const { hasPermission, hasAnyPermission } = usePermissions()
 const router = useRouter()
 const deleteWithReason = useApiDeleteWithReason()
+
+const canEditFlatConfig = computed(() => {
+  if (hasPermission('plantillas_editar')) {
+    return true
+  }
+  return props.configEditPermissions.length > 0 && hasAnyPermission(props.configEditPermissions)
+})
 const deleteCategoryDialogOpen = ref(false)
 const categoryIdPendingDelete = ref<number | null>(null)
 const deletingCategory = ref(false)
@@ -85,6 +99,7 @@ const templateLabels: Record<string, string> = {
   aprobadores: 'Aprobadores (niveles de aprobación)',
   bancos: 'Bancos (Análisis y Score)',
   ing: 'ING — % reserva (Análisis y Score)',
+  'org-work-group-kind': 'Tipos de grupo y comité',
 }
 
 function getTemplateLabel(key: string): string {
@@ -140,7 +155,30 @@ async function fetchData() {
       $api<{ data: Record<string, FlatDataRecord[]> }>('/template-flat-data'),
       $api<{ data: Record<string, TemplateCategory[]> }>('/template-categories'),
     ])
-    templateData.value = flatRes.data
+    const flat: Record<string, FlatDataRecord[]> = { ...flatRes.data }
+    for (const tplKey of allTemplateValuesInSectors()) {
+      if (!isEstructuraOptionCatalogTemplate(tplKey)) {
+        continue
+      }
+      const rows = flat[tplKey]
+      if (rows && rows.length > 0) {
+        continue
+      }
+      const configData = defaultConfigDataForEstructuraOptionCatalog(tplKey)
+      if (!configData) {
+        continue
+      }
+      flat[tplKey] = [
+        {
+          id: 0,
+          template_key: tplKey,
+          product_key: null,
+          config_data: configData,
+          updated_at: new Date().toISOString(),
+        },
+      ]
+    }
+    templateData.value = flat
     categoriesByTemplate.value = catRes.data
   } catch (e) {
     console.error('Error al cargar configuraciones:', e)
@@ -423,7 +461,7 @@ watch(deleteCategoryDialogOpen, (v) => {
                           :template-label="getTemplateLabel(record.template_key)"
                           :product-label="getProductLabel(productKey)"
                           :saving="saving === `${record.template_key}::${productKey ?? 'default'}`"
-                          :can-edit="hasPermission('plantillas_editar')"
+                          :can-edit="canEditFlatConfig"
                           :can-delete="hasPermission('plantillas_eliminar')"
                           :category-id="getCategoryId(record.template_key, productKey)"
                           @save="(data) => saveConfig(record.template_key, productKey, data)"
@@ -438,7 +476,7 @@ watch(deleteCategoryDialogOpen, (v) => {
                           :template-label="getTemplateLabel(record.template_key)"
                           :product-label="getProductLabel(productKey)"
                           :saving="saving === `${record.template_key}::${productKey ?? 'default'}`"
-                          :can-edit="hasPermission('plantillas_editar')"
+                          :can-edit="canEditFlatConfig"
                           :can-delete="hasPermission('plantillas_eliminar')"
                           :category-id="getCategoryId(record.template_key, productKey)"
                           @save="(data) => saveConfig(record.template_key, productKey, data)"

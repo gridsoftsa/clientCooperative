@@ -27,9 +27,9 @@ import {
 } from '~/constants/cultivo-ciclo-corto-cost-breakdown'
 import { validateTemplateConfigPctSums } from '~/utils/template-config-percent-sums'
 import {
-  isRadicacionOptionCatalogTemplate,
-  RADICACION_OPTION_CATALOG_FIELD_LABELS,
-} from '~/constants/radicacion-catalog-templates'
+  flatOptionCatalogFieldLabel,
+  isFlatOptionCatalogTemplate,
+} from '~/constants/flat-option-catalog-templates'
 import { migrateAuxiliaryDocumentsFlatConfig } from '~/utils/auxiliary-documents-config'
 
 interface FlatDataRecord {
@@ -111,7 +111,7 @@ watch(() => props.record.config_data, (newVal) => {
         : SERVICIOS_PCT_CONTRIBUCION_DEFAULT
     }
   }
-  if (isRadicacionOptionCatalogTemplate(props.record.template_key) && !Array.isArray(editedData.value.options)) {
+  if (isFlatOptionCatalogTemplate(props.record.template_key) && !Array.isArray(editedData.value.options)) {
     editedData.value.options = []
   }
   if (
@@ -196,7 +196,7 @@ function handleSave() {
   if (props.record.template_key === 'servicios') {
     delete data.pct_contribucion_estandar
   }
-  if (isRadicacionOptionCatalogTemplate(props.record.template_key)) {
+  if (isFlatOptionCatalogTemplate(props.record.template_key)) {
     const raw = Array.isArray(data.options) ? data.options : []
     const cleaned = raw
       .map((o) => {
@@ -237,7 +237,7 @@ function removeRadicacionCatalogOption(idx: number) {
 
 const radicacionCatalogFieldTitle = computed(() => {
   const key = props.record.template_key
-  return isRadicacionOptionCatalogTemplate(key) ? RADICACION_OPTION_CATALOG_FIELD_LABELS[key] : ''
+  return isFlatOptionCatalogTemplate(key) ? flatOptionCatalogFieldLabel(key) : ''
 })
 
 /** Filtro local solo en parametrización de bancos (lista larga). */
@@ -341,7 +341,7 @@ function onAuxiliaryDocumentsChecklistField(payload: { key: string, value: unkno
     </Alert>
 
     <!-- Catálogos (radicación): una columna, mismo texto que en el desplegable -->
-    <div v-if="isRadicacionOptionCatalogTemplate(record.template_key)" class="space-y-3">
+    <div v-if="isFlatOptionCatalogTemplate(record.template_key)" class="space-y-3">
       <p class="text-sm text-muted-foreground">
         Mismo texto que aparece en el desplegable de «{{ radicacionCatalogFieldTitle }}» al radicar.
       </p>
@@ -555,7 +555,7 @@ function onAuxiliaryDocumentsChecklistField(payload: { key: string, value: unkno
     </template>
 
     <!-- Sin schema: fallback genérico (no aplica a catálogos de opciones de radicación) -->
-    <div v-else-if="!isRadicacionOptionCatalogTemplate(record.template_key)" class="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-end">
+    <div v-else-if="!isFlatOptionCatalogTemplate(record.template_key)" class="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-end">
       <div
         v-for="[key, value] in visibleConfigEntries"
         :key="key"

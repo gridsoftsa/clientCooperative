@@ -183,6 +183,21 @@ export function sectorsForParametrizacionRadicacion(): SectorConfig[] {
 }
 
 /**
+ * Parametrización de estructura organizacional (catálogos usados en ajustes de estructura).
+ */
+export function sectorsForParametrizacionEstructura(): SectorConfig[] {
+  return [
+    {
+      value: 'estructura-organizacional',
+      label: 'Estructura organizacional',
+      templates: [
+        { value: 'org-work-group-kind', label: 'Tipos de grupo y comité' },
+      ],
+    },
+  ]
+}
+
+/**
  * Ganancia mensual máxima de referencia (kg/mes) para la cantidad calculada en ganado ceba.
  * Si el cálculo la supera, se muestra alerta (tiempo de ceba insuficiente).
  */

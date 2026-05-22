@@ -93,11 +93,6 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="w-full max-w-sm space-y-2">
-        <Label for="sq" class="leading-snug">Buscar</Label>
-        <Input id="sq" v-model="q" placeholder="Nombre, correo, documento…" />
-      </div>
-
       <Card>
         <CardHeader class="gap-2">
           <CardTitle class="leading-snug">
@@ -107,14 +102,21 @@ onMounted(() => {
             Personas institucionales, vínculo con usuario del sistema y ubicación organizacional vigente.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div v-if="loading" class="flex justify-center py-12">
+        <CardContent class="space-y-4">
+          <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <div class="grid w-full gap-2 sm:max-w-sm sm:shrink-0">
+              <Label for="sq" class="text-xs text-muted-foreground">Buscar</Label>
+              <Input id="sq" v-model="q" placeholder="Nombre, correo, documento…" class="w-full" />
+            </div>
+          </div>
+          <div v-if="loading" class="flex justify-center py-8">
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
           <div v-else-if="staff.length === 0" class="py-12 text-center text-muted-foreground leading-relaxed">
             No hay funcionarios registrados.
           </div>
-          <Table v-else>
+          <div v-else class="border rounded-lg overflow-hidden">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
@@ -145,39 +147,44 @@ onMounted(() => {
                     {{ s.is_active ? 'Activo' : 'Inactivo' }}
                   </Badge>
                 </TableCell>
-                <TableCell class="text-right flex flex-wrap justify-end gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    @click="router.push(`/settings/organizational-structure/staff/${s.id}`)"
-                  >
-                    Ver
-                  </Button>
-                  <PermissionGate permission="estructura_org_editar">
+                <TableCell class="text-right">
+                  <div class="flex flex-wrap justify-end gap-1">
                     <Button
-                      variant="secondary"
+                      variant="outline"
                       size="sm"
-                      @click="router.push(`/settings/organizational-structure/staff/${s.id}/edit`)"
+                      class="h-8 gap-1.5 px-2 text-xs"
+                      @click="router.push(`/settings/organizational-structure/staff/${s.id}`)"
                     >
-                      Editar
+                      Ver
                     </Button>
-                    <Button
-                      v-if="s.is_active"
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      class="rounded-full gap-1.5 px-4 font-medium shadow-xs"
-                      :disabled="deactivatingId === s.id"
-                      @click="deactivateStaff(s.id)"
-                    >
-                      <Icon name="i-lucide-ban" class="size-4 shrink-0" />
-                      Desactivar
-                    </Button>
-                  </PermissionGate>
+                    <PermissionGate permission="estructura_org_editar">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
+                        @click="router.push(`/settings/organizational-structure/staff/${s.id}/edit`)"
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        v-if="s.is_active"
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
+                        :disabled="deactivatingId === s.id"
+                        @click="deactivateStaff(s.id)"
+                      >
+                        <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                        Desactivar
+                      </Button>
+                    </PermissionGate>
+                  </div>
                 </TableCell>
               </TableRow>
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

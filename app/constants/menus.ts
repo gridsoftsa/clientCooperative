@@ -88,6 +88,21 @@ export const navMenu: NavMenu[] = [
             link: '/settings/organizational-structure/tree',
             permission: 'estructura_org_ver',
           },
+          {
+            title: 'Grupos y comités',
+            link: '/settings/organizational-structure/work-groups',
+            anyPermission: ['grupos_trabajo_ver', 'estructura_org_ver'],
+          },
+          {
+            title: 'Suplencias y delegaciones',
+            link: '/settings/organizational-structure/delegations',
+            anyPermission: ['suplencias_delegaciones_ver', 'estructura_org_ver'],
+          },
+          {
+            title: 'Importar Excel',
+            link: '/settings/organizational-structure/import',
+            anyPermission: ['estructura_org_importar_ver', 'estructura_org_ver'],
+          },
         ],
       },
       {
@@ -126,6 +141,12 @@ export const navMenu: NavMenu[] = [
             icon: 'i-lucide-layout-template',
             link: '/parametrizacion/plantillas',
             permission: 'plantillas_ver',
+          },
+          {
+            title: 'Estructura',
+            icon: 'i-lucide-building-2',
+            link: '/parametrizacion/estructura',
+            anyPermission: ['plantillas_ver', 'estructura_org_ver'],
           },
           {
             title: 'Radicación',

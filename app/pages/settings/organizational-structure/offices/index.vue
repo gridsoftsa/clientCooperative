@@ -89,65 +89,70 @@ onMounted(() => {
             Misma sede operativa que en Configuración → Sucursales (nombre, código, ciudad y estado activo se mantienen alineados).
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div v-if="loading" class="flex justify-center py-12">
+        <CardContent class="space-y-4">
+          <div v-if="loading" class="flex justify-center py-8">
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
           <div v-else-if="offices.length === 0" class="py-12 text-center text-muted-foreground leading-relaxed">
             No hay agencias registradas.
           </div>
-          <Table v-else>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                <TableHead>Código</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Ciudad</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead class="text-right">
-                  Acciones
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-for="o in offices" :key="o.id">
-                <TableCell class="font-medium">
-                  {{ o.name }}
-                </TableCell>
-                <TableCell>{{ o.code }}</TableCell>
-                <TableCell>{{ officeTypeLabel(o.office_type) }}</TableCell>
-                <TableCell>{{ o.city ?? '—' }}</TableCell>
-                <TableCell>
-                  <Badge :variant="o.is_active ? 'default' : 'secondary'">
-                    {{ o.is_active ? 'Activa' : 'Inactiva' }}
-                  </Badge>
-                </TableCell>
-                <TableCell class="text-right space-x-2">
-                  <PermissionGate :any-permission="['estructura_org_editar', 'sucursales_editar']">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      @click="router.push(`/settings/organizational-structure/offices/${o.id}/edit`)"
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      v-if="o.is_active"
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      class="rounded-full gap-1.5 px-4 font-medium shadow-xs"
-                      :disabled="deactivatingId === o.id"
-                      @click="deactivateOffice(o.id)"
-                    >
-                      <Icon name="i-lucide-ban" class="size-4 shrink-0" />
-                      Desactivar
-                    </Button>
-                  </PermissionGate>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+          <div v-else class="border rounded-lg overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Ciudad</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead class="text-right">
+                    Acciones
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow v-for="o in offices" :key="o.id">
+                  <TableCell class="font-medium">
+                    {{ o.name }}
+                  </TableCell>
+                  <TableCell>{{ o.code }}</TableCell>
+                  <TableCell>{{ officeTypeLabel(o.office_type) }}</TableCell>
+                  <TableCell>{{ o.city ?? '—' }}</TableCell>
+                  <TableCell>
+                    <Badge :variant="o.is_active ? 'default' : 'secondary'">
+                      {{ o.is_active ? 'Activa' : 'Inactiva' }}
+                    </Badge>
+                  </TableCell>
+                  <TableCell class="text-right">
+                    <div class="flex flex-wrap justify-end gap-1">
+                      <PermissionGate :any-permission="['estructura_org_editar', 'sucursales_editar']">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          class="h-8 gap-1.5 px-2 text-xs"
+                          @click="router.push(`/settings/organizational-structure/offices/${o.id}/edit`)"
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          v-if="o.is_active"
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          class="h-8 gap-1.5 px-2 text-xs"
+                          :disabled="deactivatingId === o.id"
+                          @click="deactivateOffice(o.id)"
+                        >
+                          <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                          Desactivar
+                        </Button>
+                      </PermissionGate>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

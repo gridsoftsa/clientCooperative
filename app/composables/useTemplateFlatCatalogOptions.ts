@@ -13,7 +13,8 @@ export function useTemplateFlatCatalogOptions(
   fallbacks: FlatCatalogOption[],
 ) {
   const { $api } = useNuxtApp()
-  const options = ref<FlatCatalogOption[]>([])
+  /** Seed with fallbacks so selects show labels before fetch and if the API returns no `options`. */
+  const options = ref<FlatCatalogOption[]>([...fallbacks])
   const loading = ref(false)
 
   async function fetchOptions() {

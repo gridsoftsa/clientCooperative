@@ -95,30 +95,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="w-full max-w-md space-y-2">
-        <Label for="funit" class="leading-snug">Filtrar por área</Label>
-        <Select
-          :model-value="filterUnitId == null ? 'all' : String(filterUnitId)"
-          @update:model-value="(v) => { filterUnitId = v === 'all' ? null : Number(v) }"
-        >
-          <SelectTrigger id="funit">
-            <SelectValue placeholder="Todas" />
-          </SelectTrigger>
-          <SelectContent class="max-h-72">
-            <SelectItem value="all">
-              Todas las áreas
-            </SelectItem>
-            <SelectItem
-              v-for="u in unitOptions"
-              :key="u.id"
-              :value="String(u.id)"
-            >
-              {{ u.label }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       <Card>
         <CardHeader class="gap-2">
           <CardTitle class="leading-snug">
@@ -128,14 +104,40 @@ onMounted(async () => {
             Puestos por área, nivel jerárquico, reporte a cargo superior y estado.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div v-if="loading" class="flex justify-center py-12">
+        <CardContent class="space-y-4">
+          <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <div class="grid w-full gap-2 sm:max-w-md sm:shrink-0">
+              <Label for="funit" class="text-xs text-muted-foreground">Filtrar por área</Label>
+              <Select
+                :model-value="filterUnitId == null ? 'all' : String(filterUnitId)"
+                @update:model-value="(v) => { filterUnitId = v === 'all' ? null : Number(v) }"
+              >
+                <SelectTrigger id="funit" class="w-full">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent class="max-h-72">
+                  <SelectItem value="all">
+                    Todas las áreas
+                  </SelectItem>
+                  <SelectItem
+                    v-for="u in unitOptions"
+                    :key="u.id"
+                    :value="String(u.id)"
+                  >
+                    {{ u.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div v-if="loading" class="flex justify-center py-8">
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
           <div v-else-if="positions.length === 0" class="py-12 text-center text-muted-foreground leading-relaxed">
             No hay cargos. Cree antes áreas.
           </div>
-          <Table v-else>
+          <div v-else class="border rounded-lg overflow-hidden">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
@@ -163,32 +165,36 @@ onMounted(async () => {
                     {{ p.is_active ? 'Activo' : 'Inactivo' }}
                   </Badge>
                 </TableCell>
-                <TableCell class="text-right space-x-2">
-                  <PermissionGate permission="estructura_org_editar">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      @click="router.push(`/settings/organizational-structure/positions/${p.id}/edit`)"
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      v-if="p.is_active"
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      class="rounded-full gap-1.5 px-4 font-medium shadow-xs"
-                      :disabled="deactivatingId === p.id"
-                      @click="deactivatePosition(p.id)"
-                    >
-                      <Icon name="i-lucide-ban" class="size-4 shrink-0" />
-                      Desactivar
-                    </Button>
-                  </PermissionGate>
+                <TableCell class="text-right">
+                  <div class="flex flex-wrap justify-end gap-1">
+                    <PermissionGate permission="estructura_org_editar">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
+                        @click="router.push(`/settings/organizational-structure/positions/${p.id}/edit`)"
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        v-if="p.is_active"
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
+                        :disabled="deactivatingId === p.id"
+                        @click="deactivatePosition(p.id)"
+                      >
+                        <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                        Desactivar
+                      </Button>
+                    </PermissionGate>
+                  </div>
                 </TableCell>
               </TableRow>
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
