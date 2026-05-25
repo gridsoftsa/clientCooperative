@@ -1,0 +1,590 @@
+<script setup lang="ts">
+import { VENTANILLA_FILING_TYPE_LABELS } from '~/constants/ventanilla'
+import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
+import type { VentanillaCatalogData, VentanillaFilingDetail } from '~/types/ventanilla'
+
+definePageMeta({
+  layout: 'default',
+  middleware: 'permission',
+  permissions: 'ventanilla_ver',
+})
+
+const route = useRoute()
+const ventanillaApi = useVentanillaApi()
+const { hasPermission } = usePermissions()
+
+const filing = ref<VentanillaFilingDetail | null>(null)
+const catalog = ref<VentanillaCatalogData | null>(null)
+const loading = ref(true)
+const errorMessage = ref('')
+const actionMessage = ref('')
+const actionLoading = ref('')
+const downloadingFileId = ref<number | null>(null)
+const downloadingReceipt = ref(false)
+const selectedAssignedUserId = ref<number | null>(null)
+const assignmentNote = ref('')
+const responseText = ref('')
+const closeReason = ref('')
+const voidReason = ref('')
+
+const id = computed(() => Number(route.params.id))
+const isTerminal = computed(() => filing.value?.status === 'closed' || filing.value?.status === 'voided')
+const canAssign = computed(() => hasPermission('ventanilla_asignar') && !isTerminal.value)
+const canManage = computed(() => hasPermission('ventanilla_gestionar') && !isTerminal.value)
+const canVoid = computed(() => hasPermission('ventanilla_anular') && !isTerminal.value)
+const canRefreshSla = computed(() => hasPermission('ventanilla_sla_configurar'))
+const metadataRows = computed(() => {
+  const fields = filing.value?.archival_metadata_schema?.fields ?? []
+  const values = filing.value?.metadata_values ?? {}
+
+  return fields
+    .slice()
+    .sort((a: ArchivalMetadataFieldRow, b: ArchivalMetadataFieldRow) => a.sort_order - b.sort_order)
+    .map((field: ArchivalMetadataFieldRow) => ({
+      code: field.code,
+      label: field.name,
+      value: values[field.code],
+    }))
+    .filter((row: { code: string; label: string; value: unknown }) => row.value !== null && row.value !== undefined && row.value !== '')
+})
+
+async function load() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    catalog.value = await ventanillaApi.fetchCatalog()
+    filing.value = await ventanillaApi.fetchFiling(id.value)
+    selectedAssignedUserId.value = filing.value.assigned_user?.id ?? null
+  } catch {
+    errorMessage.value = 'No se pudo cargar el radicado'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => load())
+
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) {
+    return '—'
+  }
+
+  return new Date(iso).toLocaleString('es-CO')
+}
+
+function statusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    registered: 'Registrado',
+    in_progress: 'En gestión',
+    closed: 'Cerrado',
+    voided: 'Anulado',
+  }
+
+  return labels[status] ?? status
+}
+
+function closureResultLabel(result: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    closed_on_time: 'Cerrado en término',
+    closed_late: 'Cerrado fuera de término',
+    closed_no_response_required: 'Cerrado sin obligación de respuesta',
+    closed_without_deadline: 'Cerrado sin fecha límite',
+  }
+
+  return result ? (labels[result] ?? result) : '—'
+}
+
+function eventTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    registered: 'Radicación',
+    assigned: 'Asignación',
+    started: 'Inicio de gestión',
+    responded: 'Respuesta',
+    closed: 'Cierre',
+    voided: 'Anulación',
+    intake_classified: 'Clasificación desde bandeja',
+  }
+
+  return labels[type] ?? type
+}
+
+function formatMetadataValue(value: unknown): string {
+  if (typeof value === 'boolean') {
+    return value ? 'Sí' : 'No'
+  }
+  if (Array.isArray(value) || (value && typeof value === 'object')) {
+    return JSON.stringify(value)
+  }
+
+  return value == null || value === '' ? '—' : String(value)
+}
+
+async function runAction(action: string, callback: () => Promise<VentanillaFilingDetail>) {
+  actionLoading.value = action
+  errorMessage.value = ''
+  actionMessage.value = ''
+  try {
+    filing.value = await callback()
+    selectedAssignedUserId.value = filing.value.assigned_user?.id ?? selectedAssignedUserId.value
+    actionMessage.value = 'Acción registrada correctamente'
+  } catch (e: unknown) {
+    const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    errorMessage.value = first ?? err.data?.message ?? 'No se pudo ejecutar la acción'
+  } finally {
+    actionLoading.value = ''
+  }
+}
+
+async function assignResponsible() {
+  if (!selectedAssignedUserId.value) {
+    errorMessage.value = 'Seleccione un responsable'
+    return
+  }
+
+  await runAction('assign', () => ventanillaApi.assignFiling(id.value, {
+    assigned_user_id: selectedAssignedUserId.value!,
+    note: assignmentNote.value.trim() || undefined,
+  }))
+  assignmentNote.value = ''
+}
+
+async function startManagement() {
+  await runAction('start', () => ventanillaApi.startFiling(id.value))
+}
+
+async function respondAndClose() {
+  if (!responseText.value.trim()) {
+    errorMessage.value = 'Ingrese la respuesta'
+    return
+  }
+
+  await runAction('respond', () => ventanillaApi.respondFiling(id.value, responseText.value.trim()))
+  responseText.value = ''
+}
+
+async function closeFiling() {
+  await runAction('close', () => ventanillaApi.closeFiling(id.value, closeReason.value.trim() || undefined))
+  closeReason.value = ''
+}
+
+async function voidCurrentFiling() {
+  if (!voidReason.value.trim()) {
+    errorMessage.value = 'Ingrese el motivo de anulación'
+    return
+  }
+
+  await runAction('void', () => ventanillaApi.voidFiling(id.value, voidReason.value.trim()))
+  voidReason.value = ''
+}
+
+async function refreshSla() {
+  await runAction('sla', async () => {
+    await ventanillaApi.refreshSla()
+
+    return await ventanillaApi.fetchFiling(id.value)
+  })
+}
+
+async function downloadFile(fileId: number, name: string) {
+  if (!hasPermission('ventanilla_archivos_descargar')) {
+    return
+  }
+  downloadingFileId.value = fileId
+  try {
+    await ventanillaApi.downloadFilingFile(id.value, fileId, name)
+  } catch {
+    errorMessage.value = 'No se pudo descargar el archivo'
+  } finally {
+    downloadingFileId.value = null
+  }
+}
+
+async function downloadReceipt() {
+  if (!filing.value) {
+    return
+  }
+
+  downloadingReceipt.value = true
+  try {
+    await ventanillaApi.downloadReceipt(filing.value.id, `comprobante-${filing.value.filing_number}.pdf`)
+  } catch {
+    errorMessage.value = 'No se pudo descargar el comprobante'
+  } finally {
+    downloadingReceipt.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="mx-auto max-w-4xl space-y-6 p-4 md:p-6">
+    <div class="flex items-center gap-3">
+      <Button variant="ghost" size="icon" @click="navigateTo('/ventanilla')">
+        <Icon name="i-lucide-arrow-left" class="size-4" />
+      </Button>
+      <div v-if="filing" class="flex-1">
+        <h1 class="font-mono text-xl font-semibold">
+          {{ filing.filing_number }}
+        </h1>
+        <p class="text-muted-foreground text-sm">
+          {{ VENTANILLA_FILING_TYPE_LABELS[filing.filing_type] }} · {{ filing.subject }}
+        </p>
+      </div>
+    </div>
+
+    <div v-if="loading" class="text-muted-foreground text-sm">
+      Cargando…
+    </div>
+    <p v-if="!loading && errorMessage" class="text-destructive text-sm">
+      {{ errorMessage }}
+    </p>
+
+    <template v-if="!loading && filing">
+      <div class="flex flex-wrap gap-2">
+        <VentanillaTrafficLightBadge :status="filing.traffic_light_status" />
+        <Badge variant="outline">
+          {{ statusLabel(filing.status) }}
+        </Badge>
+        <Button
+          variant="outline"
+          size="sm"
+          class="ml-auto"
+          :disabled="downloadingReceipt"
+          @click="downloadReceipt"
+        >
+          <Icon name="i-lucide-file-down" class="mr-1 size-4" />
+          {{ downloadingReceipt ? 'Descargando…' : 'Comprobante PDF' }}
+        </Button>
+      </div>
+      <p v-if="actionMessage" class="text-sm text-emerald-600">
+        {{ actionMessage }}
+      </p>
+
+      <Card v-if="canAssign || canManage || canVoid">
+        <CardHeader>
+          <CardTitle>Gestión del radicado</CardTitle>
+          <CardDescription>
+            Asignación, respuesta, cierre y anulación conservan trazabilidad.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-6">
+          <Button
+            v-if="canRefreshSla"
+            variant="outline"
+            :disabled="actionLoading === 'sla'"
+            @click="refreshSla"
+          >
+            {{ actionLoading === 'sla' ? 'Actualizando…' : 'Actualizar semáforo SLA' }}
+          </Button>
+
+          <div v-if="canAssign" class="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+            <div class="space-y-2">
+              <Label>Responsable</Label>
+              <Select
+                :model-value="selectedAssignedUserId != null ? String(selectedAssignedUserId) : undefined"
+                @update:model-value="selectedAssignedUserId = $event ? Number($event) : null"
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione responsable" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="user in catalog?.responsible_users ?? []"
+                    :key="user.id"
+                    :value="String(user.id)"
+                  >
+                    {{ user.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="space-y-2">
+              <Label>Nota de asignación</Label>
+              <Input v-model="assignmentNote" placeholder="Opcional" />
+            </div>
+            <Button
+              class="self-end"
+              :disabled="actionLoading === 'assign'"
+              @click="assignResponsible"
+            >
+              {{ actionLoading === 'assign' ? 'Asignando…' : 'Asignar' }}
+            </Button>
+          </div>
+
+          <div v-if="canManage" class="space-y-3">
+            <Button
+              v-if="filing.status === 'registered'"
+              variant="secondary"
+              :disabled="actionLoading === 'start'"
+              @click="startManagement"
+            >
+              {{ actionLoading === 'start' ? 'Iniciando…' : 'Iniciar gestión' }}
+            </Button>
+
+            <div v-if="filing.requires_response" class="space-y-2">
+              <Label>Respuesta</Label>
+              <Textarea v-model="responseText" rows="4" placeholder="Registre la respuesta dada al remitente…" />
+              <Button :disabled="actionLoading === 'respond'" @click="respondAndClose">
+                {{ actionLoading === 'respond' ? 'Cerrando…' : 'Registrar respuesta y cerrar' }}
+              </Button>
+            </div>
+
+            <div v-else class="space-y-2">
+              <Label>Motivo de cierre</Label>
+              <Textarea v-model="closeReason" rows="3" placeholder="Opcional" />
+              <Button :disabled="actionLoading === 'close'" @click="closeFiling">
+                {{ actionLoading === 'close' ? 'Cerrando…' : 'Cerrar radicado' }}
+              </Button>
+            </div>
+          </div>
+
+          <div v-if="canVoid" class="space-y-2 rounded-lg border border-destructive/30 p-3">
+            <Label>Motivo de anulación</Label>
+            <Textarea v-model="voidReason" rows="3" placeholder="Obligatorio para anular" />
+            <Button variant="destructive" :disabled="actionLoading === 'void'" @click="voidCurrentFiling">
+              {{ actionLoading === 'void' ? 'Anulando…' : 'Anular radicado' }}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Resumen</CardTitle>
+        </CardHeader>
+        <CardContent class="grid gap-3 text-sm md:grid-cols-2">
+          <div>
+            <span class="text-muted-foreground">Radicado por:</span>
+            {{ filing.filed_by?.name ?? '—' }}
+          </div>
+          <div>
+            <span class="text-muted-foreground">Fecha:</span>
+            {{ formatDate(filing.filed_at) }}
+          </div>
+          <div>
+            <span class="text-muted-foreground">Área responsable:</span>
+            {{ filing.org_unit_responsible?.code }} — {{ filing.org_unit_responsible?.name }}
+          </div>
+          <div>
+            <span class="text-muted-foreground">Tipo funcional:</span>
+            {{ filing.functional_type_label ?? filing.functional_type_key }}
+          </div>
+          <div v-if="filing.requires_response">
+            <span class="text-muted-foreground">Fecha límite:</span>
+            {{ formatDate(filing.response_deadline_at) }}
+          </div>
+          <div v-if="filing.sla_business_days">
+            <span class="text-muted-foreground">SLA:</span>
+            {{ filing.sla_business_days }} días hábiles
+          </div>
+          <div>
+            <span class="text-muted-foreground">Responsable:</span>
+            {{ filing.assigned_user?.name ?? 'Sin asignar' }}
+          </div>
+          <div v-if="filing.assigned_at">
+            <span class="text-muted-foreground">Asignado el:</span>
+            {{ formatDate(filing.assigned_at) }}
+          </div>
+          <div v-if="filing.closed_at">
+            <span class="text-muted-foreground">Cierre:</span>
+            {{ formatDate(filing.closed_at) }} — {{ closureResultLabel(filing.closure_result) }}
+          </div>
+          <div v-if="filing.voided_at">
+            <span class="text-muted-foreground">Anulación:</span>
+            {{ formatDate(filing.voided_at) }}
+          </div>
+          <div v-if="filing.sender_name" class="md:col-span-2">
+            <span class="text-muted-foreground">Remitente:</span>
+            {{ filing.sender_name }}
+            <span v-if="filing.sender_identifier"> ({{ filing.sender_identifier }})</span>
+          </div>
+          <div v-if="filing.notes" class="md:col-span-2">
+            <span class="text-muted-foreground">Observaciones:</span>
+            {{ filing.notes }}
+          </div>
+          <div v-if="filing.response_text" class="md:col-span-2">
+            <span class="text-muted-foreground">Respuesta:</span>
+            {{ filing.response_text }}
+          </div>
+          <div v-if="filing.close_reason" class="md:col-span-2">
+            <span class="text-muted-foreground">Motivo de cierre:</span>
+            {{ filing.close_reason }}
+          </div>
+          <div v-if="filing.void_reason" class="md:col-span-2">
+            <span class="text-muted-foreground">Motivo de anulación:</span>
+            {{ filing.void_reason }}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Clasificación TRD</CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-2 text-sm">
+          <p>
+            <span class="text-muted-foreground">Serie:</span>
+            {{ filing.doc_series?.code }} — {{ filing.doc_series?.name }}
+          </p>
+          <p>
+            <span class="text-muted-foreground">Subserie:</span>
+            {{ filing.doc_subseries?.code }} — {{ filing.doc_subseries?.name }}
+          </p>
+          <p>
+            <span class="text-muted-foreground">Tipo documental:</span>
+            {{ filing.doc_document_type?.code }} — {{ filing.doc_document_type?.name }}
+          </p>
+          <p v-if="filing.trd_version">
+            <span class="text-muted-foreground">Versión TRD:</span>
+            v{{ filing.trd_version.version_number }}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Metadatos y verificación</CardTitle>
+          <CardDescription>
+            Datos dinámicos capturados y enlace público de verificación del comprobante.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4 text-sm">
+          <div v-if="filing.archival_metadata_schema" class="space-y-1">
+            <p class="font-medium">
+              {{ filing.archival_metadata_schema.name }}
+              <span class="text-muted-foreground font-normal">v{{ filing.archival_metadata_schema.version_number }}</span>
+            </p>
+            <dl v-if="metadataRows.length" class="grid gap-2 md:grid-cols-2">
+              <div
+                v-for="row in metadataRows"
+                :key="row.code"
+                class="rounded-lg border p-3"
+              >
+                <dt class="text-muted-foreground text-xs">
+                  {{ row.label }}
+                </dt>
+                <dd class="font-medium">
+                  {{ formatMetadataValue(row.value) }}
+                </dd>
+              </div>
+            </dl>
+            <p v-else class="text-muted-foreground">
+              No se registraron valores para este esquema.
+            </p>
+          </div>
+          <p v-else class="text-muted-foreground">
+            No hay esquema de metadatos archivísticos aplicado a este radicado.
+          </p>
+          <div class="rounded-lg bg-muted/40 p-3">
+            <p class="text-muted-foreground text-xs">
+              URL de verificación
+            </p>
+            <a
+              :href="filing.verification_url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="break-all font-mono text-xs text-primary underline"
+            >
+              {{ filing.verification_url }}
+            </a>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Trazabilidad</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul v-if="filing.events?.length" class="space-y-4">
+            <li
+              v-for="event in filing.events"
+              :key="event.id"
+              class="border-l pl-4 text-sm"
+            >
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-medium">{{ eventTypeLabel(event.event_type) }}</span>
+                <span class="text-muted-foreground text-xs">{{ formatDate(event.created_at) }}</span>
+              </div>
+              <p v-if="event.description" class="mt-1">
+                {{ event.description }}
+              </p>
+              <p class="text-muted-foreground text-xs">
+                {{ event.created_by?.name ?? 'Sistema' }}
+                <template v-if="event.from_status || event.to_status">
+                  · {{ event.from_status ? statusLabel(event.from_status) : '—' }}
+                  → {{ event.to_status ? statusLabel(event.to_status) : '—' }}
+                </template>
+              </p>
+            </li>
+          </ul>
+          <p v-else class="text-muted-foreground text-sm">
+            Sin eventos registrados.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Alertas SLA</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul v-if="filing.alerts?.length" class="space-y-3">
+            <li
+              v-for="alert in filing.alerts"
+              :key="alert.id"
+              class="rounded-lg border p-3 text-sm"
+            >
+              <div class="flex flex-wrap items-center gap-2">
+                <VentanillaTrafficLightBadge :status="alert.traffic_light_status" />
+                <span class="font-medium">{{ alert.message }}</span>
+              </div>
+              <p class="mt-1 text-muted-foreground text-xs">
+                Generada: {{ formatDate(alert.triggered_at) }}
+              </p>
+            </li>
+          </ul>
+          <p v-else class="text-muted-foreground text-sm">
+            Sin alertas SLA registradas.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Archivos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul class="divide-y">
+            <li
+              v-for="file in filing.files ?? []"
+              :key="file.id"
+              class="flex items-center justify-between py-3 text-sm"
+            >
+              <div>
+                <p class="font-medium">
+                  {{ file.title }}
+                  <Badge v-if="file.is_primary" variant="secondary" class="ml-2">
+                    Principal
+                  </Badge>
+                </p>
+                <p class="text-muted-foreground text-xs">
+                  {{ file.original_name }}
+                </p>
+              </div>
+              <Button
+                v-if="hasPermission('ventanilla_archivos_descargar')"
+                variant="outline"
+                size="sm"
+                :disabled="downloadingFileId === file.id"
+                @click="downloadFile(file.id, file.original_name)"
+              >
+                {{ downloadingFileId === file.id ? 'Descargando…' : 'Descargar' }}
+              </Button>
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
+    </template>
+  </div>
+</template>

@@ -28,6 +28,7 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
   /** Corto: se usa en chips/listados («Ver Radicación», «Ver Solicitantes»). */
   solicitantes: 'Solicitantes',
   radicacion: 'Radicación',
+  ventanilla: 'Ventanilla única',
   settings: 'Configuración',
   estructura: 'Estructura organizacional',
   trd: 'Gestión archivística / TRD',
@@ -38,6 +39,7 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
  */
 export const PERMISSION_CATEGORY_SECTION_TITLES: Record<string, string> = {
   radicacion: 'Radicación (Solicitudes de crédito)',
+  ventanilla: 'Ventanilla única y radicación de documentos',
   solicitantes: 'Solicitantes (Deudores/Codeudores)',
   estructura: 'Estructura organizacional',
   trd: 'Gestión archivística y tablas de retención (TRD)',
@@ -50,6 +52,7 @@ export const PERMISSION_CATEGORY_SECTION_TITLES: Record<string, string> = {
 export const PERMISSION_CATEGORY_ORDER: string[] = [
   'dashboard',
   'reportes',
+  'ventanilla',
   'radicacion',
   'solicitantes',
   'plantillas',
@@ -199,6 +202,16 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   reportes_ver: 'Ver reportes',
   radicacion_catalogos_ver: 'Ver catálogos',
   radicacion_catalogos_editar: 'Editar catálogos',
+  ventanilla_ver: 'Ver radicados de ventanilla',
+  ventanilla_crear: 'Radicar documentos en ventanilla',
+  ventanilla_clasificar: 'Clasificar entradas de ventanilla',
+  ventanilla_configurar: 'Configurar listas de ventanilla',
+  ventanilla_asignar: 'Asignar responsables en ventanilla',
+  ventanilla_gestionar: 'Gestionar ciclo de vida en ventanilla',
+  ventanilla_anular: 'Anular radicados de ventanilla',
+  ventanilla_sla_configurar: 'Configurar SLA de ventanilla',
+  ventanilla_archivos_descargar: 'Descargar archivos de ventanilla',
+  ventanilla_override_respuesta: 'Ajustar obligación de respuesta',
   plantilla_score_ver: 'Ver plantilla SCORE',
   plantilla_score_editar: 'Editar plantilla SCORE',
   trd_catalogo_ver: 'Ver catálogo documental (TRD)',

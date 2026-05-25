@@ -29,6 +29,33 @@ export const navMenu: NavMenu[] = [
     ],
   },
   {
+    heading: 'Gestión documental',
+    items: [
+      {
+        title: 'Ventanilla única',
+        icon: 'i-lucide-inbox',
+        anyPermission: ['ventanilla_ver', 'ventanilla_clasificar', 'ventanilla_sla_configurar'],
+        children: [
+          {
+            title: 'Radicados',
+            link: '/ventanilla',
+            permission: 'ventanilla_ver',
+          },
+          {
+            title: 'Bandeja de clasificación',
+            link: '/ventanilla/bandeja',
+            permission: 'ventanilla_clasificar',
+          },
+          {
+            title: 'SLA',
+            link: '/ventanilla/sla',
+            permission: 'ventanilla_sla_configurar',
+          },
+        ],
+      },
+    ],
+  },
+  {
     heading: 'Crédito',
     items: [
       {

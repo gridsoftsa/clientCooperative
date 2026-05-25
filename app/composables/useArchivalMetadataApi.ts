@@ -50,10 +50,21 @@ export function useArchivalMetadataApi() {
     return res.data
   }
 
-  async function resolveSchema(docDocumentTypeId: number) {
+  async function resolveSchema(input: number | {
+    doc_document_type_id?: number | null
+    functional_type_key?: string | null
+    file_type_key?: string | null
+  }) {
+    const query = typeof input === 'number'
+      ? { doc_document_type_id: input }
+      : {
+          doc_document_type_id: input.doc_document_type_id ?? undefined,
+          functional_type_key: input.functional_type_key ?? undefined,
+          file_type_key: input.file_type_key ?? undefined,
+        }
     const res = await $api<{ data: ArchivalMetadataSchemaRow | null }>(
       '/archival/metadata-schemas/resolve',
-      { query: { doc_document_type_id: docDocumentTypeId } },
+      { query },
     )
     return res.data
   }
