@@ -498,6 +498,30 @@ const schemaDocumentationInsurabilityDocuments: TemplateConfigSchema = {
   ],
 }
 
+const schemaDocumentationFngDocuments: TemplateConfigSchema = {
+  template_key: 'documentation-fng-documents',
+  sections: [
+    {
+      key: 'documentation_fng_documents',
+      title: 'Documentos FNG (revisión documental)',
+      layout: 'documentationInsurabilityDocumentsChecklist',
+      fields: [],
+    },
+  ],
+}
+
+const schemaCreditDirectorApproverDocuments: TemplateConfigSchema = {
+  template_key: 'credit-director-approver-documents',
+  sections: [
+    {
+      key: 'credit_director_approver_documents',
+      title: 'Documentos del ente aprobador (director de crédito)',
+      layout: 'documentationInsurabilityDocumentsChecklist',
+      fields: [],
+    },
+  ],
+}
+
 const TEMPLATE_CONFIG_SCHEMAS: Record<string, TemplateConfigSchema> = {
   'ganado-ceba': schemaGanadoCeba,
   'ganado-doble-proposito': schemaGanadoDobleProposito,
@@ -516,6 +540,8 @@ const TEMPLATE_CONFIG_SCHEMAS: Record<string, TemplateConfigSchema> = {
   ing: schemaIngAnalisisScore,
   'auxiliary-documents': schemaAuxiliaryDocuments,
   'documentation-insurability-documents': schemaDocumentationInsurabilityDocuments,
+  'documentation-fng-documents': schemaDocumentationFngDocuments,
+  'credit-director-approver-documents': schemaCreditDirectorApproverDocuments,
 }
 
 export function getTemplateConfigSchema(templateKey: string): TemplateConfigSchema | null {

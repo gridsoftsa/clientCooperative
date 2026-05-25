@@ -7,6 +7,31 @@ export function isCreditApplicationTerminalImmutable(status: string | null | und
 
 /** Estados de solicitud alineados con `App\Models\CreditApplication` (API). */
 
+/** Borrador y devoluciones al asesor: pueden abrir el formulario de edición con permiso `radicacion_editar`. */
+export const creditApplicationAdviserEditableStatuses = [
+  'Draft',
+  'Returned',
+  'Returned_Credit_Modification',
+  'Returned_Insurer_Response',
+] as const
+
+export function isCreditApplicationAdviserEditableStatus(status: string | null | undefined): boolean {
+  const s = String(status ?? '')
+  return (creditApplicationAdviserEditableStatuses as readonly string[]).includes(s)
+}
+
+/** Devoluciones al asesor (no borrador): trazabilidad y botón «Corregir». */
+export const creditApplicationReturnedToAdviserStatuses = [
+  'Returned',
+  'Returned_Credit_Modification',
+  'Returned_Insurer_Response',
+] as const
+
+export function isCreditApplicationReturnedToAdviser(status: string | null | undefined): boolean {
+  const s = String(status ?? '')
+  return (creditApplicationReturnedToAdviserStatuses as readonly string[]).includes(s)
+}
+
 export const creditApplicationStatusFilterOptions = [
   { value: 'all', label: 'Todos los estados' },
   { value: 'Draft', label: 'Borrador' },
@@ -17,6 +42,8 @@ export const creditApplicationStatusFilterOptions = [
   { value: 'Documentation_Review', label: 'Revisión de documentación' },
   /** Un solo estado en API; el matiz director vs documentación sale del backend (`skip_next_director_review`) al mostrar filas. */
   { value: 'Returned', label: 'Devuelta (ajustes pendientes)' },
+  { value: 'Returned_Credit_Modification', label: 'Modificación' },
+  { value: 'Returned_Insurer_Response', label: 'Respuesta aseguradora' },
   { value: 'Approved', label: 'Aprobada' },
   { value: 'Disbursement', label: 'Desembolso' },
   { value: 'Rejected', label: 'Rechazada' },
@@ -39,6 +66,8 @@ const STATUS_LABELS: Record<string, string> = {
   Credit_Director_Review: 'Revisión director de crédito',
   Documentation_Review: 'Revisión de documentación',
   Returned: 'Devuelta',
+  Returned_Credit_Modification: 'Modificación',
+  Returned_Insurer_Response: 'Respuesta aseguradora',
   Approved: 'Aprobada',
   Disbursement: 'Desembolso',
   Rejected: 'Rechazada',
@@ -71,6 +100,12 @@ function returnedLabelFromTimeline(
     if (ek === 'analyst_returned_review') {
       return 'Devuelta por analista'
     }
+    if (ek === 'credit_director_returned_modification') {
+      return 'Modificación'
+    }
+    if (ek === 'credit_director_returned_insurer_response') {
+      return 'Respuesta aseguradora'
+    }
     return null
   }
   if (role === 'from') {
@@ -93,6 +128,8 @@ const BADGE_VARIANTS: Record<string, string> = {
   Credit_Director_Review: 'default',
   Documentation_Review: 'secondary',
   Returned: 'destructive',
+  Returned_Credit_Modification: 'destructive',
+  Returned_Insurer_Response: 'destructive',
   Approved: 'default',
   Disbursement: 'success',
   Rejected: 'destructive',
@@ -104,7 +141,11 @@ export function getCreditApplicationStatusLabel(
   options?: CreditApplicationStatusLabelOptions,
 ): string {
   if (status !== 'Returned') {
-    return STATUS_LABELS[status] ?? status
+    const direct = STATUS_LABELS[status]
+    if (direct != null && direct !== '') {
+      return direct
+    }
+    return status
   }
 
   if (options?.resubmitToAnalystAfterReturn === true) {
@@ -142,6 +183,8 @@ export const creditApplicationStatusOrder = [
   'Credit_Director_Review',
   'Documentation_Review',
   'Returned',
+  'Returned_Credit_Modification',
+  'Returned_Insurer_Response',
   'In_Analysis',
   'Approved',
   'Disbursement',

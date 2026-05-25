@@ -13,6 +13,7 @@ export const RADICACION_OPTION_CATALOG_TEMPLATE_KEYS = [
   'credit-destination',
   'aprobadores',
   'excepciones',
+  'insurability-status',
   'bancos',
 ] as const
 
@@ -34,5 +35,6 @@ export const RADICACION_OPTION_CATALOG_FIELD_LABELS: Record<RadicacionOptionCata
   'credit-destination': 'Destino del crédito',
   aprobadores: 'Aprobadores',
   excepciones: 'Excepciones (director de crédito)',
+  'insurability-status': 'Estado asegurabilidad',
   bancos: 'Bancos',
 }

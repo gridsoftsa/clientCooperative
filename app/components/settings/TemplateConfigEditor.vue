@@ -456,6 +456,11 @@ function onAuxiliaryDocumentsChecklistField(payload: { key: string, value: unkno
             :edited-data="editedData"
             :editing="editing"
             :can-edit="canEdit"
+            :help-paragraph="record.template_key === 'credit-director-approver-documents'
+              ? 'Documentos que el director de crédito puede adjuntar al registrar la aprobación con ente aprobador (misma estructura de checklist que asegurabilidad). Claves técnicas en inglés; textos visibles en español.'
+              : record.template_key === 'documentation-fng-documents'
+                ? 'Documentos que revisión de documentos carga cuando la solicitud tiene garantía FNG (paso 4). Se almacenan en carpeta FNG en el repositorio de archivos. Claves técnicas en inglés; textos visibles en español.'
+                : null"
             @update:field="onAuxiliaryDocumentsChecklistField"
           />
         </div>

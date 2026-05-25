@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { useDebounceFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
 import InsurabilityDocumentsSection from '~/components/radicacion/InsurabilityDocumentsSection.vue'
+import FngDocumentsSection from '~/components/radicacion/FngDocumentsSection.vue'
+import ApproverEntityDocumentsSection from '~/components/radicacion/ApproverEntityDocumentsSection.vue'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/components/ui/collapsible'
 import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import RadicacionResumenFinancieroDeudorComparacion from '~/components/radicacion/RadicacionResumenFinancieroDeudorComparacion.vue'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
-import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
+import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable, isCreditApplicationAdviserEditableStatus, isCreditApplicationReturnedToAdviser } from '~/constants/credit-application-status'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 import { parseActivityTemplateList } from '~/types/credit-application'
 import { normalizeFinancialInfoAliases } from '~/utils/merge-applicant-search'
@@ -21,6 +23,14 @@ import {
   extractInsurabilityItemsFromCatalogResponse,
   titleForInsurabilityDocumentUpload,
 } from '~/constants/documentation-insurability-checklist'
+import {
+  extractFngItemsFromCatalogResponse,
+  titleForFngDocumentUpload,
+} from '~/constants/documentation-fng-checklist'
+import {
+  extractApproverEntityItemsFromCatalogResponse,
+  titleForApproverEntityDocumentUpload,
+} from '~/constants/documentation-approver-entity-checklist'
 
 definePageMeta({
   layout: 'default',
@@ -44,6 +54,7 @@ const documentationUploadMode = computed(
     && (
       hasPermission('radicacion_documentos_subir')
       || hasPermission('radicacion_insurability_documentos_subir')
+      || hasPermission('radicacion_fng_documentos_subir')
     ),
 )
 
@@ -59,7 +70,14 @@ const insurabilityDocumentUploadMode = computed(
 )
 const skipDocumentationFinancialPatch = ref(true)
 
-/** Borrador editable: redirige a /editar. Las devoluciones (`Returned`) se quedan aquí para ver trazabilidad y motivo antes de corregir. */
+/**
+ * Firma estable de los campos que el PATCH documental persiste (evita PATCH al montar el formulario:
+ * `ApplicantFormFields` sincroniza `solvency.real_estate` desde garantías con `watch(..., { immediate: true })`,
+ * lo que muta `financial_info` sin cambiar activity/aux/ins/approver).
+ */
+const lastDebtorDocumentationFinancialPatchSignature = ref('')
+
+/** Borrador editable: redirige a /editar. Las devoluciones al asesor se quedan aquí para ver trazabilidad y motivo antes de corregir. */
 const shouldRedirectDraftToEdit = computed(() =>
   Boolean(
     !loading.value
@@ -129,11 +147,12 @@ function timelineHasReturnedEvent(events: unknown): boolean {
   if (!Array.isArray(events)) {
     return false
   }
+  const toAdviser = new Set(['Returned', 'Returned_Credit_Modification', 'Returned_Insurer_Response'])
   return events.some(
     (e: unknown) =>
       e != null
       && typeof e === 'object'
-      && String((e as { to_status?: unknown }).to_status ?? '') === 'Returned',
+      && toAdviser.has(String((e as { to_status?: unknown }).to_status ?? '')),
   )
 }
 const directorDecision = ref<'approved' | 'returned' | ''>('')
@@ -143,8 +162,19 @@ const submittingDirectorDecision = ref(false)
 const documentationDecision = ref<'approved' | 'returned' | ''>('')
 const documentationConcept = ref('')
 const documentationInsurabilityChoice = ref<'yes' | 'no'>('no')
+const documentationInsurabilityStatusValue = ref('')
+const documentationInsurabilityStatusJustification = ref('')
+const documentationInsurabilityStatusOptions = ref<Array<{ value: string, label: string }>>([])
 const documentationDecisionDialogOpen = ref(false)
 const submittingDocumentationDecision = ref(false)
+const submittingInsurabilityStatusPatch = ref(false)
+/** `yes` | `no` — al aprobar revisión documental se envía como `credit_mortgage_options: [value]`. */
+const documentationCreditMortgage = ref<'' | 'yes' | 'no'>('')
+const documentationMortgageSelectOptions = [
+  { value: 'yes', label: 'Sí' },
+  { value: 'no', label: 'No' },
+]
+const fngStandaloneCollapsibleOpen = ref(true)
 const selectedCoDebtorIndex = ref<number | null>(null)
 const selectedCoDebtorStep = ref(1)
 const canDirectorDecide = computed(
@@ -187,6 +217,64 @@ const showInsurabilityDocumentsSection = computed(
     ),
 )
 
+/** En revisión documental el bloque de documentos va dentro de la misma tarjeta, arriba de la decisión. */
+const inlineInsurabilityDocumentsInDocReviewCard = computed(
+  () => canDocumentationDecide.value && documentationReviewFlowActive.value && showInsurabilityDocumentsSection.value,
+)
+
+/** Fuera de la tarjeta de decisión documental (p. ej. analista con seguimiento). */
+const showInsurabilityDocumentsAsStandaloneCard = computed(
+  () => showInsurabilityDocumentsSection.value && !inlineInsurabilityDocumentsInDocReviewCard.value,
+)
+
+/** Misma vista que asegurabilidad independiente y crédito con FNG: mostrar checklist FNG aquí (evita omitirlo si no tienen `radicacion_fng_ver` solo). */
+const showFngEmbeddedWithStandaloneInsurability = computed(
+  () => showInsurabilityDocumentsAsStandaloneCard.value && Boolean(form.value.credito_garantia_fng),
+)
+
+const showFngDocumentsSection = computed(
+  () =>
+    hasPermission('radicacion_fng_ver')
+    && form.value.credito_garantia_fng === true,
+)
+
+const inlineFngDocumentsInDocReviewCard = computed(
+  () => canDocumentationDecide.value && documentationReviewFlowActive.value && showFngDocumentsSection.value,
+)
+
+const showFngDocumentsAsStandaloneCard = computed(
+  () =>
+    showFngDocumentsSection.value
+    && !inlineFngDocumentsInDocReviewCard.value
+    && !showFngEmbeddedWithStandaloneInsurability.value,
+)
+
+const fngDocumentationInteractionMode = computed((): 'full' | 'uploadOnly' | 'viewOnly' => {
+  if (!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')) {
+    return 'viewOnly'
+  }
+  if (isCreditApplicationTerminalImmutable(application.value?.status)) {
+    return 'viewOnly'
+  }
+  if (String(application.value?.status ?? '') !== 'Documentation_Review') {
+    return 'viewOnly'
+  }
+  return 'full'
+})
+
+/** Estado catalogado de asegurabilidad: solo usuarios con permiso explícito (plantilla: director de crédito). */
+const showInsurabilityStatusInAsegurabilidadCard = computed(
+  () =>
+    hasPermission('radicacion_insurability_status_editar')
+    && application.value?.documentation_insurability_required === true,
+)
+
+const canEditInsurabilityStatusInAsegurabilidadSection = computed(
+  () =>
+    showInsurabilityStatusInAsegurabilidadCard.value
+    && !isCreditApplicationTerminalImmutable(application.value?.status),
+)
+
 const showDocumentationAuxiliaryChecklist = computed(() => documentationReviewFlowActive.value)
 
 const showAuxiliaryDocumentReviewInChecklist = computed(
@@ -197,7 +285,7 @@ const showReturnedCorrectionHint = computed(
   () =>
     Boolean(
       application.value
-        && String(application.value.status ?? '') === 'Returned'
+        && isCreditApplicationReturnedToAdviser(application.value.status)
         && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
     ),
 )
@@ -239,7 +327,7 @@ const analystDecisionOptions = [
   { value: 'returned', label: 'Devolver al asesor para corrección (visible también para director de agencia)' },
 ]
 
-const creditDirectorDecision = ref<'approved' | 'rejected' | ''>('')
+const creditDirectorDecision = ref<'approved' | 'rejected' | 'returned_modification' | 'returned_insurer_response' | ''>('')
 const creditDirectorConcept = ref('')
 const creditDirectorExceptionOptions = [
   { value: 'no', label: 'No' },
@@ -259,12 +347,55 @@ const creditDirectorApproverValue = ref('')
 const creditDirectorApproverOptions = ref<Array<{ value: string, label: string }>>([])
 const creditDirectorDecisionDialogOpen = ref(false)
 const submittingCreditDirectorDecision = ref(false)
+const insurabilityStandaloneCollapsibleOpen = ref(true)
+const creditDirectorSectionCollapsibleOpen = ref(true)
+const documentationReviewConceptCollapsibleOpen = ref(true)
 const creditDirectorDecisionOptions = [
-  { value: 'approved', label: 'Aprobar para desembolso (definitivo)' },
-  { value: 'rejected', label: 'Rechazar solicitud (definitivo)' },
+  { value: 'approved', label: 'Aprobar para desembolso' },
+  { value: 'rejected', label: 'Rechazar solicitud' },
+  { value: 'returned_modification', label: 'Modificación' },
+  { value: 'returned_insurer_response', label: 'Respuesta aseguradora' },
 ]
 const canCreditDirectorDecide = computed(
   () => hasPermission('radicacion_director_credito_decidir') && application.value?.status === 'Credit_Director_Review',
+)
+
+/** Subida del checklist del ente aprobador: solo en revisión del director de crédito. */
+const approverEntityDocumentUploadMode = computed(
+  () =>
+    application.value?.status === 'Credit_Director_Review'
+    && (
+      hasPermission('radicacion_approver_entity_documentos_subir')
+      || hasPermission('radicacion_documentos_subir')
+    ),
+)
+
+const approverEntityDocumentationInteractionMode = computed((): 'full' | 'uploadOnly' | 'viewOnly' => {
+  if (hasPermission('radicacion_approver_entity_documentos_subir') || hasPermission('radicacion_documentos_subir')) {
+    if (application.value?.status !== 'Credit_Director_Review') {
+      return 'viewOnly'
+    }
+    return 'full'
+  }
+  if (
+    hasPermission('radicacion_approver_entity_ver')
+    && application.value?.status === 'Credit_Director_Review'
+  ) {
+    return 'viewOnly'
+  }
+  return 'viewOnly'
+})
+
+const showApproverEntityDocumentsInCreditDirectorCard = computed(
+  () =>
+    canCreditDirectorDecide.value
+    && creditDirectorDecision.value === 'approved'
+    && creditDirectorApproverValue.value.trim() !== ''
+    && (
+      hasPermission('radicacion_approver_entity_ver')
+      || hasPermission('radicacion_approver_entity_documentos_subir')
+      || hasPermission('radicacion_documentos_subir')
+    ),
 )
 const creditDirectorUseExceptionReasonCatalog = computed(
   () => creditDirectorExceptionReasonOptions.value.length > 0,
@@ -327,9 +458,14 @@ function onAnalystDecisionUpdate(value: string | null) {
 }
 
 function onCreditDirectorDecisionUpdate(value: string | null) {
-  if (value === 'approved' || value === 'rejected') {
+  if (
+    value === 'approved'
+    || value === 'rejected'
+    || value === 'returned_modification'
+    || value === 'returned_insurer_response'
+  ) {
     creditDirectorDecision.value = value
-    if (value === 'rejected') {
+    if (value !== 'approved') {
       creditDirectorApproverValue.value = ''
     }
     return
@@ -343,7 +479,6 @@ function onCreditDirectorExceptionUpdate(value: string | null) {
     if (value === 'no') {
       creditDirectorExceptionJustification.value = ''
       creditDirectorExceptionReasonsSelected.value = []
-      creditDirectorApproverValue.value = ''
     } else {
       creditDirectorExceptionReasonsSelected.value = []
     }
@@ -401,6 +536,27 @@ async function loadAprobadoresCatalog(): Promise<void> {
     console.error('Error cargando catálogo aprobadores:', e)
     creditDirectorApproverOptions.value = []
   }
+}
+
+async function loadInsurabilityStatusCatalog(): Promise<void> {
+  try {
+    const res = await $api<{ data: { options?: Array<{ value: string, label: string }> } }>(
+      '/catalogs/template-flat-data/insurability-status',
+    )
+    const opts = res.data?.options
+    documentationInsurabilityStatusOptions.value = Array.isArray(opts) ? opts : []
+  } catch (e) {
+    console.error('Error cargando catálogo estado asegurabilidad:', e)
+    documentationInsurabilityStatusOptions.value = []
+  }
+}
+
+function insurabilityStatusLabelForCatalogValue(value: string | null | undefined): string {
+  if (value == null || value === '') {
+    return ''
+  }
+  const o = documentationInsurabilityStatusOptions.value.find(x => x.value === value)
+  return o?.label ?? value
 }
 
 async function loadExcepcionesCatalog(): Promise<void> {
@@ -729,6 +885,14 @@ function getDocumentsForApplicant(applicantId: number | string | null | undefine
   return documentsByApplicant.value[String(applicantId)] ?? []
 }
 
+function creditMortgageSummaryText(opts: unknown): string {
+  if (!Array.isArray(opts) || opts.length !== 1) {
+    return '—'
+  }
+  const v = opts[0]
+  return v === 'yes' ? 'Sí' : v === 'no' ? 'No' : '—'
+}
+
 function fullName(a: any): string {
   return [a.first_name, a.second_name, a.first_last_name, a.second_last_name].filter(Boolean).join(' ') || '-'
 }
@@ -946,8 +1110,21 @@ async function confirmDirectorDecision() {
   }
 }
 
-function openCreditDirectorDecisionDialog() {
+async function openCreditDirectorDecisionDialog() {
   if (submittingCreditDirectorDecision.value) {
+    return
+  }
+  try {
+    await flushDebtorInsurabilityDocumentUploads()
+    await flushDebtorFngDocumentUploads()
+    await flushDebtorApproverEntityDocumentUploads()
+    await patchDebtorDocumentationFinancialToServer()
+  } catch (e: any) {
+    if (e?.message === 'document_too_large') {
+      return
+    }
+    console.error(e)
+    toast.error(e?.data?.message ?? 'No se pudieron sincronizar los documentos antes de registrar la decisión.')
     return
   }
   if (creditDirectorDecision.value === '') {
@@ -957,6 +1134,20 @@ function openCreditDirectorDecisionDialog() {
   if (creditDirectorConcept.value.trim().length < 25) {
     toast.error('El concepto debe ser claro y estructurado (mínimo 25 caracteres). Incluya antecedentes, análisis y decisión fundamentada.')
     return
+  }
+  if (
+    application.value?.documentation_insurability_required === true
+    && creditDirectorDecision.value === 'approved'
+    && creditDirectorIsExceptionChoice.value === 'no'
+  ) {
+    if (documentationInsurabilityStatusValue.value === '') {
+      toast.error('Seleccione el estado de asegurabilidad.')
+      return
+    }
+    if (documentationInsurabilityStatusJustification.value.trim().length < 10) {
+      toast.error('Escriba la justificación del estado de asegurabilidad (mínimo 10 caracteres).')
+      return
+    }
   }
   if (creditDirectorIsExceptionChoice.value === 'yes') {
     if (creditDirectorUseExceptionReasonCatalog.value) {
@@ -968,7 +1159,8 @@ function openCreditDirectorDecisionDialog() {
       toast.error('Si marca excepción, la justificación debe tener al menos 10 caracteres.')
       return
     }
-  } else if (creditDirectorDecision.value === 'approved') {
+  }
+  if (creditDirectorDecision.value === 'approved') {
     if (creditDirectorApproverValue.value.trim() === '') {
       toast.error('Seleccione el ente aprobador.')
       return
@@ -1004,9 +1196,26 @@ async function confirmCreditDirectorDecision() {
       concept: creditDirectorConcept.value.trim(),
       is_exception: isEx,
       exception_justification: exceptionJustificationPayload,
-      approver_value: !isEx && creditDirectorDecision.value === 'approved'
+      approver_value: creditDirectorDecision.value === 'approved'
         ? creditDirectorApproverValue.value.trim()
         : null,
+    }
+    if (
+      application.value?.documentation_insurability_required === true
+      && creditDirectorDecision.value === 'approved'
+      && !isEx
+    ) {
+      body.insurability_status_value = documentationInsurabilityStatusValue.value.trim()
+      body.insurability_status_justification = documentationInsurabilityStatusJustification.value.trim()
+    }
+    if (creditDirectorDecision.value === 'approved') {
+      const fiRaw = form.value.debtor.financial_info
+      if (fiRaw && typeof fiRaw === 'object') {
+        const m = (fiRaw as Record<string, unknown>).approverEntityDocuments
+        if (m && typeof m === 'object' && !Array.isArray(m)) {
+          body.approver_entity_documents = m
+        }
+      }
     }
     if (hasPermission('radicacion_marcar_privilegiado')) {
       const isPriv = creditDirectorIsPrivilegedChoice.value === 'yes'
@@ -1028,7 +1237,26 @@ async function confirmCreditDirectorDecision() {
   }
 }
 
-function openDocumentationDecisionDialog() {
+function onDocumentationInsurabilityChoiceUpdate(v: unknown): void {
+  documentationInsurabilityChoice.value = v === 'yes' ? 'yes' : 'no'
+  if (documentationInsurabilityChoice.value === 'no') {
+    documentationInsurabilityStatusValue.value = ''
+    documentationInsurabilityStatusJustification.value = ''
+  }
+}
+
+function onDocumentationInsurabilityStatusUpdate(v: unknown): void {
+  documentationInsurabilityStatusValue.value = typeof v === 'string' ? v : ''
+  if (documentationInsurabilityStatusValue.value === '') {
+    documentationInsurabilityStatusJustification.value = ''
+  }
+}
+
+function onDocumentationCreditMortgageUpdate(v: unknown): void {
+  documentationCreditMortgage.value = v === 'yes' || v === 'no' ? v : ''
+}
+
+async function openDocumentationDecisionDialog() {
   if (submittingDocumentationDecision.value) {
     return
   }
@@ -1042,6 +1270,22 @@ function openDocumentationDecisionDialog() {
   }
   if (documentationConcept.value.trim().length < 5) {
     toast.error('Escribe un concepto de revisión de documentos de al menos 5 caracteres.')
+    return
+  }
+  if (documentationDecision.value === 'approved') {
+    if (documentationCreditMortgage.value !== 'yes' && documentationCreditMortgage.value !== 'no') {
+      toast.error('Indique si la solicitud de crédito es hipotecario (elija Sí o No).')
+      return
+    }
+  }
+  try {
+    await flushPendingDocumentationReviewUploadsBeforeDecision()
+  } catch (e: any) {
+    if (e?.message === 'document_too_large') {
+      return
+    }
+    console.error(e)
+    toast.error(e?.data?.message ?? 'No se pudieron sincronizar los documentos antes de registrar la decisión.')
     return
   }
   documentationDecisionDialogOpen.value = true
@@ -1061,29 +1305,86 @@ async function confirmDocumentationDecision() {
   }
   submittingDocumentationDecision.value = true
   try {
+    await flushPendingDocumentationReviewUploadsBeforeDecision()
     await $csrf()
     const documentsPayload = (application.value?.documents ?? []).map((doc: any) => ({
       id: Number(doc.id),
       is_reviewed: Boolean(doc.is_reviewed),
       review_comment: String(doc.review_comment ?? '').trim(),
     }))
+    const body: Record<string, unknown> = {
+      decision: documentationDecision.value,
+      concept: documentationConcept.value.trim(),
+      insurability_required: documentationInsurabilityChoice.value === 'yes',
+      documents: documentsPayload,
+    }
+    if (documentationDecision.value === 'approved') {
+      body.credit_mortgage_options = [documentationCreditMortgage.value]
+    }
     await $api(`/credit-applications/${application.value.id}/documentation-decision`, {
       method: 'PATCH',
-      body: {
-        decision: documentationDecision.value,
-        concept: documentationConcept.value.trim(),
-        insurability_required: documentationInsurabilityChoice.value === 'yes',
-        documents: documentsPayload,
-      },
+      body,
     })
     documentationDecisionDialogOpen.value = false
     toast.success('Decisión de revisión de documentos registrada correctamente.')
     await navigateTo('/radicacion')
   } catch (e: any) {
+    if (e?.message === 'document_too_large') {
+      return
+    }
     console.error('Error registrando decisión de revisión de documentos:', e)
     toast.error(e?.data?.message ?? 'No se pudo registrar la decisión de revisión de documentos.')
   } finally {
     submittingDocumentationDecision.value = false
+  }
+}
+
+async function patchInsurabilityStatusFromSection(): Promise<void> {
+  const app = application.value
+  if (!app?.id || !canEditInsurabilityStatusInAsegurabilidadSection.value) {
+    return
+  }
+  if (documentationInsurabilityStatusOptions.value.length < 1) {
+    toast.error('Configure el catálogo «Estado asegurabilidad» en Parametrización → Radicación.')
+    return
+  }
+  if (documentationInsurabilityStatusValue.value === '') {
+    toast.error('Seleccione el estado de asegurabilidad.')
+    return
+  }
+  if (documentationInsurabilityStatusJustification.value.trim().length < 10) {
+    toast.error('Escriba la justificación del estado de asegurabilidad (mínimo 10 caracteres).')
+    return
+  }
+  submittingInsurabilityStatusPatch.value = true
+  try {
+    await $csrf()
+    const res = await $api<{ data: Record<string, unknown> }>(`/credit-applications/${app.id}/insurability-status`, {
+      method: 'PATCH',
+      body: {
+        insurability_status_value: documentationInsurabilityStatusValue.value,
+        insurability_status_justification: documentationInsurabilityStatusJustification.value.trim(),
+      },
+    })
+    const data = res.data
+    const prevDocs = application.value?.documents ?? []
+    application.value = {
+      ...application.value,
+      ...data,
+      documents: Array.isArray(data.documents) ? data.documents : prevDocs,
+    }
+    const nextStatus = data.insurability_status_value
+    documentationInsurabilityStatusValue.value = typeof nextStatus === 'string' && nextStatus !== ''
+      ? nextStatus
+      : documentationInsurabilityStatusValue.value
+    const nextJust = data.insurability_status_justification
+    documentationInsurabilityStatusJustification.value = typeof nextJust === 'string' ? nextJust : documentationInsurabilityStatusJustification.value
+    toast.success('Estado de asegurabilidad actualizado.')
+  } catch (e: any) {
+    console.error('Error actualizando estado de asegurabilidad:', e)
+    toast.error(e?.data?.message ?? 'No se pudo actualizar el estado de asegurabilidad.')
+  } finally {
+    submittingInsurabilityStatusPatch.value = false
   }
 }
 
@@ -1107,6 +1408,9 @@ function syncFormFromApplication() {
       return apiApplicantToForm(c, docs)
     }),
   }
+  lastDebtorDocumentationFinancialPatchSignature.value = stableStringifyDocumentationFinancialPatch(
+    buildDocumentationFinancialPatch(form.value.debtor.financial_info),
+  )
 }
 
 async function fetchApplication() {
@@ -1120,7 +1424,7 @@ async function fetchApplication() {
       documents: Array.isArray(data?.documents) ? data.documents : [],
     }
     await fetchCreditDestinationOptions()
-    if (String(application.value?.status ?? '') === 'Returned') {
+    if (isCreditApplicationReturnedToAdviser(String(application.value?.status ?? ''))) {
       timelineExpanded.value = true
     } else if (
       application.value?.skip_next_director_review === true
@@ -1133,13 +1437,31 @@ async function fetchApplication() {
       await navigateTo(`/radicacion/editar/${id.value}`, { replace: true })
       return
     }
+    cancelPendingDebtorDocumentationFinancialPush()
+    cancelPendingCodeudorDocumentationFinancialPush()
     skipDocumentationFinancialPatch.value = true
     syncFormFromApplication()
     documentationInsurabilityChoice.value = application.value?.documentation_insurability_required === true ? 'yes' : 'no'
+    documentationInsurabilityStatusValue.value = typeof application.value?.insurability_status_value === 'string'
+      && application.value.insurability_status_value !== ''
+      ? application.value.insurability_status_value
+      : ''
+    documentationInsurabilityStatusJustification.value = typeof application.value?.insurability_status_justification === 'string'
+      ? application.value.insurability_status_justification
+      : ''
+    const mo = application.value?.credit_mortgage_options
+    const firstMortgage = Array.isArray(mo)
+      ? mo.find((x: unknown): x is 'yes' | 'no' => x === 'yes' || x === 'no')
+      : undefined
+    documentationCreditMortgage.value = firstMortgage ?? ''
     syncAnalystFieldsFromApplication()
     syncCreditDirectorPrivilegedFromApplication()
     await nextTick()
     skipDocumentationFinancialPatch.value = false
+    const appStatus = String(application.value?.status ?? '')
+    if (application.value?.documentation_insurability_required === true || appStatus === 'Documentation_Review') {
+      await loadInsurabilityStatusCatalog()
+    }
     if (
       application.value?.status === 'Credit_Director_Review'
       || application.value?.credit_director_is_exception
@@ -1182,10 +1504,33 @@ function syncCreditDirectorPrivilegedFromApplication(): void {
     : ''
 }
 
+function stableStringifyDocumentationFinancialPatch(p: {
+  activity_type?: string
+  auxiliaryDocuments?: Record<string, number | null>
+  insurabilityDocuments?: Record<string, number | null>
+  fngDocuments?: Record<string, number | null>
+  approverEntityDocuments?: Record<string, number | null>
+}): string {
+  const normalize = (v: unknown): unknown => {
+    if (v != null && typeof v === 'object' && !Array.isArray(v)) {
+      const o = v as Record<string, unknown>
+      const out: Record<string, unknown> = {}
+      for (const k of Object.keys(o).sort()) {
+        out[k] = normalize(o[k])
+      }
+      return out
+    }
+    return v
+  }
+  return JSON.stringify(normalize(p))
+}
+
 function buildDocumentationFinancialPatch(fi: unknown): {
   activity_type?: string
   auxiliaryDocuments?: Record<string, number | null>
   insurabilityDocuments?: Record<string, number | null>
+  fngDocuments?: Record<string, number | null>
+  approverEntityDocuments?: Record<string, number | null>
 } {
   if (!fi || typeof fi !== 'object') {
     return {}
@@ -1195,6 +1540,8 @@ function buildDocumentationFinancialPatch(fi: unknown): {
     activity_type?: string
     auxiliaryDocuments?: Record<string, number | null>
     insurabilityDocuments?: Record<string, number | null>
+    fngDocuments?: Record<string, number | null>
+    approverEntityDocuments?: Record<string, number | null>
   } = {}
   if ('activity_type' in o) {
     const at = o.activity_type
@@ -1241,6 +1588,44 @@ function buildDocumentationFinancialPatch(fi: unknown): {
       }
     }
     patch.insurabilityDocuments = clean
+  }
+  if (
+    'fngDocuments' in o
+    && o.fngDocuments
+    && typeof o.fngDocuments === 'object'
+    && !Array.isArray(o.fngDocuments)
+  ) {
+    const raw = o.fngDocuments as Record<string, unknown>
+    const clean: Record<string, number | null> = {}
+    for (const [k, v] of Object.entries(raw)) {
+      if (v == null || v === '') {
+        clean[k] = null
+      } else if (typeof v === 'number' && Number.isFinite(v)) {
+        clean[k] = v
+      } else if (typeof v === 'string' && /^\d+$/.test(v)) {
+        clean[k] = parseInt(v, 10)
+      }
+    }
+    patch.fngDocuments = clean
+  }
+  if (
+    'approverEntityDocuments' in o
+    && o.approverEntityDocuments
+    && typeof o.approverEntityDocuments === 'object'
+    && !Array.isArray(o.approverEntityDocuments)
+  ) {
+    const raw = o.approverEntityDocuments as Record<string, unknown>
+    const clean: Record<string, number | null> = {}
+    for (const [k, v] of Object.entries(raw)) {
+      if (v == null || v === '') {
+        clean[k] = null
+      } else if (typeof v === 'number' && Number.isFinite(v)) {
+        clean[k] = v
+      } else if (typeof v === 'string' && /^\d+$/.test(v)) {
+        clean[k] = parseInt(v, 10)
+      }
+    }
+    patch.approverEntityDocuments = clean
   }
   return patch
 }
@@ -1301,6 +1686,14 @@ function pendingInsurabilityFileKeys(files: Record<string, File | undefined> | u
     .map(([k]) => k)
     .sort()
     .join(',')
+}
+
+function pendingFngFileKeys(files: Record<string, File | undefined> | undefined): string {
+  return pendingInsurabilityFileKeys(files)
+}
+
+function pendingApproverEntityFileKeys(files: Record<string, File | undefined> | undefined): string {
+  return pendingInsurabilityFileKeys(files)
 }
 
 function mergeUploadedDocumentIntoApplication(doc: unknown): void {
@@ -1381,9 +1774,8 @@ async function flushDebtorAuxiliaryDocumentUploads(): Promise<void> {
     const fd = new FormData()
     fd.append('title', titleForAuxiliaryDocumentUpload(label))
     fd.append('file', file)
-    fd.append('auxiliary_checklist', '1')
     const res = await $api<{ data: unknown }>(
-      `/credit-applications/${applicationId}/documents`,
+      `/credit-applications/${applicationId}/documents?auxiliary_checklist=1`,
       { method: 'POST', body: fd },
     )
     const created = res.data
@@ -1451,9 +1843,8 @@ async function flushDebtorInsurabilityDocumentUploads(): Promise<void> {
     const fd = new FormData()
     fd.append('title', titleForInsurabilityDocumentUpload(label))
     fd.append('file', file)
-    fd.append('insurability_checklist', '1')
     const res = await $api<{ data: unknown }>(
-      `/credit-applications/${applicationId}/documents`,
+      `/credit-applications/${applicationId}/documents?insurability_checklist=1`,
       { method: 'POST', body: fd },
     )
     const created = res.data
@@ -1468,6 +1859,144 @@ async function flushDebtorInsurabilityDocumentUploads(): Promise<void> {
   const nextFi = { ...fi, insurabilityDocuments: docMap }
   form.value.debtor.financial_info = nextFi as typeof form.value.debtor.financial_info
   form.value.debtor.insurabilityDocumentFiles = {}
+  patchApplicationDebtorFinancialCache(nextFi)
+}
+
+async function flushDebtorFngDocumentUploads(): Promise<void> {
+  const applicationId = application.value?.id
+  if (!documentationUploadMode.value || typeof applicationId !== 'number' || applicationId < 1) {
+    return
+  }
+  if (!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')) {
+    return
+  }
+  const fngFiles = form.value.debtor.fngDocumentFiles
+  if (!fngFiles) {
+    return
+  }
+  const pending = Object.entries(fngFiles).filter(([, f]) => f instanceof File) as [string, File][]
+  if (pending.length === 0) {
+    return
+  }
+  for (const [, f] of pending) {
+    if (f.size > MAX_AUXILIARY_DOCUMENT_BYTES) {
+      toast.error(`"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`)
+      throw new Error('document_too_large')
+    }
+  }
+  let labelByKey: Record<string, string> = {}
+  try {
+    const cfg = await $api<unknown>('/catalogs/template-flat-data/documentation-fng-documents')
+    const rows = extractFngItemsFromCatalogResponse(cfg)
+    labelByKey = Object.fromEntries(rows.map(r => [r.key, r.label]))
+  } catch {
+    labelByKey = {}
+  }
+  const fiRaw = form.value.debtor.financial_info
+  const fi = { ...(typeof fiRaw === 'object' && fiRaw ? fiRaw : {}) } as Record<string, unknown>
+  const docMap = { ...(typeof fi.fngDocuments === 'object' && fi.fngDocuments && !Array.isArray(fi.fngDocuments)
+    ? (fi.fngDocuments as Record<string, number | null>)
+    : {}) }
+
+  await $csrf()
+  for (const [key, file] of pending) {
+    const prevId = docMap[key]
+    if (typeof prevId === 'number' && prevId > 0) {
+      try {
+        await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    const label = labelByKey[key] ?? key
+    const fd = new FormData()
+    fd.append('title', titleForFngDocumentUpload(label))
+    fd.append('file', file)
+    const res = await $api<{ data: unknown }>(
+      `/credit-applications/${applicationId}/documents?fng_checklist=1`,
+      { method: 'POST', body: fd },
+    )
+    const created = res.data
+    mergeUploadedDocumentIntoApplication(created)
+    const newId = typeof created === 'object' && created !== null && 'id' in (created as object)
+      ? Number((created as { id: unknown }).id)
+      : NaN
+    if (Number.isFinite(newId) && newId > 0) {
+      docMap[key] = newId
+    }
+  }
+  const nextFi = { ...fi, fngDocuments: docMap }
+  form.value.debtor.financial_info = nextFi as typeof form.value.debtor.financial_info
+  form.value.debtor.fngDocumentFiles = {}
+  patchApplicationDebtorFinancialCache(nextFi)
+}
+
+async function flushDebtorApproverEntityDocumentUploads(): Promise<void> {
+  const applicationId = application.value?.id
+  if (!approverEntityDocumentUploadMode.value || typeof applicationId !== 'number' || applicationId < 1) {
+    return
+  }
+  if (!hasPermission('radicacion_approver_entity_documentos_subir') && !hasPermission('radicacion_documentos_subir')) {
+    return
+  }
+  const appFiles = form.value.debtor.approverEntityDocumentFiles
+  if (!appFiles) {
+    return
+  }
+  const pending = Object.entries(appFiles).filter(([, f]) => f instanceof File) as [string, File][]
+  if (pending.length === 0) {
+    return
+  }
+  for (const [, f] of pending) {
+    if (f.size > MAX_AUXILIARY_DOCUMENT_BYTES) {
+      toast.error(`"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`)
+      throw new Error('document_too_large')
+    }
+  }
+  let labelByKey: Record<string, string> = {}
+  try {
+    const cfg = await $api<unknown>('/catalogs/template-flat-data/credit-director-approver-documents')
+    const rows = extractApproverEntityItemsFromCatalogResponse(cfg)
+    labelByKey = Object.fromEntries(rows.map(r => [r.key, r.label]))
+  } catch {
+    labelByKey = {}
+  }
+  const fiRaw = form.value.debtor.financial_info
+  const fi = { ...(typeof fiRaw === 'object' && fiRaw ? fiRaw : {}) } as Record<string, unknown>
+  const docMap = { ...(typeof fi.approverEntityDocuments === 'object' && fi.approverEntityDocuments && !Array.isArray(fi.approverEntityDocuments)
+    ? (fi.approverEntityDocuments as Record<string, number | null>)
+    : {}) }
+
+  await $csrf()
+  for (const [key, file] of pending) {
+    const prevId = docMap[key]
+    if (typeof prevId === 'number' && prevId > 0) {
+      try {
+        await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    const label = labelByKey[key] ?? key
+    const fd = new FormData()
+    fd.append('title', titleForApproverEntityDocumentUpload(label))
+    fd.append('file', file)
+    const res = await $api<{ data: unknown }>(
+      `/credit-applications/${applicationId}/documents?approver_entity_checklist=1`,
+      { method: 'POST', body: fd },
+    )
+    const created = res.data
+    mergeUploadedDocumentIntoApplication(created)
+    const newId = typeof created === 'object' && created !== null && 'id' in (created as object)
+      ? Number((created as { id: unknown }).id)
+      : NaN
+    if (Number.isFinite(newId) && newId > 0) {
+      docMap[key] = newId
+    }
+  }
+  const nextFi = { ...fi, approverEntityDocuments: docMap }
+  form.value.debtor.financial_info = nextFi as typeof form.value.debtor.financial_info
+  form.value.debtor.approverEntityDocumentFiles = {}
   patchApplicationDebtorFinancialCache(nextFi)
 }
 
@@ -1528,10 +2057,9 @@ async function flushCodeudorAuxiliaryDocumentUploads(applicantId: number): Promi
     const fd = new FormData()
     fd.append('title', titleForAuxiliaryDocumentUpload(label))
     fd.append('file', file)
-    fd.append('auxiliary_checklist', '1')
     fd.append('applicant_id', String(applicantId))
     const res = await $api<{ data: unknown }>(
-      `/credit-applications/${applicationId}/documents`,
+      `/credit-applications/${applicationId}/documents?auxiliary_checklist=1`,
       { method: 'POST', body: fd },
     )
     const created = res.data
@@ -1554,10 +2082,16 @@ async function patchDebtorDocumentationFinancialToServer(): Promise<void> {
     return
   }
   const rawPatch = buildDocumentationFinancialPatch(form.value.debtor.financial_info)
+  const rawSig = stableStringifyDocumentationFinancialPatch(rawPatch)
+  if (rawSig === lastDebtorDocumentationFinancialPatchSignature.value) {
+    return
+  }
   const patch: {
     activity_type?: string
     auxiliaryDocuments?: Record<string, number | null>
     insurabilityDocuments?: Record<string, number | null>
+    fngDocuments?: Record<string, number | null>
+    approverEntityDocuments?: Record<string, number | null>
   } = {}
   if (hasPermission('radicacion_documentos_subir')) {
     if (rawPatch.activity_type !== undefined) {
@@ -1573,30 +2107,93 @@ async function patchDebtorDocumentationFinancialToServer(): Promise<void> {
       patch.insurabilityDocuments = rawPatch.insurabilityDocuments
     }
   }
+  if (hasPermission('radicacion_fng_documentos_subir') || hasPermission('radicacion_documentos_subir')
+    || hasPermission('radicacion_fng_documentos_eliminar') || hasPermission('radicacion_documentos_eliminar')) {
+    if (rawPatch.fngDocuments !== undefined) {
+      patch.fngDocuments = rawPatch.fngDocuments
+    }
+  }
+  if (hasPermission('radicacion_approver_entity_documentos_subir') || hasPermission('radicacion_documentos_subir')
+    || hasPermission('radicacion_approver_entity_documentos_eliminar') || hasPermission('radicacion_documentos_eliminar')) {
+    if (rawPatch.approverEntityDocuments !== undefined) {
+      patch.approverEntityDocuments = rawPatch.approverEntityDocuments
+    }
+  }
   if (Object.keys(patch).length === 0) {
     return
   }
 
-  const onlyIns =
-    Object.keys(patch).length === 1
-    && patch.insurabilityDocuments !== undefined
-
+  const status = String(application.value?.status ?? '')
   const docReviewFinancial =
-    documentationUploadMode.value && String(application.value?.status ?? '') === 'Documentation_Review'
+    documentationUploadMode.value && status === 'Documentation_Review'
 
-  if (!docReviewFinancial && !(onlyIns && insurabilityDocumentUploadMode.value)) {
-    return
+  type FiPatch = typeof patch
+  let financialInfoForRequest: FiPatch = patch
+
+  if (!docReviewFinancial) {
+    const hasActOrAux = patch.activity_type !== undefined || patch.auxiliaryDocuments !== undefined
+    const hasIns = patch.insurabilityDocuments !== undefined
+    const hasApp = patch.approverEntityDocuments !== undefined
+    const hasFng = patch.fngDocuments !== undefined
+
+    if (hasActOrAux) {
+      return
+    }
+
+    const insAllowed = insurabilityDocumentUploadMode.value
+    const appAllowed = approverEntityDocumentUploadMode.value && status === 'Credit_Director_Review'
+    const fngAllowed = documentationUploadMode.value && status === 'Documentation_Review'
+
+    if (!hasIns && !hasApp && !hasFng) {
+      return
+    }
+    if (hasIns && !insAllowed) {
+      return
+    }
+    if (hasApp && !appAllowed) {
+      return
+    }
+    if (hasFng && !fngAllowed) {
+      return
+    }
+
+    const merged: FiPatch = {}
+    if (hasIns) {
+      merged.insurabilityDocuments = patch.insurabilityDocuments
+    }
+    if (hasApp) {
+      merged.approverEntityDocuments = patch.approverEntityDocuments
+    }
+    if (hasFng) {
+      merged.fngDocuments = patch.fngDocuments
+    }
+    financialInfoForRequest = merged
   }
 
   await $csrf()
   await $api(`/credit-applications/${application.value.id}/documentation-applicant-financial`, {
     method: 'PATCH',
-    body: { role: 'DEUDOR', financial_info: patch },
+    body: { role: 'DEUDOR', financial_info: financialInfoForRequest },
   })
+  lastDebtorDocumentationFinancialPatchSignature.value = stableStringifyDocumentationFinancialPatch(
+    buildDocumentationFinancialPatch(form.value.debtor.financial_info),
+  )
   const fi = form.value.debtor.financial_info
   if (fi && typeof fi === 'object') {
     patchApplicationDebtorFinancialCache(fi as Record<string, unknown>)
   }
+}
+
+/**
+ * Sube adjuntos pendientes del deudor (auxiliar, asegurabilidad, FNG) y persiste `financial_info`
+ * antes de registrar la decisión de revisión documental. Evita 422 en el servidor (p. ej. FNG obligatorio)
+ * si el usuario envía antes de que el watch asíncrono termine de sincronizar.
+ */
+async function flushPendingDocumentationReviewUploadsBeforeDecision(): Promise<void> {
+  await flushDebtorAuxiliaryDocumentUploads()
+  await flushDebtorInsurabilityDocumentUploads()
+  await flushDebtorFngDocumentUploads()
+  await patchDebtorDocumentationFinancialToServer()
 }
 
 async function patchCodeudorDocumentationFinancialToServer(applicantId: number): Promise<void> {
@@ -1622,28 +2219,77 @@ async function patchCodeudorDocumentationFinancialToServer(applicantId: number):
   }
 }
 
-const pushDebtorDocumentationFinancial = useDebounceFn(async () => {
-  try {
-    await patchDebtorDocumentationFinancialToServer()
-  } catch (e: any) {
-    console.error(e)
-    toast.error(e?.data?.message ?? 'No se pudo guardar el tipo de actividad o documentos auxiliares del deudor')
-  }
-}, 500)
+let debtorDocumentationFinancialDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
-const pushCodeudorDocumentationFinancial = useDebounceFn(async (applicantId: number) => {
-  try {
-    await patchCodeudorDocumentationFinancialToServer(applicantId)
-  } catch (e: any) {
-    console.error(e)
-    toast.error(e?.data?.message ?? 'No se pudo guardar el tipo de actividad o documentos auxiliares del codeudor')
+function cancelPendingDebtorDocumentationFinancialPush(): void {
+  if (debtorDocumentationFinancialDebounceTimer != null) {
+    clearTimeout(debtorDocumentationFinancialDebounceTimer)
+    debtorDocumentationFinancialDebounceTimer = null
   }
-}, 500)
+}
+
+function schedulePushDebtorDocumentationFinancial(): void {
+  if (skipDocumentationFinancialPatch.value) {
+    return
+  }
+  if (debtorDocumentationFinancialDebounceTimer != null) {
+    clearTimeout(debtorDocumentationFinancialDebounceTimer)
+  }
+  debtorDocumentationFinancialDebounceTimer = setTimeout(() => {
+    debtorDocumentationFinancialDebounceTimer = null
+    void (async () => {
+      try {
+        await patchDebtorDocumentationFinancialToServer()
+      } catch (e: any) {
+        console.error(e)
+        toast.error(e?.data?.message ?? 'No se pudo guardar el tipo de actividad o documentos auxiliares del deudor')
+      }
+    })()
+  }, 500)
+}
+
+
+let codeudorDocumentationFinancialDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let codeudorDocumentationFinancialDebounceApplicantId: number | null = null
+
+function cancelPendingCodeudorDocumentationFinancialPush(): void {
+  if (codeudorDocumentationFinancialDebounceTimer != null) {
+    clearTimeout(codeudorDocumentationFinancialDebounceTimer)
+    codeudorDocumentationFinancialDebounceTimer = null
+  }
+  codeudorDocumentationFinancialDebounceApplicantId = null
+}
+
+function schedulePushCodeudorDocumentationFinancial(applicantId: number): void {
+  if (skipDocumentationFinancialPatch.value) {
+    return
+  }
+  if (codeudorDocumentationFinancialDebounceTimer != null) {
+    clearTimeout(codeudorDocumentationFinancialDebounceTimer)
+  }
+  codeudorDocumentationFinancialDebounceApplicantId = applicantId
+  codeudorDocumentationFinancialDebounceTimer = setTimeout(() => {
+    codeudorDocumentationFinancialDebounceTimer = null
+    const id = codeudorDocumentationFinancialDebounceApplicantId
+    codeudorDocumentationFinancialDebounceApplicantId = null
+    if (id == null) {
+      return
+    }
+    void (async () => {
+      try {
+        await patchCodeudorDocumentationFinancialToServer(id)
+      } catch (e: any) {
+        console.error(e)
+        toast.error(e?.data?.message ?? 'No se pudo guardar el tipo de actividad o documentos auxiliares del codeudor')
+      }
+    })()
+  }, 500)
+}
 
 watch(
   () => form.value.debtor.financial_info,
   () => {
-    void pushDebtorDocumentationFinancial()
+    schedulePushDebtorDocumentationFinancial()
   },
   { deep: true },
 )
@@ -1680,7 +2326,7 @@ watch(
     if (state.id == null || typeof state.id !== 'number') {
       return
     }
-    void pushCodeudorDocumentationFinancial(state.id)
+    schedulePushCodeudorDocumentationFinancial(state.id)
   },
   { deep: true },
 )
@@ -1735,6 +2381,50 @@ watch(
   },
 )
 
+watch(
+  () => pendingFngFileKeys(form.value.debtor.fngDocumentFiles),
+  async (pend, prevPend) => {
+    if (skipDocumentationFinancialPatch.value || !documentationUploadMode.value) {
+      return
+    }
+    if (!pend || pend === prevPend) {
+      return
+    }
+    try {
+      await flushDebtorFngDocumentUploads()
+      await patchDebtorDocumentationFinancialToServer()
+    } catch (e: any) {
+      if (e?.message === 'document_too_large') {
+        return
+      }
+      console.error(e)
+      toast.error(e?.data?.message ?? 'No se pudo subir o guardar los documentos FNG del deudor')
+    }
+  },
+)
+
+watch(
+  () => pendingApproverEntityFileKeys(form.value.debtor.approverEntityDocumentFiles),
+  async (pend, prevPend) => {
+    if (skipDocumentationFinancialPatch.value || !approverEntityDocumentUploadMode.value) {
+      return
+    }
+    if (!pend || pend === prevPend) {
+      return
+    }
+    try {
+      await flushDebtorApproverEntityDocumentUploads()
+      await patchDebtorDocumentationFinancialToServer()
+    } catch (e: any) {
+      if (e?.message === 'document_too_large') {
+        return
+      }
+      console.error(e)
+      toast.error(e?.data?.message ?? 'No se pudo subir o guardar los documentos del ente aprobador')
+    }
+  },
+)
+
 async function fetchCatalogs() {
   try {
     const agenciesRes = await $api<{ data: typeof agencies.value }>('/catalogs/agencies')
@@ -1759,7 +2449,7 @@ onMounted(() => {
         </h2>
         <p class="text-muted-foreground">
           <template v-if="documentationUploadMode">
-            Revisión de documentación: puede ajustar el tipo de actividad económica y el checklist auxiliar de documentos (deudor y codeudores).
+            Revisión de documentación: puede ajustar el tipo de actividad económica, el checklist auxiliar (deudor y codeudores), documentos de asegurabilidad y FNG cuando la solicitud tiene garantía FNG, e indicar si el crédito es hipotecario antes de registrar el concepto.
           </template>
           <template v-else>
             Solicitud de crédito — solo lectura
@@ -1772,13 +2462,13 @@ onMounted(() => {
       <div class="flex flex-wrap items-center gap-2">
         <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
           <Button
-            v-if="(application?.status === 'Draft' || application?.status === 'Returned') && application?.id"
+            v-if="isCreditApplicationAdviserEditableStatus(application?.status) && application?.id"
             variant="warning"
             as-child
           >
             <NuxtLink :to="`/radicacion/editar/${application.id}`">
               <Icon name="i-lucide-pencil" class="mr-2 h-4 w-4" />
-              {{ application?.status === 'Returned' ? 'Corregir radicación' : 'Editar' }}
+              {{ application?.status === 'Draft' ? 'Editar' : 'Corregir radicación' }}
             </NuxtLink>
           </Button>
         </PermissionGate>
@@ -1979,15 +2669,214 @@ onMounted(() => {
         </CardContent>
       </Card>
 
+      <Card v-if="showInsurabilityDocumentsAsStandaloneCard">
+        <Collapsible v-model:open="insurabilityStandaloneCollapsibleOpen">
+          <CardHeader class="pb-2">
+            <CollapsibleTrigger as-child>
+              <button
+                type="button"
+                class="flex w-full items-start gap-3 rounded-lg text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring -m-2 p-2"
+              >
+                <div class="min-w-0 flex-1 space-y-1.5">
+                  <CardTitle class="text-left">
+                    Documentos de asegurabilidad
+                  </CardTitle>
+                  <CardDescription class="text-left">
+                    Lista en Parametrización → Radicación → Asegurabilidad. Puede subirlos en cualquier etapa mientras la solicitud no esté en desembolso, rechazada o cancelada. Al enviar a director de crédito desde Análisis y SCORE, deben constar cargados los ítems obligatorios del checklist si la solicitud requiere asegurabilidad.
+                    <span v-if="canCreditDirectorDecide" class="mt-2 block font-medium text-foreground">
+                      Si está en revisión del director de crédito, el estado catalogado y la justificación se guardan al pulsar «Registrar decisión final» (junto con la decisión), o con «Guardar estado y justificación» en el bloque de estado cuando tenga el permiso correspondiente.
+                    </span>
+                  </CardDescription>
+                </div>
+                <Icon
+                  name="i-lucide-chevron-down"
+                  class="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200"
+                  :class="insurabilityStandaloneCollapsibleOpen ? 'rotate-180' : ''"
+                />
+              </button>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent class="space-y-4 pt-0">
+              <div
+                v-if="showInsurabilityStatusInAsegurabilidadCard"
+                class="rounded-md border bg-muted/30 p-4 space-y-3"
+              >
+                <p class="text-sm text-muted-foreground leading-relaxed">
+                  La <span class="font-medium text-foreground">revisión de documentación</span> indicó
+                  <span class="font-medium text-foreground">sí requiere asegurabilidad</span>
+                  (después del visto bueno del director de agencia). El <span class="font-medium text-foreground">director de crédito</span> (o quien tenga permiso de actualizar estado) registra aquí el estado catalogado y su justificación.
+                </p>
+                <template v-if="canEditInsurabilityStatusInAsegurabilidadSection">
+                  <div class="space-y-3">
+                    <div class="space-y-1.5">
+                      <Label for="insurability_section_status">Estado asegurabilidad *</Label>
+                      <Multiselect
+                        id="insurability_section_status"
+                        :model-value="documentationInsurabilityStatusValue === '' ? null : documentationInsurabilityStatusValue"
+                        :options="documentationInsurabilityStatusOptions"
+                        value-prop="value"
+                        label="label"
+                        mode="single"
+                        :can-clear="false"
+                        :searchable="false"
+                        placeholder="Seleccionar estado"
+                        class="multiselect-director w-full max-w-md"
+                        @update:model-value="onDocumentationInsurabilityStatusUpdate"
+                      />
+                    </div>
+                    <div v-if="documentationInsurabilityStatusValue !== ''" class="space-y-1.5">
+                      <Label for="insurability_section_justification">Justificación del estado *</Label>
+                      <textarea
+                        id="insurability_section_justification"
+                        v-model="documentationInsurabilityStatusJustification"
+                        rows="4"
+                        class="flex min-h-[100px] w-full max-w-2xl rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        placeholder="Fundamente el estado elegido respecto de la operación."
+                      />
+                      <p class="text-xs text-muted-foreground">
+                        Mínimo 10 caracteres para guardar el cambio.
+                      </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 justify-start">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        :disabled="submittingInsurabilityStatusPatch"
+                        @click="patchInsurabilityStatusFromSection"
+                      >
+                        <Icon v-if="submittingInsurabilityStatusPatch" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                        Guardar estado y justificación
+                      </Button>
+                      <p class="text-xs text-muted-foreground max-w-xl">
+                        También puede usar «Registrar decisión final» en la sección de abajo para persistir estado y justificación sin pulsar este botón.
+                      </p>
+                    </div>
+                  </div>
+                </template>
+                <div v-else class="space-y-3">
+                  <div class="space-y-1">
+                    <p class="text-sm font-medium text-foreground">
+                      Estado asegurabilidad
+                    </p>
+                    <p class="text-sm">
+                      {{ insurabilityStatusLabelForCatalogValue(application?.insurability_status_value) || '—' }}
+                    </p>
+                  </div>
+                  <div v-if="application?.insurability_status_justification" class="space-y-1">
+                    <p class="text-sm font-medium text-foreground">
+                      Justificación del estado
+                    </p>
+                    <p class="text-sm whitespace-pre-wrap rounded-md border bg-background/50 p-3">
+                      {{ application.insurability_status_justification }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <InsurabilityDocumentsSection
+                :applicant="form.debtor"
+                :credit-application-id="application?.id ?? null"
+                :application-documents="(application?.documents ?? [])"
+                :disabled="!hasPermission('radicacion_insurability_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
+                :auxiliary-pending-upload-hint="(documentationUploadMode || insurabilityDocumentUploadMode) ? 'immediate' : 'draftSave'"
+                :interaction-mode="insurabilityDocumentationInteractionMode"
+                @update:applicant="(v) => { form.debtor = v }"
+                @document-removed="removeInsurabilityDocumentFromApplicationState"
+              />
+              <div
+                v-if="showFngEmbeddedWithStandaloneInsurability"
+                class="rounded-md border border-border/60 bg-muted/10 p-4 space-y-3"
+              >
+                <div>
+                  <p class="text-sm font-medium text-foreground">
+                    Documentos FNG (Fondo Nacional de Garantías)
+                  </p>
+                  <p class="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    La solicitud tiene garantía FNG. Revise o complete cargues desde aquí; la subida de archivos nuevos queda habilitada en <span class="font-medium">revisión de documentación</span> (según permisos de FNG o documentos).
+                  </p>
+                </div>
+                <FngDocumentsSection
+                  :applicant="form.debtor"
+                  :credit-application-id="application?.id ?? null"
+                  :application-documents="(application?.documents ?? [])"
+                  :disabled="!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
+                  :auxiliary-pending-upload-hint="documentationUploadMode ? 'immediate' : 'draftSave'"
+                  :interaction-mode="fngDocumentationInteractionMode"
+                  @update:applicant="(v) => { form.debtor = v }"
+                  @document-removed="removeInsurabilityDocumentFromApplicationState"
+                />
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
+      </Card>
+
+      <Card v-if="showFngDocumentsAsStandaloneCard">
+        <Collapsible v-model:open="fngStandaloneCollapsibleOpen">
+          <CardHeader class="pb-2">
+            <CollapsibleTrigger as-child>
+              <button
+                type="button"
+                class="flex w-full items-start gap-3 rounded-lg text-left transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring -m-2 p-2"
+              >
+                <div class="min-w-0 flex-1 space-y-1.5">
+                  <CardTitle class="text-left">
+                    Documentos FNG
+                  </CardTitle>
+                  <CardDescription class="text-left">
+                    Solo en <span class="font-medium">revisión de documentación</span> se pueden adjuntar ítems obligatorios si la solicitud tiene garantía FNG. Fuera de ese estado puede consultar lo ya cargado.
+                  </CardDescription>
+                </div>
+                <Icon
+                  name="i-lucide-chevron-down"
+                  class="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200"
+                  :class="fngStandaloneCollapsibleOpen ? 'rotate-180' : ''"
+                />
+              </button>
+            </CollapsibleTrigger>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent class="space-y-4 pt-0">
+              <FngDocumentsSection
+                :applicant="form.debtor"
+                :credit-application-id="application?.id ?? null"
+                :application-documents="(application?.documents ?? [])"
+                :disabled="!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
+                :auxiliary-pending-upload-hint="documentationUploadMode ? 'immediate' : 'draftSave'"
+                :interaction-mode="fngDocumentationInteractionMode"
+                @update:applicant="(v) => { form.debtor = v }"
+                @document-removed="removeInsurabilityDocumentFromApplicationState"
+              />
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
+      </Card>
+
       <Card v-if="canCreditDirectorDecide">
-        <CardHeader>
-          <CardTitle>Decisión final — director de crédito</CardTitle>
-          <CardDescription>
-            Revise la radicación y el SCORE. Esta decisión es definitiva: si aprueba, la solicitud pasa a
-            <strong>desembolso</strong>; si rechaza, queda en estado <strong>rechazado</strong>. Debe dejar un concepto claro y estructurado.
-          </CardDescription>
-        </CardHeader>
-        <CardContent class="space-y-4">
+        <Collapsible v-model:open="creditDirectorSectionCollapsibleOpen">
+          <CardHeader>
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0 space-y-1.5">
+                <CardTitle>Decisión final — director de crédito</CardTitle>
+                <CardDescription>
+                  Revise la radicación y el SCORE. Elija <strong>Aprobar para desembolso</strong>, <strong>Rechazar solicitud</strong>,
+                  <strong>Modificación</strong> o <strong>Respuesta aseguradora</strong> según corresponda. Debe dejar un concepto claro y estructurado.
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="shrink-0"
+                @click="creditDirectorSectionCollapsibleOpen = !creditDirectorSectionCollapsibleOpen"
+              >
+                <Icon :name="creditDirectorSectionCollapsibleOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="mr-2 h-4 w-4" />
+                {{ creditDirectorSectionCollapsibleOpen ? 'Contraer' : 'Expandir' }}
+              </Button>
+            </div>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent class="space-y-4 pt-0">
           <div class="rounded-lg border bg-muted/20 p-4 space-y-2">
             <p class="text-sm font-medium">
               Resumen Análisis y SCORE
@@ -2064,7 +2953,7 @@ onMounted(() => {
                 @update:model-value="onCreditDirectorExceptionUpdate"
               />
               <p class="text-xs text-muted-foreground">
-                Por defecto «No». Si elige «Sí», debe indicar la justificación según la parametrización (lista de motivos o texto libre si el catálogo está vacío). Si no es excepción y aprueba, seleccione el ente aprobador.
+                Por defecto «No». Si elige «Sí», debe indicar la justificación según la parametrización (lista de motivos o texto libre si el catálogo está vacío). Si aprueba, además seleccione el ente aprobador y cargue los documentos del ente cuando aplique.
               </p>
             </div>
             <div
@@ -2089,6 +2978,40 @@ onMounted(() => {
                 Queda guardado en la solicitud para informes y seguimiento.
               </p>
             </div>
+          </div>
+          <div
+            v-if="creditDirectorDecision === 'approved'"
+            class="space-y-1.5"
+          >
+            <Label for="credit_director_approver">Ente aprobador *</Label>
+            <Multiselect
+              id="credit_director_approver"
+              :model-value="creditDirectorApproverValue === '' ? null : creditDirectorApproverValue"
+              :options="creditDirectorApproverOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="true"
+              placeholder="Seleccionar aprobador"
+              class="multiselect-director"
+              @update:model-value="onCreditDirectorApproverUpdate"
+            />
+          </div>
+          <div
+            v-if="showApproverEntityDocumentsInCreditDirectorCard"
+            class="rounded-md border border-border/60 bg-muted/10 p-4 space-y-3"
+          >
+            <ApproverEntityDocumentsSection
+              :applicant="form.debtor"
+              :credit-application-id="application?.id ?? null"
+              :application-documents="(application?.documents ?? [])"
+              :disabled="!hasPermission('radicacion_approver_entity_documentos_subir') && !hasPermission('radicacion_documentos_subir') && !hasPermission('radicacion_approver_entity_ver')"
+              :auxiliary-pending-upload-hint="approverEntityDocumentUploadMode ? 'immediate' : 'draftSave'"
+              :interaction-mode="approverEntityDocumentationInteractionMode"
+              @update:applicant="(v) => { form.debtor = v }"
+              @document-removed="removeInsurabilityDocumentFromApplicationState"
+            />
           </div>
           <div
             v-if="creditDirectorIsExceptionChoice === 'yes' || (hasPermission('radicacion_marcar_privilegiado') && creditDirectorIsPrivilegedChoice === 'yes')"
@@ -2152,25 +3075,6 @@ onMounted(() => {
               </p>
             </div>
           </div>
-          <div
-            v-if="creditDirectorIsExceptionChoice === 'no' && creditDirectorDecision === 'approved'"
-            class="space-y-1.5"
-          >
-            <Label for="credit_director_approver">Ente aprobador *</Label>
-            <Multiselect
-              id="credit_director_approver"
-              :model-value="creditDirectorApproverValue === '' ? null : creditDirectorApproverValue"
-              :options="creditDirectorApproverOptions"
-              value-prop="value"
-              label="label"
-              mode="single"
-              :can-clear="false"
-              :searchable="true"
-              placeholder="Seleccionar aprobador"
-              class="multiselect-director"
-              @update:model-value="onCreditDirectorApproverUpdate"
-            />
-          </div>
           <div class="space-y-1.5">
             <Label for="credit_director_concept">Concepto estructurado *</Label>
             <textarea
@@ -2194,7 +3098,9 @@ onMounted(() => {
               Registrar decisión final
             </Button>
           </div>
-        </CardContent>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       <Card v-if="canDirectorDecide">
@@ -2245,25 +3151,30 @@ onMounted(() => {
       </Card>
 
       <Card v-if="canDocumentationDecide">
-        <CardHeader>
-          <CardTitle>Concepto revisión de documentos</CardTitle>
-          <CardDescription>
-            Registra el concepto final de revisión documental y define si la radicación pasa a análisis o se devuelve.
-          </CardDescription>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <p
-            v-if="(application?.documents ?? []).length > 0 && !allDocumentsMarkedReviewed"
-            class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
-          >
-            <template v-if="documentationReviewFlowActive">
-              Marca «Revisado» en cada documento del checklist auxiliar del deudor y de cada codeudor (pasos del formulario) antes de enviar el concepto.
-            </template>
-            <template v-else>
-              Marca «Revisado» en todos los documentos del deudor y de cada codeudor (pasos del formulario) antes de enviar el concepto.
-            </template>
-          </p>
-          <div v-if="hasPermission('radicacion_insurability_ver')" class="space-y-1.5">
+        <Collapsible v-model:open="documentationReviewConceptCollapsibleOpen">
+          <CardHeader>
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0 space-y-1.5">
+                <CardTitle>Concepto revisión de documentos</CardTitle>
+                <CardDescription>
+                  Registra el concepto final de revisión documental y define si la radicación pasa a análisis o se devuelve.
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="shrink-0"
+                @click="documentationReviewConceptCollapsibleOpen = !documentationReviewConceptCollapsibleOpen"
+              >
+                <Icon :name="documentationReviewConceptCollapsibleOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'" class="mr-2 h-4 w-4" />
+                {{ documentationReviewConceptCollapsibleOpen ? 'Contraer' : 'Expandir' }}
+              </Button>
+            </div>
+          </CardHeader>
+          <CollapsibleContent>
+            <CardContent class="space-y-4 pt-0">
+          <div class="space-y-1.5">
             <Label for="documentation_insurability">Requiere asegurabilidad</Label>
             <div class="flex justify-start">
               <Multiselect
@@ -2280,13 +3191,105 @@ onMounted(() => {
                 :searchable="false"
                 placeholder="Seleccionar"
                 class="multiselect-director w-full max-w-md"
-                @update:model-value="(v: unknown) => { documentationInsurabilityChoice = (v === 'yes' ? 'yes' : 'no') }"
+                @update:model-value="onDocumentationInsurabilityChoiceUpdate"
               />
             </div>
             <p class="text-xs text-muted-foreground leading-relaxed">
-              Si marca «Sí», la solicitud quedará marcada como que requiere asegurabilidad; complete los adjuntos cuando pueda (sección siguiente). Marque como revisados los del checklist auxiliar antes de enviar el concepto.
+              Si marca «Sí», complete los documentos del checklist debajo antes de registrar la decisión. El <span class="font-medium">estado catalogado de asegurabilidad</span> y su justificación los registra el <span class="font-medium">director de crédito</span> al aprobar la operación (o quien tenga permiso de actualizar estado en la sección de asegurabilidad). Marque como revisados los del checklist auxiliar.
             </p>
           </div>
+          <div
+            v-if="inlineInsurabilityDocumentsInDocReviewCard"
+            class="rounded-md border border-border/60 bg-muted/10 p-4 space-y-3"
+          >
+            <div>
+              <p class="text-sm font-medium text-foreground">
+                Documentos de asegurabilidad
+              </p>
+              <p class="text-xs text-muted-foreground mt-1">
+                Lista en Parametrización → Radicación → Asegurabilidad. Suba los ítems obligatorios del deudor cuando corresponda.
+              </p>
+            </div>
+            <InsurabilityDocumentsSection
+              :applicant="form.debtor"
+              :credit-application-id="application?.id ?? null"
+              :application-documents="(application?.documents ?? [])"
+              :disabled="!hasPermission('radicacion_insurability_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
+              :auxiliary-pending-upload-hint="(documentationUploadMode || insurabilityDocumentUploadMode) ? 'immediate' : 'draftSave'"
+              :interaction-mode="insurabilityDocumentationInteractionMode"
+              @update:applicant="(v) => { form.debtor = v }"
+              @document-removed="removeInsurabilityDocumentFromApplicationState"
+            />
+          </div>
+          <div
+            v-if="inlineFngDocumentsInDocReviewCard"
+            class="rounded-md border border-border/60 bg-muted/10 p-4 space-y-3"
+          >
+            <div>
+              <p class="text-sm font-medium text-foreground">
+                Documentos FNG (Fondo Nacional de Garantías)
+              </p>
+              <p class="text-xs text-muted-foreground mt-1">
+                Lista en Parametrización → Radicación (plantilla «FNG — documentos»). Los carga <span class="font-medium">revisión de documentos</span>, no el asesor. Obligatorios si en el paso 4 figura garantía FNG.
+              </p>
+            </div>
+            <FngDocumentsSection
+              :applicant="form.debtor"
+              :credit-application-id="application?.id ?? null"
+              :application-documents="(application?.documents ?? [])"
+              :disabled="!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
+              :auxiliary-pending-upload-hint="documentationUploadMode ? 'immediate' : 'draftSave'"
+              :interaction-mode="fngDocumentationInteractionMode"
+              @update:applicant="(v) => { form.debtor = v }"
+              @document-removed="removeInsurabilityDocumentFromApplicationState"
+            />
+          </div>
+          <div
+            v-if="documentationReviewFlowActive && canDocumentationDecide"
+            class="rounded-md border border-border/60 bg-muted/10 p-4 space-y-3"
+          >
+            <div class="space-y-1.5">
+              <Label for="documentation_credit_mortgage">¿La solicitud de crédito es hipotecario? *</Label>
+              <p class="text-xs text-muted-foreground">
+                Elija Sí o No. Es obligatorio al aprobar la revisión documental.
+              </p>
+              <Multiselect
+                v-if="hasPermission('radicacion_credit_mortgage_classify')"
+                id="documentation_credit_mortgage"
+                :model-value="documentationCreditMortgage === '' ? null : documentationCreditMortgage"
+                :options="documentationMortgageSelectOptions"
+                value-prop="value"
+                label="label"
+                mode="single"
+                :can-clear="true"
+                :searchable="false"
+                placeholder="Seleccionar Sí o No"
+                class="multiselect-director w-full max-w-md"
+                @update:model-value="onDocumentationCreditMortgageUpdate"
+              />
+              <p v-else class="text-sm text-muted-foreground">
+                Valor registrado: {{
+                  documentationCreditMortgage === 'yes'
+                    ? 'Sí'
+                    : documentationCreditMortgage === 'no'
+                      ? 'No'
+                      : '—'
+                }}
+                <span class="block text-xs mt-1">Indicar hipotecario requiere el permiso correspondiente en el rol.</span>
+              </p>
+            </div>
+          </div>
+          <p
+            v-if="(application?.documents ?? []).length > 0 && !allDocumentsMarkedReviewed"
+            class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
+          >
+            <template v-if="documentationReviewFlowActive">
+              Marca «Revisado» en cada documento del checklist auxiliar del deudor y de cada codeudor (pasos del formulario) antes de enviar el concepto.
+            </template>
+            <template v-else>
+              Marca «Revisado» en todos los documentos del deudor y de cada codeudor (pasos del formulario) antes de enviar el concepto.
+            </template>
+          </p>
           <div class="space-y-1.5">
             <Label for="documentation_decision">Decisión *</Label>
             <Multiselect
@@ -2323,28 +3326,9 @@ onMounted(() => {
               Enviar revisión de documentos
             </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card v-if="showInsurabilityDocumentsSection">
-        <CardHeader>
-          <CardTitle>Documentos de asegurabilidad</CardTitle>
-          <CardDescription>
-            Lista en Parametrización → Radicación → Asegurabilidad. Puede subirlos en cualquier etapa mientras la solicitud no esté en desembolso, rechazada o cancelada. Al enviar a director de crédito desde Análisis y SCORE, deben constar cargados los ítems obligatorios del checklist si la solicitud requiere asegurabilidad.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <InsurabilityDocumentsSection
-            :applicant="form.debtor"
-            :credit-application-id="application?.id ?? null"
-            :application-documents="(application?.documents ?? [])"
-            :disabled="!hasPermission('radicacion_insurability_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
-            :auxiliary-pending-upload-hint="(documentationUploadMode || insurabilityDocumentUploadMode) ? 'immediate' : 'draftSave'"
-            :interaction-mode="insurabilityDocumentationInteractionMode"
-            @update:applicant="(v) => { form.debtor = v }"
-            @document-removed="removeInsurabilityDocumentFromApplicationState"
-          />
-        </CardContent>
+            </CardContent>
+          </CollapsibleContent>
+        </Collapsible>
       </Card>
 
       <Card v-if="canAnalystDecide">
@@ -2615,6 +3599,15 @@ onMounted(() => {
                   {{ form.credito_garantia_fng === true ? 'Sí' : 'No' }}
                 </p>
               </div>
+              <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+                <p class="text-sm font-medium">¿Solicitud de crédito hipotecario?</p>
+                <p class="rounded-md border bg-muted/50 px-3 py-2 text-sm">
+                  {{ creditMortgageSummaryText(application?.credit_mortgage_options) }}
+                </p>
+                <p class="text-xs text-muted-foreground">
+                  Lo registra revisión de documentación al aprobar el concepto (cuando aplica).
+                </p>
+              </div>
             </div>
             <div
               v-if="(form.destination_activity_templates ?? []).length"
@@ -2834,8 +3827,17 @@ onMounted(() => {
             <template v-if="creditDirectorDecision === 'approved'">
               La solicitud pasará a estado <strong>desembolso</strong>. Verifique que el concepto quede completo antes de confirmar.
             </template>
-            <template v-else>
+            <template v-else-if="creditDirectorDecision === 'rejected'">
               La solicitud quedará <strong>rechazada</strong> de forma definitiva. Esta acción no se puede deshacer desde aquí.
+            </template>
+            <template v-else-if="creditDirectorDecision === 'returned_modification'">
+              La solicitud pasará a estado <strong>Modificación</strong> para corrección y nuevo flujo hasta una nueva revisión del director de crédito.
+            </template>
+            <template v-else-if="creditDirectorDecision === 'returned_insurer_response'">
+              La solicitud pasará a estado <strong>Respuesta aseguradora</strong>; al reenviar, irá priorizada al analista.
+            </template>
+            <template v-else>
+              Confirme la decisión del director de crédito.
             </template>
           </AlertDialogDescription>
         </AlertDialogHeader>

@@ -4,6 +4,7 @@ import {
   getCreditApplicationStatusBadgeVariant as getStatusBadgeVariant,
   getCreditApplicationStatusLabel as getStatusLabel,
   isCreditApplicationTerminalImmutable,
+  isCreditApplicationAdviserEditableStatus,
 } from '~/constants/credit-application-status'
 import { toast } from 'vue-sonner'
 
@@ -363,7 +364,7 @@ watch(deactivateDialogOpen, (v) => {
               <TableRow v-for="app in applications" :key="app.id">
                 <TableCell class="font-medium">
                   <NuxtLink
-                    v-if="(app.status === 'Draft' || app.status === 'Returned') && canOpenDraftForm"
+                    v-if="isCreditApplicationAdviserEditableStatus(app.status) && canOpenDraftForm"
                     :to="`/radicacion/editar/${app.id}`"
                     class="font-medium text-primary hover:underline"
                     title="Abrir formulario editable"
@@ -515,7 +516,7 @@ watch(deactivateDialogOpen, (v) => {
                     </PermissionGate>
                     <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
                       <Button
-                        v-if="app.status === 'Draft' || app.status === 'Returned'"
+                        v-if="isCreditApplicationAdviserEditableStatus(app.status)"
                         variant="warning"
                         size="sm"
                         class="gap-1.5"

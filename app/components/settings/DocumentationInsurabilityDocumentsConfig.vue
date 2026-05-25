@@ -2,11 +2,27 @@
 import { generateAuxiliaryChecklistItemKey } from '~/constants/auxiliary-documents-checklist'
 import type { DocumentationInsurabilityChecklistItem } from '~/constants/documentation-insurability-checklist'
 
-const props = defineProps<{
-  editedData: Record<string, unknown>
-  editing: boolean
-  canEdit: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    editedData: Record<string, unknown>
+    editing: boolean
+    canEdit: boolean
+    /** Si se informa, sustituye el texto de ayuda por defecto (p. ej. checklist ente aprobador). */
+    helpParagraph?: string | null
+  }>(),
+  { helpParagraph: null },
+)
+
+const defaultHelpParagraph =
+  'Documentos que el revisor puede solicitar cuando marca «Asegurabilidad: Sí» al registrar el concepto de revisión documental. Claves técnicas en inglés; textos visibles en español.'
+
+const resolvedHelpParagraph = computed(() => {
+  const h = props.helpParagraph
+  if (typeof h === 'string' && h.trim() !== '') {
+    return h.trim()
+  }
+  return defaultHelpParagraph
+})
 
 const emit = defineEmits<{
   'update:field': [payload: { key: string, value: unknown }]
@@ -56,8 +72,7 @@ function removeRow(index: number): void {
 <template>
   <div class="space-y-3">
     <p class="text-sm text-muted-foreground">
-      Documentos que el revisor puede solicitar cuando marca «Asegurabilidad: Sí» al registrar el concepto de revisión
-      documental. Claves técnicas en inglés; textos visibles en español.
+      {{ resolvedHelpParagraph }}
     </p>
     <div class="overflow-x-auto">
       <table class="w-full min-w-[28rem] table-fixed border-collapse text-sm rounded-lg border border-border">

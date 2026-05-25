@@ -19,7 +19,7 @@ import { mergeApplicantFromApi, normalizeFinancialInfoAliases } from '~/utils/me
 import { messageFromFetchError } from '~/utils/http-error-message'
 import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
-import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
+import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable, isCreditApplicationAdviserEditableStatus, isCreditApplicationReturnedToAdviser } from '~/constants/credit-application-status'
 import { RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK } from '~/constants/radicacion-form-catalog-fallbacks'
 import {
   RADICACION_CREDITO_GARANTIA_FNG_OPTIONS,
@@ -57,7 +57,7 @@ const skipNextDirectorReview = computed(() => Boolean(application.value?.skip_ne
 /** Devolución por revisión de documentos: solo adjuntos; el resto queda bloqueado en UI y el API ignora otros cambios. */
 const documentsOnlyEditMode = computed(
   () => Boolean(application.value?.skip_next_director_review)
-    && ['Returned', 'Draft'].includes(String(application.value?.status ?? '')),
+    && isCreditApplicationAdviserEditableStatus(application.value?.status),
 )
 
 const timelineEvents = computed(() =>
@@ -71,7 +71,7 @@ const showEditTraceability = computed((): boolean => {
   if (!application.value) {
     return false
   }
-  if (String(application.value.status ?? '') === 'Returned') {
+  if (isCreditApplicationReturnedToAdviser(String(application.value.status ?? ''))) {
     return true
   }
   if (application.value.skip_next_director_review === true) {
@@ -81,7 +81,7 @@ const showEditTraceability = computed((): boolean => {
     return true
   }
   return timelineEvents.value.some(
-    (e: { to_status?: string | null }) => String(e?.to_status ?? '') === 'Returned',
+    (e: { to_status?: string | null }) => isCreditApplicationReturnedToAdviser(String(e?.to_status ?? '')),
   )
 })
 /** Devolución: trazabilidad visible por defecto para ver motivo y actor sin salir del formulario. */
@@ -220,7 +220,7 @@ const stepsCodeudor = [
 const steps = computed(() => (addingCodeudor.value ? stepsCodeudor : stepsDeudor))
 const maxStep = computed(() => steps.value.length)
 
-const canEdit = computed(() => ['Draft', 'Returned'].includes(String(application.value?.status ?? '')))
+const canEdit = computed(() => isCreditApplicationAdviserEditableStatus(application.value?.status))
 const isTerminalClosed = computed(() => isCreditApplicationTerminalImmutable(application.value?.status))
 
 /** Última vez que la solicitud se guardó en el servidor (borrador abierto). */
@@ -1899,6 +1899,7 @@ onMounted(() => {
                   />
                   <p class="text-xs text-muted-foreground leading-relaxed">
                     Por defecto «No». Elija «Sí» solo si la operación cuenta con cobertura o garantía del FNG. Dato informativo para la solicitud.
+                    Si marca «Sí», los documentos FNG del checklist parametrizado los carga <span class="font-medium text-foreground">revisión de documentación</span> (no el asesor).
                   </p>
                 </div>
               </div>

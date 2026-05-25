@@ -161,6 +161,9 @@ const RADICACION_SUBGROUP_DEFINITIONS: Array<{ key: string; label: string; names
  */
 const RADICACION_PREFIX_SUBGROUPS: ReadonlyArray<{ key: string; label: string; prefix: string }> = [
   { key: 'insurability', label: 'Asegurabilidad', prefix: 'radicacion_insurability_' },
+  { key: 'fng', label: 'FNG (revisión documental)', prefix: 'radicacion_fng_' },
+  { key: 'credit_mortgage', label: 'Clasificación hipotecaria', prefix: 'radicacion_credit_mortgage_' },
+  { key: 'approver_entity', label: 'Ente aprobador (director de crédito)', prefix: 'radicacion_approver_entity_' },
   { key: 'sucursal_solicitud', label: 'Sucursal de la solicitud', prefix: 'radicacion_sucursal_' },
 ]
 
@@ -190,7 +193,16 @@ const RADICACION_TRAILING_ACTIONS = new Set(Object.keys(ACTION_LABELS))
 const PERMISSION_RESOURCE_LABELS: Record<string, string> = {
   insurability: 'asegurabilidad',
   insurability_documentos: 'documentos de asegurabilidad',
+  /** Variante con segmento en inglés (`documents`) que aún pueda existir en BD. */
+  insurability_documents: 'documentos de asegurabilidad',
+  insurability_status: 'estado de asegurabilidad',
   insurability_form: 'formato de asegurabilidad',
+  fng: 'FNG',
+  fng_documentos: 'documentos FNG',
+  credit_mortgage: 'crédito hipotecario',
+  approver_entity: 'ente aprobador',
+  approver_entity_ver: 'documentos del ente aprobador (solo lectura)',
+  approver_entity_documentos: 'documentos del ente aprobador',
   sucursal: 'sucursal de la solicitud',
 }
 
@@ -221,8 +233,20 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   radicacion_descargar_documentos: 'Ver y descargar adjuntos',
   radicacion_documentos_subir: 'Subir adjuntos',
   radicacion_documentos_editar: 'Editar títulos de adjuntos',
+  radicacion_insurability_ver: 'Ver asegurabilidad',
+  radicacion_approver_entity_ver: 'Ver documentos del ente aprobador',
+  radicacion_insurability_documentos_subir: 'Subir documentos de asegurabilidad',
   radicacion_insurability_documentos_editar: 'Editar títulos de documentos de asegurabilidad',
   radicacion_insurability_documentos_eliminar: 'Eliminar documentos de asegurabilidad',
+  radicacion_insurability_status_editar: 'Actualizar estado de asegurabilidad (plantilla: director de crédito; no analista ni revisión documental)',
+  radicacion_fng_ver: 'Ver documentos FNG',
+  radicacion_fng_documentos_subir: 'Subir documentos FNG',
+  radicacion_fng_documentos_editar: 'Editar títulos de documentos FNG',
+  radicacion_fng_documentos_eliminar: 'Eliminar documentos FNG',
+  radicacion_credit_mortgage_classify: 'Indicar si el crédito es hipotecario (revisión documental)',
+  radicacion_approver_entity_documentos_subir: 'Subir documentos del ente aprobador',
+  radicacion_approver_entity_documentos_editar: 'Editar títulos de documentos del ente aprobador',
+  radicacion_approver_entity_documentos_eliminar: 'Eliminar documentos del ente aprobador',
   reportes_ver: 'Ver reportes',
   radicacion_catalogos_ver: 'Ver catálogos',
   radicacion_catalogos_editar: 'Editar catálogos',

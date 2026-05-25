@@ -54,6 +54,16 @@ export interface FinancialInfoForm {
    * Persisted on debtor pivot `financial_info` JSON (revisión documental).
    */
   insurabilityDocuments?: Record<string, number | null>
+  /**
+   * Document IDs for documentation-fng-documents checklist, keyed by item key.
+   * Persisted on debtor pivot `financial_info` JSON (revisión documental).
+   */
+  fngDocuments?: Record<string, number | null>
+  /**
+   * Document IDs for credit-director-approver-documents checklist, keyed by item key.
+   * Persisted on debtor pivot `financial_info` JSON (revisión director de crédito).
+   */
+  approverEntityDocuments?: Record<string, number | null>
   solvency?: {
     /** (Pasivos + monto solicitado) ÷ Activos × 100 — se calcula en resumen */
     solvency?: number
@@ -120,6 +130,16 @@ export interface ApplicantForm {
    * `financial_info.insurabilityDocuments`.
    */
   insurabilityDocumentFiles?: Record<string, File | undefined>
+  /**
+   * Pending files for FNG checklist uploads (revisión documental). Uploaded via multipart; IDs stored in
+   * `financial_info.fngDocuments`.
+   */
+  fngDocumentFiles?: Record<string, File | undefined>
+  /**
+   * Pending files for approver-entity checklist (director de crédito). Uploaded via multipart; IDs stored in
+   * `financial_info.approverEntityDocuments`.
+   */
+  approverEntityDocumentFiles?: Record<string, File | undefined>
 }
 
 export interface CreditApplicationForm {

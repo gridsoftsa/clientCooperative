@@ -135,9 +135,12 @@ export const sectorsConfig: SectorConfig[] = [
       { value: 'job-position', label: 'Cargo' },
       { value: 'credit-destination', label: 'Destino del crédito' },
       { value: 'aprobadores', label: 'Aprobadores' },
+      { value: 'credit-director-approver-documents', label: 'Documentos del ente aprobador (director de crédito)' },
       { value: 'excepciones', label: 'Excepciones' },
       { value: 'auxiliary-documents', label: 'Documentos (módulo auxiliar)' },
       { value: 'documentation-insurability-documents', label: 'Asegurabilidad (revisión documental)' },
+      { value: 'documentation-fng-documents', label: 'FNG — documentos (revisión documental)' },
+      { value: 'insurability-status', label: 'Estado asegurabilidad' },
       { value: 'bancos', label: 'Bancos' },
       { value: 'ing', label: 'ING' },
     ],
@@ -147,7 +150,7 @@ export const sectorsConfig: SectorConfig[] = [
 const SECTOR_RADICACION_KEY = 'radicacion'
 
 /** Plantillas agrupadas bajo «Aprobadores» en /parametrizacion/radicacion. */
-const RADICACION_APROBADORES_TEMPLATE_VALUES = new Set<string>(['aprobadores'])
+const RADICACION_APROBADORES_TEMPLATE_VALUES = new Set<string>(['aprobadores', 'credit-director-approver-documents'])
 
 /** Plantillas agrupadas bajo «Excepciones» en /parametrizacion/radicacion. */
 const RADICACION_EXCEPCIONES_TEMPLATE_VALUES = new Set<string>(['excepciones'])
