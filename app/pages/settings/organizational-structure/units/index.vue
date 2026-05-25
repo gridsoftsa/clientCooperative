@@ -91,29 +91,6 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="flex flex-wrap items-center gap-4">
-        <div class="w-full max-w-xs space-y-2">
-          <Label for="foffice" class="leading-snug">Filtrar por agencia</Label>
-          <Select :model-value="filterOfficeId === null ? 'all' : String(filterOfficeId)" @update:model-value="(v) => { filterOfficeId = v === 'all' ? null : Number(v) }">
-            <SelectTrigger id="foffice">
-              <SelectValue placeholder="Todas" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                Todas las agencias
-              </SelectItem>
-              <SelectItem
-                v-for="o in offices"
-                :key="o.id"
-                :value="String(o.id)"
-              >
-                {{ o.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
       <Card>
         <CardHeader class="gap-2">
           <CardTitle class="leading-snug">
@@ -123,14 +100,37 @@ onMounted(async () => {
             Jerarquía por agencia, indicador TRD/producora documental y estado de cada dependencia.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div v-if="loading" class="flex justify-center py-12">
+        <CardContent class="space-y-4">
+          <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <div class="grid w-full gap-2 sm:max-w-xs sm:shrink-0">
+              <Label for="foffice" class="text-xs text-muted-foreground">Filtrar por agencia</Label>
+              <Select :model-value="filterOfficeId === null ? 'all' : String(filterOfficeId)" @update:model-value="(v) => { filterOfficeId = v === 'all' ? null : Number(v) }">
+                <SelectTrigger id="foffice" class="w-full">
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    Todas las agencias
+                  </SelectItem>
+                  <SelectItem
+                    v-for="o in offices"
+                    :key="o.id"
+                    :value="String(o.id)"
+                  >
+                    {{ o.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div v-if="loading" class="flex justify-center py-8">
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
           <div v-else-if="units.length === 0" class="py-12 text-center text-muted-foreground leading-relaxed">
             No hay áreas. Cree antes al menos una agencia.
           </div>
-          <Table v-else>
+          <div v-else class="border rounded-lg overflow-hidden">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
@@ -160,32 +160,36 @@ onMounted(async () => {
                     {{ u.is_active ? 'Activa' : 'Inactiva' }}
                   </Badge>
                 </TableCell>
-                <TableCell class="text-right space-x-2">
-                  <PermissionGate permission="estructura_org_editar">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      @click="router.push(`/settings/organizational-structure/units/${u.id}/edit`)"
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      v-if="u.is_active"
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      class="rounded-full gap-1.5 px-4 font-medium shadow-xs"
-                      :disabled="deactivatingId === u.id"
-                      @click="deactivateUnit(u.id)"
-                    >
-                      <Icon name="i-lucide-ban" class="size-4 shrink-0" />
-                      Desactivar
-                    </Button>
-                  </PermissionGate>
+                <TableCell class="text-right">
+                  <div class="flex flex-wrap justify-end gap-1">
+                    <PermissionGate permission="estructura_org_editar">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
+                        @click="router.push(`/settings/organizational-structure/units/${u.id}/edit`)"
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        v-if="u.is_active"
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
+                        :disabled="deactivatingId === u.id"
+                        @click="deactivateUnit(u.id)"
+                      >
+                        <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                        Desactivar
+                      </Button>
+                    </PermissionGate>
+                  </div>
                 </TableCell>
               </TableRow>
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

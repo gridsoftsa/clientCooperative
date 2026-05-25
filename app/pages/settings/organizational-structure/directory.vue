@@ -81,15 +81,6 @@ onMounted(() => {
         </h2>
       </div>
 
-      <div class="w-full max-w-sm space-y-2">
-        <Label for="q" class="sr-only">Buscar</Label>
-        <Input
-          id="q"
-          v-model="q"
-          placeholder="Nombre, cargo, área, correo…"
-        />
-      </div>
-
       <Card>
         <CardHeader class="gap-2">
           <CardTitle class="leading-snug">
@@ -99,14 +90,26 @@ onMounted(() => {
             Funcionarios con asignación vigente: cargo, área, agencia y datos de contacto.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div v-if="loading" class="flex justify-center py-12">
+        <CardContent class="space-y-4">
+          <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+            <div class="grid w-full gap-2 sm:max-w-md sm:shrink-0">
+              <Label for="q" class="text-xs text-muted-foreground">Buscar</Label>
+              <Input
+                id="q"
+                v-model="q"
+                placeholder="Nombre, cargo, área, correo…"
+                class="w-full"
+              />
+            </div>
+          </div>
+          <div v-if="loading" class="flex justify-center py-8">
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
           <div v-else-if="rows.length === 0" class="py-12 text-center text-muted-foreground leading-relaxed">
             No hay funcionarios con ubicación vigente.
           </div>
-          <Table v-else>
+          <div v-else class="border rounded-lg overflow-hidden">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
@@ -145,26 +148,29 @@ onMounted(() => {
               </TableRow>
             </TableBody>
           </Table>
-          <div v-if="pagination.last_page > 1" class="flex justify-center gap-2 border-t pt-6">
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="pagination.current_page <= 1 || loading"
-              @click="pagination.current_page--; fetchDirectory()"
-            >
-              Anterior
-            </Button>
-            <span class="text-sm text-muted-foreground self-center">
-              {{ pagination.current_page }} / {{ pagination.last_page }}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="pagination.current_page >= pagination.last_page || loading"
-              @click="pagination.current_page++; fetchDirectory()"
-            >
-              Siguiente
-            </Button>
+          </div>
+          <div v-if="!loading && pagination.last_page > 1" class="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
+            <p class="text-sm text-muted-foreground">
+              Página {{ pagination.current_page }} de {{ pagination.last_page }}
+            </p>
+            <div class="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                :disabled="pagination.current_page <= 1 || loading"
+                @click="pagination.current_page--; fetchDirectory()"
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                :disabled="pagination.current_page >= pagination.last_page || loading"
+                @click="pagination.current_page++; fetchDirectory()"
+              >
+                Siguiente
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

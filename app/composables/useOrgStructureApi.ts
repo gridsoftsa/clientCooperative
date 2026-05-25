@@ -75,13 +75,29 @@ export function useOrgStructureApi() {
     return res.data
   }
 
-  async function fetchStaff(opts?: { activeOnly?: boolean; q?: string }): Promise<OrgStaffListItem[]> {
-    const q: Record<string, string | number | boolean> = { per_page: 500 }
-    if (opts?.activeOnly)
-      q.active_only = true
-    if (opts?.q)
-      q.q = opts.q
-    const res = await $api<{ data: OrgStaffListItem[] }>('/organizational-structure/org-staff', { query: q })
+  async function fetchStaff(opts?: { activeOnly?: boolean; q?: string; orgUnitIds?: number[]; orgPositionIds?: number[] }): Promise<OrgStaffListItem[]> {
+    const qs = new URLSearchParams()
+    qs.set('per_page', '500')
+    if (opts?.activeOnly) {
+      qs.set('active_only', 'true')
+    }
+    if (opts?.q) {
+      qs.set('q', opts.q)
+    }
+    if (opts?.orgUnitIds?.length) {
+      for (const id of opts.orgUnitIds) {
+        qs.append('org_unit_ids[]', String(id))
+      }
+    }
+    if (opts?.orgPositionIds?.length) {
+      for (const id of opts.orgPositionIds) {
+        qs.append('org_position_ids[]', String(id))
+      }
+    }
+    const query = qs.toString()
+    const res = await $api<{ data: OrgStaffListItem[] }>(
+      `/organizational-structure/org-staff${query ? `?${query}` : ''}`,
+    )
     return res.data
   }
 
