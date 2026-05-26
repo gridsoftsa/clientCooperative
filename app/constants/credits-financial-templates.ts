@@ -139,7 +139,7 @@ export const sectorsConfig: SectorConfig[] = [
       { value: 'excepciones', label: 'Excepciones' },
       { value: 'auxiliary-documents', label: 'Documentos (módulo auxiliar)' },
       { value: 'documentation-insurability-documents', label: 'Asegurabilidad (revisión documental)' },
-      { value: 'documentation-fng-documents', label: 'FNG — documentos (revisión documental)' },
+      { value: 'documentation-fng-documents', label: 'FNG — documentos (asesor y revisión documental)' },
       { value: 'insurability-status', label: 'Estado asegurabilidad' },
       { value: 'bancos', label: 'Bancos' },
       { value: 'ing', label: 'ING' },

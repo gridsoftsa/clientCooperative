@@ -10,6 +10,7 @@ import {
   type DocumentationFngChecklistItem,
 } from '~/constants/documentation-fng-checklist'
 import { messageFromFetchError } from '~/utils/http-error-message'
+import { creditApplicationDocumentIdEquals, parseFinancialChecklistDocumentIdMap } from '~/utils/financial-checklist-document-id-map'
 
 const props = withDefaults(
   defineProps<{
@@ -27,6 +28,21 @@ const props = withDefaults(
     disabled?: boolean
     auxiliaryPendingUploadHint?: 'draftSave' | 'immediate'
     interactionMode?: 'full' | 'uploadOnly' | 'viewOnly'
+    /** Muestra «Revisado» y comentario por documento ya vinculado al ítem (revisión documental con decisión). */
+    showDocumentReviewControls?: boolean
+    /**
+     * `full`: todas las filas del checklist.
+     * `adviser_pack`: solo filas que carga el asesor (borrador / devolución).
+     * `documentation_review_only`: solo filas marcadas en parametrización como carga de revisión documental.
+     */
+    checklistScope?: 'full' | 'adviser_pack' | 'documentation_review_only'
+    /**
+     * Si es verdadero, las filas de revisión documental muestran badge «Obligatorio» aunque en plantilla sean opcionales
+     * (p. ej. al aprobar revisión documental con garantía FNG).
+     */
+    mandatoryBadgeForDocumentationReviewUploads?: boolean
+    /** Muestra badge «Obligatorio» aunque en plantilla la fila sea opcional (por clave). */
+    displayAsMandatoryRowKeys?: string[]
   }>(),
   {
     creditApplicationId: null,
@@ -34,6 +50,10 @@ const props = withDefaults(
     disabled: false,
     auxiliaryPendingUploadHint: 'draftSave',
     interactionMode: 'full',
+    showDocumentReviewControls: false,
+    checklistScope: 'full',
+    mandatoryBadgeForDocumentationReviewUploads: false,
+    displayAsMandatoryRowKeys: () => [],
   },
 )
 
@@ -49,23 +69,32 @@ const { viewDocumentInNewTab } = useDocumentDownload()
 const loadingConfig = ref(false)
 const checklistRows = ref<DocumentationFngChecklistItem[]>([])
 
+const visibleChecklistRows = computed((): DocumentationFngChecklistItem[] => {
+  let rows = checklistRows.value
+  const scope = props.checklistScope ?? 'full'
+  if (scope === 'adviser_pack') {
+    rows = rows.filter(r => !r.documentation_review_upload)
+  } else if (scope === 'documentation_review_only') {
+    rows = rows.filter(r => Boolean(r.documentation_review_upload))
+  }
+  return rows
+})
+
+function rowShowsMandatoryBadge(row: DocumentationFngChecklistItem): boolean {
+  if (row.required) {
+    return true
+  }
+  if (props.mandatoryBadgeForDocumentationReviewUploads && row.documentation_review_upload) {
+    return true
+  }
+  return props.displayAsMandatoryRowKeys.includes(row.key)
+}
+
 const financial = computed(() => (props.applicant.financial_info || {}) as FinancialInfoForm)
 
-const docIdsByKey = computed((): Record<string, number | null> => {
-  const raw = financial.value.fngDocuments
-  if (!raw || typeof raw !== 'object') {
-    return {}
-  }
-  const out: Record<string, number | null> = {}
-  for (const [k, v] of Object.entries(raw)) {
-    if (typeof v === 'number' && Number.isFinite(v)) {
-      out[k] = v
-    } else if (v === null) {
-      out[k] = null
-    }
-  }
-  return out
-})
+const docIdsByKey = computed((): Record<string, number | null> =>
+  parseFinancialChecklistDocumentIdMap(financial.value.fngDocuments),
+)
 
 function applicantIdForDocs(): number | undefined {
   return props.applicant.id
@@ -79,8 +108,45 @@ function docMetaForKey(key: string) {
   const aid = applicantIdForDocs()
   const list = props.applicationDocuments ?? []
   return list.find(d =>
-    d.id === id && (aid == null || d.applicant_id == null || d.applicant_id === aid),
-  ) ?? list.find(d => d.id === id) ?? null
+    creditApplicationDocumentIdEquals(d.id, id)
+    && (aid == null || d.applicant_id == null || Number(d.applicant_id) === aid),
+  ) ?? list.find(d => creditApplicationDocumentIdEquals(d.id, id)) ?? null
+}
+
+/** Misma fila que `applicationDocuments` del padre (mutación para revisión documental). */
+function documentReviewRowForKey(key: string): {
+  id: number
+  is_reviewed?: boolean
+  review_comment?: string | null
+} | null {
+  const docId = docIdsByKey.value[key]
+  if (docId == null || docId < 1) {
+    return null
+  }
+  const d = props.applicationDocuments?.find(x => creditApplicationDocumentIdEquals(x.id, docId))
+  if (!d || typeof d !== 'object') {
+    return null
+  }
+  return d as { id: number, is_reviewed?: boolean, review_comment?: string | null }
+}
+
+function fngReviewDomId(key: string): string {
+  const d = documentReviewRowForKey(key)
+  return d ? `fng_doc_reviewed_${key}_${d.id}` : `fng_doc_reviewed_${key}`
+}
+
+function setDocumentReviewChecked(key: string, v: unknown): void {
+  const d = documentReviewRowForKey(key)
+  if (d) {
+    d.is_reviewed = Boolean(v)
+  }
+}
+
+function setDocumentReviewComment(key: string, v: unknown): void {
+  const d = documentReviewRowForKey(key)
+  if (d) {
+    d.review_comment = String(v ?? '')
+  }
 }
 
 const uploadBlocked = computed(
@@ -97,17 +163,9 @@ const allowsRemoveUploaded = computed(
 
 function patchFngDocumentsMap(next: Record<string, number | null>): void {
   const raw = financial.value.fngDocuments
-  const prev: Record<string, number | null> = {}
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    for (const [k, v] of Object.entries(raw)) {
-      if (typeof v === 'number' && Number.isFinite(v)) {
-        prev[k] = v
-      }
-      else if (v === null) {
-        prev[k] = null
-      }
-    }
-  }
+  const prev = parseFinancialChecklistDocumentIdMap(
+    raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : undefined,
+  )
   patchApplicant({
     financial_info: {
       ...financial.value,
@@ -312,7 +370,13 @@ watch(
         Documentos de FNG (parametrizados)
       </h4>
       <p class="mt-1 text-xs text-muted-foreground leading-relaxed">
-        Lista definida en Parametrización → Radicación (plantilla «FNG — documentos», debajo de Asegurabilidad). Mismo criterio de archivos que el módulo auxiliar (PDF, ZIP, imagen · máximo 10 MB). No requiere marcar «Revisado» en esta sección. Si ya hay archivo cargado, use «Reemplazar archivo» para cambiarlo; «Eliminar» requiere permiso de eliminación (adjuntos o solo FNG).
+        Lista definida en Parametrización → Radicación (plantilla «FNG — documentos», debajo de Asegurabilidad). Mismo criterio de archivos que el módulo auxiliar (PDF, ZIP, imagen · máximo 10 MB).
+        <template v-if="showDocumentReviewControls">
+          Cuando corresponda, marque «Revisado» y una nota breve en cada ítem que ya tenga archivo cargado.
+        </template>
+        <template v-else>
+          Si ya hay archivo cargado, use «Reemplazar archivo» para cambiarlo; «Eliminar» requiere permiso de eliminación (adjuntos o solo FNG).
+        </template>
       </p>
     </div>
 
@@ -330,10 +394,17 @@ watch(
       si aún no se cargó la plantilla en base de datos.
     </p>
 
+    <p
+      v-else-if="visibleChecklistRows.length === 0"
+      class="text-sm text-muted-foreground"
+    >
+      No hay filas de checklist visibles con los filtros actuales. Revise parametrización o permisos.
+    </p>
+
     <ScrollArea v-else class="h-[min(65vh,28rem)] w-full rounded-lg border border-border bg-muted/15 p-2 sm:p-3">
       <ul class="list-none space-y-4 p-0 pr-3">
         <li
-          v-for="(row, idx) in checklistRows"
+          v-for="(row, idx) in visibleChecklistRows"
           :key="`${row.key}-${idx}`"
           class="overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm"
         >
@@ -341,11 +412,11 @@ watch(
             <div class="flex flex-wrap items-center gap-2">
               <span
                 class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
-                :class="row.required
+                :class="rowShowsMandatoryBadge(row)
                   ? 'border-amber-600/35 bg-amber-500/10 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100'
                   : 'border-muted-foreground/25 bg-background text-muted-foreground'"
               >
-                {{ row.required ? 'Obligatorio' : 'Opcional' }}
+                {{ rowShowsMandatoryBadge(row) ? 'Obligatorio' : 'Opcional' }}
               </span>
               <span class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 FNG
@@ -433,6 +504,29 @@ watch(
                     Eliminar
                   </button>
                 </div>
+              </div>
+              <div
+                v-if="showDocumentReviewControls && documentReviewRowForKey(row.key)"
+                class="mt-4 space-y-3 border-t border-border pt-4"
+              >
+                <div class="flex items-center gap-2">
+                  <Checkbox
+                    :id="fngReviewDomId(row.key)"
+                    :model-value="Boolean(documentReviewRowForKey(row.key)?.is_reviewed)"
+                    @update:model-value="setDocumentReviewChecked(row.key, $event)"
+                  />
+                  <Label
+                    :for="fngReviewDomId(row.key)"
+                    class="cursor-pointer text-xs font-medium"
+                  >
+                    Revisado
+                  </Label>
+                </div>
+                <Input
+                  :model-value="documentReviewRowForKey(row.key)?.review_comment ?? ''"
+                  placeholder="Descripción corta de revisión"
+                  @update:model-value="setDocumentReviewComment(row.key, $event)"
+                />
               </div>
             </template>
             <template v-else-if="showChecklistEmptyReadOnlyState(row.key)">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { Applicant, PaginatedApplicants } from '~/types/applicant'
+import { appendFileToFormData } from '~/utils/safe-upload-file-name'
 
 definePageMeta({
   layout: 'default',
@@ -176,7 +177,7 @@ async function applyApplicantImportFile(file: File) {
   importingApplicants.value = true
   try {
     const fd = new FormData()
-    fd.append('file', file)
+    appendFileToFormData(fd, file, 'importacion-solicitantes')
     const res = await $api<{ message: string, data: ApplicantImportSummary }>('/applicants/import', {
       method: 'POST',
       body: fd,

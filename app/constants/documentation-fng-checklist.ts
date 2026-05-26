@@ -1,11 +1,18 @@
 /**
- * Checklist de documentos FNG en revisión documental (`documentation-fng-documents`).
+ * Checklist de documentos FNG (`documentation-fng-documents`).
+ * Filas con `documentation_review_upload: true` se cargan solo en revisión documental (no en el paquete del asesor en borrador).
+ * Claves históricas sin el flag en JSON se tratan como «solo revisión» si están en esta lista.
  */
+export const FNG_DOCUMENTATION_REVIEW_ONLY_ROW_KEYS = ['fng_documentation_review_attachment'] as const
+
+const FNG_DOCUMENTATION_REVIEW_ONLY_ROW_KEY_SET = new Set<string>(FNG_DOCUMENTATION_REVIEW_ONLY_ROW_KEYS)
 
 export interface DocumentationFngChecklistItem {
   key: string
   label: string
   required: boolean
+  /** When true, only documentation review sees this row (not the adviser's draft pack). */
+  documentation_review_upload: boolean
 }
 
 /**
@@ -37,7 +44,13 @@ export function extractFngItemsFromCatalogResponse(body: unknown): Documentation
     if (!row || typeof row !== 'object') {
       continue
     }
-    const r = row as { key?: unknown; label?: unknown; required?: unknown; obligatorio?: unknown }
+    const r = row as {
+      key?: unknown
+      label?: unknown
+      required?: unknown
+      obligatorio?: unknown
+      documentation_review_upload?: unknown
+    }
     const key = String(r.key ?? '').trim()
     if (!key) {
       continue
@@ -45,10 +58,15 @@ export function extractFngItemsFromCatalogResponse(body: unknown): Documentation
     const required = Object.prototype.hasOwnProperty.call(r, 'required')
       ? Boolean(r.required)
       : Boolean(r.obligatorio)
+    let documentationReviewUpload = Boolean(r.documentation_review_upload)
+    if (!documentationReviewUpload && FNG_DOCUMENTATION_REVIEW_ONLY_ROW_KEY_SET.has(key)) {
+      documentationReviewUpload = true
+    }
     out.push({
       key,
       label: String(r.label ?? key),
       required,
+      documentation_review_upload: documentationReviewUpload,
     })
   }
   return out

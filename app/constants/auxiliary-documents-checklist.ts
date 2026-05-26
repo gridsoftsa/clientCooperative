@@ -5,6 +5,8 @@
  * `actividad-economica` (parametrización); no hay lista fija en el cliente.
  */
 
+import { safeClientUploadFileName } from '~/utils/safe-upload-file-name'
+
 export interface AuxiliaryChecklistItem {
   key: string
   /** Display text (Spanish in production). */
@@ -139,7 +141,7 @@ export function generateAuxiliaryChecklistItemKey(): string {
 export const AUXILIARY_UPLOAD_ALLOWED_EXTENSIONS = ['pdf', 'zip', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] as const
 
 export function isAuxiliaryUploadFileAllowed(file: File): boolean {
-  const name = file.name.toLowerCase()
+  const name = safeClientUploadFileName(file, 'auxiliar').toLowerCase()
   const ext = name.includes('.') ? name.slice(name.lastIndexOf('.') + 1) : ''
   if (!ext || !(AUXILIARY_UPLOAD_ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
     return false

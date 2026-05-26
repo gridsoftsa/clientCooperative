@@ -12,6 +12,7 @@ import {
   resolveAuxiliaryChecklistRows,
 } from '~/constants/auxiliary-documents-checklist'
 import { messageFromFetchError } from '~/utils/http-error-message'
+import { creditApplicationDocumentIdEquals, parseFinancialChecklistDocumentIdMap } from '~/utils/financial-checklist-document-id-map'
 
 const props = withDefaults(
   defineProps<{
@@ -75,19 +76,9 @@ const checklistRows = computed((): AuxiliaryChecklistItem[] =>
   ),
 )
 
-const docIdsByKey = computed((): Record<string, number | null> => {
-  const raw = financial.value.auxiliaryDocuments
-  if (!raw || typeof raw !== 'object') return {}
-  const out: Record<string, number | null> = {}
-  for (const [k, v] of Object.entries(raw)) {
-    if (typeof v === 'number' && Number.isFinite(v)) {
-      out[k] = v
-    } else if (v === null) {
-      out[k] = null
-    }
-  }
-  return out
-})
+const docIdsByKey = computed((): Record<string, number | null> =>
+  parseFinancialChecklistDocumentIdMap(financial.value.auxiliaryDocuments),
+)
 
 function applicantIdForDocs(): number | undefined {
   return props.applicant.id
@@ -99,8 +90,9 @@ function docMetaForKey(key: string) {
   const aid = applicantIdForDocs()
   const list = props.applicationDocuments ?? []
   return list.find(d =>
-    d.id === id && (aid == null || d.applicant_id == null || d.applicant_id === aid),
-  ) ?? list.find(d => d.id === id) ?? null
+    creditApplicationDocumentIdEquals(d.id, id)
+    && (aid == null || d.applicant_id == null || Number(d.applicant_id) === aid),
+  ) ?? list.find(d => creditApplicationDocumentIdEquals(d.id, id)) ?? null
 }
 
 /** Misma fila que `applicationDocuments` del padre (mutación para revisión documental). */
@@ -109,11 +101,11 @@ function documentReviewRowForKey(key: string): {
   is_reviewed?: boolean
   review_comment?: string | null
 } | null {
-  const meta = docMetaForKey(key)
-  if (!meta?.id) {
+  const docId = docIdsByKey.value[key]
+  if (docId == null || docId < 1) {
     return null
   }
-  const d = props.applicationDocuments?.find(x => x.id === meta.id)
+  const d = props.applicationDocuments?.find(x => creditApplicationDocumentIdEquals(x.id, docId))
   if (!d || typeof d !== 'object') {
     return null
   }

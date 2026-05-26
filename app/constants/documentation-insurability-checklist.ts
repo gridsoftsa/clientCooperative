@@ -6,6 +6,8 @@ export interface DocumentationInsurabilityChecklistItem {
   key: string
   label: string
   required: boolean
+  /** FNG (`documentation-fng-documents`): when true, row is for documentation review only. */
+  documentation_review_upload?: boolean
 }
 
 /**

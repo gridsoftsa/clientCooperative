@@ -503,7 +503,7 @@ const schemaDocumentationFngDocuments: TemplateConfigSchema = {
   sections: [
     {
       key: 'documentation_fng_documents',
-      title: 'Documentos FNG (revisión documental)',
+      title: 'Documentos FNG (asesor y revisión documental)',
       layout: 'documentationInsurabilityDocumentsChecklist',
       fields: [],
     },

@@ -31,6 +31,7 @@ import {
   extractApproverEntityItemsFromCatalogResponse,
   titleForApproverEntityDocumentUpload,
 } from '~/constants/documentation-approver-entity-checklist'
+import { appendFileToFormData } from '~/utils/safe-upload-file-name'
 
 definePageMeta({
   layout: 'default',
@@ -65,6 +66,18 @@ const insurabilityDocumentUploadMode = computed(
     && !isCreditApplicationTerminalImmutable(application.value?.status)
     && (
       hasPermission('radicacion_insurability_documentos_subir')
+      || hasPermission('radicacion_documentos_subir')
+    ),
+)
+
+/** Subida del checklist FNG (deudor): borrador, devolución, análisis, etc., si la solicitud tiene garantía FNG. */
+const fngDocumentUploadMode = computed(
+  () =>
+    Boolean(application.value?.id)
+    && !isCreditApplicationTerminalImmutable(application.value?.status)
+    && form.value.credito_garantia_fng === true
+    && (
+      hasPermission('radicacion_fng_documentos_subir')
       || hasPermission('radicacion_documentos_subir')
     ),
 )
@@ -234,9 +247,29 @@ const showFngEmbeddedWithStandaloneInsurability = computed(
 
 const showFngDocumentsSection = computed(
   () =>
-    hasPermission('radicacion_fng_ver')
-    && form.value.credito_garantia_fng === true,
+    form.value.credito_garantia_fng === true
+    && (
+      hasPermission('radicacion_fng_ver')
+      || (
+        documentationReviewFlowActive.value
+        && (
+          hasPermission('radicacion_documentos_decidir')
+          || hasPermission('radicacion_documentos_subir')
+          || hasPermission('radicacion_fng_documentos_subir')
+        )
+      )
+    ),
 )
+
+const fngAdviserPackDocumentationInteractionMode = computed((): 'full' | 'uploadOnly' | 'viewOnly' => {
+  if (!documentationReviewFlowActive.value) {
+    return fngDocumentationInteractionMode.value
+  }
+  if (!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')) {
+    return 'viewOnly'
+  }
+  return documentationUploadMode.value ? 'uploadOnly' : 'viewOnly'
+})
 
 const inlineFngDocumentsInDocReviewCard = computed(
   () => canDocumentationDecide.value && documentationReviewFlowActive.value && showFngDocumentsSection.value,
@@ -256,7 +289,7 @@ const fngDocumentationInteractionMode = computed((): 'full' | 'uploadOnly' | 'vi
   if (isCreditApplicationTerminalImmutable(application.value?.status)) {
     return 'viewOnly'
   }
-  if (String(application.value?.status ?? '') !== 'Documentation_Review') {
+  if (!form.value.credito_garantia_fng) {
     return 'viewOnly'
   }
   return 'full'
@@ -678,8 +711,78 @@ function auxiliaryDocumentIdsLinkedInReview(): Set<number> {
 }
 
 /**
- * En `Documentation_Review` solo exigimos «Revisado» en adjuntos del checklist auxiliar (mapa
- * `auxiliaryDocuments`). Los de asegurabilidad no usan «Revisado» en esta vista.
+ * IDs de `credit_application_documents` en `financial_info.fngDocuments` (deudor, codeudores y pivots).
+ */
+function fngDocumentIdsLinkedInReview(): Set<number> {
+  const s = new Set<number>()
+  const ingest = (fi: unknown): void => {
+    if (!fi || typeof fi !== 'object') {
+      return
+    }
+    const raw = (fi as { fngDocuments?: unknown }).fngDocuments
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return
+    }
+    for (const v of Object.values(raw)) {
+      let n: number
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        n = v
+      } else if (typeof v === 'string' && /^\d+$/.test(String(v).trim())) {
+        n = parseInt(String(v).trim(), 10)
+      } else {
+        continue
+      }
+      if (n > 0) {
+        s.add(n)
+      }
+    }
+  }
+  ingest(form.value.debtor.financial_info)
+  for (const co of form.value.co_debtors ?? []) {
+    ingest(co.financial_info)
+  }
+  const app = application.value
+  if (app) {
+    const rows = app.application_applicants ?? app.applicationApplicants ?? []
+    for (const r of rows as Array<{ financial_info?: unknown }>) {
+      ingest(parseJsonField(r.financial_info))
+    }
+  }
+  return s
+}
+
+/** IDs en `financial_info.insurabilityDocuments` del deudor (no exigen «Revisado» al aprobar revisión documental). */
+function insurabilityDocumentIdsLinkedInReview(): Set<number> {
+  const s = new Set<number>()
+  const ingest = (fi: unknown): void => {
+    if (!fi || typeof fi !== 'object') {
+      return
+    }
+    const raw = (fi as { insurabilityDocuments?: unknown }).insurabilityDocuments
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return
+    }
+    for (const v of Object.values(raw)) {
+      let n: number
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        n = v
+      } else if (typeof v === 'string' && /^\d+$/.test(String(v).trim())) {
+        n = parseInt(String(v).trim(), 10)
+      } else {
+        continue
+      }
+      if (n > 0) {
+        s.add(n)
+      }
+    }
+  }
+  ingest(form.value.debtor.financial_info)
+  return s
+}
+
+/**
+ * En `Documentation_Review` exigimos «Revisado» en ítems del checklist auxiliar (`auxiliaryDocuments`)
+ * y, si hay garantía FNG, en documentos enlazados en `fngDocuments`. Los de asegurabilidad no exigen «Revisado» aquí.
  */
 const allDocumentsMarkedReviewed = computed(() => {
   const docs = application.value?.documents ?? []
@@ -691,17 +794,74 @@ const allDocumentsMarkedReviewed = computed(() => {
     return docs.every((d: { is_reviewed?: boolean }) => Boolean(d.is_reviewed))
   }
   const auxIds = auxiliaryDocumentIdsLinkedInReview()
-  const useLinkedOnly = auxIds.size > 0
-  if (!useLinkedOnly) {
-    return docs.every((d: { is_reviewed?: boolean }) => Boolean(d.is_reviewed))
+  const fngIds = fngDocumentIdsLinkedInReview()
+  const useAux = auxIds.size > 0
+  const useFng = Boolean(form.value.credito_garantia_fng) && fngIds.size > 0
+  if (!useAux && !useFng) {
+    const insIds = insurabilityDocumentIdsLinkedInReview()
+    return docs.every((d: { id?: unknown, is_reviewed?: boolean }) => {
+      const id = Number(d.id)
+      if (!Number.isFinite(id)) {
+        return true
+      }
+      if (insIds.has(id)) {
+        return true
+      }
+      return Boolean(d.is_reviewed)
+    })
   }
   return docs.every((d: { id?: unknown, is_reviewed?: boolean }) => {
     const id = Number(d.id)
-    if (!Number.isFinite(id) || !auxIds.has(id)) {
+    if (!Number.isFinite(id)) {
       return true
     }
-    return Boolean(d.is_reviewed)
+    if (useAux && auxIds.has(id) && !Boolean(d.is_reviewed)) {
+      return false
+    }
+    if (useFng && fngIds.has(id) && !Boolean(d.is_reviewed)) {
+      return false
+    }
+    return true
   })
+})
+
+const documentationMortgageChoiceComplete = computed(
+  () => documentationCreditMortgage.value === 'yes' || documentationCreditMortgage.value === 'no',
+)
+
+/** Botón «Enviar revisión de documentos»: habilitado sin toasts previos (similar al analista). */
+const documentationReviewSubmitReady = computed(() => {
+  if (documentationDecision.value === '' || documentationConcept.value.trim().length < 5) {
+    return false
+  }
+  if (documentationDecision.value === 'returned') {
+    return true
+  }
+  if (documentationDecision.value === 'approved') {
+    return allDocumentsMarkedReviewed.value && documentationMortgageChoiceComplete.value
+  }
+  return false
+})
+
+const documentationReviewSubmitBlockedReason = computed((): string => {
+  if (documentationReviewSubmitReady.value) {
+    return ''
+  }
+  if (documentationDecision.value === '') {
+    return 'Seleccione la decisión (aprobar o devolver).'
+  }
+  if (documentationConcept.value.trim().length < 5) {
+    return 'Escriba el concepto (mínimo 5 caracteres).'
+  }
+  if (documentationDecision.value === 'approved') {
+    if (!allDocumentsMarkedReviewed.value) {
+      return 'Marque «Revisado» en los ítems del checklist auxiliar y en cada documento FNG ya cargado (si aplica); en otros adjuntos, excepto los del checklist de asegurabilidad, también debe quedar marcado.'
+    }
+    if (!documentationMortgageChoiceComplete.value) {
+      return 'Indique si el crédito es hipotecario (Sí o No).'
+    }
+  }
+  return ''
 })
 
 function parseReferences(val: unknown): any[] {
@@ -1260,23 +1420,8 @@ async function openDocumentationDecisionDialog() {
   if (submittingDocumentationDecision.value) {
     return
   }
-  if (!allDocumentsMarkedReviewed.value) {
-    toast.error('Marca como revisados todos los documentos del deudor y codeudores antes de registrar el concepto.')
+  if (!documentationReviewSubmitReady.value) {
     return
-  }
-  if (documentationDecision.value === '') {
-    toast.error('Selecciona la decisión de revisión de documentos.')
-    return
-  }
-  if (documentationConcept.value.trim().length < 5) {
-    toast.error('Escribe un concepto de revisión de documentos de al menos 5 caracteres.')
-    return
-  }
-  if (documentationDecision.value === 'approved') {
-    if (documentationCreditMortgage.value !== 'yes' && documentationCreditMortgage.value !== 'no') {
-      toast.error('Indique si la solicitud de crédito es hipotecario (elija Sí o No).')
-      return
-    }
   }
   try {
     await flushPendingDocumentationReviewUploadsBeforeDecision()
@@ -1295,12 +1440,7 @@ async function confirmDocumentationDecision() {
   if (!application.value?.id || documentationDecision.value === '' || submittingDocumentationDecision.value) {
     return
   }
-  if (!allDocumentsMarkedReviewed.value) {
-    toast.error('Marca como revisados todos los documentos del deudor y codeudores antes de registrar el concepto.')
-    return
-  }
-  if (documentationConcept.value.trim().length < 5) {
-    toast.error('Escribe un concepto de revisión de documentos de al menos 5 caracteres.')
+  if (!documentationReviewSubmitReady.value) {
     return
   }
   submittingDocumentationDecision.value = true
@@ -1773,7 +1913,7 @@ async function flushDebtorAuxiliaryDocumentUploads(): Promise<void> {
     const label = labelByKey[key] ?? key
     const fd = new FormData()
     fd.append('title', titleForAuxiliaryDocumentUpload(label))
-    fd.append('file', file)
+    appendFileToFormData(fd, file, 'auxiliar')
     const res = await $api<{ data: unknown }>(
       `/credit-applications/${applicationId}/documents?auxiliary_checklist=1`,
       { method: 'POST', body: fd },
@@ -1842,7 +1982,7 @@ async function flushDebtorInsurabilityDocumentUploads(): Promise<void> {
     const label = labelByKey[key] ?? key
     const fd = new FormData()
     fd.append('title', titleForInsurabilityDocumentUpload(label))
-    fd.append('file', file)
+    appendFileToFormData(fd, file, 'asegurabilidad')
     const res = await $api<{ data: unknown }>(
       `/credit-applications/${applicationId}/documents?insurability_checklist=1`,
       { method: 'POST', body: fd },
@@ -1864,7 +2004,7 @@ async function flushDebtorInsurabilityDocumentUploads(): Promise<void> {
 
 async function flushDebtorFngDocumentUploads(): Promise<void> {
   const applicationId = application.value?.id
-  if (!documentationUploadMode.value || typeof applicationId !== 'number' || applicationId < 1) {
+  if (!fngDocumentUploadMode.value || typeof applicationId !== 'number' || applicationId < 1) {
     return
   }
   if (!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')) {
@@ -1911,9 +2051,10 @@ async function flushDebtorFngDocumentUploads(): Promise<void> {
     const label = labelByKey[key] ?? key
     const fd = new FormData()
     fd.append('title', titleForFngDocumentUpload(label))
-    fd.append('file', file)
+    appendFileToFormData(fd, file, 'fng')
+    fd.append('fng_checklist', '1')
     const res = await $api<{ data: unknown }>(
-      `/credit-applications/${applicationId}/documents?fng_checklist=1`,
+      `/credit-applications/${applicationId}/documents`,
       { method: 'POST', body: fd },
     )
     const created = res.data
@@ -1980,7 +2121,7 @@ async function flushDebtorApproverEntityDocumentUploads(): Promise<void> {
     const label = labelByKey[key] ?? key
     const fd = new FormData()
     fd.append('title', titleForApproverEntityDocumentUpload(label))
-    fd.append('file', file)
+    appendFileToFormData(fd, file, 'ente-aprobador')
     const res = await $api<{ data: unknown }>(
       `/credit-applications/${applicationId}/documents?approver_entity_checklist=1`,
       { method: 'POST', body: fd },
@@ -2056,7 +2197,7 @@ async function flushCodeudorAuxiliaryDocumentUploads(applicantId: number): Promi
     const label = labelByKey[key] ?? key
     const fd = new FormData()
     fd.append('title', titleForAuxiliaryDocumentUpload(label))
-    fd.append('file', file)
+    appendFileToFormData(fd, file, 'auxiliar-codeudor')
     fd.append('applicant_id', String(applicantId))
     const res = await $api<{ data: unknown }>(
       `/credit-applications/${applicationId}/documents?auxiliary_checklist=1`,
@@ -2093,7 +2234,12 @@ async function patchDebtorDocumentationFinancialToServer(): Promise<void> {
     fngDocuments?: Record<string, number | null>
     approverEntityDocuments?: Record<string, number | null>
   } = {}
-  if (hasPermission('radicacion_documentos_subir')) {
+  /** Misma lógica que FNG: checklist auxiliar + tipo de actividad no deben quedar solo con `radicacion_documentos_subir`. */
+  const canPatchAuxiliaryOrActivity = hasPermission('radicacion_documentos_subir')
+    || hasPermission('radicacion_fng_documentos_subir')
+    || hasPermission('radicacion_fng_documentos_eliminar')
+    || hasPermission('radicacion_documentos_eliminar')
+  if (canPatchAuxiliaryOrActivity) {
     if (rawPatch.activity_type !== undefined) {
       patch.activity_type = rawPatch.activity_type
     }
@@ -2142,7 +2288,7 @@ async function patchDebtorDocumentationFinancialToServer(): Promise<void> {
 
     const insAllowed = insurabilityDocumentUploadMode.value
     const appAllowed = approverEntityDocumentUploadMode.value && status === 'Credit_Director_Review'
-    const fngAllowed = documentationUploadMode.value && status === 'Documentation_Review'
+    const fngAllowed = fngDocumentUploadMode.value
 
     if (!hasIns && !hasApp && !hasFng) {
       return
@@ -2384,7 +2530,7 @@ watch(
 watch(
   () => pendingFngFileKeys(form.value.debtor.fngDocumentFiles),
   async (pend, prevPend) => {
-    if (skipDocumentationFinancialPatch.value || !documentationUploadMode.value) {
+    if (skipDocumentationFinancialPatch.value || !fngDocumentUploadMode.value) {
       return
     }
     if (!pend || pend === prevPend) {
@@ -2792,7 +2938,7 @@ onMounted(() => {
                     Documentos FNG (Fondo Nacional de Garantías)
                   </p>
                   <p class="text-xs text-muted-foreground mt-1 leading-relaxed">
-                    La solicitud tiene garantía FNG. Revise o complete cargues desde aquí; la subida de archivos nuevos queda habilitada en <span class="font-medium">revisión de documentación</span> (según permisos de FNG o documentos).
+                    La solicitud tiene garantía FNG. El asesor carga el paquete parametrizado en borrador o devolución; aquí puede consultar o completar cargues según permisos.
                   </p>
                 </div>
                 <FngDocumentsSection
@@ -2800,8 +2946,9 @@ onMounted(() => {
                   :credit-application-id="application?.id ?? null"
                   :application-documents="(application?.documents ?? [])"
                   :disabled="!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
-                  :auxiliary-pending-upload-hint="documentationUploadMode ? 'immediate' : 'draftSave'"
+                  :auxiliary-pending-upload-hint="(documentationUploadMode || fngDocumentUploadMode) ? 'immediate' : 'draftSave'"
                   :interaction-mode="fngDocumentationInteractionMode"
+                  checklist-scope="adviser_pack"
                   @update:applicant="(v) => { form.debtor = v }"
                   @document-removed="removeInsurabilityDocumentFromApplicationState"
                 />
@@ -2824,7 +2971,7 @@ onMounted(() => {
                     Documentos FNG
                   </CardTitle>
                   <CardDescription class="text-left">
-                    Solo en <span class="font-medium">revisión de documentación</span> se pueden adjuntar ítems obligatorios si la solicitud tiene garantía FNG. Fuera de ese estado puede consultar lo ya cargado.
+                    Paquete FNG del asesor (borrador / devolución) y seguimiento en otras etapas. Un documento adicional lo carga <span class="font-medium">revisión de documentación</span> al decidir.
                   </CardDescription>
                 </div>
                 <Icon
@@ -2842,8 +2989,9 @@ onMounted(() => {
                 :credit-application-id="application?.id ?? null"
                 :application-documents="(application?.documents ?? [])"
                 :disabled="!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
-                :auxiliary-pending-upload-hint="documentationUploadMode ? 'immediate' : 'draftSave'"
+                :auxiliary-pending-upload-hint="(documentationUploadMode || fngDocumentUploadMode) ? 'immediate' : 'draftSave'"
                 :interaction-mode="fngDocumentationInteractionMode"
+                checklist-scope="adviser_pack"
                 @update:applicant="(v) => { form.debtor = v }"
                 @document-removed="removeInsurabilityDocumentFromApplicationState"
               />
@@ -3195,7 +3343,7 @@ onMounted(() => {
               />
             </div>
             <p class="text-xs text-muted-foreground leading-relaxed">
-              Si marca «Sí», complete los documentos del checklist debajo antes de registrar la decisión. El <span class="font-medium">estado catalogado de asegurabilidad</span> y su justificación los registra el <span class="font-medium">director de crédito</span> al aprobar la operación (o quien tenga permiso de actualizar estado en la sección de asegurabilidad). Marque como revisados los del checklist auxiliar.
+              Si marca «Sí», complete los documentos del checklist debajo antes de registrar la decisión. El <span class="font-medium">estado catalogado de asegurabilidad</span> y su justificación los registra el <span class="font-medium">director de crédito</span> al aprobar la operación (o quien tenga permiso de actualizar estado en la sección de asegurabilidad). Marque como revisados los del checklist auxiliar y, si la solicitud tiene garantía FNG, cada documento FNG ya cargado en la solicitud.
             </p>
           </div>
           <div
@@ -3223,26 +3371,53 @@ onMounted(() => {
           </div>
           <div
             v-if="inlineFngDocumentsInDocReviewCard"
-            class="rounded-md border border-border/60 bg-muted/10 p-4 space-y-3"
+            class="rounded-md border border-border/60 bg-muted/10 p-4 space-y-6"
           >
-            <div>
-              <p class="text-sm font-medium text-foreground">
-                Documentos FNG (Fondo Nacional de Garantías)
-              </p>
-              <p class="text-xs text-muted-foreground mt-1">
-                Lista en Parametrización → Radicación (plantilla «FNG — documentos»). Los carga <span class="font-medium">revisión de documentos</span>, no el asesor. Obligatorios si en el paso 4 figura garantía FNG.
-              </p>
+            <div class="space-y-3">
+              <div>
+                <p class="text-sm font-medium text-foreground">
+                  FNG — paquete del asesor (consulta)
+                </p>
+                <p class="text-xs text-muted-foreground mt-1">
+                  Revise cada archivo del paquete y marque «Revisado» (y una nota breve si aplica) antes de aprobar.
+                </p>
+              </div>
+              <FngDocumentsSection
+                :applicant="form.debtor"
+                :credit-application-id="application?.id ?? null"
+                :application-documents="(application?.documents ?? [])"
+                :disabled="!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
+                :auxiliary-pending-upload-hint="documentationUploadMode ? 'immediate' : 'draftSave'"
+                :interaction-mode="fngAdviserPackDocumentationInteractionMode"
+                :show-document-review-controls="showAuxiliaryDocumentReviewInChecklist"
+                checklist-scope="adviser_pack"
+                @update:applicant="(v) => { form.debtor = v }"
+                @document-removed="removeInsurabilityDocumentFromApplicationState"
+              />
             </div>
-            <FngDocumentsSection
-              :applicant="form.debtor"
-              :credit-application-id="application?.id ?? null"
-              :application-documents="(application?.documents ?? [])"
-              :disabled="!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
-              :auxiliary-pending-upload-hint="documentationUploadMode ? 'immediate' : 'draftSave'"
-              :interaction-mode="fngDocumentationInteractionMode"
-              @update:applicant="(v) => { form.debtor = v }"
-              @document-removed="removeInsurabilityDocumentFromApplicationState"
-            />
+            <div class="space-y-3 border-t border-border/60 pt-4">
+              <div>
+                <p class="text-sm font-medium text-foreground">
+                  FNG — carga de revisión documental
+                </p>
+                <p class="text-xs text-muted-foreground mt-1">
+                  Ítems del bloque «Revisión documental» en parametrización FNG. Obligatorios al aprobar si la operación tiene garantía FNG.
+                </p>
+              </div>
+              <FngDocumentsSection
+                :applicant="form.debtor"
+                :credit-application-id="application?.id ?? null"
+                :application-documents="(application?.documents ?? [])"
+                :disabled="!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
+                :auxiliary-pending-upload-hint="documentationUploadMode ? 'immediate' : 'draftSave'"
+                :interaction-mode="fngDocumentationInteractionMode"
+                :show-document-review-controls="showAuxiliaryDocumentReviewInChecklist"
+                checklist-scope="documentation_review_only"
+                mandatory-badge-for-documentation-review-uploads
+                @update:applicant="(v) => { form.debtor = v }"
+                @document-removed="removeInsurabilityDocumentFromApplicationState"
+              />
+            </div>
           </div>
           <div
             v-if="documentationReviewFlowActive && canDocumentationDecide"
@@ -3280,15 +3455,10 @@ onMounted(() => {
             </div>
           </div>
           <p
-            v-if="(application?.documents ?? []).length > 0 && !allDocumentsMarkedReviewed"
+            v-if="(application?.documents ?? []).length > 0 && !allDocumentsMarkedReviewed && !documentationReviewFlowActive"
             class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
           >
-            <template v-if="documentationReviewFlowActive">
-              Marca «Revisado» en cada documento del checklist auxiliar del deudor y de cada codeudor (pasos del formulario) antes de enviar el concepto.
-            </template>
-            <template v-else>
-              Marca «Revisado» en todos los documentos del deudor y de cada codeudor (pasos del formulario) antes de enviar el concepto.
-            </template>
+            Marca «Revisado» en todos los documentos del deudor y de cada codeudor (pasos del formulario) antes de enviar el concepto.
           </p>
           <div class="space-y-1.5">
             <Label for="documentation_decision">Decisión *</Label>
@@ -3319,7 +3489,8 @@ onMounted(() => {
           <div class="flex justify-end">
             <Button
               type="button"
-              :disabled="submittingDocumentationDecision || !allDocumentsMarkedReviewed"
+              :disabled="submittingDocumentationDecision || !documentationReviewSubmitReady"
+              :title="documentationReviewSubmitBlockedReason || undefined"
               @click="openDocumentationDecisionDialog"
             >
               <Icon v-if="submittingDocumentationDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />

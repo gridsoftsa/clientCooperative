@@ -86,7 +86,7 @@ const templateLabels: Record<string, string> = {
   'credit-destination': 'Destino del crédito',
   'auxiliary-documents': 'Documentos módulo auxiliar (por actividad económica)',
   'documentation-insurability-documents': 'Asegurabilidad (revisión documental)',
-  'documentation-fng-documents': 'FNG — documentos (revisión documental)',
+  'documentation-fng-documents': 'FNG — documentos (asesor y revisión documental)',
   'insurability-status': 'Estado asegurabilidad',
   aprobadores: 'Aprobadores (niveles de aprobación)',
   'credit-director-approver-documents': 'Documentos del ente aprobador (director de crédito)',

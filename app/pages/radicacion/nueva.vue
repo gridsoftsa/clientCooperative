@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
+import FngDocumentsSection from '~/components/radicacion/FngDocumentsSection.vue'
 import {
   sumUtilidadMensualFromTemplates,
   validateAllActivityTemplates,
@@ -17,6 +18,10 @@ import {
   resolveAuxiliaryChecklistRows,
   titleForAuxiliaryDocumentUpload,
 } from '~/constants/auxiliary-documents-checklist'
+import {
+  extractFngItemsFromCatalogResponse,
+  titleForFngDocumentUpload,
+} from '~/constants/documentation-fng-checklist'
 import { mergeApplicantFromApi } from '~/utils/merge-applicant-search'
 import { messageFromFetchError } from '~/utils/http-error-message'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
@@ -28,6 +33,7 @@ import {
   creditoGarantiaFngBooleanToSelectValue,
   selectValueToCreditoGarantiaFngBoolean,
 } from '~/constants/radicacion-credito-fng-yes-no'
+import { appendFileToFormData } from '~/utils/safe-upload-file-name'
 
 definePageMeta({
   layout: 'default',
@@ -816,6 +822,11 @@ function validateAllDocumentsBeforeUpload(): string | null {
       }
     }
   }
+  for (const f of Object.values(form.value.debtor.fngDocumentFiles ?? {})) {
+    if (f instanceof File && f.size > MAX_DOCUMENT_SIZE) {
+      return `"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`
+    }
+  }
   return null
 }
 
@@ -843,7 +854,7 @@ async function uploadAllDocuments(
       }
       const fd = new FormData()
       fd.append('title', doc.title.trim())
-      fd.append('file', doc.file)
+      appendFileToFormData(fd, doc.file, 'adjunto')
       await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
     }
 
@@ -880,7 +891,7 @@ async function uploadAllDocuments(
         const label = labelByKey[key] ?? key
         const fd = new FormData()
         fd.append('title', titleForAuxiliaryDocumentUpload(label))
-        fd.append('file', file)
+        appendFileToFormData(fd, file, 'auxiliar')
         fd.append('auxiliary_checklist', '1')
         const res = await $api<{ data: { id: number } }>(
           `/credit-applications/${applicationId}/documents`,
@@ -900,6 +911,56 @@ async function uploadAllDocuments(
         })
       }
     }
+
+    let didFngUpload = false
+    if (form.value.credito_garantia_fng) {
+      const fngFiles = form.value.debtor.fngDocumentFiles
+      if (fngFiles && Object.keys(fngFiles).length > 0) {
+        let labelByKeyFng: Record<string, string> = {}
+        try {
+          const cfgFng = await $api<unknown>('/catalogs/template-flat-data/documentation-fng-documents')
+          const rowsFng = extractFngItemsFromCatalogResponse(cfgFng)
+          labelByKeyFng = Object.fromEntries(rowsFng.map(r => [r.key, r.label]))
+        } catch {
+          labelByKeyFng = {}
+        }
+        const fiFng = { ...(typeof fiRaw === 'object' && fiRaw ? fiRaw : {}) } as Record<string, unknown>
+        const fngDocMap = { ...(typeof fiFng.fngDocuments === 'object' && fiFng.fngDocuments && !Array.isArray(fiFng.fngDocuments)
+          ? (fiFng.fngDocuments as Record<string, number | null>)
+          : {}) }
+
+        for (const [key, file] of Object.entries(fngFiles)) {
+          if (!(file instanceof File)) {
+            continue
+          }
+          const prevIdFng = fngDocMap[key]
+          if (typeof prevIdFng === 'number' && prevIdFng > 0) {
+            await $api(`/credit-applications/${applicationId}/documents/${prevIdFng}`, { method: 'DELETE' })
+          }
+          const labelFng = labelByKeyFng[key] ?? key
+          const fdFng = new FormData()
+          fdFng.append('title', titleForFngDocumentUpload(labelFng))
+          appendFileToFormData(fdFng, file, 'fng')
+          fdFng.append('fng_checklist', '1')
+          const resFng = await $api<{ data: { id: number } }>(
+            `/credit-applications/${applicationId}/documents`,
+            { method: 'POST', body: fdFng },
+          )
+          fngDocMap[key] = resFng.data.id
+          didFngUpload = true
+        }
+
+        if (didFngUpload) {
+          form.value.debtor.financial_info = { ...fiFng, fngDocuments: fngDocMap }
+          form.value.debtor.fngDocumentFiles = {}
+          await $csrf()
+          await $api(`/credit-applications/${applicationId}`, {
+            method: 'PUT',
+            body: payloadWithoutDocuments('Draft'),
+          })
+        }
+      }
+    }
   }
 
   // Codeudores (desde tabla co_debtors)
@@ -916,7 +977,7 @@ async function uploadAllDocuments(
       }
       const fd = new FormData()
       fd.append('title', doc.title.trim())
-      fd.append('file', doc.file)
+      appendFileToFormData(fd, doc.file, 'adjunto')
       fd.append('applicant_id', String(applicantId))
       await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
     }
@@ -954,7 +1015,7 @@ async function uploadAllDocuments(
         const labelCo = labelByKeyCo[key] ?? key
         const fdAux = new FormData()
         fdAux.append('title', titleForAuxiliaryDocumentUpload(labelCo))
-        fdAux.append('file', file)
+        appendFileToFormData(fdAux, file, 'auxiliar-codeudor')
         fdAux.append('auxiliary_checklist', '1')
         fdAux.append('applicant_id', String(applicantId))
         const resCo = await $api<{ data: { id: number } }>(
@@ -1057,7 +1118,7 @@ async function saveCodeudor() {
         if (!doc.file || !doc.title?.trim()) continue
         const fd = new FormData()
         fd.append('title', doc.title.trim())
-        fd.append('file', doc.file)
+        appendFileToFormData(fd, doc.file, 'adjunto')
         fd.append('applicant_id', String(createdCoDebtor.applicant_id))
         await $api(`/credit-applications/${updated.id}/documents`, { method: 'POST', body: fd })
       }
@@ -1094,7 +1155,7 @@ async function saveCodeudor() {
           const lbl = labelBySave[key] ?? key
           const fdAux = new FormData()
           fdAux.append('title', titleForAuxiliaryDocumentUpload(lbl))
-          fdAux.append('file', file)
+          appendFileToFormData(fdAux, file, 'auxiliar-codeudor')
           fdAux.append('auxiliary_checklist', '1')
           fdAux.append('applicant_id', String(createdCoDebtor.applicant_id))
           const resS = await $api<{ data: { id: number } }>(
@@ -1796,9 +1857,43 @@ onMounted(() => {
                   @update:model-value="form.credito_garantia_fng = selectValueToCreditoGarantiaFngBoolean($event)"
                 />
                 <p class="text-xs text-muted-foreground leading-relaxed">
-                  Por defecto «No». Elija «Sí» solo si la operación cuenta con cobertura o garantía del FNG. Dato informativo para la solicitud.
+                  Por defecto «No». Elija «Sí» solo si la operación cuenta con cobertura o garantía del FNG. Si marca «Sí», cargue el paquete FNG en el bloque siguiente; <span class="font-medium text-foreground">revisión de documentación</span> adjunta un único documento de respaldo al aprobar.
                 </p>
               </div>
+            </div>
+            <div
+              v-if="form.credito_garantia_fng"
+              class="space-y-3 sm:col-span-2 lg:col-span-3"
+            >
+              <Card class="border-border/80">
+                <CardHeader class="pb-2">
+                  <CardTitle class="text-base">
+                    Documentos FNG (Fondo Nacional de Garantías)
+                  </CardTitle>
+                  <CardDescription class="text-xs leading-relaxed">
+                    Checklist según Parametrización → Radicación (plantilla «FNG — documentos»). Los archivos se suben cuando ya existe un borrador en el servidor.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent class="pt-0 space-y-3">
+                  <p
+                    v-if="!draftId"
+                    class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
+                  >
+                    Para adjuntar el paquete FNG, primero debe existir el borrador: complete el paso 1 del deudor y espere el guardado automático, o pulse <span class="font-medium">Guardar borrador</span>. Cuando aparezca el checklist, elija archivos y guarde de nuevo para persistirlos.
+                  </p>
+                  <FngDocumentsSection
+                    v-else
+                    :applicant="form.debtor"
+                    :credit-application-id="draftId"
+                    :application-documents="[]"
+                    :disabled="!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
+                    auxiliary-pending-upload-hint="draftSave"
+                    interaction-mode="full"
+                    checklist-scope="adviser_pack"
+                    @update:applicant="(v) => { form.debtor = v }"
+                  />
+                </CardContent>
+              </Card>
             </div>
           </div>
           <div class="space-y-4 border-t border-border pt-6">
