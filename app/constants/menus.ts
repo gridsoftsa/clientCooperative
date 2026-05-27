@@ -38,6 +38,12 @@ export const navMenu: NavMenu[] = [
         permission: 'radicacion_ver',
       },
       {
+        title: 'Documentación',
+        icon: 'i-lucide-folder-archive',
+        link: '/documentacion',
+        permission: 'documentacion_ver',
+      },
+      {
         title: 'Solicitantes',
         icon: 'i-lucide-user-check',
         link: '/solicitantes',

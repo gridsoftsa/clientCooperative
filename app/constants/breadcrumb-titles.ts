@@ -15,6 +15,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'create': 'Crear',
   'credits': 'Créditos',
   'display': 'Pantalla',
+  'documentacion': 'Documentación',
   'edit': 'Editar',
   'editar': 'Editar',
   'email': 'Correo',
