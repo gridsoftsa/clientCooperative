@@ -80,6 +80,16 @@ export const REPORTS_CATALOG: ReportCatalogItem[] = [
     note: 'Solo radicaciones creadas en el rango; cada columna promedia tramos completos observados (N).',
   },
   {
+    slug: 'promedio-demora-excluidos',
+    title: 'Excluidos de demora',
+    summary:
+      'Casos excluidos del indicador de demora: devoluciones por modificación del director de crédito y radicaciones marcadas como inmobiliaria/asegurabilidad en revisión documental.',
+    excelSheet: 'EXCLUIDOS DEMORA',
+    status: 'available',
+    dataSource: 'applications',
+    note: 'Este reporte separa casos especiales para no distorsionar los indicadores de asesor ni del flujo estándar.',
+  },
+  {
     slug: 'indicador',
     title: 'Indicador',
     summary:
