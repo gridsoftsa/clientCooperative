@@ -225,11 +225,21 @@ async function discardSelected() {
   }
 }
 
-async function downloadIntakeFile(fileId: number, filename: string) {
+const openingIntakeFileId = ref<number | null>(null)
+
+async function viewIntakeFile(fileId: number, mimeType?: string | null) {
   if (!selectedIntake.value) {
     return
   }
-  await ventanillaApi.downloadIntakeFile(selectedIntake.value.id, fileId, filename)
+  openingIntakeFileId.value = fileId
+  errorMessage.value = ''
+  try {
+    await ventanillaApi.viewIntakeFileInNewTab(selectedIntake.value.id, fileId, mimeType ?? undefined)
+  } catch {
+    errorMessage.value = 'No se pudo abrir el archivo'
+  } finally {
+    openingIntakeFileId.value = null
+  }
 }
 </script>
 
@@ -350,8 +360,18 @@ async function downloadIntakeFile(fileId: number, filename: string) {
                 class="flex items-center justify-between rounded-lg border p-2 text-sm"
               >
                 <span>{{ file.title }} · {{ file.original_name }}</span>
-                <Button variant="ghost" size="sm" @click="downloadIntakeFile(file.id, file.original_name)">
-                  Descargar
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  :disabled="openingIntakeFileId === file.id"
+                  @click="viewIntakeFile(file.id, file.mime_type)"
+                >
+                  <Icon
+                    :name="openingIntakeFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+                    class="mr-1 size-4"
+                    :class="{ 'animate-spin': openingIntakeFileId === file.id }"
+                  />
+                  {{ openingIntakeFileId === file.id ? 'Abriendo…' : 'Ver' }}
                 </Button>
               </div>
             </div>

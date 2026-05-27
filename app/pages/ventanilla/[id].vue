@@ -19,8 +19,8 @@ const loading = ref(true)
 const errorMessage = ref('')
 const actionMessage = ref('')
 const actionLoading = ref('')
-const downloadingFileId = ref<number | null>(null)
-const downloadingReceipt = ref(false)
+const openingFileId = ref<number | null>(null)
+const openingReceipt = ref(false)
 const selectedAssignedUserId = ref<number | null>(null)
 const assignmentNote = ref('')
 const responseText = ref('')
@@ -186,32 +186,32 @@ async function refreshSla() {
   })
 }
 
-async function downloadFile(fileId: number, name: string) {
-  if (!hasPermission('ventanilla_archivos_descargar')) {
+async function viewFile(fileId: number, mimeType?: string | null) {
+  if (!hasPermission('ventanilla_archivos_ver')) {
     return
   }
-  downloadingFileId.value = fileId
+  openingFileId.value = fileId
   try {
-    await ventanillaApi.downloadFilingFile(id.value, fileId, name)
+    await ventanillaApi.viewFilingFileInNewTab(id.value, fileId, mimeType ?? undefined)
   } catch {
-    errorMessage.value = 'No se pudo descargar el archivo'
+    errorMessage.value = 'No se pudo abrir el archivo'
   } finally {
-    downloadingFileId.value = null
+    openingFileId.value = null
   }
 }
 
-async function downloadReceipt() {
+async function viewReceipt() {
   if (!filing.value) {
     return
   }
 
-  downloadingReceipt.value = true
+  openingReceipt.value = true
   try {
-    await ventanillaApi.downloadReceipt(filing.value.id, `comprobante-${filing.value.filing_number}.pdf`)
+    await ventanillaApi.viewReceiptInNewTab(filing.value.id)
   } catch {
-    errorMessage.value = 'No se pudo descargar el comprobante'
+    errorMessage.value = 'No se pudo abrir el comprobante'
   } finally {
-    downloadingReceipt.value = false
+    openingReceipt.value = false
   }
 }
 </script>
@@ -249,11 +249,11 @@ async function downloadReceipt() {
           variant="outline"
           size="sm"
           class="ml-auto"
-          :disabled="downloadingReceipt"
-          @click="downloadReceipt"
+          :disabled="openingReceipt"
+          @click="viewReceipt"
         >
-          <Icon name="i-lucide-file-down" class="mr-1 size-4" />
-          {{ downloadingReceipt ? 'Descargando…' : 'Comprobante PDF' }}
+          <Icon name="i-lucide-file-text" class="mr-1 size-4" />
+          {{ openingReceipt ? 'Abriendo…' : 'Ver comprobante PDF' }}
         </Button>
       </div>
       <p v-if="actionMessage" class="text-sm text-emerald-600">
@@ -573,13 +573,18 @@ async function downloadReceipt() {
                 </p>
               </div>
               <Button
-                v-if="hasPermission('ventanilla_archivos_descargar')"
+                v-if="hasPermission('ventanilla_archivos_ver')"
                 variant="outline"
                 size="sm"
-                :disabled="downloadingFileId === file.id"
-                @click="downloadFile(file.id, file.original_name)"
+                :disabled="openingFileId === file.id"
+                @click="viewFile(file.id, file.mime_type)"
               >
-                {{ downloadingFileId === file.id ? 'Descargando…' : 'Descargar' }}
+                <Icon
+                  :name="openingFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+                  class="mr-1 size-4"
+                  :class="{ 'animate-spin': openingFileId === file.id }"
+                />
+                {{ openingFileId === file.id ? 'Abriendo…' : 'Ver' }}
               </Button>
             </li>
           </ul>

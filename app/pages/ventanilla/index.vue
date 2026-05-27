@@ -31,6 +31,7 @@ const filterTrafficLight = ref('all')
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
 const pagination = ref({ current_page: 1, last_page: 1, per_page: 15, total: 0 })
+let dateFilterDebounce: ReturnType<typeof setTimeout> | null = null
 
 const canCreate = computed(() => hasPermission('ventanilla_crear'))
 const canClassify = computed(() => hasPermission('ventanilla_clasificar'))
@@ -98,6 +99,13 @@ onMounted(async () => {
   await loadList()
 })
 
+onUnmounted(() => {
+  if (dateFilterDebounce) {
+    clearTimeout(dateFilterDebounce)
+    dateFilterDebounce = null
+  }
+})
+
 function functionalLabel(row: VentanillaFilingSummary): string {
   return row.functional_type_label
     ?? catalog.value?.functional_types.find((t: VentanillaFunctionalTypeRow) => t.key === row.functional_type_key)?.label
@@ -128,6 +136,16 @@ function filterAndLoad() {
   pagination.value.current_page = 1
   loadList()
 }
+
+watch([filterDateFrom, filterDateTo], () => {
+  if (dateFilterDebounce) {
+    clearTimeout(dateFilterDebounce)
+  }
+  dateFilterDebounce = setTimeout(() => {
+    dateFilterDebounce = null
+    filterAndLoad()
+  }, 300)
+})
 
 function trafficLightLabel(status: string): string {
   if (status === 'all') {
@@ -163,15 +181,15 @@ function trafficLightLabel(status: string): string {
 
     <Card>
       <CardHeader class="pb-3">
-        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <div class="flex flex-col gap-3 xl:flex-row xl:flex-nowrap xl:items-end">
           <Input
             v-model="search"
             placeholder="Buscar por número, asunto o remitente…"
-            class="md:col-span-2"
+            class="min-w-0 xl:min-w-[10rem] xl:flex-1"
             @keyup.enter="filterAndLoad"
           />
           <Select v-model="filterType" @update:model-value="filterAndLoad">
-            <SelectTrigger>
+            <SelectTrigger class="w-full xl:w-[8.5rem]">
               <SelectValue placeholder="Tipo" />
             </SelectTrigger>
             <SelectContent>
@@ -190,7 +208,7 @@ function trafficLightLabel(status: string): string {
             </SelectContent>
           </Select>
           <Select v-model="filterFunctionalType" @update:model-value="filterAndLoad">
-            <SelectTrigger>
+            <SelectTrigger class="w-full xl:w-[10.5rem]">
               <SelectValue placeholder="Tipo funcional" />
             </SelectTrigger>
             <SelectContent>
@@ -207,7 +225,7 @@ function trafficLightLabel(status: string): string {
             </SelectContent>
           </Select>
           <Select v-model="filterTrafficLight" @update:model-value="filterAndLoad">
-            <SelectTrigger>
+            <SelectTrigger class="w-full xl:w-[9.5rem]">
               <SelectValue placeholder="Semáforo">
                 {{ trafficLightLabel(filterTrafficLight) }}
               </SelectValue>
@@ -227,21 +245,29 @@ function trafficLightLabel(status: string): string {
               </SelectItem>
             </SelectContent>
           </Select>
-          <Input v-model="filterDateFrom" type="date" @change="filterAndLoad" />
-          <Input v-model="filterDateTo" type="date" @change="filterAndLoad" />
-          <div class="flex gap-2 md:col-span-2 xl:col-span-6">
+          <div class="min-w-0 shrink-0 xl:w-[12.5rem]">
+            <DateRangeStringPicker
+              id="ventanilla-index-date-range"
+              v-model:from="filterDateFrom"
+              v-model:to="filterDateTo"
+              placeholder-text="Rango de fechas"
+              compact
+              full-width
+            />
+          </div>
+          <div class="flex shrink-0 gap-2">
             <Button variant="secondary" :disabled="loading" @click="filterAndLoad">
               <Icon name="i-lucide-search" class="mr-2 size-4" />
               Buscar
             </Button>
             <Button v-if="hasActiveFilters" variant="ghost" :disabled="loading" @click="resetFilters">
-              Limpiar filtros
+              Limpiar
             </Button>
           </div>
-          <p v-if="errorMessage" class="text-destructive text-sm md:col-span-2 xl:col-span-6">
-            {{ errorMessage }}
-          </p>
         </div>
+        <p v-if="errorMessage" class="text-destructive mt-2 text-sm">
+          {{ errorMessage }}
+        </p>
       </CardHeader>
       <CardContent>
         <div v-if="loading" class="py-8 text-center text-muted-foreground text-sm">

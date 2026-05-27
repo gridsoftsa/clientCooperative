@@ -210,6 +210,7 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   ventanilla_gestionar: 'Gestionar ciclo de vida en ventanilla',
   ventanilla_anular: 'Anular radicados de ventanilla',
   ventanilla_sla_configurar: 'Configurar SLA de ventanilla',
+  ventanilla_archivos_ver: 'Ver archivos de ventanilla',
   ventanilla_archivos_descargar: 'Descargar archivos de ventanilla',
   ventanilla_override_respuesta: 'Ajustar obligación de respuesta',
   plantilla_score_ver: 'Ver plantilla SCORE',

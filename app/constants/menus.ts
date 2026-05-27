@@ -133,6 +133,17 @@ export const navMenu: NavMenu[] = [
         ],
       },
       {
+        title: 'Ventanilla única',
+        icon: 'i-lucide-inbox',
+        link: '/parametrizacion/ventanilla-unica',
+        anyPermission: [
+          'ventanilla_configurar',
+          'plantillas_ver',
+          'ventanilla_ver',
+          'ventanilla_crear',
+        ],
+      },
+      {
         title: 'TRD y archivo',
         icon: 'i-lucide-archive',
         anyPermission: ['trd_catalogo_ver', 'trd_tablas_ver'],
@@ -216,6 +227,17 @@ export const navMenu: NavMenu[] = [
             icon: 'i-lucide-file-spreadsheet',
             link: '/parametrizacion/plantilla-score',
             permission: 'plantilla_score_ver',
+          },
+          {
+            title: 'Ventanilla única',
+            icon: 'i-lucide-inbox',
+            link: '/parametrizacion/ventanilla-unica',
+            anyPermission: [
+              'ventanilla_configurar',
+              'plantillas_ver',
+              'ventanilla_ver',
+              'ventanilla_crear',
+            ],
           },
         ],
       },

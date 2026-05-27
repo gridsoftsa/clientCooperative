@@ -89,15 +89,16 @@ watch(docDocumentTypeId, (id) => {
 </script>
 
 <template>
-  <div class="grid gap-4 md:grid-cols-3">
-    <div class="space-y-2">
+  <div class="grid min-w-0 gap-4 md:grid-cols-3">
+    <div class="min-w-0 space-y-2">
       <Label>Serie</Label>
       <Select
+        class="w-full min-w-0"
         :model-value="seriesId != null ? String(seriesId) : undefined"
         :disabled="loading || !orgUnitId || seriesOptions.length === 0"
         @update:model-value="seriesId = $event ? Number($event) : null"
       >
-        <SelectTrigger>
+        <SelectTrigger class="w-full min-w-0">
           <SelectValue placeholder="Seleccione serie" />
         </SelectTrigger>
         <SelectContent>
@@ -111,14 +112,15 @@ watch(docDocumentTypeId, (id) => {
         </SelectContent>
       </Select>
     </div>
-    <div class="space-y-2">
+    <div class="min-w-0 space-y-2">
       <Label>Subserie</Label>
       <Select
+        class="w-full min-w-0"
         :model-value="subseriesId != null ? String(subseriesId) : undefined"
         :disabled="!seriesId || subseriesOptions.length === 0"
         @update:model-value="subseriesId = $event ? Number($event) : null"
       >
-        <SelectTrigger>
+        <SelectTrigger class="w-full min-w-0">
           <SelectValue placeholder="Seleccione subserie" />
         </SelectTrigger>
         <SelectContent>
@@ -132,14 +134,15 @@ watch(docDocumentTypeId, (id) => {
         </SelectContent>
       </Select>
     </div>
-    <div class="space-y-2">
+    <div class="min-w-0 space-y-2">
       <Label>Tipo documental</Label>
       <Select
+        class="w-full min-w-0"
         :model-value="docDocumentTypeId != null ? String(docDocumentTypeId) : undefined"
         :disabled="!subseriesId || typeOptions.length === 0"
         @update:model-value="docDocumentTypeId = $event ? Number($event) : null"
       >
-        <SelectTrigger>
+        <SelectTrigger class="w-full min-w-0">
           <SelectValue placeholder="Seleccione tipo" />
         </SelectTrigger>
         <SelectContent>

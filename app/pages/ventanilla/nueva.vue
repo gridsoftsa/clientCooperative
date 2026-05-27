@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { VENTANILLA_FILING_TYPE_LABELS } from '~/constants/ventanilla'
 import type { VentanillaCatalogData, VentanillaFilingTypeValue, VentanillaFunctionalTypeRow } from '~/types/ventanilla'
+import type { OrgStaffListItem } from '~/types/org-structure'
+import Multiselect from '@vueform/multiselect'
 
 interface VentanillaOrgUnitOption {
   id: number
@@ -17,6 +19,7 @@ definePageMeta({
 
 const router = useRouter()
 const ventanillaApi = useVentanillaApi()
+const orgApi = useOrgStructureApi()
 const { hasPermission } = usePermissions()
 const { $api } = useNuxtApp()
 
@@ -40,9 +43,57 @@ const notes = ref('')
 const metadataValues = ref<Record<string, unknown>>({})
 
 const orgUnits = ref<VentanillaOrgUnitOption[]>([])
+const staffOptions = ref<OrgStaffListItem[]>([])
+const senderStaffId = ref<number | null>(null)
+const recipientStaffId = ref<number | null>(null)
+// Compat safety for hot-reload states that may still reference old array models.
+const senderStaffIds = computed(() => senderStaffId.value != null ? [senderStaffId.value] : [])
+const recipientStaffIds = computed(() => recipientStaffId.value != null ? [recipientStaffId.value] : [])
 const fileRows = ref<Array<{ file: File | null; title: string }>>([{ file: null, title: 'Documento principal' }])
 
 const canOverrideResponse = computed(() => hasPermission('ventanilla_override_respuesta'))
+
+function staffById(staffId: number | string | null | undefined): OrgStaffListItem | null {
+  if (staffId == null || staffId === '') {
+    return null
+  }
+  const id = Number(staffId)
+  if (!Number.isFinite(id)) {
+    return null
+  }
+
+  return staffOptions.value.find((s) => Number(s.id) === id) ?? null
+}
+
+const selectedSenderStaff = computed(() => staffById(senderStaffId.value))
+
+const selectedRecipientStaff = computed(() => staffById(recipientStaffId.value))
+
+const senderStaffChoices = computed(() => {
+  const sourceUnitId = producerOrgUnitId.value
+  if (!sourceUnitId) {
+    return []
+  }
+  return staffOptions.value
+    .filter((s) => s.current_assignment?.org_unit?.id === sourceUnitId)
+    .map((s) => ({
+      value: Number(s.id),
+      label: staffOptionLabel(s),
+    }))
+})
+
+const recipientStaffChoices = computed(() => {
+  const targetUnitId = recipientOrgUnitId.value
+  if (!targetUnitId) {
+    return []
+  }
+  return staffOptions.value
+    .filter((s) => s.current_assignment?.org_unit?.id === targetUnitId)
+    .map((s) => ({
+      value: Number(s.id),
+      label: staffOptionLabel(s),
+    }))
+})
 
 const responsibleOrgUnitId = computed(() => {
   if (filingType.value === 'incoming') {
@@ -68,6 +119,55 @@ watch(functionalTypeKey, () => {
   requiresResponseOverride.value = null
 })
 
+watch(filingType, (nextType) => {
+  senderStaffId.value = null
+  recipientStaffId.value = null
+  if (nextType === 'incoming') {
+    producerOrgUnitId.value = null
+  }
+  if (nextType === 'outgoing') {
+    recipientOrgUnitId.value = null
+  }
+})
+
+function applyStaffToPartyFields(
+  staffRow: OrgStaffListItem | null,
+  nameRef: typeof senderName,
+  identifierRef: typeof senderIdentifier,
+): void {
+  if (!staffRow) {
+    nameRef.value = ''
+    identifierRef.value = ''
+    return
+  }
+  nameRef.value = buildSelectedStaffText(staffRow)
+  identifierRef.value = staffRow.document_number?.trim() ?? ''
+}
+
+watch(producerOrgUnitId, () => {
+  senderStaffId.value = null
+  applyStaffToPartyFields(null, senderName, senderIdentifier)
+})
+
+watch(recipientOrgUnitId, () => {
+  recipientStaffId.value = null
+  applyStaffToPartyFields(null, recipientName, recipientIdentifier)
+})
+
+watch(senderStaffId, (id) => {
+  if (filingType.value === 'incoming') {
+    return
+  }
+  applyStaffToPartyFields(staffById(id), senderName, senderIdentifier)
+})
+
+watch(recipientStaffId, (id) => {
+  if (filingType.value === 'outgoing') {
+    return
+  }
+  applyStaffToPartyFields(staffById(id), recipientName, recipientIdentifier)
+})
+
 onMounted(async () => {
   catalog.value = await ventanillaApi.fetchCatalog()
   try {
@@ -78,6 +178,12 @@ onMounted(async () => {
     orgUnits.value = res.data ?? []
   } catch {
     orgUnits.value = []
+  }
+
+  try {
+    staffOptions.value = await orgApi.fetchStaff({ activeOnly: true })
+  } catch {
+    staffOptions.value = []
   }
 })
 
@@ -123,6 +229,34 @@ function onFileChange(index: number, event: Event) {
   }
 }
 
+function fullName(staff: OrgStaffListItem): string {
+  return [
+    staff.first_name,
+    staff.second_name,
+    staff.first_last_name,
+    staff.second_last_name,
+  ].filter(Boolean).join(' ')
+}
+
+function staffOptionLabel(staff: OrgStaffListItem): string {
+  const name = fullName(staff)
+  const position = staff.current_assignment?.org_position?.name
+  return position ? `${name} — ${position}` : name
+}
+
+function buildSelectedStaffText(staffRow: OrgStaffListItem): string {
+  return staffOptionLabel(staffRow)
+}
+
+function buildSelectedStaffIdentifiers(staffRow: OrgStaffListItem): string {
+  const ids = [staffRow.document_number].filter(Boolean).join(', ')
+  const staffIds = String(staffRow.id)
+  if (ids) {
+    return `${ids} [staff_ids:${staffIds}]`
+  }
+  return `staff_ids:${staffIds}`
+}
+
 async function submit() {
   errorMessage.value = ''
   if (!functionalTypeKey.value) {
@@ -146,6 +280,29 @@ async function submit() {
     return
   }
 
+  if (filingType.value === 'incoming' && !recipientStaffId.value) {
+    errorMessage.value = 'Seleccione destinatario del área'
+    return
+  }
+  if (filingType.value === 'outgoing' && !senderStaffId.value) {
+    errorMessage.value = 'Seleccione remitente del área'
+    return
+  }
+  if (filingType.value === 'internal') {
+    if (!recipientOrgUnitId.value) {
+      errorMessage.value = 'Seleccione el área destinataria para radicado interno'
+      return
+    }
+    if (!senderStaffId.value) {
+      errorMessage.value = 'Seleccione remitente del área'
+      return
+    }
+    if (!recipientStaffId.value) {
+      errorMessage.value = 'Seleccione destinatario del área'
+      return
+    }
+  }
+
   const withFiles = fileRows.value.filter((r: { file: File | null; title: string }) => r.file)
   if (withFiles.length === 0) {
     errorMessage.value = 'Adjunte al menos un archivo'
@@ -164,17 +321,30 @@ async function submit() {
   if (recipientOrgUnitId.value) {
     fd.append('recipient_org_unit_id', String(recipientOrgUnitId.value))
   }
-  if (senderName.value.trim()) {
-    fd.append('sender_name', senderName.value.trim())
+  const computedSenderName = selectedSenderStaff.value
+    ? buildSelectedStaffText(selectedSenderStaff.value)
+    : senderName.value.trim()
+  const computedSenderIdentifier = selectedSenderStaff.value
+    ? buildSelectedStaffIdentifiers(selectedSenderStaff.value)
+    : senderIdentifier.value.trim()
+  const computedRecipientName = selectedRecipientStaff.value
+    ? buildSelectedStaffText(selectedRecipientStaff.value)
+    : recipientName.value.trim()
+  const computedRecipientIdentifier = selectedRecipientStaff.value
+    ? buildSelectedStaffIdentifiers(selectedRecipientStaff.value)
+    : recipientIdentifier.value.trim()
+
+  if (computedSenderName) {
+    fd.append('sender_name', computedSenderName)
   }
-  if (senderIdentifier.value.trim()) {
-    fd.append('sender_identifier', senderIdentifier.value.trim())
+  if (computedSenderIdentifier) {
+    fd.append('sender_identifier', computedSenderIdentifier)
   }
-  if (recipientName.value.trim()) {
-    fd.append('recipient_name', recipientName.value.trim())
+  if (computedRecipientName) {
+    fd.append('recipient_name', computedRecipientName)
   }
-  if (recipientIdentifier.value.trim()) {
-    fd.append('recipient_identifier', recipientIdentifier.value.trim())
+  if (computedRecipientIdentifier) {
+    fd.append('recipient_identifier', computedRecipientIdentifier)
   }
   fd.append('subject', subject.value.trim())
   if (receptionMedium.value) {
@@ -315,7 +485,7 @@ async function submit() {
         <CardHeader>
           <CardTitle>Datos del radicado</CardTitle>
         </CardHeader>
-        <CardContent class="grid gap-4 md:grid-cols-2">
+        <CardContent class="grid min-w-0 gap-4 md:grid-cols-2">
           <div v-if="filingType === 'incoming'" class="space-y-2 md:col-span-2">
             <Label>Área destinataria *</Label>
             <Select
@@ -347,7 +517,7 @@ async function submit() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem
-                  v-for="u in orgUnits.filter(x => x.is_document_producer)"
+                  v-for="u in orgUnits"
                   :key="u.id"
                   :value="String(u.id)"
                 >
@@ -356,21 +526,71 @@ async function submit() {
               </SelectContent>
             </Select>
           </div>
-          <div class="space-y-2">
-            <Label>Remitente</Label>
-            <Input v-model="senderName" placeholder="Nombre" />
+          <div v-if="filingType === 'internal'" class="space-y-2 md:col-span-2">
+            <Label>Área destinataria *</Label>
+            <Select
+              :model-value="recipientOrgUnitId != null ? String(recipientOrgUnitId) : undefined"
+              @update:model-value="recipientOrgUnitId = $event ? Number($event) : null"
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccione área destino" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="u in orgUnits"
+                  :key="`int-dest-${u.id}`"
+                  :value="String(u.id)"
+                >
+                  {{ u.code }} — {{ u.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="min-w-0 space-y-2">
+            <Label>{{ filingType === 'incoming' ? 'Remitente' : 'Remitente *' }}</Label>
+            <Multiselect
+              v-if="filingType !== 'incoming'"
+              v-model="senderStaffId"
+              class="ventanilla-staff-multiselect"
+              :options="senderStaffChoices"
+              value-prop="value"
+              label="label"
+              :searchable="true"
+              :disabled="!producerOrgUnitId"
+              placeholder="Seleccione remitente"
+            />
+            <Input v-else v-model="senderName" placeholder="Nombre" />
           </div>
           <div class="space-y-2">
             <Label>Identificación remitente</Label>
-            <Input v-model="senderIdentifier" />
+            <Input
+              v-model="senderIdentifier"
+              :readonly="filingType !== 'incoming' && !!senderStaffId"
+              :placeholder="filingType !== 'incoming' ? 'Autocompletado' : ''"
+            />
           </div>
-          <div class="space-y-2">
-            <Label>Destinatario</Label>
-            <Input v-model="recipientName" />
+          <div class="min-w-0 space-y-2">
+            <Label>{{ filingType === 'incoming' || filingType === 'internal' ? 'Destinatario *' : 'Destinatario' }}</Label>
+            <Multiselect
+              v-if="filingType === 'incoming' || filingType === 'internal'"
+              v-model="recipientStaffId"
+              class="ventanilla-staff-multiselect"
+              :options="recipientStaffChoices"
+              value-prop="value"
+              label="label"
+              :searchable="true"
+              :disabled="!recipientOrgUnitId"
+              placeholder="Seleccione destinatario"
+            />
+            <Input v-else v-model="recipientName" />
           </div>
           <div class="space-y-2">
             <Label>Identificación destinatario</Label>
-            <Input v-model="recipientIdentifier" />
+            <Input
+              v-model="recipientIdentifier"
+              :readonly="(filingType === 'incoming' || filingType === 'internal') && !!recipientStaffId"
+              :placeholder="(filingType === 'incoming' || filingType === 'internal') ? 'Autocompletado' : ''"
+            />
           </div>
           <div class="space-y-2 md:col-span-2">
             <Label>Asunto *</Label>
@@ -407,7 +627,7 @@ async function submit() {
             Según el área responsable y la TRD vigente
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent class="min-w-0">
           <VentanillaTrdPicker
             :org-unit-id="responsibleOrgUnitId"
             v-model:doc-document-type-id="docDocumentTypeId"
@@ -444,7 +664,7 @@ async function submit() {
         </CardHeader>
         <CardContent class="space-y-4">
           <div
-            v-for="(row, index) in fileRows"
+            v-for="(row, index) in (fileRows ?? [])"
             :key="index"
             class="flex flex-wrap items-end gap-3 rounded-lg border p-3"
           >
@@ -457,7 +677,7 @@ async function submit() {
               <Input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" @change="onFileChange(index, $event)" />
             </div>
             <Button
-              v-if="fileRows.length > 1"
+              v-if="(fileRows?.length ?? 0) > 1"
               type="button"
               variant="ghost"
               size="icon"
@@ -480,3 +700,19 @@ async function submit() {
     </form>
   </div>
 </template>
+
+<style src="@vueform/multiselect/themes/default.css"></style>
+<style scoped>
+.ventanilla-staff-multiselect {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ventanilla-staff-multiselect :deep(.multiselect-single-label),
+.ventanilla-staff-multiselect :deep(.multiselect-placeholder) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

@@ -222,6 +222,12 @@ export function useVentanillaApi() {
     return res.data
   }
 
+  function filingFileViewUrl(filingId: number, fileId: number): string {
+    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+
+    return `${base}/api/ventanilla/filings/${filingId}/files/${fileId}/view`
+  }
+
   function filingFileDownloadUrl(filingId: number, fileId: number): string {
     const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
 
@@ -234,18 +240,103 @@ export function useVentanillaApi() {
     return `${base}/api/ventanilla/filings/${filingId}/receipt`
   }
 
+  function intakeFileViewUrl(intakeId: number, fileId: number): string {
+    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+
+    return `${base}/api/ventanilla/intakes/${intakeId}/files/${fileId}/view`
+  }
+
   function intakeFileDownloadUrl(intakeId: number, fileId: number): string {
     const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
 
     return `${base}/api/ventanilla/intakes/${intakeId}/files/${fileId}/download`
   }
 
+  function openBlobInNewTab(blob: Blob, mimeType?: string): void {
+    if (import.meta.server) {
+      return
+    }
+
+    const typedBlob = mimeType && blob.type !== mimeType
+      ? new Blob([blob], { type: mimeType })
+      : blob
+    const objectUrl = URL.createObjectURL(typedBlob)
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    a.style.cssText = 'position:fixed;left:-9999px;top:0'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000)
+  }
+
+  async function fetchAuthenticatedBlob(url: string): Promise<Blob> {
+    if (import.meta.server) {
+      throw new Error('No disponible en servidor.')
+    }
+
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/)
+    let token = match?.[1] ? decodeURIComponent(match[1]) : ''
+    if (!token) {
+      try {
+        await $fetch('/sanctum/csrf-cookie', {
+          baseURL: String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, ''),
+          credentials: 'include',
+        })
+      } catch {
+        // ignore
+      }
+      const retry = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/)
+      token = retry?.[1] ? decodeURIComponent(retry[1]) : ''
+    }
+
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers: {
+        Accept: '*/*',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(token ? { 'X-XSRF-TOKEN': token } : {}),
+      },
+    })
+
+    if (!res.ok) {
+      let message = 'No se pudo obtener el archivo.'
+      try {
+        const contentType = res.headers.get('Content-Type') ?? ''
+        if (contentType.includes('application/json')) {
+          const body = await res.json() as { message?: string }
+          if (body?.message) {
+            message = body.message
+          }
+        }
+      } catch {
+        // keep default
+      }
+      throw new Error(message)
+    }
+
+    return await res.blob()
+  }
+
+  async function viewFilingFileInNewTab(filingId: number, fileId: number, mimeType?: string): Promise<void> {
+    const blob = await fetchAuthenticatedBlob(filingFileViewUrl(filingId, fileId))
+    openBlobInNewTab(blob, mimeType)
+  }
+
+  async function viewIntakeFileInNewTab(intakeId: number, fileId: number, mimeType?: string): Promise<void> {
+    const blob = await fetchAuthenticatedBlob(intakeFileViewUrl(intakeId, fileId))
+    openBlobInNewTab(blob, mimeType)
+  }
+
   async function downloadFilingFile(filingId: number, fileId: number, filename: string): Promise<void> {
     await downloadFromUrl(filingFileDownloadUrl(filingId, fileId), filename)
   }
 
-  async function downloadReceipt(filingId: number, filename: string): Promise<void> {
-    await downloadFromUrl(filingReceiptUrl(filingId), filename)
+  async function viewReceiptInNewTab(filingId: number): Promise<void> {
+    const blob = await fetchAuthenticatedBlob(filingReceiptUrl(filingId))
+    openBlobInNewTab(blob, 'application/pdf')
   }
 
   async function downloadIntakeFile(intakeId: number, fileId: number, filename: string): Promise<void> {
@@ -303,11 +394,15 @@ export function useVentanillaApi() {
     updateSlaSettings,
     addHoliday,
     removeHoliday,
+    filingFileViewUrl,
     filingFileDownloadUrl,
     filingReceiptUrl,
+    intakeFileViewUrl,
     intakeFileDownloadUrl,
+    viewFilingFileInNewTab,
+    viewIntakeFileInNewTab,
     downloadFilingFile,
-    downloadReceipt,
+    viewReceiptInNewTab,
     downloadIntakeFile,
   }
 }

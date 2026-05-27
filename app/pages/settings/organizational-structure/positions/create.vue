@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import type { OrgYesNoChoice } from '~/constants/org-structure'
 import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
+import type { OrgStaffListItem } from '~/types/org-structure'
 import { todayIsoDateString } from '~/utils/dateInputValue'
 
 definePageMeta({
@@ -16,6 +17,11 @@ const orgApi = useOrgStructureApi()
 
 const unitOptions = ref<Array<{ id: number; label: string }>>([])
 const peerPositions = ref<Array<{ id: number; name: string; code: string }>>([])
+const reportToStaffOptions = ref<Array<{ id: number; label: string; reportsToPositionId: number }>>([])
+const reportToOrgUnitId = ref<number | null>(null)
+const reportToTargetType = ref<'none' | 'position' | 'staff'>('none')
+const reportToPositionChoiceId = ref<number | null>(null)
+const reportToStaffChoiceId = ref<number | null>(null)
 
 const chargesSelectedArea = ref<OrgYesNoChoice>('no')
 
@@ -37,6 +43,14 @@ function onPositionActiveChange(value: boolean) {
   form.value.is_active = value
 }
 
+function onReportToTargetTypeChange(value: unknown): void {
+  if (value === 'position' || value === 'staff' || value === 'none') {
+    reportToTargetType.value = value
+    return
+  }
+  reportToTargetType.value = 'none'
+}
+
 async function loadUnits() {
   const units = await orgApi.fetchUnits({ activeOnly: true })
   unitOptions.value = units.map((u: OrgUnitRow) => ({
@@ -45,24 +59,95 @@ async function loadUnits() {
   }))
 }
 
+async function loadReportToCandidates(orgUnitId: number): Promise<void> {
+  const [positions, staff] = await Promise.all([
+    orgApi.fetchPositions({
+      activeOnly: true,
+      orgUnitId,
+      managerOfOrgUnitOnly: true,
+    }),
+    orgApi.fetchStaff({
+      activeOnly: true,
+      orgUnitIds: [orgUnitId],
+    }),
+  ])
+
+  peerPositions.value = positions.map(p => ({ id: p.id, name: p.name, code: p.code }))
+  const managerPositionIds = new Set(peerPositions.value.map(p => p.id))
+  reportToStaffOptions.value = staff
+    .map((row: OrgStaffListItem) => {
+      const assignment = row.current_assignment
+      const position = assignment?.org_position
+      if (!position || !managerPositionIds.has(position.id)) {
+        return null
+      }
+      const fullName = row.full_name
+        ?? [row.first_name, row.second_name, row.first_last_name, row.second_last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim()
+      return {
+        id: row.id,
+        label: `${fullName} — ${position.name}`,
+        reportsToPositionId: position.id,
+      }
+    })
+    .filter((row): row is { id: number; label: string; reportsToPositionId: number } => row != null)
+}
+
 watch(() => form.value.org_unit_id, async (id: number | null) => {
   form.value.reports_to_position_id = null
   chargesSelectedArea.value = 'no'
+  reportToTargetType.value = 'none'
+  reportToPositionChoiceId.value = null
+  reportToStaffChoiceId.value = null
   if (id == null) {
     peerPositions.value = []
+    reportToStaffOptions.value = []
+    reportToOrgUnitId.value = null
     return
   }
-  const list = await orgApi.fetchPositions({
-    activeOnly: true,
-    orgUnitId: id,
-    managerOfOrgUnitOnly: true,
-  })
-  peerPositions.value = list.map(p => ({ id: p.id, name: p.name, code: p.code }))
+  reportToOrgUnitId.value = id
+  await loadReportToCandidates(id)
+})
+
+watch(reportToOrgUnitId, async (id: number | null) => {
+  form.value.reports_to_position_id = null
+  reportToTargetType.value = 'none'
+  reportToPositionChoiceId.value = null
+  reportToStaffChoiceId.value = null
+  if (id == null) {
+    peerPositions.value = []
+    reportToStaffOptions.value = []
+    return
+  }
+  await loadReportToCandidates(id)
+})
+
+watch([reportToTargetType, reportToPositionChoiceId, reportToStaffChoiceId], () => {
+  if (reportToTargetType.value === 'position') {
+    form.value.reports_to_position_id = reportToPositionChoiceId.value
+    return
+  }
+  if (reportToTargetType.value === 'staff') {
+    const staff = reportToStaffOptions.value.find(row => row.id === reportToStaffChoiceId.value)
+    form.value.reports_to_position_id = staff?.reportsToPositionId ?? null
+    return
+  }
+  form.value.reports_to_position_id = null
 })
 
 async function handleSubmit() {
   if (form.value.org_unit_id == null || !form.value.name.trim() || !form.value.code.trim()) {
     toast.error('Área, nombre y código son obligatorios')
+    return
+  }
+  if (
+    form.value.reports_to_position_id != null
+    && reportToOrgUnitId.value != null
+    && reportToOrgUnitId.value !== form.value.org_unit_id
+  ) {
+    toast.error('El jefe inmediato debe pertenecer a la misma área del cargo.')
     return
   }
   saving.value = true
@@ -105,7 +190,8 @@ onMounted(() => {
             Nuevo cargo
           </h2>
           <p class="text-muted-foreground leading-relaxed">
-            En «Reporta a» solo se listan cargos que ya estén marcados como referencia de jefe de área en el mismo área (al crear o editar otro cargo con «¿Este cargo está a cargo del área elegida?» en Sí).
+            En «Reporta a» seleccione el área y luego asocie por cargo o funcionario.
+            La referencia se mantiene en cargos configurados como jefe de área.
           </p>
         </div>
         <Button variant="outline" class="shrink-0" @click="router.back()">
@@ -184,29 +270,114 @@ onMounted(() => {
                 <div class="space-y-3 md:col-span-2">
                   <Label for="rep" class="leading-snug">Reporta a (opcional)</Label>
                   <p class="text-xs text-muted-foreground leading-relaxed">
-                    Si no aparece ningún cargo, cree antes uno con «¿Este cargo está a cargo del área elegida?» en Sí o revise el área seleccionada.
+                    Seleccione primero el área y luego indique si desea asociar por cargo o funcionario.
+                    El jefe inmediato debe pertenecer al mismo área del cargo.
                   </p>
-                  <Select
-                    :model-value="form.reports_to_position_id == null ? 'none' : String(form.reports_to_position_id)"
-                    :disabled="!form.org_unit_id"
-                    @update:model-value="(v) => { form.reports_to_position_id = v === 'none' ? null : Number(v) }"
-                  >
-                    <SelectTrigger id="rep">
-                      <SelectValue placeholder="Sin jefe inmediato en catálogo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">
-                        (Ninguno)
-                      </SelectItem>
-                      <SelectItem
-                        v-for="r in peerPositions"
-                        :key="r.id"
-                        :value="String(r.id)"
+                  <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div class="space-y-2">
+                      <Label class="text-xs text-muted-foreground">Área de reporte</Label>
+                      <Select
+                        :model-value="reportToOrgUnitId == null ? 'none' : String(reportToOrgUnitId)"
+                        :disabled="!form.org_unit_id"
+                        @update:model-value="(v) => { reportToOrgUnitId = v === 'none' ? null : Number(v) }"
                       >
-                        {{ r.name }} — {{ r.code }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione área" />
+                        </SelectTrigger>
+                        <SelectContent class="max-h-72">
+                          <SelectItem value="none">
+                            (Sin jefe inmediato)
+                          </SelectItem>
+                          <SelectItem
+                            v-for="u in unitOptions"
+                            :key="u.id"
+                            :value="String(u.id)"
+                          >
+                            {{ u.label }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div class="space-y-2">
+                      <Label class="text-xs text-muted-foreground">Tipo</Label>
+                      <Select
+                        :model-value="reportToTargetType"
+                        :disabled="!reportToOrgUnitId"
+                        @update:model-value="onReportToTargetTypeChange"
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            (Ninguno)
+                          </SelectItem>
+                          <SelectItem value="position">
+                            Cargo
+                          </SelectItem>
+                          <SelectItem value="staff">
+                            Funcionario
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div class="space-y-2">
+                      <Label class="text-xs text-muted-foreground">Selección</Label>
+                      <Select
+                        v-if="reportToTargetType === 'position'"
+                        :model-value="reportToPositionChoiceId == null ? 'none' : String(reportToPositionChoiceId)"
+                        :disabled="!reportToOrgUnitId"
+                        @update:model-value="(v) => { reportToPositionChoiceId = v === 'none' ? null : Number(v) }"
+                      >
+                        <SelectTrigger id="rep">
+                          <SelectValue placeholder="Seleccione cargo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            (Ninguno)
+                          </SelectItem>
+                          <SelectItem
+                            v-for="r in peerPositions"
+                            :key="r.id"
+                            :value="String(r.id)"
+                          >
+                            {{ r.name }} — {{ r.code }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <Select
+                        v-else-if="reportToTargetType === 'staff'"
+                        :model-value="reportToStaffChoiceId == null ? 'none' : String(reportToStaffChoiceId)"
+                        :disabled="!reportToOrgUnitId"
+                        @update:model-value="(v) => { reportToStaffChoiceId = v === 'none' ? null : Number(v) }"
+                      >
+                        <SelectTrigger id="rep">
+                          <SelectValue placeholder="Seleccione funcionario" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            (Ninguno)
+                          </SelectItem>
+                          <SelectItem
+                            v-for="s in reportToStaffOptions"
+                            :key="s.id"
+                            :value="String(s.id)"
+                          >
+                            {{ s.label }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <Input
+                        v-else
+                        disabled
+                        placeholder="Seleccione área y tipo"
+                      />
+                    </div>
+                  </div>
                 </div>
                 </div>
 
