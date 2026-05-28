@@ -1,0 +1,97 @@
+# Stack QA (paralelo a producción). Levantar siempre con:
+#   docker compose -p cooperative-qa -f docker-compose.qa.yml --env-file .env.qa.compose up -d
+#
+# En el servidor (worktrees): apiCooperative-qa + clientCooperative-qa como hermanos en ~/www.
+# Ajusta API_BUILD_CONTEXT / API_ENV_FILE en .env.qa.compose si usas otras rutas.
+
+name: cooperative-qa
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cooperative_qa_postgres
+    restart: unless-stopped
+    env_file:
+      - ${API_ENV_FILE:-../apiCooperative-qa/.env}
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-cooperative_qa}
+      POSTGRES_USER: ${DB_USERNAME:-cooperative}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    volumes:
+      - postgres_data_qa:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_HOST_PORT:-5436}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-cooperative} -d ${DB_DATABASE:-cooperative_qa}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cooperative_qa
+
+  minio:
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2025-04-22T22-12-26Z}
+    container_name: cooperative_qa_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio_data_qa:/data
+    ports:
+      - "${MINIO_API_PORT:-9002}:9000"
+      - "${MINIO_CONSOLE_PORT:-9003}:9001"
+    networks:
+      - cooperative_qa
+
+  api:
+    build:
+      context: ${API_BUILD_CONTEXT:-../apiCooperative-qa}
+      dockerfile: Dockerfile
+    container_name: cooperative_qa_api
+    restart: unless-stopped
+    ports:
+      - "${API_HOST_PORT:-8586}:80"
+    volumes:
+      - api_storage_qa:/var/www/html/storage
+      - api_cache_qa:/var/www/html/bootstrap/cache
+    env_file:
+      - ${API_ENV_FILE:-../apiCooperative-qa/.env}
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    networks:
+      - cooperative_qa
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-https://api-qa-gd.tecnologicaslf.com}
+    container_name: cooperative_qa_client
+    restart: unless-stopped
+    ports:
+      - "${CLIENT_HOST_PORT:-3536}:3000"
+    environment:
+      - NUXT_PUBLIC_API_BASE=${NUXT_PUBLIC_API_BASE:-https://api-qa-gd.tecnologicaslf.com}
+    depends_on:
+      - api
+    networks:
+      - cooperative_qa
+
+volumes:
+  postgres_data_qa:
+  minio_data_qa:
+  api_storage_qa:
+  api_cache_qa:
+
+networks:
+  cooperative_qa:
+    driver: bridge
