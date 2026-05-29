@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import Multiselect from '@vueform/multiselect'
 import type { PaginatedUsers, User } from '~/types/user'
+import {
+  STAFF_CREATE_DRAFT_KEY,
+  STAFF_CREATE_RETURN_PATH,
+  USER_CREATE_PREFILL_FROM_STAFF_KEY,
+  hasStaffPersonalInfoForUserPrefill,
+  userCreatePrefillFromStaff,
+} from '~/utils/staff-user-create-bridge'
 
 definePageMeta({
   layout: 'default',
@@ -9,6 +17,7 @@ definePageMeta({
 })
 
 const router = useRouter()
+const route = useRoute()
 const { $api } = useNuxtApp()
 const { hasPermission } = usePermissions()
 
@@ -28,8 +37,52 @@ const form = ref({
 const userOptions = ref<Array<{ id: number; label: string }>>([])
 const saving = ref(false)
 
+const userSelectOptions = computed(() =>
+  userOptions.value.map(u => ({
+    value: u.id,
+    label: u.label,
+  })),
+)
+
 function onStaffActiveChange(value: boolean) {
   form.value.is_active = value
+}
+
+function restoreDraftFromStorage() {
+  if (!import.meta.client) {
+    return
+  }
+  const raw = sessionStorage.getItem(STAFF_CREATE_DRAFT_KEY)
+  if (!raw) {
+    return
+  }
+  try {
+    const parsed = JSON.parse(raw) as typeof form.value
+    form.value = { ...form.value, ...parsed }
+  } catch {
+    // ignore corrupt draft
+  } finally {
+    sessionStorage.removeItem(STAFF_CREATE_DRAFT_KEY)
+  }
+}
+
+function saveDraftAndGoCreateUser() {
+  if (!import.meta.client) {
+    return
+  }
+  sessionStorage.setItem(STAFF_CREATE_DRAFT_KEY, JSON.stringify(form.value))
+  if (hasStaffPersonalInfoForUserPrefill(form.value)) {
+    sessionStorage.setItem(
+      USER_CREATE_PREFILL_FROM_STAFF_KEY,
+      JSON.stringify(userCreatePrefillFromStaff(form.value)),
+    )
+  } else {
+    sessionStorage.removeItem(USER_CREATE_PREFILL_FROM_STAFF_KEY)
+  }
+  router.push({
+    path: '/settings/users/create',
+    query: { returnTo: STAFF_CREATE_RETURN_PATH },
+  })
 }
 
 async function loadUsersIfAllowed() {
@@ -39,12 +92,42 @@ async function loadUsersIfAllowed() {
   }
   try {
     const res = await $api<PaginatedUsers>('/users', { query: { per_page: 200, page: 1 } })
-    userOptions.value = res.data.map((u: User) => ({
-      id: u.id,
-      label: `${u.name || u.email} · ${u.email}`,
-    }))
+    userOptions.value = res.data
+      .filter((u: User) => u.org_staff_id == null)
+      .map((u: User) => ({
+        id: u.id,
+        label: `${u.name || u.email} · ${u.email}`,
+      }))
   } catch {
     userOptions.value = []
+  }
+}
+
+async function ensureSelectedUserInOptions(userId: number) {
+  if (userOptions.value.some(u => u.id === userId)) {
+    return
+  }
+  try {
+    const res = await $api<{ data: User }>(`/users/${userId}`)
+    const u = res.data
+    if (u.org_staff_id == null) {
+      userOptions.value = [
+        ...userOptions.value,
+        { id: u.id, label: `${u.name || u.email} · ${u.email}` },
+      ]
+    }
+  } catch {
+    // ignore — multiselect may still show id if options load later
+  }
+}
+
+function applyReturnedUserFromQuery() {
+  const raw = route.query.user_id
+  const userId = typeof raw === 'string' ? Number(raw) : null
+  if (userId != null && Number.isFinite(userId) && userId > 0) {
+    form.value.user_id = userId
+    void ensureSelectedUserInOptions(userId)
+    router.replace({ path: route.path })
   }
 }
 
@@ -83,8 +166,10 @@ async function handleSubmit() {
   }
 }
 
-onMounted(() => {
-  loadUsersIfAllowed()
+onMounted(async () => {
+  restoreDraftFromStorage()
+  await loadUsersIfAllowed()
+  applyReturnedUserFromQuery()
 })
 </script>
 
@@ -108,44 +193,6 @@ onMounted(() => {
 
       <form @submit.prevent="handleSubmit">
         <div class="grid gap-6">
-          <Card v-if="hasPermission('usuarios_ver')">
-            <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Vínculo con usuario del sistema</CardTitle>
-              <CardDescription class="leading-relaxed">
-                Opcional: asocie este funcionario a una cuenta ya existente.
-              </CardDescription>
-            </CardHeader>
-            <CardContent class="space-y-6">
-              <div class="space-y-3">
-                <Label for="usr" class="leading-snug">Usuario (opcional)</Label>
-                <Select
-                  :model-value="form.user_id == null ? 'none' : String(form.user_id)"
-                  @update:model-value="(v) => { form.user_id = v === 'none' ? null : Number(v) }"
-                >
-                  <SelectTrigger id="usr">
-                    <SelectValue placeholder="Sin vínculo" />
-                  </SelectTrigger>
-                  <SelectContent class="max-h-60">
-                    <SelectItem value="none">
-                      (Sin usuario)
-                    </SelectItem>
-                    <SelectItem
-                      v-for="u in userOptions"
-                      :key="u.id"
-                      :value="String(u.id)"
-                    >
-                      {{ u.label }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-
-          <p v-if="!hasPermission('usuarios_ver')" class="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground leading-relaxed">
-            No tiene permiso para listar usuarios; puede crear el funcionario sin vínculo y asociarlo después desde la edición, si corresponde.
-          </p>
-
           <Card>
             <CardHeader class="gap-2">
               <CardTitle class="leading-snug">Información personal y contacto</CardTitle>
@@ -196,6 +243,52 @@ onMounted(() => {
             </CardContent>
           </Card>
 
+          <Card v-if="hasPermission('usuarios_ver')">
+            <CardHeader class="gap-2">
+              <CardTitle class="leading-snug">Vínculo con usuario del sistema</CardTitle>
+              <CardDescription class="leading-relaxed">
+                Opcional: asocie este funcionario a una cuenta ya existente sin funcionario vinculado.
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-6">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div class="min-w-0 flex-1 space-y-3">
+                  <Label for="usr" class="leading-snug">Usuario (opcional)</Label>
+                  <Multiselect
+                    id="usr"
+                    v-model="form.user_id"
+                    mode="single"
+                    :object="false"
+                    :options="userSelectOptions"
+                    value-prop="value"
+                    label="label"
+                    :searchable="true"
+                    :can-clear="true"
+                    placeholder="Sin vínculo — busque usuario…"
+                    no-options-text="No hay usuarios sin funcionario vinculado"
+                    no-results-text="Sin coincidencias"
+                    class="multiselect-roles"
+                  />
+                </div>
+                <PermissionGate permission="usuarios_crear">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    class="shrink-0 sm:mb-0.5"
+                    @click="saveDraftAndGoCreateUser"
+                  >
+                    <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                    Crear usuario
+                  </Button>
+                </PermissionGate>
+              </div>
+            </CardContent>
+          </Card>
+
+          <p v-if="!hasPermission('usuarios_ver')" class="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground leading-relaxed">
+            No tiene permiso para listar usuarios; puede crear el funcionario sin vínculo y asociarlo después desde la edición, si corresponde.
+          </p>
+
           <Card>
             <CardHeader class="gap-2">
               <CardTitle class="leading-snug">Estado del registro</CardTitle>
@@ -228,3 +321,19 @@ onMounted(() => {
     </div>
   </SettingsLayout>
 </template>
+
+<style src="@vueform/multiselect/themes/default.css"></style>
+<style scoped>
+.multiselect-roles {
+  --ms-font-size: 0.875rem;
+  --ms-line-height: 1.25rem;
+  --ms-radius: 0.375rem;
+  --ms-border-color: var(--border);
+  --ms-bg: var(--background);
+  --ms-py: 0.5rem;
+  --ms-dropdown-radius: 0.375rem;
+  min-height: 2.75rem;
+  width: 100%;
+  min-width: 0;
+}
+</style>

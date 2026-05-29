@@ -4,6 +4,11 @@ import Multiselect from '@vueform/multiselect'
 import type { Role } from '~/types/role'
 import type { UserAccountStatus } from '~/types/user'
 import { ACCOUNT_STATUS_FORM_OPTIONS } from '~/utils/accountStatus'
+import {
+  STAFF_CREATE_RETURN_PATH,
+  USER_CREATE_PREFILL_FROM_STAFF_KEY,
+  type UserCreatePrefillFromStaff,
+} from '~/utils/staff-user-create-bridge'
 
 definePageMeta({
   layout: 'default',
@@ -13,6 +18,14 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
+const route = useRoute()
+
+const returnTo = computed(() => {
+  const value = route.query.returnTo
+  return typeof value === 'string' && value.startsWith('/') ? value : null
+})
+
+const fromStaffCreate = computed(() => returnTo.value === STAFF_CREATE_RETURN_PATH)
 
 const form = ref({
   name: '',
@@ -103,9 +116,43 @@ const fetchLinkableStaff = async () => {
   }
 }
 
+function restorePrefillFromStaffCreate() {
+  if (!fromStaffCreate.value || !import.meta.client) {
+    return
+  }
+  const raw = sessionStorage.getItem(USER_CREATE_PREFILL_FROM_STAFF_KEY)
+  if (!raw) {
+    return
+  }
+  try {
+    const prefill = JSON.parse(raw) as UserCreatePrefillFromStaff
+    if (prefill.name) {
+      form.value.name = prefill.name
+    }
+    if (prefill.full_name) {
+      form.value.full_name = prefill.full_name
+    }
+    if (prefill.email) {
+      form.value.email = prefill.email
+    }
+    if (prefill.phone) {
+      form.value.phone = prefill.phone
+    }
+  } catch {
+    // ignore corrupt prefill
+  } finally {
+    sessionStorage.removeItem(USER_CREATE_PREFILL_FROM_STAFF_KEY)
+  }
+}
+
 const handleSubmit = async () => {
-  if (!form.value.name.trim() || !form.value.email.trim() || !form.value.password || !form.value.sucursal_id || form.value.org_staff_id == null) {
-    toast.error('Completa todos los campos requeridos, incluido el funcionario organizacional')
+  if (!form.value.name.trim() || !form.value.email.trim() || !form.value.password || !form.value.sucursal_id) {
+    toast.error('Completa todos los campos requeridos')
+    return
+  }
+
+  if (!fromStaffCreate.value && form.value.org_staff_id == null) {
+    toast.error('Debe seleccionar el funcionario organizacional')
     return
   }
 
@@ -126,7 +173,7 @@ const handleSubmit = async () => {
 
   saving.value = true
   try {
-    await $api('/users', {
+    const res = await $api<{ data: { id: number } }>('/users', {
       method: 'POST',
       body: {
         name: form.value.name,
@@ -137,13 +184,20 @@ const handleSubmit = async () => {
         password: form.value.password,
         password_confirmation: form.value.password_confirmation,
         sucursal_id: form.value.sucursal_id,
-        org_staff_id: form.value.org_staff_id,
+        ...(form.value.org_staff_id != null ? { org_staff_id: form.value.org_staff_id } : {}),
         allowed_sucursal_ids: form.value.allowed_sucursal_ids,
         roles: form.value.roles,
       },
     })
-    
+
     toast.success('Usuario creado correctamente')
+    if (returnTo.value) {
+      await router.push({
+        path: returnTo.value,
+        query: { user_id: String(res.data.id) },
+      })
+      return
+    }
     router.push('/settings/users')
   } catch (error: any) {
     console.error('Error saving user:', error)
@@ -155,7 +209,12 @@ const handleSubmit = async () => {
 }
 
 onMounted(() => {
-  Promise.all([fetchRoles(), fetchSucursales(), fetchLinkableStaff()])
+  restorePrefillFromStaffCreate()
+  const tasks: Promise<void>[] = [fetchRoles(), fetchSucursales()]
+  if (!fromStaffCreate.value) {
+    tasks.push(fetchLinkableStaff())
+  }
+  Promise.all(tasks)
 })
 
 watch(selectedRole, (role) => {
@@ -172,13 +231,21 @@ watch(selectedRole, (role) => {
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1">
           <h2 class="text-2xl font-bold tracking-tight">
-            Crear Nuevo Usuario
+            {{ fromStaffCreate ? 'Crear usuario para funcionario' : 'Crear Nuevo Usuario' }}
           </h2>
           <p class="text-muted-foreground leading-relaxed">
-            Crea un nuevo usuario y asigna sus roles
+            {{
+              fromStaffCreate
+                ? 'Al guardar volverá al alta de funcionario con este usuario preseleccionado.'
+                : 'Crea un nuevo usuario y asigna sus roles'
+            }}
           </p>
         </div>
-        <Button variant="outline" class="shrink-0" @click="router.back()">
+        <Button
+          variant="outline"
+          class="shrink-0"
+          @click="returnTo ? router.push(returnTo) : router.back()"
+        >
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>
@@ -255,7 +322,7 @@ watch(selectedRole, (role) => {
                   </Select>
                 </div>
 
-                <div class="space-y-3 md:col-span-2">
+                <div v-if="!fromStaffCreate" class="space-y-3 md:col-span-2">
                   <Label for="org_staff" class="leading-snug">Funcionario organizacional *</Label>
                   <p class="text-sm text-muted-foreground leading-relaxed">
                     Cada usuario debe corresponder a un funcionario del módulo de estructura organizacional (solo aparecen los que aún no tienen cuenta).
@@ -276,6 +343,9 @@ watch(selectedRole, (role) => {
                     class="multiselect-roles"
                   />
                 </div>
+                <p v-else class="md:col-span-2 text-sm text-muted-foreground leading-relaxed rounded-lg border border-dashed px-4 py-3">
+                  El vínculo con el funcionario se completará al guardar el alta en estructura organizacional.
+                </p>
               </div>
 
               <div class="space-y-3 md:col-span-2 rounded-lg border p-4">
@@ -387,12 +457,12 @@ watch(selectedRole, (role) => {
           </Card>
 
           <div class="flex justify-end gap-4">
-            <Button type="button" variant="outline" @click="router.back()">
+            <Button type="button" variant="outline" @click="returnTo ? router.push(returnTo) : router.back()">
               Cancelar
             </Button>
             <Button type="submit" :disabled="saving">
               <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              {{ saving ? 'Guardando...' : 'Crear Usuario' }}
+              {{ saving ? 'Guardando...' : (fromStaffCreate ? 'Crear y volver al funcionario' : 'Crear Usuario') }}
             </Button>
           </div>
         </div>
