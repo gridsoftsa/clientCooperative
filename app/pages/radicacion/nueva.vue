@@ -883,7 +883,12 @@ async function uploadAllDocuments(
         : {}) }
 
       for (const [key, file] of Object.entries(auxFiles)) {
-        if (!(file instanceof File)) continue
+        if (!(file instanceof File)) {
+          continue
+        }
+        if (file.size < 1) {
+          throw new Error(`El documento auxiliar «${labelByKey[key] ?? key}» está vacío. Vuelva a seleccionarlo.`)
+        }
         const prevId = docMap[key]
         if (typeof prevId === 'number' && prevId > 0) {
           await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
