@@ -516,7 +516,7 @@ watch(
               <CardHeader class="gap-2">
                 <CardTitle class="leading-snug">Estado del registro</CardTitle>
                 <CardDescription v-if="!readOnly" class="leading-relaxed">
-                  Use el selector para activar o inactivar el registro; al editar se muestra el estado guardado.
+                  Use el interruptor para activar o inactivar el registro; al editar se muestra el estado guardado.
                 </CardDescription>
               </CardHeader>
               <CardContent>

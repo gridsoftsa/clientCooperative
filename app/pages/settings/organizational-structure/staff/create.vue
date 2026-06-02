@@ -293,7 +293,7 @@ onMounted(async () => {
             <CardHeader class="gap-2">
               <CardTitle class="leading-snug">Estado del registro</CardTitle>
               <CardDescription class="leading-relaxed">
-                Por defecto queda <strong>Activo</strong> en el selector; elija <strong>Inactivo</strong> si el alta es provisional.
+                Por defecto queda <strong>activo</strong>; desactive el interruptor si el alta es provisional.
               </CardDescription>
             </CardHeader>
             <CardContent>
