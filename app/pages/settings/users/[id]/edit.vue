@@ -420,7 +420,7 @@ onMounted(async () => {
                 <div v-if="lockedUntilDisplay" class="flex items-center gap-3 pt-2">
                   <Switch
                     id="clearLockout"
-                    v-model:checked="clearLoginLockout"
+                    v-model="clearLoginLockout"
                   />
                   <Label for="clearLockout" class="font-normal leading-snug">
                     Quitar bloqueo temporal y reiniciar contador de intentos
@@ -435,7 +435,7 @@ onMounted(async () => {
                 <div class="flex items-center gap-3">
                   <Switch
                     id="changePassword"
-                    v-model:checked="changePassword"
+                    v-model="changePassword"
                   />
                   <Label for="changePassword" class="font-normal leading-snug">
                     Cambiar contraseña

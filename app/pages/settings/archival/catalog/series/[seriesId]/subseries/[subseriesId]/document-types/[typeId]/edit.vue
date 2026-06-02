@@ -108,8 +108,8 @@ onMounted(load)
             <Textarea v-model="form.description" rows="3" />
           </div>
           <div class="flex items-center gap-2">
-            <Switch id="active" v-model:checked="form.is_active" />
-            <Label for="active" class="font-normal">Activo</Label>
+            <Switch id="active" v-model="form.is_active" />
+            <Label for="active" class="font-normal">{{ form.is_active ? 'Activo' : 'Inactivo' }}</Label>
           </div>
           <Button :disabled="saving" @click="submit">
             Guardar
