@@ -1,6 +1,6 @@
+import { normalizeTrdVersionShowResponse } from '~/utils/archival-trd-version'
 import type {
   CatalogTreeSeries,
-  EffectiveRetentionPayload,
   TrdRetentionRuleRow,
   TrdTableRow,
   TrdVersionRow,
@@ -30,12 +30,17 @@ export function useTrdApi() {
   }
 
   async function fetchVersion(tableId: number, versionId: number): Promise<TrdVersionShowResponse> {
-    return await $api<TrdVersionShowResponse>(`/archival/trd-tables/${tableId}/versions/${versionId}`)
+    const res = await $api<TrdVersionShowResponse>(`/archival/trd-tables/${tableId}/versions/${versionId}`)
+
+    return normalizeTrdVersionShowResponse(res)
   }
 
-  async function fetchCatalogTree(activeOnly = true): Promise<CatalogTreeSeries[]> {
+  async function fetchCatalogTree(orgUnitId: number, activeOnly = true): Promise<CatalogTreeSeries[]> {
     const res = await $api<{ data: CatalogTreeSeries[] }>('/archival/catalog/tree', {
-      query: { active_only: activeOnly ? 1 : 0 },
+      query: {
+        org_unit_id: orgUnitId,
+        active_only: activeOnly ? 1 : 0,
+      },
     })
 
     return res.data

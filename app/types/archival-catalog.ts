@@ -1,10 +1,12 @@
 export interface DocSeriesRow {
   id: number
+  org_unit_id: number
   code: string
   name: string
   description?: string | null
   is_active: boolean
   subseries_count?: number
+  org_unit?: { id: number; name: string; code: string }
 }
 
 export interface DocSubseriesRow {

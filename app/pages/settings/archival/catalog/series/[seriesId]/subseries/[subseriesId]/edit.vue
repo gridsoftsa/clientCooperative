@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { DocSubseriesRow } from '~/types/archival-catalog'
+import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
+import { catalogCodeSuffix } from '~/utils/archival-catalog-code'
+import type { DocSeriesRow } from '~/types/archival-catalog'
 
 definePageMeta({
   layout: 'default',
@@ -15,9 +17,13 @@ const { $api } = useNuxtApp()
 
 const seriesId = computed(() => Number(route.params.seriesId))
 const subseriesId = computed(() => Number(route.params.subseriesId))
+
+const series = ref<DocSeriesRow | null>(null)
 const form = ref({ code: '', name: '', description: '', is_active: true })
 const loading = ref(true)
 const saving = ref(false)
+
+const seriesCodePrefix = computed(() => series.value?.code ?? '')
 
 async function load() {
   loading.value = true
@@ -28,6 +34,7 @@ async function load() {
       await router.push(catalogApi.subseriesListPath(seriesId.value))
       return
     }
+    series.value = await catalogApi.fetchSeriesById(seriesId.value)
     form.value = {
       code: row.code,
       name: row.name,
@@ -45,10 +52,11 @@ async function load() {
 async function submit() {
   saving.value = true
   try {
+    const code = catalogCodeSuffix(seriesCodePrefix.value, form.value.code)
     await $api(`/archival/catalog/subseries/${subseriesId.value}`, {
       method: 'PUT',
       body: {
-        code: form.value.code.trim(),
+        code,
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
         is_active: form.value.is_active,
@@ -70,9 +78,14 @@ onMounted(load)
   <SettingsLayout :wide="true">
     <div class="w-full flex flex-col gap-4 max-w-xl">
       <div class="flex justify-between items-center">
-        <h2 class="text-2xl font-bold tracking-tight">
-          Editar subserie
-        </h2>
+        <div class="space-y-1">
+          <h2 class="text-2xl font-bold tracking-tight">
+            Editar subserie
+          </h2>
+          <p v-if="series" class="text-sm text-muted-foreground">
+            Serie <span class="font-mono">{{ series.code }}</span> — {{ series.name }}
+          </p>
+        </div>
         <Button variant="outline" @click="router.push(catalogApi.subseriesListPath(seriesId))">
           Volver
         </Button>
@@ -81,7 +94,16 @@ onMounted(load)
         <CardContent class="pt-6 space-y-4">
           <div class="space-y-2">
             <Label>Código *</Label>
-            <Input v-model="form.code" maxlength="64" />
+            <CatalogPrefixedCodeInput
+              v-if="series"
+              v-model="form.code"
+              :prefix="seriesCodePrefix"
+              maxlength="64"
+              placeholder="02"
+            />
+            <p class="text-xs text-muted-foreground leading-relaxed">
+              Prefijo: código de la serie. Solo digite el sufijo (ej. <span class="font-mono">02</span> → <span class="font-mono">{{ series?.code ?? '045-02' }}-02</span>).
+            </p>
           </div>
           <div class="space-y-2">
             <Label>Nombre *</Label>

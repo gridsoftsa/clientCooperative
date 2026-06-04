@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
+import { catalogCodeSuffix } from '~/utils/archival-catalog-code'
 import type { DocSeriesRow } from '~/types/archival-catalog'
 
 definePageMeta({
@@ -13,20 +15,23 @@ const router = useRouter()
 const { $api } = useNuxtApp()
 
 const id = computed(() => Number(route.params.id))
+const series = ref<DocSeriesRow | null>(null)
 const form = ref({ code: '', name: '', description: '', is_active: true })
 const loading = ref(true)
 const saving = ref(false)
+
+const orgUnitCodePrefix = computed(() => series.value?.org_unit?.code ?? '')
 
 async function load() {
   loading.value = true
   try {
     const res = await $api<{ data: DocSeriesRow }>(`/archival/catalog/series/${id.value}`)
-    const s = res.data
+    series.value = res.data
     form.value = {
-      code: s.code,
-      name: s.name,
-      description: s.description ?? '',
-      is_active: s.is_active,
+      code: res.data.code,
+      name: res.data.name,
+      description: res.data.description ?? '',
+      is_active: res.data.is_active,
     }
   } catch {
     toast.error('Serie no encontrada')
@@ -39,17 +44,20 @@ async function load() {
 async function submit() {
   saving.value = true
   try {
+    const code = catalogCodeSuffix(orgUnitCodePrefix.value, form.value.code)
     await $api(`/archival/catalog/series/${id.value}`, {
       method: 'PUT',
       body: {
-        code: form.value.code.trim(),
+        code,
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
         is_active: form.value.is_active,
       },
     })
     toast.success('Serie actualizada')
-    await router.push('/settings/archival/catalog/series')
+    const orgUnitId = series.value?.org_unit_id
+    const listQuery = orgUnitId != null ? `?org_unit_id=${orgUnitId}` : ''
+    await router.push(`/settings/archival/catalog/series${listQuery}`)
   } catch (e: any) {
     toast.error(e?.data?.message || 'No se pudo guardar')
   } finally {
@@ -64,10 +72,18 @@ onMounted(load)
   <SettingsLayout :wide="true">
     <div class="w-full flex flex-col gap-4 max-w-xl">
       <div class="flex justify-between items-center">
-        <h2 class="text-2xl font-bold tracking-tight">
-          Editar serie
-        </h2>
-        <Button variant="outline" @click="router.push('/settings/archival/catalog/series')">
+        <div class="space-y-1">
+          <h2 class="text-2xl font-bold tracking-tight">
+            Editar serie
+          </h2>
+          <p v-if="series?.org_unit" class="text-sm text-muted-foreground">
+            Área: {{ series.org_unit.name }} ({{ series.org_unit.code }})
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          @click="router.push(series?.org_unit_id ? `/settings/archival/catalog/series?org_unit_id=${series.org_unit_id}` : '/settings/archival/catalog/series')"
+        >
           Volver
         </Button>
       </div>
@@ -75,7 +91,16 @@ onMounted(load)
         <CardContent class="pt-6 space-y-4">
           <div class="space-y-2">
             <Label>Código *</Label>
-            <Input v-model="form.code" maxlength="64" />
+            <CatalogPrefixedCodeInput
+              v-model="form.code"
+              :prefix="orgUnitCodePrefix"
+              maxlength="64"
+              placeholder="Sufijo (ej. 02)"
+            />
+            <p class="text-xs text-muted-foreground">
+              Prefijo: código del área (<span class="font-mono">{{ orgUnitCodePrefix || '…' }}</span>).
+              Ejemplo: área <span class="font-mono">045</span> + sufijo <span class="font-mono">02</span> → serie <span class="font-mono">045-02</span>.
+            </p>
           </div>
           <div class="space-y-2">
             <Label>Nombre *</Label>

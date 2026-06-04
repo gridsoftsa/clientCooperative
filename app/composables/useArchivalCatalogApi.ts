@@ -8,9 +8,12 @@ import type {
 export function useArchivalCatalogApi() {
   const { $api } = useNuxtApp()
 
-  async function fetchSeries(perPage = 200): Promise<DocSeriesRow[]> {
+  async function fetchSeries(perPage = 200, orgUnitId?: number): Promise<DocSeriesRow[]> {
     const res = await $api<ArchivalCatalogListResponse<DocSeriesRow>>('/archival/catalog/series', {
-      query: { per_page: perPage },
+      query: {
+        per_page: perPage,
+        ...(orgUnitId != null ? { org_unit_id: orgUnitId } : {}),
+      },
     })
 
     return res.data

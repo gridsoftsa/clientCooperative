@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
+import { buildCatalogCode, catalogCodeSuffix } from '~/utils/archival-catalog-code'
 import type { DocSeriesRow } from '~/types/archival-catalog'
 
 definePageMeta({
@@ -24,6 +26,14 @@ const form = ref({
 })
 const saving = ref(false)
 
+const seriesCodePrefix = computed(() => series.value?.code ?? '')
+
+const previewCode = computed(() =>
+  form.value.code.trim()
+    ? buildCatalogCode(seriesCodePrefix.value, form.value.code)
+    : (seriesCodePrefix.value ? `${seriesCodePrefix.value}-` : ''),
+)
+
 async function loadSeries() {
   if (!Number.isFinite(seriesId.value) || seriesId.value <= 0) {
     toast.error('Serie no válida')
@@ -39,23 +49,34 @@ async function loadSeries() {
 }
 
 async function submit() {
-  if (!form.value.code.trim() || !form.value.name.trim()) {
+  const suffix = catalogCodeSuffix(seriesCodePrefix.value, form.value.code)
+  if (!suffix.trim()) {
+    toast.error('Digite el sufijo del código de la subserie')
+    return
+  }
+  if (!form.value.name.trim()) {
     toast.error('Código y nombre son obligatorios')
     return
   }
   saving.value = true
   try {
+    const code = buildCatalogCode(seriesCodePrefix.value, suffix)
     await $api('/archival/catalog/subseries', {
       method: 'POST',
       body: {
         doc_series_id: seriesId.value,
-        code: form.value.code.trim(),
+        code,
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
         is_active: form.value.is_active,
       },
     })
     toast.success('Subserie creada')
+    const returnTo = typeof route.query.return_to === 'string' ? route.query.return_to : ''
+    if (returnTo.startsWith('/settings/archival/trd/')) {
+      await router.push(returnTo)
+      return
+    }
     await router.push(catalogApi.subseriesListPath(seriesId.value))
   } catch (e: any) {
     toast.error(e?.data?.message || 'No se pudo crear la subserie')
@@ -76,7 +97,7 @@ onMounted(loadSeries)
             Nueva subserie documental
           </h2>
           <p v-if="series" class="text-muted-foreground">
-            Serie {{ series.code }} — {{ series.name }}
+            Serie <span class="font-mono">{{ series.code }}</span> — {{ series.name }}
           </p>
         </div>
         <Button
@@ -92,7 +113,24 @@ onMounted(loadSeries)
         <CardContent class="pt-6 space-y-4 max-w-xl">
           <div class="space-y-2">
             <Label for="code">Código *</Label>
-            <Input id="code" v-model="form.code" maxlength="64" />
+            <p v-if="!series" class="text-xs text-muted-foreground">
+              Cargando serie…
+            </p>
+            <p v-else class="text-xs text-muted-foreground leading-relaxed">
+              Prefijo: código de la serie (<span class="font-mono">{{ seriesCodePrefix }}</span>).
+              Digite solo el sufijo a la derecha (ej. <span class="font-mono">02</span> → <span class="font-mono">045-02-02</span>).
+            </p>
+            <CatalogPrefixedCodeInput
+              v-if="series"
+              id="code"
+              v-model="form.code"
+              :prefix="seriesCodePrefix"
+              maxlength="64"
+              placeholder="02"
+            />
+            <p v-if="series && previewCode" class="text-xs text-muted-foreground">
+              Código completo: <span class="font-mono font-medium text-foreground">{{ previewCode }}</span>
+            </p>
           </div>
           <div class="space-y-2">
             <Label for="name">Nombre *</Label>

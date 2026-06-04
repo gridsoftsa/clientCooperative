@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { formatAllowedSupportLabels } from '~/constants/archival-document-support'
 import type { DocDocumentTypeRow, DocSeriesRow, DocSubseriesRow } from '~/types/archival-catalog'
 
 definePageMeta({
@@ -126,7 +127,7 @@ onMounted(load)
                   </TableCell>
                   <TableCell>{{ r.name }}</TableCell>
                   <TableCell class="text-muted-foreground">
-                    {{ r.allowed_support || '—' }}
+                    {{ formatAllowedSupportLabels(r.allowed_support) }}
                   </TableCell>
                   <TableCell>
                     <Badge :variant="r.is_active ? 'default' : 'secondary'">

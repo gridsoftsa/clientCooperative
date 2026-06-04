@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import { TRD_FINAL_DISPOSITION_LABELS } from '~/constants/archival-trd'
+import { formatFinalDispositionLabels } from '~/constants/archival-trd'
 import { ARCHIVAL_PHASE_LABELS } from '~/constants/archival-lifecycle'
 import type { ArchivalLifecycleDocumentRow } from '~/composables/useArchivalLifecycleApi'
 
@@ -84,8 +84,7 @@ function phaseLabel(p: string) {
 }
 
 function dispositionLabel(d: string | null | undefined) {
-  if (!d) return '—'
-  return TRD_FINAL_DISPOSITION_LABELS[d] ?? d
+  return formatFinalDispositionLabels(d)
 }
 
 onMounted(async () => {

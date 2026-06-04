@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import {
-  TRD_FINAL_DISPOSITION_LABELS,
   TRD_INHERITED_FROM_LABELS,
   TRD_RETENTION_APPLICATION_OPTIONS,
   TRD_RETENTION_LEVEL_HELP,
   TRD_VERSION_STATUS_LABELS,
+  formatFinalDispositionLabels,
 } from '~/constants/archival-trd'
 import type { EffectiveRetentionPayload, TrdActiveVersionConsultData } from '~/types/archival-trd'
 
@@ -121,7 +121,7 @@ async function consult() {
 }
 
 function dispositionLabel(v: string): string {
-  return TRD_FINAL_DISPOSITION_LABELS[v] ?? v
+  return formatFinalDispositionLabels(v)
 }
 
 function inheritedLabel(v: string): string {
