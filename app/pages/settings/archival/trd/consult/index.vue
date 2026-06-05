@@ -7,7 +7,8 @@ import {
   TRD_VERSION_STATUS_LABELS,
   formatFinalDispositionLabels,
 } from '~/constants/archival-trd'
-import type { EffectiveRetentionPayload, TrdActiveVersionConsultData } from '~/types/archival-trd'
+import type { TrdActiveVersionConsultData } from '~/types/archival-trd'
+import { buildTrdSpreadsheetFilename } from '~/utils/trd-spreadsheet-view'
 
 definePageMeta({
   layout: 'default',
@@ -18,6 +19,7 @@ definePageMeta({
 const router = useRouter()
 const { $api } = useNuxtApp()
 const trdApi = useTrdApi()
+const { downloadReportFile } = useReportExport()
 
 interface OrgUnitOption {
   id: number
@@ -29,6 +31,7 @@ interface OrgUnitOption {
 const units = ref<OrgUnitOption[]>([])
 const orgUnitId = ref<number | null>(null)
 const loading = ref(false)
+const exportingSheet = ref(false)
 const result = ref<TrdActiveVersionConsultData | null>(null)
 const message = ref('')
 const filterText = ref('')
@@ -153,6 +156,48 @@ function collapseAll() {
   expandedSubseries.value = {}
 }
 
+async function openSpreadsheetView() {
+  if (orgUnitId.value == null) {
+    toast.error('Seleccione un área productora')
+    return
+  }
+
+  await navigateTo(
+    {
+      path: '/settings/archival/trd/consult/sheet',
+      query: { org_unit_id: String(orgUnitId.value) },
+    },
+    { open: { target: '_blank' } },
+  )
+}
+
+async function downloadSpreadsheetExcel() {
+  if (orgUnitId.value == null) {
+    toast.error('Seleccione un área productora')
+    return
+  }
+
+  if (!result.value) {
+    toast.error('Consulte primero la TRD vigente')
+    return
+  }
+
+  exportingSheet.value = true
+  try {
+    await downloadReportFile(
+      '/archival/trd-tables/active-version/export',
+      { org_unit_id: orgUnitId.value, format: 'xlsx' },
+      buildTrdSpreadsheetFilename(result.value),
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    toast.success('Excel descargado')
+  } catch (e: unknown) {
+    toast.error(e instanceof Error ? e.message : 'No se pudo descargar el Excel')
+  } finally {
+    exportingSheet.value = false
+  }
+}
+
 onMounted(loadUnits)
 </script>
 
@@ -191,6 +236,26 @@ onMounted(loadUnits)
           <Button :disabled="loading" @click="consult">
             <Icon name="i-lucide-search" class="mr-2 h-4 w-4" />
             Consultar
+          </Button>
+          <Button
+            variant="outline"
+            :disabled="orgUnitId == null"
+            @click="openSpreadsheetView"
+          >
+            <Icon name="i-lucide-table-2" class="mr-2 h-4 w-4" />
+            Vista formato TRD
+          </Button>
+          <Button
+            variant="outline"
+            :disabled="!result || exportingSheet"
+            @click="downloadSpreadsheetExcel"
+          >
+            <Icon
+              :name="exportingSheet ? 'i-lucide-loader-2' : 'i-lucide-file-spreadsheet'"
+              class="mr-2 h-4 w-4"
+              :class="{ 'animate-spin': exportingSheet }"
+            />
+            Descargar Excel
           </Button>
         </CardContent>
       </Card>
