@@ -12,19 +12,19 @@ const sections = computed(() => buildTrdSpreadsheetGlossarySections(props.contex
 </script>
 
 <template>
-  <div class="trd-spreadsheet-glossary border-x border-b border-slate-400 bg-[#fafafa] px-4 py-3">
-    <p class="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-[#0f766e]">
+  <div class="trd-spreadsheet-glossary border-x border-b border-border bg-muted/40 px-4 py-3">
+    <p class="mb-3 text-center text-[11px] font-bold uppercase tracking-wide text-primary">
       Glosario
     </p>
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <div v-for="section in sections" :key="section.title" class="space-y-1.5">
-        <p class="text-[10px] font-semibold uppercase text-slate-700">
+        <p class="text-[10px] font-semibold uppercase text-foreground">
           {{ section.title }}
         </p>
-        <ul class="space-y-1 text-[10px] leading-snug text-slate-800">
+        <ul class="space-y-1 text-[10px] leading-snug text-muted-foreground">
           <li v-for="item in section.items" :key="`${section.title}-${item.term}`">
-            <span class="font-semibold text-slate-900">{{ item.term }}:</span>
+            <span class="font-semibold text-foreground">{{ item.term }}:</span>
             {{ item.definition }}
           </li>
         </ul>

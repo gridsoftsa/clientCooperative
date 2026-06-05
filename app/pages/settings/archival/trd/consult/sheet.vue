@@ -92,23 +92,33 @@ watch(orgUnitId, () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-100 text-slate-900">
-    <div class="no-print sticky top-0 z-20 border-b border-slate-300 bg-white/95 backdrop-blur px-4 py-3">
+  <div class="min-h-screen bg-muted/30 text-foreground">
+    <div class="no-print sticky top-0 z-20 border-b border-header-border bg-header px-4 py-3 text-header-foreground">
       <div class="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3">
         <div>
           <p class="text-sm font-semibold">
             TRD — vista formato hoja de cálculo
           </p>
-          <p v-if="result" class="text-xs text-slate-600">
+          <p v-if="result" class="text-xs opacity-85">
             {{ result.trd_table.org_unit?.name }} · versión {{ result.version.version_number }}
           </p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" :disabled="!result" @click="printSheet">
+          <Button
+            variant="secondary"
+            size="sm"
+            :disabled="!result"
+            @click="printSheet"
+          >
             <Icon name="i-lucide-printer" class="mr-2 h-4 w-4" />
             Imprimir
           </Button>
-          <Button variant="outline" size="sm" :disabled="!result || exporting" @click="downloadExcel">
+          <Button
+            variant="secondary"
+            size="sm"
+            :disabled="!result || exporting"
+            @click="downloadExcel"
+          >
             <Icon
               :name="exporting ? 'i-lucide-loader-2' : 'i-lucide-file-spreadsheet'"
               class="mr-2 h-4 w-4"
@@ -116,10 +126,20 @@ watch(orgUnitId, () => {
             />
             Descargar Excel
           </Button>
-          <Button variant="ghost" size="sm" @click="router.push('/settings/archival/trd/consult')">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="text-header-foreground hover:bg-header-foreground/10 hover:text-header-foreground"
+            @click="router.push('/settings/archival/trd/consult')"
+          >
             Volver a consulta
           </Button>
-          <Button variant="ghost" size="sm" @click="closeTab">
+          <Button
+            variant="ghost"
+            size="sm"
+            class="text-header-foreground hover:bg-header-foreground/10 hover:text-header-foreground"
+            @click="closeTab"
+          >
             Cerrar
           </Button>
         </div>
@@ -128,7 +148,7 @@ watch(orgUnitId, () => {
 
     <div class="mx-auto max-w-[1400px] p-4 print:p-0">
       <div v-if="loading" class="flex justify-center py-24">
-        <Icon name="i-lucide-loader-2" class="h-10 w-10 animate-spin text-slate-500" />
+        <Icon name="i-lucide-loader-2" class="h-10 w-10 animate-spin text-muted-foreground" />
       </div>
 
       <Alert v-else-if="message" class="no-print">

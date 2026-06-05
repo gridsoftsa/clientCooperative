@@ -48,31 +48,35 @@ const dataColumnCount = 16
 </script>
 
 <template>
-  <div class="trd-spreadsheet-root bg-white text-slate-900">
-    <div class="trd-spreadsheet-header border border-slate-400 bg-[#f3f3f3] p-4 text-center space-y-2">
-      <p class="text-xs uppercase tracking-wide text-slate-600">
-        Formato ADM-GD-FO-01
-      </p>
-      <h1 class="text-lg font-bold uppercase leading-tight">
-        Tabla de retención documental (TRD)
-      </h1>
-      <div class="grid gap-2 text-left text-xs sm:grid-cols-2 lg:grid-cols-4">
-        <p><span class="font-semibold">Área productora:</span> {{ orgUnitLabel }}</p>
-        <p><span class="font-semibold">Oficina productora:</span> {{ data.version.producer_office_name }} ({{ data.version.producer_office_code }})</p>
-        <p><span class="font-semibold">Versión TRD:</span> {{ data.version.version_number }} · Vigente</p>
-        <p><span class="font-semibold">Aprobación:</span> {{ data.version.approved_at ?? '—' }}</p>
-        <p class="sm:col-span-2 lg:col-span-4">
-          <span class="font-semibold">Vigencia:</span> {{ validityLabel }}
+  <div class="trd-spreadsheet-root bg-card text-foreground">
+    <div class="border border-border overflow-hidden">
+      <div class="trd-spreadsheet-title-bar bg-header px-4 py-3 text-center text-header-foreground space-y-1">
+        <p class="text-xs uppercase tracking-wide opacity-90">
+          Formato ADM-GD-FO-01
         </p>
+        <h1 class="text-lg font-bold uppercase leading-tight">
+          Tabla de retención documental (TRD)
+        </h1>
+      </div>
+      <div class="trd-spreadsheet-meta border-t border-header-border bg-muted/35 px-4 py-3">
+        <div class="grid gap-2 text-left text-xs sm:grid-cols-2 lg:grid-cols-4">
+          <p><span class="font-semibold text-foreground">Área productora:</span> {{ orgUnitLabel }}</p>
+          <p><span class="font-semibold text-foreground">Oficina productora:</span> {{ data.version.producer_office_name }} ({{ data.version.producer_office_code }})</p>
+          <p><span class="font-semibold text-foreground">Versión TRD:</span> {{ data.version.version_number }} · Vigente</p>
+          <p><span class="font-semibold text-foreground">Aprobación:</span> {{ data.version.approved_at ?? '—' }}</p>
+          <p class="sm:col-span-2 lg:col-span-4">
+            <span class="font-semibold text-foreground">Vigencia:</span> {{ validityLabel }}
+          </p>
+        </div>
       </div>
     </div>
 
     <ArchivalTrdSpreadsheetGlossary :context="glossaryContext" />
 
-    <div class="overflow-x-auto border border-t-0 border-slate-400">
+    <div class="overflow-x-auto border border-t-0 border-border">
       <table class="trd-spreadsheet-table w-full min-w-[980px] border-collapse text-[11px] leading-tight">
         <thead>
-          <tr class="bg-[#0f766e] text-white">
+          <tr class="trd-sheet-head-main">
             <th rowspan="2" class="trd-sheet-cell w-10">
               No.
             </th>
@@ -98,7 +102,7 @@ const dataColumnCount = 16
               Procedimiento
             </th>
           </tr>
-          <tr class="bg-[#115e59] text-white">
+          <tr class="trd-sheet-head-sub">
             <th class="trd-sheet-cell w-20">
               Código
             </th>
@@ -142,14 +146,14 @@ const dataColumnCount = 16
         </thead>
         <tbody>
           <tr v-if="rows.length === 0">
-            <td :colspan="dataColumnCount" class="trd-sheet-cell py-8 text-center text-slate-500">
+            <td :colspan="dataColumnCount" class="trd-sheet-cell py-8 text-center text-muted-foreground">
               No hay tipos documentales asociados a la TRD vigente.
             </td>
           </tr>
           <tr
             v-for="row in rows"
             :key="`${row.seriesCode}-${row.subseriesCode}-${row.documentTypeCode}-${row.rowNumber}`"
-            :class="row.hasEffectiveRule ? 'bg-white' : 'bg-red-50'"
+            :class="row.hasEffectiveRule ? 'bg-card' : 'bg-destructive/10'"
           >
             <td class="trd-sheet-cell text-center tabular-nums">
               {{ row.rowNumber }}
@@ -181,7 +185,7 @@ const dataColumnCount = 16
             <td class="trd-sheet-cell text-center tabular-nums">
               {{ formatYears(row.yearsCentral) }}
             </td>
-            <td class="trd-sheet-cell text-center tabular-nums text-slate-600">
+            <td class="trd-sheet-cell text-center tabular-nums text-muted-foreground">
               {{ formatYears(row.yearsHistorical) }}
             </td>
             <td class="trd-sheet-cell text-center font-semibold">
@@ -204,7 +208,7 @@ const dataColumnCount = 16
       </table>
     </div>
 
-    <p class="border border-t-0 border-slate-400 px-3 py-2 text-[10px] text-slate-600">
+    <p class="border border-t-0 border-border px-3 py-2 text-[10px] text-muted-foreground">
       Filas resaltadas en rojo claro no tienen regla de retención efectiva.
     </p>
   </div>
@@ -212,9 +216,19 @@ const dataColumnCount = 16
 
 <style scoped>
 .trd-sheet-cell {
-  border: 1px solid #94a3b8;
+  border: 1px solid var(--border);
   padding: 0.35rem 0.45rem;
   vertical-align: top;
+}
+
+.trd-sheet-head-main {
+  background: var(--header);
+  color: var(--header-foreground);
+}
+
+.trd-sheet-head-sub {
+  background: color-mix(in srgb, var(--header) 84%, black);
+  color: var(--header-foreground);
 }
 
 @media print {
@@ -228,6 +242,13 @@ const dataColumnCount = 16
 
   .trd-sheet-cell {
     padding: 0.2rem 0.25rem;
+  }
+
+  .trd-sheet-head-main,
+  .trd-sheet-head-sub,
+  .trd-spreadsheet-title-bar {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }
 </style>
