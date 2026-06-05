@@ -49,6 +49,19 @@ const metaForm = ref({
   effective_to: '',
 })
 
+type MetaDateField = 'approved_at' | 'effective_from' | 'effective_to'
+
+const META_DATE_FIELDS: MetaDateField[] = ['approved_at', 'effective_from', 'effective_to']
+
+const META_DATE_LABELS: Record<MetaDateField, string> = {
+  approved_at: 'Fecha aprobación',
+  effective_from: 'Vigencia desde',
+  effective_to: 'Vigencia hasta',
+}
+
+const metaValidationVisible = ref(false)
+const activeTab = ref('general')
+
 const showRuleForm = ref(false)
 const editingRuleId = ref<number | null>(null)
 const hydratingRuleForm = ref(false)
@@ -611,6 +624,79 @@ function onTypeCheckboxChange(typeId: number | string, event: Event): void {
   setTypeSelected(typeId, target.checked)
 }
 
+function isMetaDateFieldEmpty(field: MetaDateField): boolean {
+  return !metaForm.value[field]?.trim()
+}
+
+function isMetaDateFieldInvalid(field: MetaDateField): boolean {
+  if (!metaValidationVisible.value) {
+    return false
+  }
+
+  if (isMetaDateFieldEmpty(field)) {
+    return true
+  }
+
+  if (
+    field === 'effective_to'
+    && metaForm.value.effective_from
+    && metaForm.value.effective_to
+    && metaForm.value.effective_to < metaForm.value.effective_from
+  ) {
+    return true
+  }
+
+  return false
+}
+
+function metaDateInputClass(field: MetaDateField): string {
+  return isMetaDateFieldInvalid(field) ? '!border-destructive ring-2 ring-destructive/50' : ''
+}
+
+function metaDateLabelClass(field: MetaDateField): string {
+  return isMetaDateFieldInvalid(field) ? 'text-destructive' : ''
+}
+
+const metaDateFieldsHaveErrors = computed(() =>
+  META_DATE_FIELDS.some(field => isMetaDateFieldInvalid(field)),
+)
+
+function validateMetaDates(): boolean {
+  metaValidationVisible.value = true
+
+  const missing = META_DATE_FIELDS.filter(field => isMetaDateFieldEmpty(field))
+  if (missing.length > 0) {
+    toast.error(`Complete los campos obligatorios: ${missing.map(field => META_DATE_LABELS[field]).join(', ')}`)
+    return false
+  }
+
+  if (metaForm.value.effective_to < metaForm.value.effective_from) {
+    toast.error('La vigencia hasta debe ser igual o posterior a la vigencia desde')
+    return false
+  }
+
+  metaValidationVisible.value = false
+  return true
+}
+
+function buildMetaBody() {
+  return {
+    producer_office_name: metaForm.value.producer_office_name.trim(),
+    producer_office_code: metaForm.value.producer_office_code.trim(),
+    retention_application_level: metaForm.value.retention_application_level,
+    approved_at: metaForm.value.approved_at,
+    effective_from: metaForm.value.effective_from,
+    effective_to: metaForm.value.effective_to,
+  }
+}
+
+async function persistMetaRequest() {
+  await $api(`/archival/trd-tables/${tableId.value}/versions/${versionId.value}`, {
+    method: 'PUT',
+    body: buildMetaBody(),
+  })
+}
+
 async function reload() {
   const res = await trdApi.fetchVersion(tableId.value, versionId.value)
   version.value = res.data
@@ -644,22 +730,21 @@ async function saveMeta() {
   if (!canEdit.value) {
     return
   }
+  if (!validateMetaDates()) {
+    activeTab.value = 'general'
+    return
+  }
   saving.value = true
   try {
-    await $api(`/archival/trd-tables/${tableId.value}/versions/${versionId.value}`, {
-      method: 'PUT',
-      body: {
-        producer_office_name: metaForm.value.producer_office_name.trim(),
-        producer_office_code: metaForm.value.producer_office_code.trim(),
-        retention_application_level: metaForm.value.retention_application_level,
-        approved_at: metaForm.value.approved_at || null,
-        effective_from: metaForm.value.effective_from || null,
-        effective_to: metaForm.value.effective_to || null,
-      },
-    })
+    await persistMetaRequest()
     toast.success('Datos de versión guardados')
     await reload()
   } catch (e: any) {
+    const errors = e?.data?.errors
+    if (errors?.approved_at || errors?.effective_from || errors?.effective_to) {
+      metaValidationVisible.value = true
+      activeTab.value = 'general'
+    }
     toast.error(e?.data?.message || 'Error al guardar')
   } finally {
     saving.value = false
@@ -826,16 +911,28 @@ async function activateVersion() {
   if (!canEdit.value) {
     return
   }
+  if (!validateMetaDates()) {
+    activeTab.value = 'general'
+    return
+  }
   activating.value = true
   try {
+    await persistMetaRequest()
     await $api(`/archival/trd-tables/${tableId.value}/versions/${versionId.value}/activate`, {
       method: 'POST',
     })
     toast.success('TRD activada')
     await reload()
   } catch (e: any) {
-    const msg = e?.data?.errors?.retention_rules?.[0]
-      ?? e?.data?.errors?.approved_at?.[0]
+    const errors = e?.data?.errors
+    if (errors?.approved_at || errors?.effective_from || errors?.effective_to) {
+      metaValidationVisible.value = true
+      activeTab.value = 'general'
+    }
+    const msg = errors?.retention_rules?.[0]
+      ?? errors?.approved_at?.[0]
+      ?? errors?.effective_from?.[0]
+      ?? errors?.effective_to?.[0]
       ?? e?.data?.message
       ?? 'No se pudo activar'
     toast.error(msg)
@@ -959,7 +1056,7 @@ onActivated(async () => {
         </div>
       </div>
 
-      <Tabs default-value="general">
+      <Tabs v-model="activeTab" default-value="general">
         <TabsList class="flex flex-wrap h-auto gap-1">
           <TabsTrigger value="general">
             General
@@ -978,6 +1075,15 @@ onActivated(async () => {
         <TabsContent value="general" class="mt-4">
           <Card>
             <CardContent class="pt-6 space-y-4 max-w-2xl">
+              <Alert
+                v-if="metaValidationVisible && metaDateFieldsHaveErrors"
+                variant="destructive"
+              >
+                <AlertTitle>Fechas obligatorias</AlertTitle>
+                <AlertDescription>
+                  Indique la fecha de aprobación y el rango de vigencia (desde y hasta) antes de guardar o activar la TRD.
+                </AlertDescription>
+              </Alert>
               <p class="text-sm text-muted-foreground leading-relaxed">
                 {{ TRD_RETENTION_LEVEL_HELP[metaForm.retention_application_level] }}
               </p>
@@ -1002,16 +1108,58 @@ onActivated(async () => {
               </div>
               <div class="grid gap-4 sm:grid-cols-3">
                 <div class="space-y-2">
-                  <Label>Fecha aprobación</Label>
-                  <Input v-model="metaForm.approved_at" type="date" :disabled="!canEdit" />
+                  <Label :class="metaDateLabelClass('approved_at')">Fecha aprobación *</Label>
+                  <Input
+                    v-model="metaForm.approved_at"
+                    type="date"
+                    :disabled="!canEdit"
+                    :aria-invalid="isMetaDateFieldInvalid('approved_at')"
+                    :class="metaDateInputClass('approved_at')"
+                  />
+                  <p
+                    v-if="isMetaDateFieldInvalid('approved_at')"
+                    class="text-xs text-destructive"
+                  >
+                    Campo obligatorio
+                  </p>
                 </div>
                 <div class="space-y-2">
-                  <Label>Vigencia desde</Label>
-                  <Input v-model="metaForm.effective_from" type="date" :disabled="!canEdit" />
+                  <Label :class="metaDateLabelClass('effective_from')">Vigencia desde *</Label>
+                  <Input
+                    v-model="metaForm.effective_from"
+                    type="date"
+                    :disabled="!canEdit"
+                    :aria-invalid="isMetaDateFieldInvalid('effective_from')"
+                    :class="metaDateInputClass('effective_from')"
+                  />
+                  <p
+                    v-if="isMetaDateFieldInvalid('effective_from')"
+                    class="text-xs text-destructive"
+                  >
+                    Campo obligatorio
+                  </p>
                 </div>
                 <div class="space-y-2">
-                  <Label>Vigencia hasta</Label>
-                  <Input v-model="metaForm.effective_to" type="date" :disabled="!canEdit" />
+                  <Label :class="metaDateLabelClass('effective_to')">Vigencia hasta *</Label>
+                  <Input
+                    v-model="metaForm.effective_to"
+                    type="date"
+                    :disabled="!canEdit"
+                    :aria-invalid="isMetaDateFieldInvalid('effective_to')"
+                    :class="metaDateInputClass('effective_to')"
+                  />
+                  <p
+                    v-if="isMetaDateFieldInvalid('effective_to') && !isMetaDateFieldEmpty('effective_to')"
+                    class="text-xs text-destructive"
+                  >
+                    Debe ser igual o posterior a vigencia desde
+                  </p>
+                  <p
+                    v-else-if="isMetaDateFieldInvalid('effective_to')"
+                    class="text-xs text-destructive"
+                  >
+                    Campo obligatorio
+                  </p>
                 </div>
               </div>
               <div v-if="canEdit" class="flex justify-end">
