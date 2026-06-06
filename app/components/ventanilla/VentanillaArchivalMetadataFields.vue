@@ -58,6 +58,24 @@ function updateField(code: string, raw: unknown) {
 function fieldId(f: ArchivalMetadataFieldRow, idx: number) {
   return `ventanilla_meta_${f.code}_${idx}`
 }
+
+function validateRequiredFields(): string | null {
+  for (const field of activeFields.value) {
+    if (!field.is_required) {
+      continue
+    }
+    const value = values.value[field.code]
+    if (value === null || value === undefined || value === '') {
+      return `Complete el metadato obligatorio: ${field.name}`
+    }
+  }
+
+  return null
+}
+
+defineExpose({
+  validateRequiredFields,
+})
 </script>
 
 <template>

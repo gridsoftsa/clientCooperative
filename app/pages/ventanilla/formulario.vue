@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { onDigitsOnlyInput, filterDigitsOnly } from '~/utils/digits-only-input'
+import { isDigitsOnlyIdentifier } from '~/utils/ventanilla-party-validation'
+
 definePageMeta({
   layout: false,
 })
@@ -47,6 +50,14 @@ async function submit() {
     errorMessage.value = 'Nombre, correo y asunto son obligatorios.'
     return
   }
+  if (!senderIdentifier.value.trim()) {
+    errorMessage.value = 'La identificación es obligatoria.'
+    return
+  }
+  if (!isDigitsOnlyIdentifier(filterDigitsOnly(senderIdentifier.value))) {
+    errorMessage.value = 'La identificación debe contener solo números.'
+    return
+  }
 
   const withFiles = fileRows.value.filter((row: { file: File | null; title: string }) => row.file)
   if (withFiles.length === 0) {
@@ -57,9 +68,7 @@ async function submit() {
   const fd = new FormData()
   fd.append('sender_name', senderName.value.trim())
   fd.append('sender_email', senderEmail.value.trim())
-  if (senderIdentifier.value.trim()) {
-    fd.append('sender_identifier', senderIdentifier.value.trim())
-  }
+  fd.append('sender_identifier', filterDigitsOnly(senderIdentifier.value.trim()))
   fd.append('subject', subject.value.trim())
   if (body.value.trim()) {
     fd.append('body', body.value.trim())
@@ -126,8 +135,14 @@ async function submit() {
             <Input v-model="senderEmail" type="email" />
           </div>
           <div class="space-y-2">
-            <Label>Identificación</Label>
-            <Input v-model="senderIdentifier" />
+            <Label>Identificación *</Label>
+            <Input
+              v-model="senderIdentifier"
+              inputmode="numeric"
+              maxlength="64"
+              placeholder="Solo números"
+              @input="onDigitsOnlyInput($event, v => (senderIdentifier = v))"
+            />
           </div>
           <div class="space-y-2 md:col-span-2">
             <Label>Asunto *</Label>

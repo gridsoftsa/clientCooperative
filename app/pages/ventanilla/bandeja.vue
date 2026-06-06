@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { VENTANILLA_FILING_TYPE_LABELS } from '~/constants/ventanilla'
+import { onDigitsOnlyInput, filterDigitsOnly } from '~/utils/digits-only-input'
+import { validateVentanillaCoreFilingForm } from '~/utils/ventanilla-filing-form-validation'
 import type {
   VentanillaCatalogData,
   VentanillaFilingTypeValue,
@@ -46,8 +48,11 @@ const assignedUserId = ref<number | null>(null)
 const subject = ref('')
 const senderName = ref('')
 const senderIdentifier = ref('')
+const recipientName = ref('')
+const recipientIdentifier = ref('')
 const notes = ref('')
 const metadataValues = ref<Record<string, unknown>>({})
+const metadataFieldsRef = ref<{ validateRequiredFields?: () => string | null } | null>(null)
 const discardReason = ref('')
 
 const responsibleOrgUnitId = computed(() => filingType.value === 'incoming' ? recipientOrgUnitId.value : producerOrgUnitId.value)
@@ -139,7 +144,9 @@ function selectIntake(intake: VentanillaIntakeRow) {
   functionalTypeKey.value = intake.suggested_functional_type_key ?? catalog.value?.functional_types[0]?.key ?? ''
   subject.value = intake.subject
   senderName.value = intake.sender_name ?? ''
-  senderIdentifier.value = intake.sender_identifier ?? ''
+  senderIdentifier.value = filterDigitsOnly(intake.sender_identifier ?? '')
+  recipientName.value = ''
+  recipientIdentifier.value = ''
   notes.value = [
     `Entrada desde ${sourceLabel(intake.source)}.`,
     intake.sender_email ? `Correo remitente: ${intake.sender_email}` : '',
@@ -164,16 +171,24 @@ async function classifySelected() {
   if (!selectedIntake.value) {
     return
   }
-  if (!functionalTypeKey.value || !docDocumentTypeId.value) {
-    errorMessage.value = 'Seleccione tipo funcional y tipo documental TRD.'
-    return
-  }
-  if (filingType.value === 'incoming' && !recipientOrgUnitId.value) {
-    errorMessage.value = 'Seleccione el área destinataria.'
-    return
-  }
-  if (filingType.value !== 'incoming' && !producerOrgUnitId.value) {
-    errorMessage.value = 'Seleccione el área productora.'
+
+  const formError = validateVentanillaCoreFilingForm({
+    filingType: filingType.value,
+    functionalTypeKey: functionalTypeKey.value,
+    subject: subject.value,
+    producerOrgUnitId: producerOrgUnitId.value,
+    recipientOrgUnitId: recipientOrgUnitId.value,
+    docDocumentTypeId: docDocumentTypeId.value,
+    parties: {
+      senderName: senderName.value,
+      senderIdentifier: senderIdentifier.value,
+      recipientName: recipientName.value,
+      recipientIdentifier: recipientIdentifier.value,
+    },
+    metadataError: metadataFieldsRef.value?.validateRequiredFields?.() ?? null,
+  })
+  if (formError) {
+    errorMessage.value = formError
     return
   }
 
@@ -186,8 +201,10 @@ async function classifySelected() {
       functional_type_key: functionalTypeKey.value,
       recipient_org_unit_id: recipientOrgUnitId.value,
       producer_org_unit_id: producerOrgUnitId.value,
-      sender_name: senderName.value.trim() || undefined,
-      sender_identifier: senderIdentifier.value.trim() || undefined,
+      sender_name: senderName.value.trim(),
+      sender_identifier: filterDigitsOnly(senderIdentifier.value),
+      recipient_name: recipientName.value.trim() || undefined,
+      recipient_identifier: filterDigitsOnly(recipientIdentifier.value) || undefined,
       subject: subject.value.trim(),
       reception_medium: selectedIntake.value.suggested_reception_medium ?? (selectedIntake.value.source === 'email' ? 'email' : 'web'),
       notes: notes.value.trim() || undefined,
@@ -443,6 +460,21 @@ async function viewIntakeFile(fileId: number, mimeType?: string | null) {
               </Select>
             </div>
 
+            <div v-if="filingType === 'internal'" class="space-y-2">
+              <Label>Área destinataria *</Label>
+              <Select
+                :model-value="recipientOrgUnitId != null ? String(recipientOrgUnitId) : undefined"
+                @update:model-value="recipientOrgUnitId = $event ? Number($event) : null"
+              >
+                <SelectTrigger><SelectValue placeholder="Seleccione área destino" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="unit in orgUnits" :key="`int-${unit.id}`" :value="String(unit.id)">
+                    {{ unit.code }} — {{ unit.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             <div class="space-y-2">
               <Label>Responsable</Label>
               <Select
@@ -464,13 +496,37 @@ async function viewIntakeFile(fileId: number, mimeType?: string | null) {
             </div>
             <div class="grid gap-3 md:grid-cols-2">
               <div class="space-y-2">
-                <Label>Remitente</Label>
+                <Label>Remitente *</Label>
                 <Input v-model="senderName" />
               </div>
               <div class="space-y-2">
-                <Label>Identificación remitente</Label>
-                <Input v-model="senderIdentifier" />
+                <Label>Identificación remitente *</Label>
+                <Input
+                  v-model="senderIdentifier"
+                  inputmode="numeric"
+                  maxlength="64"
+                  autocomplete="off"
+                  placeholder="Solo números"
+                  @input="onDigitsOnlyInput($event, v => (senderIdentifier = v))"
+                />
               </div>
+              <template v-if="filingType === 'outgoing' || filingType === 'internal'">
+                <div class="space-y-2">
+                  <Label>Destinatario *</Label>
+                  <Input v-model="recipientName" />
+                </div>
+                <div class="space-y-2">
+                  <Label>Identificación destinatario *</Label>
+                  <Input
+                    v-model="recipientIdentifier"
+                    inputmode="numeric"
+                    maxlength="64"
+                    autocomplete="off"
+                    placeholder="Solo números"
+                    @input="onDigitsOnlyInput($event, v => (recipientIdentifier = v))"
+                  />
+                </div>
+              </template>
             </div>
 
             <VentanillaTrdPicker
@@ -479,6 +535,7 @@ async function viewIntakeFile(fileId: number, mimeType?: string | null) {
             />
 
             <VentanillaArchivalMetadataFields
+              ref="metadataFieldsRef"
               v-model="metadataValues"
               :doc-document-type-id="docDocumentTypeId"
               :functional-type-key="functionalTypeKey"

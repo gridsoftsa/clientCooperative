@@ -193,8 +193,10 @@ async function viewFile(fileId: number, mimeType?: string | null) {
   openingFileId.value = fileId
   try {
     await ventanillaApi.viewFilingFileInNewTab(id.value, fileId, mimeType ?? undefined)
-  } catch {
-    errorMessage.value = 'No se pudo abrir el archivo'
+  } catch (err) {
+    errorMessage.value = err instanceof Error && err.message
+      ? err.message
+      : 'No se pudo abrir el archivo'
   } finally {
     openingFileId.value = null
   }
