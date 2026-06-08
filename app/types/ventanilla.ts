@@ -67,6 +67,26 @@ export interface VentanillaSlaSettingsData {
   holidays: VentanillaBusinessHolidayRow[]
 }
 
+export interface VentanillaColombiaHolidayPreviewRow {
+  date: string
+  name: string
+  source: 'seed' | 'calculated'
+  already_configured: boolean
+  configured_holiday_id: number | null
+}
+
+export interface VentanillaColombiaHolidayPreviewData {
+  year: number
+  holidays: VentanillaColombiaHolidayPreviewRow[]
+}
+
+export interface VentanillaColombiaHolidayImportResult {
+  year: number
+  imported: number
+  reactivated: number
+  skipped: number
+}
+
 export interface VentanillaIntakeFileRow {
   id: number
   title: string

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { VentanillaSlaSettingsData } from '~/types/ventanilla'
+import type { VentanillaColombiaHolidayPreviewData, VentanillaSlaSettingsData } from '~/types/ventanilla'
 
 definePageMeta({
   layout: 'default',
@@ -15,6 +15,15 @@ const successMessage = ref('')
 const data = ref<VentanillaSlaSettingsData | null>(null)
 const holidayDate = ref('')
 const holidayName = ref('')
+const catalogYear = ref(new Date().getFullYear())
+const catalogPreview = ref<VentanillaColombiaHolidayPreviewData | null>(null)
+const catalogLoading = ref(false)
+const replaceCatalogYear = ref(false)
+
+const visibleHolidays = computed(() => {
+  const year = String(catalogYear.value)
+  return (data.value?.holidays ?? []).filter((holiday) => holiday.date.startsWith(year))
+})
 
 const weekDays = [
   { value: 1, label: 'Lunes' },
@@ -115,6 +124,40 @@ async function removeHoliday(id: number) {
   } finally {
     saving.value = false
   }
+}
+
+async function previewColombiaHolidays() {
+  catalogLoading.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    catalogPreview.value = await api.previewColombiaHolidays(catalogYear.value)
+  } catch {
+    errorMessage.value = 'No se pudo consultar el calendario de festivos'
+    catalogPreview.value = null
+  } finally {
+    catalogLoading.value = false
+  }
+}
+
+async function importColombiaHolidays() {
+  catalogLoading.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    const result = await api.importColombiaHolidays(catalogYear.value, replaceCatalogYear.value)
+    data.value = result.data
+    catalogPreview.value = await api.previewColombiaHolidays(catalogYear.value)
+    successMessage.value = result.message
+  } catch {
+    errorMessage.value = 'No se pudo importar el calendario de festivos'
+  } finally {
+    catalogLoading.value = false
+  }
+}
+
+function catalogSourceLabel(source: 'seed' | 'calculated'): string {
+  return source === 'seed' ? 'Catálogo verificado' : 'Calculado (Ley Emiliani)'
 }
 </script>
 
@@ -217,7 +260,82 @@ async function removeHoliday(id: number) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Festivos</CardTitle>
+          <CardTitle>Festivos oficiales Colombia</CardTitle>
+          <CardDescription>
+            Consulte el calendario nacional por año e impórtelo al SLA. 2026 usa fechas verificadas; otros años se calculan con Ley Emiliani (incluye Chiquinquirá desde 2026).
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div class="flex flex-wrap items-end gap-3">
+            <div class="space-y-2">
+              <Label>Año</Label>
+              <Input v-model.number="catalogYear" type="number" min="1970" max="2100" class="w-[120px]" />
+            </div>
+            <Button variant="outline" :disabled="catalogLoading" @click="previewColombiaHolidays">
+              {{ catalogLoading ? 'Consultando…' : 'Consultar calendario' }}
+            </Button>
+            <Button :disabled="catalogLoading || !catalogPreview?.holidays.length" @click="importColombiaHolidays">
+              {{ catalogLoading ? 'Importando…' : 'Importar al SLA' }}
+            </Button>
+          </div>
+          <label class="flex items-center gap-2 text-sm">
+            <Checkbox
+              :checked="replaceCatalogYear"
+              @update:checked="replaceCatalogYear = Boolean($event)"
+            />
+            Reemplazar festivos activos del año antes de importar
+          </label>
+          <div v-if="catalogPreview?.holidays.length" class="overflow-x-auto rounded-lg border">
+            <table class="min-w-full text-sm">
+              <thead class="bg-muted/50 text-left">
+                <tr>
+                  <th class="px-3 py-2 font-medium">
+                    Fecha
+                  </th>
+                  <th class="px-3 py-2 font-medium">
+                    Festivo
+                  </th>
+                  <th class="px-3 py-2 font-medium">
+                    Origen
+                  </th>
+                  <th class="px-3 py-2 font-medium">
+                    En SLA
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="holiday in catalogPreview.holidays"
+                  :key="holiday.date"
+                  class="border-t"
+                >
+                  <td class="px-3 py-2 whitespace-nowrap">
+                    {{ holiday.date }}
+                  </td>
+                  <td class="px-3 py-2">
+                    {{ holiday.name }}
+                  </td>
+                  <td class="px-3 py-2 whitespace-nowrap">
+                    {{ catalogSourceLabel(holiday.source) }}
+                  </td>
+                  <td class="px-3 py-2">
+                    <Badge :variant="holiday.already_configured ? 'secondary' : 'outline'">
+                      {{ holiday.already_configured ? 'Sí' : 'No' }}
+                    </Badge>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Festivos configurados ({{ catalogYear }})</CardTitle>
+          <CardDescription>
+            Festivos activos en el calendario SLA. Puede agregar otros manualmente abajo.
+          </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="grid gap-3 md:grid-cols-[180px_1fr_auto]">
@@ -227,9 +345,9 @@ async function removeHoliday(id: number) {
               Agregar
             </Button>
           </div>
-          <ul v-if="data.holidays.length" class="divide-y rounded-lg border">
+          <ul v-if="visibleHolidays.length" class="divide-y rounded-lg border">
             <li
-              v-for="holiday in data.holidays"
+              v-for="holiday in visibleHolidays"
               :key="holiday.id"
               class="flex items-center justify-between gap-3 p-3 text-sm"
             >
@@ -240,7 +358,7 @@ async function removeHoliday(id: number) {
             </li>
           </ul>
           <p v-else class="text-muted-foreground text-sm">
-            No hay festivos configurados.
+            No hay festivos configurados para {{ catalogYear }}. Use «Consultar calendario» e «Importar al SLA».
           </p>
         </CardContent>
       </Card>

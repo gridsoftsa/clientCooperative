@@ -1,6 +1,8 @@
 import type {
   VentanillaCatalogData,
   VentanillaCatalogSettingsData,
+  VentanillaColombiaHolidayImportResult,
+  VentanillaColombiaHolidayPreviewData,
   VentanillaFilingDetail,
   VentanillaFilingSummary,
   VentanillaIntakeRow,
@@ -222,6 +224,40 @@ export function useVentanillaApi() {
     return res.data
   }
 
+  async function previewColombiaHolidays(year: number): Promise<VentanillaColombiaHolidayPreviewData> {
+    const res = await api<{ data: VentanillaColombiaHolidayPreviewData }>('/ventanilla/sla-settings/holidays/colombia/preview', {
+      query: { year },
+    })
+
+    return res.data
+  }
+
+  async function importColombiaHolidays(
+    year: number,
+    replace = false,
+  ): Promise<{ data: VentanillaSlaSettingsData; import: VentanillaColombiaHolidayImportResult; message: string }> {
+    const res = await api<{
+      data: {
+        settings: VentanillaSlaSettingsData['settings']
+        holidays: VentanillaSlaSettingsData['holidays']
+        import: VentanillaColombiaHolidayImportResult
+      }
+      message: string
+    }>('/ventanilla/sla-settings/holidays/colombia/import', {
+      method: 'POST',
+      body: { year, replace },
+    })
+
+    return {
+      data: {
+        settings: res.data.settings,
+        holidays: res.data.holidays,
+      },
+      import: res.data.import,
+      message: res.message,
+    }
+  }
+
   function filingFileViewUrl(filingId: number, fileId: number): string {
     const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
 
@@ -394,6 +430,8 @@ export function useVentanillaApi() {
     updateSlaSettings,
     addHoliday,
     removeHoliday,
+    previewColombiaHolidays,
+    importColombiaHolidays,
     filingFileViewUrl,
     filingFileDownloadUrl,
     filingReceiptUrl,
