@@ -1,10 +1,16 @@
+function isVentanillaPublicPath(path: string): boolean {
+  return path === '/ventanilla/formulario' || path.startsWith('/ventanilla/verificar/')
+}
+
 export default defineNuxtRouteMiddleware(async (to) => {
   const publicPages = new Set(['/login', '/forgot-password', '/reset-password', '/register', '/unauthorized'])
   const guestOnly = new Set(['/login', '/forgot-password', '/reset-password', '/register'])
 
+  const isPublic = publicPages.has(to.path) || isVentanillaPublicPath(to.path)
+
   // En el servidor, solo permitir páginas públicas
   if (import.meta.server) {
-    if (!publicPages.has(to.path)) {
+    if (!isPublic) {
       // En SSR, no podemos redirigir, pero el cliente lo hará inmediatamente
       return
     }
@@ -15,7 +21,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const { user, fetchUser } = useAuth()
 
   // Si ya estamos en una página pública, verificar si debemos redirigir
-  if (publicPages.has(to.path)) {
+  if (isPublic) {
     // Si estamos en login y ya estamos logueados, redirigir al dashboard
     const checked = useState<boolean>('auth.checked', () => false)
     if (!checked.value) {

@@ -5,7 +5,9 @@ import type {
   VentanillaColombiaHolidayPreviewData,
   VentanillaFilingDetail,
   VentanillaFilingSummary,
+  VentanillaFilingVerificationData,
   VentanillaIntakeRow,
+  VentanillaResponsibleUserRow,
   VentanillaSlaSettingsData,
 } from '~/types/ventanilla'
 
@@ -16,6 +18,20 @@ export function useVentanillaApi() {
 
   async function fetchCatalog(): Promise<VentanillaCatalogData> {
     const res = await api<{ data: VentanillaCatalogData }>('/ventanilla/catalog')
+
+    return res.data
+  }
+
+  async function fetchResponsibleUsers(
+    orgUnitId: number,
+    includeUserId?: number,
+  ): Promise<VentanillaResponsibleUserRow[]> {
+    const query: Record<string, string | number> = { org_unit_id: orgUnitId }
+    if (includeUserId) {
+      query.include_user_id = includeUserId
+    }
+
+    const res = await api<{ data: VentanillaResponsibleUserRow[] }>('/ventanilla/responsible-users', { query })
 
     return res.data
   }
@@ -71,6 +87,14 @@ export function useVentanillaApi() {
 
   async function fetchFiling(id: number): Promise<VentanillaFilingDetail> {
     const res = await api<{ data: VentanillaFilingDetail }>(`/ventanilla/filings/${id}`)
+
+    return res.data
+  }
+
+  async function verifyFilingReceipt(token: string): Promise<VentanillaFilingVerificationData> {
+    const res = await api<{ data: VentanillaFilingVerificationData }>(
+      `/ventanilla/verify/${encodeURIComponent(token)}`,
+    )
 
     return res.data
   }
@@ -276,6 +300,12 @@ export function useVentanillaApi() {
     return `${base}/api/ventanilla/filings/${filingId}/receipt`
   }
 
+  function filingStickerUrl(filingId: number): string {
+    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+
+    return `${base}/api/ventanilla/filings/${filingId}/sticker`
+  }
+
   function intakeFileViewUrl(intakeId: number, fileId: number): string {
     const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
 
@@ -375,6 +405,11 @@ export function useVentanillaApi() {
     openBlobInNewTab(blob, 'application/pdf')
   }
 
+  async function viewStickerInNewTab(filingId: number): Promise<void> {
+    const blob = await fetchAuthenticatedBlob(filingStickerUrl(filingId))
+    openBlobInNewTab(blob, 'application/pdf')
+  }
+
   async function downloadIntakeFile(intakeId: number, fileId: number, filename: string): Promise<void> {
     await downloadFromUrl(intakeFileDownloadUrl(intakeId, fileId), filename)
   }
@@ -406,6 +441,7 @@ export function useVentanillaApi() {
 
   return {
     fetchCatalog,
+    fetchResponsibleUsers,
     fetchCatalogSettings,
     createFunctionalType,
     updateFunctionalType,
@@ -413,6 +449,7 @@ export function useVentanillaApi() {
     updateReceptionMedium,
     fetchFilings,
     fetchFiling,
+    verifyFilingReceipt,
     createFiling,
     createPublicIntake,
     fetchIntakes,
@@ -435,12 +472,14 @@ export function useVentanillaApi() {
     filingFileViewUrl,
     filingFileDownloadUrl,
     filingReceiptUrl,
+    filingStickerUrl,
     intakeFileViewUrl,
     intakeFileDownloadUrl,
     viewFilingFileInNewTab,
     viewIntakeFileInNewTab,
     downloadFilingFile,
     viewReceiptInNewTab,
+    viewStickerInNewTab,
     downloadIntakeFile,
   }
 }

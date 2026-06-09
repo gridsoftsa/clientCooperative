@@ -7,6 +7,7 @@ import type { VentanillaTrafficLightValue } from '~/types/ventanilla'
 
 const props = defineProps<{
   status: VentanillaTrafficLightValue | null | undefined
+  requiresResponse?: boolean
 }>()
 
 const label = computed(() => {
@@ -21,7 +22,10 @@ const variant = computed(() => ventanillaTrafficLightBadgeVariant(props.status))
 </script>
 
 <template>
-  <Badge v-if="status" :variant="variant">
+  <Badge v-if="requiresResponse === false" variant="outline">
+    Sin respuesta
+  </Badge>
+  <Badge v-else-if="status" :variant="variant">
     {{ label }}
   </Badge>
   <span v-else class="text-muted-foreground text-xs">—</span>

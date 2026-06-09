@@ -22,7 +22,7 @@ const replaceCatalogYear = ref(false)
 
 const visibleHolidays = computed(() => {
   const year = String(catalogYear.value)
-  return (data.value?.holidays ?? []).filter((holiday) => holiday.date.startsWith(year))
+  return (data.value?.holidays ?? []).filter((holiday) => holidayYear(holiday.date) === year)
 })
 
 const weekDays = [
@@ -158,6 +158,23 @@ async function importColombiaHolidays() {
 
 function catalogSourceLabel(source: 'seed' | 'calculated'): string {
   return source === 'seed' ? 'Catálogo verificado' : 'Calculado (Ley Emiliani)'
+}
+
+function holidayYear(value: string): string {
+  return value.slice(0, 4)
+}
+
+function formatHolidayDate(value: string): string {
+  const normalized = value.slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return value
+  }
+  const [year, month, day] = normalized.split('-').map(Number)
+  return new Date(year, month - 1, day).toLocaleDateString('es-CO', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
 }
 </script>
 
@@ -310,7 +327,7 @@ function catalogSourceLabel(source: 'seed' | 'calculated'): string {
                   class="border-t"
                 >
                   <td class="px-3 py-2 whitespace-nowrap">
-                    {{ holiday.date }}
+                    {{ formatHolidayDate(holiday.date) }}
                   </td>
                   <td class="px-3 py-2">
                     {{ holiday.name }}
@@ -351,9 +368,16 @@ function catalogSourceLabel(source: 'seed' | 'calculated'): string {
               :key="holiday.id"
               class="flex items-center justify-between gap-3 p-3 text-sm"
             >
-              <span>{{ holiday.date }} — {{ holiday.name }}</span>
-              <Button variant="ghost" size="sm" :disabled="saving" @click="removeHoliday(holiday.id)">
-                Eliminar
+              <span>{{ formatHolidayDate(holiday.date) }} — {{ holiday.name }}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                :disabled="saving"
+                aria-label="Eliminar festivo"
+                @click="removeHoliday(holiday.id)"
+              >
+                <Icon name="i-lucide-trash-2" class="size-4 text-destructive" />
               </Button>
             </li>
           </ul>

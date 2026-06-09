@@ -25,6 +25,12 @@ definePageMeta({
 const router = useRouter()
 const { $api } = useNuxtApp()
 const ventanillaApi = useVentanillaApi()
+const {
+  responsibleUsers,
+  loadingResponsibleUsers,
+  loadResponsibleUsers,
+  clearAssignedUserIfMissing,
+} = useVentanillaResponsibleUsers()
 
 const intakes = ref<VentanillaIntakeRow[]>([])
 const selectedIntake = ref<VentanillaIntakeRow | null>(null)
@@ -56,6 +62,15 @@ const metadataFieldsRef = ref<{ validateRequiredFields?: () => string | null } |
 const discardReason = ref('')
 
 const responsibleOrgUnitId = computed(() => filingType.value === 'incoming' ? recipientOrgUnitId.value : producerOrgUnitId.value)
+
+watch(responsibleOrgUnitId, async (orgUnitId) => {
+  await loadResponsibleUsers(orgUnitId)
+  clearAssignedUserIfMissing(assignedUserId)
+})
+
+watch(filingType, () => {
+  assignedUserId.value = null
+})
 const producerOrgUnits = computed(() => orgUnits.value.filter((item: OrgUnitOption) => item.is_document_producer))
 const selectedFunctionalType = computed(() =>
   catalog.value?.functional_types.find((item: VentanillaFunctionalTypeRow) => item.key === functionalTypeKey.value),
@@ -477,17 +492,29 @@ async function viewIntakeFile(fileId: number, mimeType?: string | null) {
 
             <div class="space-y-2">
               <Label>Responsable</Label>
+              <p class="text-muted-foreground text-xs">
+                Usuarios del área responsable del radicado.
+              </p>
               <Select
                 :model-value="assignedUserId != null ? String(assignedUserId) : undefined"
+                :disabled="!responsibleOrgUnitId || loadingResponsibleUsers"
                 @update:model-value="assignedUserId = $event ? Number($event) : null"
               >
-                <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue :placeholder="responsibleOrgUnitId ? 'Opcional' : 'Seleccione primero el área'" />
+                </SelectTrigger>
                 <SelectContent>
-                  <SelectItem v-for="user in catalog?.responsible_users ?? []" :key="user.id" :value="String(user.id)">
+                  <SelectItem v-for="user in responsibleUsers" :key="user.id" :value="String(user.id)">
                     {{ user.name }}
                   </SelectItem>
                 </SelectContent>
               </Select>
+              <p
+                v-if="responsibleOrgUnitId && !loadingResponsibleUsers && !responsibleUsers.length"
+                class="text-muted-foreground text-xs"
+              >
+                No hay usuarios asignados a esta área.
+              </p>
             </div>
 
             <div class="space-y-2">

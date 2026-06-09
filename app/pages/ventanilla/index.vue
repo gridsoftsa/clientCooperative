@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  VENTANILLA_FILING_STATUS_LABELS,
   VENTANILLA_FILING_TYPE_LABELS,
   VENTANILLA_TRAFFIC_LIGHT_LABELS,
 } from '~/constants/ventanilla'
@@ -28,6 +29,7 @@ const search = ref('')
 const filterType = ref('all')
 const filterFunctionalType = ref('all')
 const filterTrafficLight = ref('all')
+const filterStatus = ref('all')
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
 const pagination = ref({ current_page: 1, last_page: 1, per_page: 15, total: 0 })
@@ -40,6 +42,7 @@ const hasActiveFilters = computed(() =>
   || filterType.value !== 'all'
   || filterFunctionalType.value !== 'all'
   || filterTrafficLight.value !== 'all'
+  || filterStatus.value !== 'all'
   || filterDateFrom.value
   || filterDateTo.value,
 )
@@ -68,6 +71,9 @@ async function loadList() {
     }
     if (filterTrafficLight.value !== 'all') {
       query.traffic_light_status = filterTrafficLight.value
+    }
+    if (filterStatus.value !== 'all') {
+      query.status = filterStatus.value
     }
     if (filterDateFrom.value) {
       query.filed_from = filterDateFrom.value
@@ -117,6 +123,7 @@ function resetFilters() {
   filterType.value = 'all'
   filterFunctionalType.value = 'all'
   filterTrafficLight.value = 'all'
+  filterStatus.value = 'all'
   filterDateFrom.value = ''
   filterDateTo.value = ''
   pagination.value.current_page = 1
@@ -154,6 +161,10 @@ function trafficLightLabel(status: string): string {
 
   return VENTANILLA_TRAFFIC_LIGHT_LABELS[status as VentanillaTrafficLightValue] ?? status
 }
+
+function statusLabel(status: string): string {
+  return VENTANILLA_FILING_STATUS_LABELS[status as keyof typeof VENTANILLA_FILING_STATUS_LABELS] ?? status
+}
 </script>
 
 <template>
@@ -181,81 +192,129 @@ function trafficLightLabel(status: string): string {
 
     <Card>
       <CardHeader class="pb-3">
-        <div class="flex flex-col gap-3 xl:flex-row xl:flex-nowrap xl:items-end">
-          <Input
-            v-model="search"
-            placeholder="Buscar por número, asunto o remitente…"
-            class="min-w-0 xl:min-w-[10rem] xl:flex-1"
-            @keyup.enter="filterAndLoad"
-          />
-          <Select v-model="filterType" @update:model-value="filterAndLoad">
-            <SelectTrigger class="w-full xl:w-[8.5rem]">
-              <SelectValue placeholder="Tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                Todos los tipos
-              </SelectItem>
-              <SelectItem value="incoming">
-                Entrada
-              </SelectItem>
-              <SelectItem value="outgoing">
-                Salida
-              </SelectItem>
-              <SelectItem value="internal">
-                Interna
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <Select v-model="filterFunctionalType" @update:model-value="filterAndLoad">
-            <SelectTrigger class="w-full xl:w-[10.5rem]">
-              <SelectValue placeholder="Tipo funcional" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                Todos
-              </SelectItem>
-              <SelectItem
-                v-for="t in catalog?.functional_types ?? []"
-                :key="t.key"
-                :value="t.key"
-              >
-                {{ t.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <Select v-model="filterTrafficLight" @update:model-value="filterAndLoad">
-            <SelectTrigger class="w-full xl:w-[9.5rem]">
-              <SelectValue placeholder="Semáforo">
-                {{ trafficLightLabel(filterTrafficLight) }}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">
-                Todos
-              </SelectItem>
-              <SelectItem value="green">
-                En término
-              </SelectItem>
-              <SelectItem value="orange">
-                Próximo a vencer
-              </SelectItem>
-              <SelectItem value="red">
-                Vencido
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <div class="min-w-0 shrink-0 xl:w-[12.5rem]">
-            <DateRangeStringPicker
-              id="ventanilla-index-date-range"
-              v-model:from="filterDateFrom"
-              v-model:to="filterDateTo"
-              placeholder-text="Rango de fechas"
-              compact
-              full-width
+        <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 xl:flex-row xl:flex-nowrap xl:items-end">
+          <div class="min-w-0 space-y-1 xl:flex-1">
+            <Label for="ventanilla-filter-search" class="text-xs text-muted-foreground">
+              Buscar
+            </Label>
+            <Input
+              id="ventanilla-filter-search"
+              v-model="search"
+              placeholder="Número, asunto o remitente…"
+              class="min-w-0"
+              @keyup.enter="filterAndLoad"
             />
           </div>
-          <div class="flex shrink-0 gap-2">
+          <div class="grid w-full gap-3 sm:grid-cols-2 xl:flex xl:w-auto xl:shrink-0 xl:gap-3">
+            <div class="space-y-1 xl:w-[8.5rem]">
+              <Label for="ventanilla-filter-type" class="text-xs text-muted-foreground">
+                Tipo de radicación
+              </Label>
+              <Select v-model="filterType" @update:model-value="filterAndLoad">
+                <SelectTrigger id="ventanilla-filter-type" class="w-full">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    Todos los tipos
+                  </SelectItem>
+                  <SelectItem value="incoming">
+                    Entrada
+                  </SelectItem>
+                  <SelectItem value="outgoing">
+                    Salida
+                  </SelectItem>
+                  <SelectItem value="internal">
+                    Interna
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="space-y-1 xl:w-[10.5rem]">
+              <Label for="ventanilla-filter-functional" class="text-xs text-muted-foreground">
+                Tipo funcional
+              </Label>
+              <Select v-model="filterFunctionalType" @update:model-value="filterAndLoad">
+                <SelectTrigger id="ventanilla-filter-functional" class="w-full">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    Todos
+                  </SelectItem>
+                  <SelectItem
+                    v-for="t in catalog?.functional_types ?? []"
+                    :key="t.key"
+                    :value="t.key"
+                  >
+                    {{ t.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="space-y-1 xl:w-[9.5rem]">
+              <Label for="ventanilla-filter-status" class="text-xs text-muted-foreground">
+                Estado
+              </Label>
+              <Select v-model="filterStatus" @update:model-value="filterAndLoad">
+                <SelectTrigger id="ventanilla-filter-status" class="w-full">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    Todos los estados
+                  </SelectItem>
+                  <SelectItem
+                    v-for="(label, key) in VENTANILLA_FILING_STATUS_LABELS"
+                    :key="key"
+                    :value="key"
+                  >
+                    {{ label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="space-y-1 xl:w-[9.5rem]">
+              <Label for="ventanilla-filter-traffic-light" class="text-xs text-muted-foreground">
+                Semáforo SLA
+              </Label>
+              <Select v-model="filterTrafficLight" @update:model-value="filterAndLoad">
+                <SelectTrigger id="ventanilla-filter-traffic-light" class="w-full">
+                  <SelectValue placeholder="Todos">
+                    {{ trafficLightLabel(filterTrafficLight) }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    Todos
+                  </SelectItem>
+                  <SelectItem value="green">
+                    En término
+                  </SelectItem>
+                  <SelectItem value="orange">
+                    Próximo a vencer
+                  </SelectItem>
+                  <SelectItem value="red">
+                    Vencido
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="space-y-1 xl:w-[12.5rem]">
+              <Label for="ventanilla-index-date-range" class="text-xs text-muted-foreground">
+                Fecha de radicación
+              </Label>
+              <DateRangeStringPicker
+                id="ventanilla-index-date-range"
+                v-model:from="filterDateFrom"
+                v-model:to="filterDateTo"
+                placeholder-text="Desde — Hasta"
+                compact
+                full-width
+              />
+            </div>
+          </div>
+          <div class="flex shrink-0 gap-2 xl:pb-0.5">
             <Button variant="secondary" :disabled="loading" @click="filterAndLoad">
               <Icon name="i-lucide-search" class="mr-2 size-4" />
               Buscar
@@ -282,6 +341,7 @@ function trafficLightLabel(status: string): string {
               <TableHead>Asunto</TableHead>
               <TableHead>Área responsable</TableHead>
               <TableHead>Fecha</TableHead>
+              <TableHead>Estado</TableHead>
               <TableHead>SLA</TableHead>
               <TableHead />
             </TableRow>
@@ -312,7 +372,15 @@ function trafficLightLabel(status: string): string {
                 {{ row.filed_at ? new Date(row.filed_at).toLocaleString('es-CO') : '—' }}
               </TableCell>
               <TableCell>
-                <VentanillaTrafficLightBadge :status="row.traffic_light_status" />
+                <Badge variant="outline">
+                  {{ statusLabel(row.status) }}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <VentanillaTrafficLightBadge
+                  :status="row.traffic_light_status"
+                  :requires-response="row.requires_response"
+                />
               </TableCell>
               <TableCell>
                 <Button variant="ghost" size="sm" @click.stop="router.push(`/ventanilla/${row.id}`)">

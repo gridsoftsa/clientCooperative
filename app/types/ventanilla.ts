@@ -36,7 +36,6 @@ export interface VentanillaCatalogData {
   filing_types: Array<{ value: VentanillaFilingTypeValue; label: string }>
   functional_types: VentanillaFunctionalTypeRow[]
   reception_media: VentanillaReceptionMediumRow[]
-  responsible_users: VentanillaResponsibleUserRow[]
 }
 
 export interface VentanillaCatalogSettingsData {
@@ -166,6 +165,17 @@ export interface VentanillaFilingAlertRow {
   message: string
   triggered_at: string | null
   resolved_at: string | null
+}
+
+export interface VentanillaFilingVerificationData {
+  filing_number: string
+  filing_type: VentanillaFilingTypeValue | null
+  functional_type_label: string | null
+  status: VentanillaFilingStatusValue | null
+  subject: string | null
+  filed_at: string | null
+  org_unit_responsible?: { id: number; name: string; code: string } | null
+  doc_document_type?: { id: number; code: string; name: string } | null
 }
 
 export interface VentanillaFilingDetail extends VentanillaFilingSummary {

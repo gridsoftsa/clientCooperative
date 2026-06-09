@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { VENTANILLA_FILING_TYPE_LABELS } from '~/constants/ventanilla'
+import {
+  VENTANILLA_FILING_TYPE_LABELS,
+  VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY,
+  VENTANILLA_INFORMATIVE_TYPE_HINT,
+} from '~/constants/ventanilla'
 import type { VentanillaCatalogData, VentanillaFilingTypeValue, VentanillaFunctionalTypeRow } from '~/types/ventanilla'
 import type { OrgStaffListItem } from '~/types/org-structure'
 import { onDigitsOnlyInput, filterDigitsOnly } from '~/utils/digits-only-input'
@@ -23,6 +27,12 @@ const router = useRouter()
 const ventanillaApi = useVentanillaApi()
 const orgApi = useOrgStructureApi()
 const { hasPermission } = usePermissions()
+const {
+  responsibleUsers,
+  loadingResponsibleUsers,
+  loadResponsibleUsers,
+  clearAssignedUserIfMissing,
+} = useVentanillaResponsibleUsers()
 const { $api } = useNuxtApp()
 
 const catalog = ref<VentanillaCatalogData | null>(null)
@@ -42,6 +52,7 @@ const recipientIdentifier = ref('')
 const subject = ref('')
 const receptionMedium = ref('')
 const notes = ref('')
+const assignedUserId = ref<number | null>(null)
 const metadataValues = ref<Record<string, unknown>>({})
 
 const orgUnits = ref<VentanillaOrgUnitOption[]>([])
@@ -125,12 +136,18 @@ watch(functionalTypeKey, () => {
 watch(filingType, (nextType) => {
   senderStaffId.value = null
   recipientStaffId.value = null
+  assignedUserId.value = null
   if (nextType === 'incoming') {
     producerOrgUnitId.value = null
   }
   if (nextType === 'outgoing') {
     recipientOrgUnitId.value = null
   }
+})
+
+watch(responsibleOrgUnitId, async (orgUnitId) => {
+  await loadResponsibleUsers(orgUnitId)
+  clearAssignedUserIfMissing(assignedUserId)
 })
 
 function applyStaffToPartyFields(
@@ -370,6 +387,9 @@ async function submit() {
   if (notes.value.trim()) {
     fd.append('notes', notes.value.trim())
   }
+  if (assignedUserId.value) {
+    fd.append('assigned_user_id', String(assignedUserId.value))
+  }
   fd.append('doc_document_type_id', String(docDocumentTypeId.value))
   if (Object.keys(metadataValues.value).length > 0) {
     fd.append('metadata_values', JSON.stringify(metadataValues.value))
@@ -468,6 +488,12 @@ async function submit() {
             <template v-else>
               No requiere respuesta (sin SLA)
             </template>
+          </p>
+          <p
+            v-if="functionalTypeKey === VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY"
+            class="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground"
+          >
+            {{ VENTANILLA_INFORMATIVE_TYPE_HINT }}
           </p>
           <div v-if="canOverrideResponse && selectedFunctionalType" class="flex items-center gap-2">
             <Checkbox
@@ -621,6 +647,36 @@ async function submit() {
           <div class="space-y-2 md:col-span-2">
             <Label>Asunto *</Label>
             <Input v-model="subject" maxlength="500" />
+          </div>
+          <div class="space-y-2">
+            <Label>Responsable asignado</Label>
+            <p class="text-muted-foreground text-xs">
+              Solo usuarios vinculados al área responsable del radicado.
+            </p>
+            <Select
+              :model-value="assignedUserId != null ? String(assignedUserId) : undefined"
+              :disabled="!responsibleOrgUnitId || loadingResponsibleUsers"
+              @update:model-value="assignedUserId = $event ? Number($event) : null"
+            >
+              <SelectTrigger>
+                <SelectValue :placeholder="responsibleOrgUnitId ? 'Opcional' : 'Seleccione primero el área'" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="user in responsibleUsers"
+                  :key="user.id"
+                  :value="String(user.id)"
+                >
+                  {{ user.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p
+              v-if="responsibleOrgUnitId && !loadingResponsibleUsers && !responsibleUsers.length"
+              class="text-muted-foreground text-xs"
+            >
+              No hay usuarios asignados a esta área en la estructura organizacional.
+            </p>
           </div>
           <div class="space-y-2">
             <Label>Medio de recepción</Label>
