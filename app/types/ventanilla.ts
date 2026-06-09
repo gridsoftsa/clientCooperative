@@ -51,6 +51,15 @@ export interface VentanillaSlaSettingsRow {
   orange_percentage: number
   orange_days_before: number
   alerts_enabled: boolean
+  notify_assignee: boolean
+  notify_immediate_supervisor: boolean
+  notify_unit_manager: boolean
+  red_reminder_interval_days: number
+  escalation_enabled: boolean
+  escalation_business_days_after_deadline: number
+  escalation_notify_immediate_supervisor: boolean
+  escalation_notify_unit_manager: boolean
+  escalation_functional_type_keys: string[] | null
   is_active: boolean
 }
 
@@ -158,6 +167,23 @@ export interface VentanillaFilingEventRow {
   created_at: string | null
 }
 
+export interface VentanillaFilingAlertDeliveryRow {
+  id: number
+  recipient_role: string
+  recipient_email: string
+  channel: string
+  sent_at: string | null
+  recipient_user?: { id: number; name: string } | null
+}
+
+export interface VentanillaFilingEscalationRow {
+  id: number
+  message: string
+  business_days_overdue: number
+  escalated_at: string | null
+  deliveries?: VentanillaFilingAlertDeliveryRow[]
+}
+
 export interface VentanillaFilingAlertRow {
   id: number
   alert_type: string
@@ -165,6 +191,7 @@ export interface VentanillaFilingAlertRow {
   message: string
   triggered_at: string | null
   resolved_at: string | null
+  deliveries?: VentanillaFilingAlertDeliveryRow[]
 }
 
 export interface VentanillaFilingVerificationData {
@@ -213,5 +240,6 @@ export interface VentanillaFilingDetail extends VentanillaFilingSummary {
   void_reason: string | null
   events?: VentanillaFilingEventRow[]
   alerts?: VentanillaFilingAlertRow[]
+  escalation?: VentanillaFilingEscalationRow | null
   files?: VentanillaFilingFileRow[]
 }

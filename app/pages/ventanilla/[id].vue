@@ -110,9 +110,22 @@ function eventTypeLabel(type: string): string {
     closed: 'Cierre',
     voided: 'Anulación',
     intake_classified: 'Clasificación desde bandeja',
+    traffic_light_changed: 'Cambio de semáforo',
+    sla_alert_notified: 'Notificación SLA',
+    escalated: 'Escalamiento SLA',
   }
 
   return labels[type] ?? type
+}
+
+function alertRecipientRoleLabel(role: string): string {
+  const labels: Record<string, string> = {
+    assignee: 'responsable',
+    immediate_supervisor: 'jefe inmediato',
+    unit_manager: 'jefe de área',
+  }
+
+  return labels[role] ?? role
 }
 
 function formatMetadataValue(value: unknown): string {
@@ -645,11 +658,38 @@ async function viewSticker() {
               <p class="mt-1 text-muted-foreground text-xs">
                 Generada: {{ formatDate(alert.triggered_at) }}
               </p>
+              <ul v-if="alert.deliveries?.length" class="mt-2 space-y-1 text-xs text-muted-foreground">
+                <li v-for="delivery in alert.deliveries" :key="delivery.id">
+                  Correo a {{ delivery.recipient_user?.name ?? delivery.recipient_email }}
+                  ({{ alertRecipientRoleLabel(delivery.recipient_role) }}) · {{ formatDate(delivery.sent_at) }}
+                </li>
+              </ul>
             </li>
           </ul>
           <p v-else class="text-muted-foreground text-sm">
             Sin alertas SLA registradas.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card v-if="filing.escalation">
+        <CardHeader>
+          <CardTitle>Escalamiento</CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-2 text-sm">
+          <p class="font-medium">
+            {{ filing.escalation.message }}
+          </p>
+          <p class="text-muted-foreground text-xs">
+            Escalado: {{ formatDate(filing.escalation.escalated_at) }}
+            · {{ filing.escalation.business_days_overdue }} día(s) hábil(es) vencido(s)
+          </p>
+          <ul v-if="filing.escalation.deliveries?.length" class="space-y-1 text-xs text-muted-foreground">
+            <li v-for="delivery in filing.escalation.deliveries" :key="delivery.id">
+              Correo a {{ delivery.recipient_user?.name ?? delivery.recipient_email }}
+              ({{ alertRecipientRoleLabel(delivery.recipient_role) }}) · {{ formatDate(delivery.sent_at) }}
+            </li>
+          </ul>
         </CardContent>
       </Card>
 

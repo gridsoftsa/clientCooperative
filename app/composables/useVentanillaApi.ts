@@ -222,6 +222,15 @@ export function useVentanillaApi() {
     orange_percentage: number
     orange_days_before: number
     alerts_enabled: boolean
+    notify_assignee: boolean
+    notify_immediate_supervisor: boolean
+    notify_unit_manager: boolean
+    red_reminder_interval_days: number
+    escalation_enabled: boolean
+    escalation_business_days_after_deadline: number
+    escalation_notify_immediate_supervisor: boolean
+    escalation_notify_unit_manager: boolean
+    escalation_functional_type_keys: string[] | null
   }): Promise<VentanillaSlaSettingsData> {
     const res = await api<{ data: VentanillaSlaSettingsData }>('/ventanilla/sla-settings', {
       method: 'PUT',
