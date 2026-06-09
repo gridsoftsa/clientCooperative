@@ -32,6 +32,23 @@ export const navMenu: NavMenu[] = [
     heading: 'Gestión documental',
     items: [
       {
+        title: 'Workflow',
+        icon: 'i-lucide-kanban-square',
+        anyPermission: ['workflow_ver', 'workflow_definir'],
+        children: [
+          {
+            title: 'Tablero de tareas',
+            link: '/workflow',
+            permission: 'workflow_ver',
+          },
+          {
+            title: 'Configurar flujos',
+            link: '/workflow/configuracion',
+            permission: 'workflow_definir',
+          },
+        ],
+      },
+      {
         title: 'Ventanilla única',
         icon: 'i-lucide-inbox',
         anyPermission: ['ventanilla_ver', 'ventanilla_clasificar', 'ventanilla_sla_configurar'],
