@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { WorkflowBoardData, WorkflowTaskCard } from '~/types/workflow'
+import type { WorkflowBoardData, WorkflowFilingContext, WorkflowTaskCard } from '~/types/workflow'
 
 definePageMeta({
   layout: 'default',
@@ -10,16 +10,32 @@ definePageMeta({
 
 const router = useRouter()
 const { hasPermission } = usePermissions()
-const { fetchBoard, advanceTask } = useWorkflowApi()
+const workflowApi = useWorkflowApi()
 
 const loading = ref(true)
 const board = ref<WorkflowBoardData>({ definition: null, columns: [] })
+const definitions = ref<Array<{ id: number, key: string, name: string }>>([])
+const definitionId = ref<string>('')
 const scope = ref<'mine' | 'area'>('mine')
 const statusFilter = ref<'open' | 'overdue' | 'due_soon'>('open')
 const functionalTypeKey = ref<string>('')
 
+const users = ref<Array<{ id: number, name: string }>>([])
+const actionsOpen = ref(false)
+const selectedTask = ref<WorkflowTaskCard | null>(null)
+const taskContext = ref<WorkflowFilingContext | null>(null)
+
 const canManage = computed(() => hasPermission('workflow_gestionar'))
 const canViewTeam = computed(() => hasPermission('workflow_equipo_ver'))
+
+async function loadDefinitions() {
+  try {
+    definitions.value = await workflowApi.fetchActiveDefinitions()
+  }
+  catch {
+    definitions.value = []
+  }
+}
 
 async function loadBoard() {
   loading.value = true
@@ -33,7 +49,10 @@ async function loadBoard() {
     if (functionalTypeKey.value)
       query.functional_type_key = functionalTypeKey.value
 
-    board.value = await fetchBoard(query)
+    if (definitionId.value)
+      query.workflow_definition_id = definitionId.value
+
+    board.value = await workflowApi.fetchBoard(query)
   }
   catch {
     toast.error('No se pudo cargar el tablero de tareas.')
@@ -48,23 +67,30 @@ function openTask(task: WorkflowTaskCard) {
     router.push(`/ventanilla/${task.subject.id}`)
 }
 
-async function handleAdvance(task: WorkflowTaskCard) {
-  try {
-    await advanceTask(task.id)
-    toast.success('Tarea avanzada.')
-    await loadBoard()
+async function openManage(task: WorkflowTaskCard) {
+  selectedTask.value = task
+
+  if (task.subject?.id) {
+    taskContext.value = await workflowApi.fetchFilingContext(task.subject.id)
   }
-  catch {
-    toast.error('No se pudo avanzar la tarea.')
+  else {
+    taskContext.value = null
   }
+
+  if (users.value.length === 0) {
+    users.value = await workflowApi.fetchAssignableUsers()
+  }
+
+  actionsOpen.value = true
 }
 
-watch([scope, statusFilter, functionalTypeKey], () => {
+watch([scope, statusFilter, functionalTypeKey, definitionId], () => {
   loadBoard()
 })
 
-onMounted(() => {
-  loadBoard()
+onMounted(async () => {
+  await loadDefinitions()
+  await loadBoard()
 })
 </script>
 
@@ -76,11 +102,17 @@ onMounted(() => {
           Workflow y tareas
         </h1>
         <p class="text-sm text-muted-foreground">
-          Tablero por etapas — estilo bandeja de trabajo
+          Tablero por etapas
           <span v-if="board.definition"> · {{ board.definition.name }}</span>
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <NuxtLink to="/workflow/bandeja">
+          <Button variant="outline" size="sm">
+            <Icon name="lucide:list" class="mr-1 size-4" />
+            Bandeja lista
+          </Button>
+        </NuxtLink>
         <Button variant="outline" size="sm" @click="loadBoard">
           <Icon name="lucide:refresh-cw" class="mr-1 size-4" />
           Actualizar
@@ -103,7 +135,7 @@ onMounted(() => {
                 Mis tareas
               </TabsTrigger>
               <TabsTrigger v-if="canViewTeam" value="area">
-                Mi área
+                Mi equipo
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -125,6 +157,24 @@ onMounted(() => {
             </SelectContent>
           </Select>
 
+          <Select v-if="definitions.length" v-model="definitionId">
+            <SelectTrigger class="w-[220px]">
+              <SelectValue placeholder="Flujo de trabajo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">
+                Flujo por defecto
+              </SelectItem>
+              <SelectItem
+                v-for="def in definitions"
+                :key="def.id"
+                :value="String(def.id)"
+              >
+                {{ def.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
           <Input
             v-model="functionalTypeKey"
             class="w-[200px]"
@@ -139,9 +189,17 @@ onMounted(() => {
           :can-manage="canManage"
           @refresh="loadBoard"
           @open-task="openTask"
-          @advance="handleAdvance"
+          @manage="openManage"
         />
       </CardContent>
     </Card>
+
+    <WorkflowTaskActionsSheet
+      v-model:open="actionsOpen"
+      :task="selectedTask"
+      :context="taskContext"
+      :users="users"
+      @changed="loadBoard"
+    />
   </div>
 </template>

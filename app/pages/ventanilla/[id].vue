@@ -470,6 +470,8 @@ async function viewSticker() {
         </CardContent>
       </Card>
 
+      <WorkflowFilingPanel :filing-id="id" @changed="load" />
+
       <Card>
         <CardHeader>
           <CardTitle>Archivos</CardTitle>

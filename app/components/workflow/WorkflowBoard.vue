@@ -10,7 +10,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   refresh: []
   openTask: [task: WorkflowTaskCard]
-  advance: [task: WorkflowTaskCard]
+  manage: [task: WorkflowTaskCard]
 }>()
 
 function trafficLightClass(status: WorkflowTaskCard['traffic_light_status']) {
@@ -106,12 +106,9 @@ function taskReference(task: WorkflowTaskCard) {
                   <Icon name="lucide:external-link" class="size-4" />
                   Abrir radicado
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  v-if="task.stage && col.key !== 'assign'"
-                  @click="emit('advance', task)"
-                >
-                  <Icon name="lucide:arrow-right" class="size-4" />
-                  Avanzar etapa
+                <DropdownMenuItem @click="emit('manage', task)">
+                  <Icon name="lucide:settings-2" class="size-4" />
+                  Gestionar tarea
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

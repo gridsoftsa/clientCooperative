@@ -2,6 +2,7 @@ import type {
   WorkflowBoardData,
   WorkflowDefinition,
   WorkflowDefinitionPayload,
+  WorkflowFilingContext,
   WorkflowFunctionalTypeOption,
   WorkflowStagePayload,
   WorkflowTaskCard,
@@ -64,8 +65,20 @@ export function useWorkflowApi() {
     return res.data
   }
 
+  async function fetchFilingContext(filingId: number): Promise<WorkflowFilingContext | null> {
+    const res = await api<{ data: WorkflowFilingContext | null }>(`/workflow/filings/${filingId}/context`)
+
+    return res.data
+  }
+
   async function fetchAssignableUsers(): Promise<Array<{ id: number, name: string, email?: string | null }>> {
     const res = await api<{ data: Array<{ id: number, name: string, email?: string | null }> }>('/workflow/meta/users')
+
+    return res.data
+  }
+
+  async function fetchActiveDefinitions(): Promise<Array<{ id: number, key: string, name: string }>> {
+    const res = await api<{ data: Array<{ id: number, key: string, name: string }> }>('/workflow/definitions/active')
 
     return res.data
   }
@@ -146,8 +159,10 @@ export function useWorkflowApi() {
     reassignTask,
     commentTask,
     fetchFunctionalTypes,
+    fetchFilingContext,
     fetchAssignableUsers,
     fetchDefinitions,
+    fetchActiveDefinitions,
     fetchDefinition,
     createDefinition,
     updateDefinition,
