@@ -1637,6 +1637,7 @@ function formatFileSize(bytes: number): string {
                 <div class="flex w-full justify-center pt-1">
                   <Checkbox
                     :id="`asset_garantia_${idx}`"
+                    bare
                     :model-value="!!asset.garantia"
                     @update:model-value="updateAsset(idx, 'garantia', !!$event)"
                   />

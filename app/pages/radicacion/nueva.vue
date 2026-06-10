@@ -27,6 +27,10 @@ import { messageFromFetchError } from '~/utils/http-error-message'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
 import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
+import {
+  isDebtorWithoutActivityTemplate,
+  setDebtorWithoutActivityTemplateFlag,
+} from '~/utils/radicacion-debtor-activity-template'
 import { RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK } from '~/constants/radicacion-form-catalog-fallbacks'
 import {
   RADICACION_CREDITO_GARANTIA_FNG_OPTIONS,
@@ -406,7 +410,7 @@ async function finalizeCodeudorWizard() {
     codeudorStep.value = 1
     return
   }
-  const rTemplates = validateAllActivityTemplates(getActivityTemplatesFor(app), { requireAtLeastOne: true })
+  const rTemplates = validateAllActivityTemplates(getActivityTemplatesFor(app), { requireAtLeastOne: false })
   if (!rTemplates.valid) {
     toast.error(rTemplates.errors.join('. '))
     return
@@ -445,7 +449,7 @@ async function nextCodeudorStep() {
   }
   if (codeudorStep.value === 2) {
     const templates = getActivityTemplatesFor(codeudorWizardApplicant.value)
-    const r = validateAllActivityTemplates(templates, { requireAtLeastOne: true })
+    const r = validateAllActivityTemplates(templates, { requireAtLeastOne: false })
     if (!r.valid) {
       toast.error(r.errors.join('. '))
       nextTick(() => codeudorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
@@ -549,9 +553,35 @@ async function validateDebtorStepOneForRadicacion(): Promise<boolean> {
 }
 
 /** Valida plantillas de actividad (deudor y codeudores) antes de guardar o enviar solicitud. */
+const debtorWithoutActivityTemplate = ref(false)
+
+watch(
+  () => (form.value.debtor.financial_info as Record<string, unknown> | undefined)?.withoutActivityTemplate,
+  () => {
+    debtorWithoutActivityTemplate.value = isDebtorWithoutActivityTemplate(form.value.debtor)
+  },
+  { immediate: true },
+)
+
+watch(debtorWithoutActivityTemplate, (checked, wasChecked) => {
+  if (checked === wasChecked) {
+    return
+  }
+  setDebtorWithoutActivityTemplateFlag(form.value.debtor, checked)
+  if (checked) {
+    setActivityTemplates([])
+  }
+})
+
+function debtorSkipsActivityTemplateStep(): boolean {
+  return debtorWithoutActivityTemplate.value || isDebtorWithoutActivityTemplate(form.value.debtor)
+}
+
 function validateActivityTemplatesBeforeSave(): string | null {
   const debtorT = getActivityTemplates()
-  let r = validateAllActivityTemplates(debtorT, { requireAtLeastOne: true })
+  let r = debtorSkipsActivityTemplateStep()
+    ? { valid: true, errors: [], invalidFieldKeys: [] as string[] }
+    : validateAllActivityTemplates(debtorT, { requireAtLeastOne: true })
   if (!r.valid) {
     return r.errors.join(' ')
   }
@@ -559,7 +589,7 @@ function validateActivityTemplatesBeforeSave(): string | null {
   for (let i = 0; i < cos.length; i++) {
     const co = cos[i]
     if (!co) continue
-    r = validateAllActivityTemplates(getActivityTemplatesFor(co), { requireAtLeastOne: true })
+    r = validateAllActivityTemplates(getActivityTemplatesFor(co), { requireAtLeastOne: false })
     if (!r.valid) {
       return `Codeudor ${i + 1}: ${r.errors.join(' ')}`
     }
@@ -1379,12 +1409,21 @@ async function nextStep() {
       return
     }
   }
-  if (
-    (mode.value === 'deudor' && currentStep.value === 2)
-    || (mode.value === 'codeudor' && currentStep.value === 2)
-  ) {
+  if (mode.value === 'deudor' && currentStep.value === 2) {
+    await nextTick()
+    if (!debtorSkipsActivityTemplateStep()) {
+      const templates = getActivityTemplates()
+      const r = validateAllActivityTemplates(templates, { requireAtLeastOne: true })
+      if (!r.valid) {
+        toast.error(r.errors.join('. '))
+        nextTick(() => debtorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
+        return
+      }
+    }
+  }
+  if (mode.value === 'codeudor' && currentStep.value === 2) {
     const templates = getActivityTemplates()
-    const r = validateAllActivityTemplates(templates, { requireAtLeastOne: true })
+    const r = validateAllActivityTemplates(templates, { requireAtLeastOne: false })
     if (!r.valid) {
       toast.error(r.errors.join('. '))
       nextTick(() => debtorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
@@ -1671,18 +1710,20 @@ onMounted(() => {
             ? (codeudorStep === 1
                 ? 'Busca por cédula o completa el formulario (datos personales y concepto del codeudor)'
                 : codeudorStep === 2
-                  ? 'Plantillas agropecuarias según la actividad económica'
+                  ? 'Opcional. Plantillas agropecuarias según la actividad económica del codeudor'
                   : 'Ingresos, gastos y solvencia del codeudor')
             : mode === 'codeudor'
               ? (currentStep === 1
                   ? 'Busca por cédula o completa el formulario del codeudor'
                   : currentStep === 2
-                    ? 'Plantillas agropecuarias según la actividad económica del codeudor'
+                    ? 'Opcional. Plantillas agropecuarias según la actividad económica del codeudor'
                     : 'Ingresos, gastos y solvencia del codeudor')
               : (currentStep === 1
                 ? 'Busca por cédula o completa el formulario del deudor principal'
                 : currentStep === 2
-                  ? 'Plantillas agropecuarias según la actividad económica del deudor'
+                  ? (debtorWithoutActivityTemplate
+                    ? 'Sin plantilla de actividad económica'
+                    : 'Plantillas agropecuarias según la actividad económica del deudor')
                   : currentStep === 3
                     ? 'Ingresos, gastos y solvencia del deudor'
                     : currentStep === 4
@@ -1753,11 +1794,29 @@ onMounted(() => {
           v-show="(mode === 'deudor' && currentStep === 2) || (mode === 'codeudor' && currentStep === 2)"
           class="space-y-4"
         >
+          <label
+            v-if="mode === 'deudor'"
+            class="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5"
+          >
+            <Checkbox
+              id="debtor_without_activity_template"
+              bare
+              v-model:checked="debtorWithoutActivityTemplate"
+            />
+            <span class="text-sm">Sin plantilla de actividad</span>
+          </label>
           <CreditsFinancialActivityFormList
+            v-if="mode !== 'deudor' || !debtorWithoutActivityTemplate"
             ref="debtorActivityTemplatesListRef"
             :model-value="getActivityTemplates()"
             @update:model-value="setActivityTemplates"
           />
+          <p
+            v-else-if="mode === 'deudor'"
+            class="text-sm text-muted-foreground"
+          >
+            No se requiere configurar plantillas agropecuarias para este deudor.
+          </p>
         </div>
 
         <!-- Paso 3: Datos financieros -->

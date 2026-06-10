@@ -12,6 +12,8 @@ export interface FinancialInfoForm {
   activity_templates?: ActivityTemplateData[]
   /** Cantidad de plantillas (se guarda explícitamente en radicación) */
   activity_templates_count?: number
+  /** Deudor sin plantilla agropecuaria en paso 2 (radicación) */
+  withoutActivityTemplate?: boolean
   activity_type?: string
   concept?: string
   income?: {

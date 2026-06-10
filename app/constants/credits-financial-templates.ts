@@ -3573,7 +3573,8 @@ export function validateActivityTemplate(
  */
 export type ValidateAllActivityTemplatesOptions = {
   /**
-   * Si es true, exige al menos una fila con sector y plantilla (actividad económica del deudor o codeudor, paso 2).
+   * Si es true, exige al menos una fila con sector y plantilla (actividad económica del deudor, paso 2).
+   * Para codeudores use false: la actividad económica es opcional; si hay filas, deben estar completas.
    * Si es false u omitido, una lista vacía es válida (p. ej. plantillas de referencia del destino, paso 4).
    */
   requireAtLeastOne?: boolean
