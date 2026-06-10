@@ -5,11 +5,12 @@ import type { VentanillaFunctionalTypeRow, VentanillaReceptionMediumRow } from '
 export type VentanillaCatalogEditorKind = 'functional-types' | 'reception-media'
 
 type FunctionalDraft = {
-  key: string
+  typeKey: string
+  originalKey?: string
   label: string
   requires_response_default: boolean
-  sla_business_days: string
-  sort_order: string
+  sla_business_days: string | number
+  sort_order: string | number
   is_active: boolean
   _isNew?: boolean
   _removed?: boolean
@@ -65,15 +66,25 @@ function slugFromLabel(label: string): string {
   return base || 'opcion'
 }
 
+function resolveFunctionalTypeKey(row: VentanillaFunctionalTypeRow | { key?: string, value?: string }): string {
+  const raw = row.key ?? row.value ?? ''
+  return String(raw).trim()
+}
+
 function cloneFunctional(rows: VentanillaFunctionalTypeRow[]): FunctionalDraft[] {
-  return rows.map(row => ({
-    key: row.key,
-    label: row.label,
-    requires_response_default: row.requires_response_default,
-    sla_business_days: row.sla_business_days != null ? String(row.sla_business_days) : '',
-    sort_order: String(row.sort_order ?? 0),
-    is_active: row.is_active ?? true,
-  }))
+  return rows.map((row) => {
+    const typeKey = resolveFunctionalTypeKey(row)
+
+    return {
+      typeKey,
+      originalKey: typeKey,
+      label: row.label,
+      requires_response_default: Boolean(row.requires_response_default),
+      sla_business_days: row.sla_business_days != null ? String(row.sla_business_days) : '',
+      sort_order: String(row.sort_order ?? 0),
+      is_active: row.is_active ?? true,
+    }
+  })
 }
 
 function cloneReception(rows: VentanillaReceptionMediumRow[]): ReceptionDraft[] {
@@ -97,7 +108,16 @@ watch(
       resetDrafts()
     }
   },
-  { deep: true },
+  { deep: true, immediate: true },
+)
+
+watch(
+  () => props.kind,
+  () => {
+    if (editing.value) {
+      cancelEditing()
+    }
+  },
 )
 
 function startEditing() {
@@ -118,13 +138,17 @@ function visibleReceptionRows(): ReceptionDraft[] {
   return receptionDraft.value.filter(row => !row._removed)
 }
 
+function functionalRowKey(row: FunctionalDraft): string {
+  return String(row.originalKey ?? row.typeKey ?? '').trim()
+}
+
 function addFunctionalRow() {
   const maxOrder = visibleFunctionalRows().reduce(
     (max, row) => Math.max(max, Number(row.sort_order) || 0),
     0,
   )
   functionalDraft.value.push({
-    key: '',
+    typeKey: '',
     label: '',
     requires_response_default: true,
     sla_business_days: '',
@@ -178,6 +202,19 @@ function removeReceptionRow(index: number) {
   row._removed = true
 }
 
+function validateFunctionalKey(row: FunctionalDraft): string {
+  let typeKey = String(row.typeKey ?? '').trim()
+  if (!typeKey && row._isNew) {
+    typeKey = slugFromLabel(row.label)
+    row.typeKey = typeKey
+  }
+  if (!typeKey && row.originalKey) {
+    typeKey = String(row.originalKey).trim()
+    row.typeKey = typeKey
+  }
+  return typeKey
+}
+
 function validateAndSave() {
   if (props.kind === 'functional-types') {
     const active = visibleFunctionalRows()
@@ -190,15 +227,13 @@ function validateAndSave() {
         toast.error('Cada tipo funcional debe tener etiqueta.')
         return
       }
-      if (!row.key.trim() && row._isNew) {
-        row.key = slugFromLabel(row.label)
-      }
-      if (!/^[a-z0-9_-]+$/.test(row.key.trim())) {
-        toast.error(`Clave no válida: ${row.label}`)
+      const typeKey = validateFunctionalKey(row)
+      if (!/^[a-z0-9_-]+$/.test(typeKey)) {
+        toast.error(`Clave no válida para «${row.label.trim()}». Use solo letras minúsculas, números, guion y guion bajo.`)
         return
       }
     }
-    emit('saveFunctional', functionalDraft.value)
+    emit('saveFunctional', functionalDraft.value.map(row => ({ ...row })))
     return
   }
 
@@ -220,7 +255,7 @@ function validateAndSave() {
       return
     }
   }
-  emit('saveReception', receptionDraft.value)
+  emit('saveReception', receptionDraft.value.map(row => ({ ...row })))
 }
 
 watch(
@@ -248,6 +283,7 @@ watch(
       <div v-if="canEdit" class="flex gap-2">
         <Button
           v-if="!editing"
+          type="button"
           variant="warning"
           size="sm"
           @click="startEditing"
@@ -256,10 +292,10 @@ watch(
           Editar
         </Button>
         <template v-else>
-          <Button variant="outline" size="sm" :disabled="saving" @click="cancelEditing">
+          <Button type="button" variant="outline" size="sm" :disabled="saving" @click="cancelEditing">
             Cancelar
           </Button>
-          <Button variant="default" size="sm" :disabled="saving" @click="validateAndSave">
+          <Button type="button" variant="default" size="sm" :disabled="saving" @click="validateAndSave">
             <Icon v-if="saving" name="i-lucide-loader-2" class="mr-1 h-4 w-4 animate-spin" />
             Guardar
           </Button>
@@ -332,7 +368,7 @@ watch(
         </div>
         <div
           v-for="(row, idx) in visibleFunctionalRows()"
-          :key="`${row.key || 'new'}-${idx}`"
+          :key="`${functionalRowKey(row) || 'new'}-${idx}`"
           class="grid min-w-[48rem] grid-cols-[minmax(10rem,1.4fr)_minmax(8rem,1fr)_5.5rem_5rem_4.5rem_4.5rem_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
         >
           <Input
@@ -342,7 +378,7 @@ watch(
             placeholder="Ej.: PQRSFD"
           />
           <Input
-            v-model="row.key"
+            v-model="row.typeKey"
             class="h-9 font-mono text-xs"
             :disabled="!editing || !canEdit || !row._isNew"
             placeholder="pqrsfd"
@@ -351,7 +387,7 @@ watch(
             <Checkbox
               :checked="row.requires_response_default"
               :disabled="!editing || !canEdit"
-              @update:checked="(v: boolean) => { row.requires_response_default = v }"
+              @update:checked="(v: boolean | 'indeterminate') => { row.requires_response_default = v === true }"
             />
           </div>
           <Input
@@ -374,7 +410,7 @@ watch(
             <Checkbox
               :checked="row.is_active"
               :disabled="!editing || !canEdit"
-              @update:checked="(v: boolean) => { row.is_active = v }"
+              @update:checked="(v: boolean | 'indeterminate') => { row.is_active = v === true }"
             />
           </div>
           <Button

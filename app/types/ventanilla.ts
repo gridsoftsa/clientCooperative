@@ -51,6 +51,15 @@ export interface VentanillaSlaSettingsRow {
   orange_percentage: number
   orange_days_before: number
   alerts_enabled: boolean
+  notify_assignee: boolean
+  notify_immediate_supervisor: boolean
+  notify_unit_manager: boolean
+  red_reminder_interval_days: number
+  escalation_enabled: boolean
+  escalation_business_days_after_deadline: number
+  escalation_notify_immediate_supervisor: boolean
+  escalation_notify_unit_manager: boolean
+  escalation_functional_type_keys: string[] | null
   is_active: boolean
 }
 
@@ -64,6 +73,49 @@ export interface VentanillaBusinessHolidayRow {
 export interface VentanillaSlaSettingsData {
   settings: VentanillaSlaSettingsRow
   holidays: VentanillaBusinessHolidayRow[]
+}
+
+export interface VentanillaNotificationSettingsRow {
+  id: number
+  channel_email_enabled: boolean
+  channel_whatsapp_enabled: boolean
+  channel_internal_enabled: boolean
+  is_active: boolean
+}
+
+export interface VentanillaFilingNotificationDeliveryRow {
+  id: number
+  event_type: string
+  channel: string
+  recipient_role: string | null
+  recipient_address: string | null
+  status: string
+  error_message: string | null
+  sent_at: string | null
+  recipient_user?: { id: number; name: string } | null
+}
+
+export interface VentanillaInboxNotificationRow {
+  id: string
+  read_at: string | null
+  created_at: string | null
+  ventanilla_filing_id: number | null
+  filing_number: string | null
+  event_type: string | null
+  title: string | null
+  message: string | null
+  url: string | null
+}
+
+export interface VentanillaInboxNotificationsData {
+  data: VentanillaInboxNotificationRow[]
+  meta: {
+    current_page: number
+    last_page: number
+    per_page: number
+    total: number
+    unread_count: number
+  }
 }
 
 export interface VentanillaColombiaHolidayPreviewRow {
@@ -158,6 +210,63 @@ export interface VentanillaFilingEventRow {
   created_at: string | null
 }
 
+export interface VentanillaFilingAlertDeliveryRow {
+  id: number
+  recipient_role: string
+  recipient_email: string
+  channel: string
+  sent_at: string | null
+  recipient_user?: { id: number; name: string } | null
+}
+
+export interface VentanillaSlaComplianceTrendRow {
+  period: string
+  closed_total: number
+  closed_on_time: number
+  closed_late: number
+  compliance_rate: number | null
+}
+
+export interface VentanillaSlaComplianceDashboardData {
+  filters: {
+    org_unit_responsible_id: number | null
+    functional_type_key: string | null
+    filed_from: string | null
+    filed_to: string | null
+  }
+  kpis: {
+    total: number
+    green: number
+    orange: number
+    red: number
+    overdue: number
+    closed_on_time: number
+    closed_late: number
+    open_total: number
+    average_sla_business_days: number | null
+    average_response_business_days: number | null
+  }
+  by_filing_status: {
+    registered: number
+    in_progress: number
+    closed: number
+  }
+  by_traffic_light: {
+    green: number
+    orange: number
+    red: number
+  }
+  compliance_trend: VentanillaSlaComplianceTrendRow[]
+}
+
+export interface VentanillaFilingEscalationRow {
+  id: number
+  message: string
+  business_days_overdue: number
+  escalated_at: string | null
+  deliveries?: VentanillaFilingAlertDeliveryRow[]
+}
+
 export interface VentanillaFilingAlertRow {
   id: number
   alert_type: string
@@ -165,6 +274,7 @@ export interface VentanillaFilingAlertRow {
   message: string
   triggered_at: string | null
   resolved_at: string | null
+  deliveries?: VentanillaFilingAlertDeliveryRow[]
 }
 
 export interface VentanillaFilingVerificationData {
@@ -213,5 +323,7 @@ export interface VentanillaFilingDetail extends VentanillaFilingSummary {
   void_reason: string | null
   events?: VentanillaFilingEventRow[]
   alerts?: VentanillaFilingAlertRow[]
+  notification_deliveries?: VentanillaFilingNotificationDeliveryRow[]
+  escalation?: VentanillaFilingEscalationRow | null
   files?: VentanillaFilingFileRow[]
 }

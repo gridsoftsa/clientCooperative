@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import type { OrgYesNoChoice } from '~/constants/org-structure'
 import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureApi'
+import type { OrgStaffListItem } from '~/types/org-structure'
 import { toDateInputValue } from '~/utils/dateInputValue'
 
 definePageMeta({
@@ -18,6 +19,11 @@ const orgApi = useOrgStructureApi()
 
 const unitOptions = ref<Array<{ id: number; label: string }>>([])
 const peerPositions = ref<Array<{ id: number; name: string; code: string }>>([])
+const reportToStaffOptions = ref<Array<{ id: number; label: string; reportsToPositionId: number }>>([])
+const reportToOrgUnitId = ref<number | null>(null)
+const reportToTargetType = ref<'none' | 'position' | 'staff'>('none')
+const reportToPositionChoiceId = ref<number | null>(null)
+const reportToStaffChoiceId = ref<number | null>(null)
 const loading = ref(true)
 
 const chargesSelectedArea = ref<OrgYesNoChoice>('no')
@@ -40,9 +46,13 @@ function onPositionActiveChange(value: boolean) {
   form.value.is_active = value
 }
 
-const reportsCandidates = computed(() =>
-  peerPositions.value.filter((p: { id: number; name: string; code: string }) => p.id !== positionId.value),
-)
+function onReportToTargetTypeChange(value: unknown): void {
+  if (value === 'position' || value === 'staff' || value === 'none') {
+    reportToTargetType.value = value
+    return
+  }
+  reportToTargetType.value = 'none'
+}
 
 async function loadUnits() {
   const units = await orgApi.fetchUnits({ activeOnly: false })
@@ -52,25 +62,99 @@ async function loadUnits() {
   }))
 }
 
-async function loadPeersForUnit(id: number) {
-  const list = await orgApi.fetchPositions({
-    activeOnly: false,
-    orgUnitId: id,
-    managerOfOrgUnitOnly: true,
-  })
-  peerPositions.value = list.map(p => ({ id: p.id, name: p.name, code: p.code }))
+async function loadReportToCandidates(orgUnitId: number): Promise<void> {
+  const [positions, staff] = await Promise.all([
+    orgApi.fetchPositions({
+      activeOnly: false,
+      orgUnitId,
+      managerOfOrgUnitOnly: true,
+    }),
+    orgApi.fetchStaff({
+      activeOnly: false,
+      orgUnitIds: [orgUnitId],
+    }),
+  ])
+
+  peerPositions.value = positions.map(p => ({ id: p.id, name: p.name, code: p.code }))
+  const managerPositionIds = new Set(peerPositions.value.map(p => p.id))
+  reportToStaffOptions.value = staff
+    .map((row: OrgStaffListItem) => {
+      const assignment = row.current_assignment
+      const position = assignment?.org_position
+      if (!position || !managerPositionIds.has(position.id)) {
+        return null
+      }
+      const fullName = row.full_name
+        ?? [row.first_name, row.second_name, row.first_last_name, row.second_last_name]
+          .filter(Boolean)
+          .join(' ')
+          .trim()
+      return {
+        id: row.id,
+        label: `${fullName} — ${position.name}`,
+        reportsToPositionId: position.id,
+      }
+    })
+    .filter((row): row is { id: number; label: string; reportsToPositionId: number } => row != null)
+}
+
+function syncReportToFormFromChoices(): void {
+  if (reportToTargetType.value === 'position') {
+    form.value.reports_to_position_id = reportToPositionChoiceId.value
+    return
+  }
+  if (reportToTargetType.value === 'staff') {
+    const staff = reportToStaffOptions.value.find(row => row.id === reportToStaffChoiceId.value)
+    form.value.reports_to_position_id = staff?.reportsToPositionId ?? null
+    return
+  }
+  form.value.reports_to_position_id = null
+}
+
+async function hydrateReportToFromSaved(reportsTo: OrgPositionRow['reports_to_position']): Promise<void> {
+  if (!reportsTo?.org_unit_id) {
+    reportToOrgUnitId.value = null
+    reportToTargetType.value = 'none'
+    reportToPositionChoiceId.value = null
+    reportToStaffChoiceId.value = null
+    return
+  }
+
+  reportToOrgUnitId.value = reportsTo.org_unit_id
+  await loadReportToCandidates(reportsTo.org_unit_id)
+  reportToTargetType.value = 'position'
+  reportToPositionChoiceId.value = reportsTo.id
+  form.value.reports_to_position_id = reportsTo.id
 }
 
 watch(() => form.value.org_unit_id, async (id: number | null, prev: number | null | undefined) => {
-  if (id == null) {
-    peerPositions.value = []
-    return
-  }
-  await loadPeersForUnit(id)
   if (prev != null && prev !== id) {
     form.value.reports_to_position_id = null
     chargesSelectedArea.value = 'no'
+    reportToOrgUnitId.value = null
+    reportToTargetType.value = 'none'
+    reportToPositionChoiceId.value = null
+    reportToStaffChoiceId.value = null
+    peerPositions.value = []
+    reportToStaffOptions.value = []
   }
+})
+
+watch(reportToOrgUnitId, async (id: number | null) => {
+  form.value.reports_to_position_id = null
+  reportToTargetType.value = 'none'
+  reportToPositionChoiceId.value = null
+  reportToStaffChoiceId.value = null
+  if (id == null) {
+    peerPositions.value = []
+    reportToStaffOptions.value = []
+    return
+  }
+  await loadReportToCandidates(id)
+})
+
+watch([reportToTargetType, reportToPositionChoiceId, reportToStaffChoiceId], () => {
+  syncReportToFormFromChoices()
 })
 
 async function loadPosition() {
@@ -90,14 +174,10 @@ async function loadPosition() {
       valid_from: toDateInputValue(p.valid_from),
       valid_to: toDateInputValue(p.valid_to),
     }
-    await loadPeersForUnit(p.org_unit_id)
-    const ids = reportsCandidates.value.map(r => r.id)
-    if (form.value.reports_to_position_id != null && !ids.includes(form.value.reports_to_position_id)) {
-      form.value.reports_to_position_id = null
-    }
     const mgrName = p.org_unit?.manager_position_name?.trim() ?? ''
     const posName = p.name.trim()
     chargesSelectedArea.value = mgrName !== '' && mgrName === posName ? 'yes' : 'no'
+    await hydrateReportToFromSaved(p.reports_to_position)
   } catch {
     toast.error('No se encontró el cargo')
     router.push('/settings/organizational-structure/positions')
@@ -151,7 +231,7 @@ onMounted(() => {
             Editar cargo
           </h2>
           <p class="text-muted-foreground leading-relaxed">
-            Modifique datos del puesto y la relación jerárquica. «Reporta a» solo ofrece cargos ya definidos como referencia de jefe de área en ese área.
+            El jefe inmediato puede pertenecer a otra área; elija el área del jefe y luego el cargo o funcionario.
           </p>
         </div>
         <Button variant="outline" class="shrink-0" @click="router.back()">
@@ -170,7 +250,7 @@ onMounted(() => {
             <CardHeader class="gap-2">
               <CardTitle class="leading-snug">Información del cargo</CardTitle>
               <CardDescription class="leading-relaxed">
-                Área de adscripción, identificación del puesto y relación jerárquica dentro del mismo área.
+                Área de adscripción, identificación del puesto y relación jerárquica con su jefe inmediato.
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-6">
@@ -234,43 +314,128 @@ onMounted(() => {
                 <div class="space-y-3 md:col-span-2">
                   <Label for="rep_e" class="leading-snug">Reporta a (opcional)</Label>
                   <p class="text-xs text-muted-foreground leading-relaxed">
-                    Solo cargos con «a cargo del área» en Sí en el mismo área. Si la lista está vacía, cree o marque antes el jefe de área.
+                    Elija el área donde está el jefe (p. ej. Gerencia) y luego el cargo o funcionario.
+                    Solo aparecen cargos marcados como referencia de jefe de esa área.
                   </p>
-                  <Select
-                    :model-value="form.reports_to_position_id == null ? 'none' : String(form.reports_to_position_id)"
-                    :disabled="!form.org_unit_id"
-                    @update:model-value="(v) => { form.reports_to_position_id = v === 'none' ? null : Number(v) }"
-                  >
-                    <SelectTrigger id="rep_e">
-                      <SelectValue placeholder="Ninguno" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">
-                        (Ninguno)
-                      </SelectItem>
-                      <SelectItem
-                        v-for="r in reportsCandidates"
-                        :key="r.id"
-                        :value="String(r.id)"
+                  <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div class="space-y-2">
+                      <Label class="text-xs text-muted-foreground">Área de reporte</Label>
+                      <Select
+                        :model-value="reportToOrgUnitId == null ? 'none' : String(reportToOrgUnitId)"
+                        :disabled="!form.org_unit_id"
+                        @update:model-value="(v) => { reportToOrgUnitId = v === 'none' ? null : Number(v) }"
                       >
-                        {{ r.name }} — {{ r.code }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                </div>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione área" />
+                        </SelectTrigger>
+                        <SelectContent class="max-h-72">
+                          <SelectItem value="none">
+                            (Sin jefe inmediato)
+                          </SelectItem>
+                          <SelectItem
+                            v-for="u in unitOptions"
+                            :key="u.id"
+                            :value="String(u.id)"
+                          >
+                            {{ u.label }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <OrgStructureValidityPeriodFields
-                  v-model:valid-from="form.valid_from"
-                  v-model:valid-to="form.valid_to"
-                  from-input-id="position_edit_valid_from"
-                  to-input-id="position_edit_valid_to"
-                />
+                    <div class="space-y-2">
+                      <Label class="text-xs text-muted-foreground">Tipo</Label>
+                      <Select
+                        :model-value="reportToTargetType"
+                        :disabled="!reportToOrgUnitId"
+                        @update:model-value="onReportToTargetTypeChange"
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            (Ninguno)
+                          </SelectItem>
+                          <SelectItem value="position">
+                            Cargo
+                          </SelectItem>
+                          <SelectItem value="staff">
+                            Funcionario
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <OrgStructureActiveMultiselect
-                  :model-value="form.is_active"
-                  gender="masculine"
-                  input-id="position_edit_active_ms"
+                    <div class="space-y-2">
+                      <Label class="text-xs text-muted-foreground">Selección</Label>
+                      <Select
+                        v-if="reportToTargetType === 'position'"
+                        :model-value="reportToPositionChoiceId == null ? 'none' : String(reportToPositionChoiceId)"
+                        :disabled="!reportToOrgUnitId"
+                        @update:model-value="(v) => { reportToPositionChoiceId = v === 'none' ? null : Number(v) }"
+                      >
+                        <SelectTrigger id="rep_e">
+                          <SelectValue placeholder="Seleccione cargo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            (Ninguno)
+                          </SelectItem>
+                          <SelectItem
+                            v-for="r in peerPositions"
+                            :key="r.id"
+                            :value="String(r.id)"
+                          >
+                            {{ r.name }} — {{ r.code }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <Select
+                        v-else-if="reportToTargetType === 'staff'"
+                        :model-value="reportToStaffChoiceId == null ? 'none' : String(reportToStaffChoiceId)"
+                        :disabled="!reportToOrgUnitId"
+                        @update:model-value="(v) => { reportToStaffChoiceId = v === 'none' ? null : Number(v) }"
+                      >
+                        <SelectTrigger id="rep_e">
+                          <SelectValue placeholder="Seleccione funcionario" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            (Ninguno)
+                          </SelectItem>
+                          <SelectItem
+                            v-for="s in reportToStaffOptions"
+                            :key="s.id"
+                            :value="String(s.id)"
+                          >
+                            {{ s.label }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      <Input
+                        v-else
+                        disabled
+                        placeholder="Seleccione área y tipo"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <OrgStructureValidityPeriodFields
+                v-model:valid-from="form.valid_from"
+                v-model:valid-to="form.valid_to"
+                from-input-id="position_edit_valid_from"
+                to-input-id="position_edit_valid_to"
+              />
+
+              <OrgStructureActiveMultiselect
+                :model-value="form.is_active"
+                gender="masculine"
+                input-id="position_edit_active_ms"
                 helper-text="Los cargos inactivos no se ofrecen al asignar funcionarios ni en flujos de alta."
                 @update:model-value="onPositionActiveChange"
               />

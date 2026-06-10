@@ -3,6 +3,8 @@ import {
   VENTANILLA_FILING_STATUS_LABELS,
   VENTANILLA_FILING_TYPE_LABELS,
   VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY,
+  VENTANILLA_NOTIFICATION_CHANNEL_LABELS,
+  VENTANILLA_NOTIFICATION_EVENT_LABELS,
 } from '~/constants/ventanilla'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type { VentanillaCatalogData, VentanillaFilingDetail } from '~/types/ventanilla'
@@ -110,9 +112,30 @@ function eventTypeLabel(type: string): string {
     closed: 'Cierre',
     voided: 'Anulación',
     intake_classified: 'Clasificación desde bandeja',
+    traffic_light_changed: 'Cambio de semáforo',
+    sla_alert_notified: 'Notificación SLA',
+    escalated: 'Escalamiento SLA',
   }
 
   return labels[type] ?? type
+}
+
+function alertRecipientRoleLabel(role: string): string {
+  const labels: Record<string, string> = {
+    assignee: 'responsable',
+    immediate_supervisor: 'jefe inmediato',
+    unit_manager: 'jefe de área',
+  }
+
+  return labels[role] ?? role
+}
+
+function notificationChannelLabel(channel: string): string {
+  return VENTANILLA_NOTIFICATION_CHANNEL_LABELS[channel] ?? channel
+}
+
+function notificationEventLabel(eventType: string): string {
+  return VENTANILLA_NOTIFICATION_EVENT_LABELS[eventType] ?? eventType
 }
 
 function formatMetadataValue(value: unknown): string {
@@ -629,6 +652,44 @@ async function viewSticker() {
         </CardContent>
       </Card>
 
+      <Card v-if="filing.notification_deliveries?.length">
+        <CardHeader>
+          <CardTitle>Notificaciones enviadas</CardTitle>
+          <CardDescription>
+            Registro de envíos por correo, WhatsApp e interno (HU-13).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul class="space-y-2 text-sm">
+            <li
+              v-for="delivery in filing.notification_deliveries"
+              :key="delivery.id"
+              class="rounded-lg border p-3"
+            >
+              <div class="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">
+                  {{ notificationChannelLabel(delivery.channel) }}
+                </Badge>
+                <span class="font-medium">{{ notificationEventLabel(delivery.event_type) }}</span>
+                <Badge v-if="delivery.status === 'failed'" variant="destructive">
+                  Fallido
+                </Badge>
+              </div>
+              <p class="text-muted-foreground mt-1 text-xs">
+                {{ delivery.recipient_user?.name ?? delivery.recipient_address ?? 'Destinatario' }}
+                <template v-if="delivery.recipient_role">
+                  ({{ alertRecipientRoleLabel(delivery.recipient_role) }})
+                </template>
+                · {{ formatDate(delivery.sent_at) }}
+              </p>
+              <p v-if="delivery.error_message" class="mt-1 text-xs text-destructive">
+                {{ delivery.error_message }}
+              </p>
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>Alertas SLA</CardTitle>
@@ -647,11 +708,38 @@ async function viewSticker() {
               <p class="mt-1 text-muted-foreground text-xs">
                 Generada: {{ formatDate(alert.triggered_at) }}
               </p>
+              <ul v-if="alert.deliveries?.length" class="mt-2 space-y-1 text-xs text-muted-foreground">
+                <li v-for="delivery in alert.deliveries" :key="delivery.id">
+                  Correo a {{ delivery.recipient_user?.name ?? delivery.recipient_email }}
+                  ({{ alertRecipientRoleLabel(delivery.recipient_role) }}) · {{ formatDate(delivery.sent_at) }}
+                </li>
+              </ul>
             </li>
           </ul>
           <p v-else class="text-muted-foreground text-sm">
             Sin alertas SLA registradas.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card v-if="filing.escalation">
+        <CardHeader>
+          <CardTitle>Escalamiento</CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-2 text-sm">
+          <p class="font-medium">
+            {{ filing.escalation.message }}
+          </p>
+          <p class="text-muted-foreground text-xs">
+            Escalado: {{ formatDate(filing.escalation.escalated_at) }}
+            · {{ filing.escalation.business_days_overdue }} día(s) hábil(es) vencido(s)
+          </p>
+          <ul v-if="filing.escalation.deliveries?.length" class="space-y-1 text-xs text-muted-foreground">
+            <li v-for="delivery in filing.escalation.deliveries" :key="delivery.id">
+              Correo a {{ delivery.recipient_user?.name ?? delivery.recipient_email }}
+              ({{ alertRecipientRoleLabel(delivery.recipient_role) }}) · {{ formatDate(delivery.sent_at) }}
+            </li>
+          </ul>
         </CardContent>
       </Card>
 

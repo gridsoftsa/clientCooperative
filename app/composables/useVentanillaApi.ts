@@ -8,6 +8,10 @@ import type {
   VentanillaFilingVerificationData,
   VentanillaIntakeRow,
   VentanillaResponsibleUserRow,
+  VentanillaSlaComplianceDashboardData,
+  VentanillaInboxNotificationRow,
+  VentanillaInboxNotificationsData,
+  VentanillaNotificationSettingsRow,
   VentanillaSlaSettingsData,
 } from '~/types/ventanilla'
 
@@ -53,7 +57,7 @@ export function useVentanillaApi() {
 
   async function updateFunctionalType(key: string, payload: Record<string, unknown>) {
     const res = await api<{ data: VentanillaCatalogSettingsData['functional_types'][number]; message: string }>(
-      `/ventanilla/catalog-settings/functional-types/${key}`,
+      `/ventanilla/catalog-settings/functional-types/${encodeURIComponent(key)}`,
       { method: 'PUT', body: payload },
     )
 
@@ -209,6 +213,71 @@ export function useVentanillaApi() {
     return res.data
   }
 
+  async function fetchSlaDashboard(query: Record<string, string | number> = {}): Promise<VentanillaSlaComplianceDashboardData> {
+    const res = await api<{ data: VentanillaSlaComplianceDashboardData }>('/ventanilla/sla-dashboard', { query })
+
+    return res.data
+  }
+
+  async function downloadSlaDashboardExport(query: Record<string, string | number> = {}): Promise<void> {
+    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== '' && value != null) {
+        params.set(key, String(value))
+      }
+    }
+    const qs = params.toString()
+    const url = `${base}/api/ventanilla/sla-dashboard/export${qs ? `?${qs}` : ''}`
+    const blob = await fetchAuthenticatedBlob(url)
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = `ventanilla-cumplimiento-sla-${new Date().toISOString().slice(0, 10)}.csv`
+    anchor.style.cssText = 'position:fixed;left:-9999px;top:0'
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+  }
+
+  async function fetchNotificationSettings(): Promise<VentanillaNotificationSettingsRow> {
+    const res = await api<{ data: VentanillaNotificationSettingsRow }>('/ventanilla/notification-settings')
+
+    return res.data
+  }
+
+  async function updateNotificationSettings(payload: {
+    channel_email_enabled: boolean
+    channel_whatsapp_enabled: boolean
+    channel_internal_enabled: boolean
+  }): Promise<VentanillaNotificationSettingsRow> {
+    const res = await api<{ data: VentanillaNotificationSettingsRow }>('/ventanilla/notification-settings', {
+      method: 'PUT',
+      body: payload,
+    })
+
+    return res.data
+  }
+
+  async function fetchInboxNotifications(query: Record<string, string | number | boolean> = {}): Promise<VentanillaInboxNotificationsData> {
+    const res = await api<VentanillaInboxNotificationsData>('/ventanilla/inbox-notifications', { query })
+
+    return res
+  }
+
+  async function markInboxNotificationRead(id: string): Promise<VentanillaInboxNotificationRow> {
+    const res = await api<{ data: VentanillaInboxNotificationRow }>(`/ventanilla/inbox-notifications/${id}/read`, {
+      method: 'PATCH',
+    })
+
+    return res.data
+  }
+
+  async function markAllInboxNotificationsRead(): Promise<void> {
+    await api('/ventanilla/inbox-notifications/mark-all-read', { method: 'POST' })
+  }
+
   async function fetchSlaSettings(): Promise<VentanillaSlaSettingsData> {
     const res = await api<{ data: VentanillaSlaSettingsData }>('/ventanilla/sla-settings')
 
@@ -222,6 +291,15 @@ export function useVentanillaApi() {
     orange_percentage: number
     orange_days_before: number
     alerts_enabled: boolean
+    notify_assignee: boolean
+    notify_immediate_supervisor: boolean
+    notify_unit_manager: boolean
+    red_reminder_interval_days: number
+    escalation_enabled: boolean
+    escalation_business_days_after_deadline: number
+    escalation_notify_immediate_supervisor: boolean
+    escalation_notify_unit_manager: boolean
+    escalation_functional_type_keys: string[] | null
   }): Promise<VentanillaSlaSettingsData> {
     const res = await api<{ data: VentanillaSlaSettingsData }>('/ventanilla/sla-settings', {
       method: 'PUT',
@@ -463,6 +541,13 @@ export function useVentanillaApi() {
     closeFiling,
     voidFiling,
     refreshSla,
+    fetchSlaDashboard,
+    downloadSlaDashboardExport,
+    fetchNotificationSettings,
+    updateNotificationSettings,
+    fetchInboxNotifications,
+    markInboxNotificationRead,
+    markAllInboxNotificationsRead,
     fetchSlaSettings,
     updateSlaSettings,
     addHoliday,

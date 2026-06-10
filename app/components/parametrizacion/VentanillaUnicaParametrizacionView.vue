@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { VentanillaFunctionalTypeRow, VentanillaReceptionMediumRow } from '~/types/ventanilla'
+import { messageFromFetchError } from '~/utils/http-error-message'
 
 type CatalogSection = 'functional-types' | 'reception-media'
 
@@ -61,52 +62,74 @@ async function loadCatalog() {
   }
 }
 
-function slaPayload(raw: string, requiresResponse: boolean): number | null {
+function slaPayload(raw: string | number | null | undefined, requiresResponse: boolean): number | null {
   if (!requiresResponse) {
     return null
   }
-  if (raw.trim() === '') {
+  const text = String(raw ?? '').trim()
+  if (text === '') {
     return null
   }
-  const n = Number(raw)
+  const n = Number(text)
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
 async function saveFunctional(rows: Array<{
-  key: string
+  typeKey: string
+  originalKey?: string
   label: string
   requires_response_default: boolean
-  sla_business_days: string
-  sort_order: string
+  sla_business_days: string | number
+  sort_order: string | number
   is_active: boolean
   _isNew?: boolean
   _removed?: boolean
 }>) {
+  if (!Array.isArray(rows)) {
+    toast.error('No se pudieron guardar los tipos funcionales.')
+    return
+  }
+
   saving.value = true
   try {
+    let savedCount = 0
+
     for (const row of rows) {
+      const typeKey = String(row.originalKey ?? row.typeKey ?? '').trim()
       const payload = {
-        key: row.key.trim(),
-        label: row.label.trim(),
-        requires_response_default: row.requires_response_default,
+        key: String(row._isNew ? row.typeKey : typeKey).trim(),
+        label: String(row.label ?? '').trim(),
+        requires_response_default: row.requires_response_default === true,
         sla_business_days: slaPayload(row.sla_business_days, row.requires_response_default),
-        is_active: row._removed ? false : row.is_active,
+        is_active: row._removed ? false : row.is_active !== false,
         sort_order: Number(row.sort_order) || 0,
       }
 
       if (row._isNew && !row._removed) {
+        if (!payload.key) {
+          throw new Error('Falta la clave técnica de un tipo funcional nuevo.')
+        }
         await ventanillaApi.createFunctionalType(payload)
+        savedCount += 1
       } else if (!row._isNew) {
-        await ventanillaApi.updateFunctionalType(row.key.trim(), payload)
+        if (!typeKey) {
+          throw new Error('Falta la clave técnica de un tipo funcional existente.')
+        }
+        await ventanillaApi.updateFunctionalType(typeKey, payload)
+        savedCount += 1
       }
     }
+
+    if (savedCount === 0) {
+      toast.error('No hay cambios para guardar.')
+      return
+    }
+
     toast.success('Tipos funcionales guardados correctamente')
     savedVersion.value += 1
     await loadCatalog()
   } catch (e: unknown) {
-    const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
-    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
-    toast.error(first ?? err.data?.message ?? 'No se pudieron guardar los tipos funcionales')
+    toast.error(messageFromFetchError(e, 'No se pudieron guardar los tipos funcionales'))
   } finally {
     saving.value = false
   }
@@ -140,9 +163,7 @@ async function saveReception(rows: Array<{
     savedVersion.value += 1
     await loadCatalog()
   } catch (e: unknown) {
-    const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
-    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
-    toast.error(first ?? err.data?.message ?? 'No se pudieron guardar los medios de recepción')
+    toast.error(messageFromFetchError(e, 'No se pudieron guardar los medios de recepción'))
   } finally {
     saving.value = false
   }
@@ -240,6 +261,7 @@ onMounted(() => {
                 </div>
                 <div class="p-4">
                   <ParametrizacionVentanillaCatalogConfigEditor
+                    :key="selectedSection"
                     :kind="selectedSection"
                     :functional-types="functionalTypes"
                     :reception-media="receptionMedia"

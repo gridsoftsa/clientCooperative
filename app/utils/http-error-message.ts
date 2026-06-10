@@ -5,6 +5,13 @@ export function messageFromFetchError(error: unknown, fallback: string): string 
   if (error && typeof error === 'object') {
     const e = error as Record<string, unknown>
     const data = e.data as Record<string, unknown> | undefined
+    const errors = data?.errors
+    if (errors && typeof errors === 'object') {
+      const first = Object.values(errors as Record<string, string[]>)[0]?.[0]
+      if (typeof first === 'string' && first.trim() !== '') {
+        return first
+      }
+    }
     const nestedMessage = data?.message
     if (typeof nestedMessage === 'string' && nestedMessage.trim() !== '') {
       return nestedMessage

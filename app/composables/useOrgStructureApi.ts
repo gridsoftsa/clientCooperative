@@ -32,7 +32,7 @@ export interface OrgPositionRow {
   valid_to?: string | null
   is_active: boolean
   org_unit?: { id: number; name: string; code: string; manager_position_name?: string | null }
-  reports_to_position?: { id: number; name: string; code: string } | null
+  reports_to_position?: { id: number; name: string; code: string; org_unit_id?: number } | null
 }
 
 /**

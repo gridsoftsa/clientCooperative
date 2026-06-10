@@ -69,6 +69,16 @@ export const navMenu: NavMenu[] = [
             permission: 'ventanilla_clasificar',
           },
           {
+            title: 'Cumplimiento SLA',
+            link: '/ventanilla/cumplimiento',
+            permission: 'ventanilla_ver',
+          },
+          {
+            title: 'Notificaciones',
+            link: '/ventanilla/notificaciones',
+            permission: 'ventanilla_ver',
+          },
+          {
             title: 'SLA',
             link: '/ventanilla/sla',
             permission: 'ventanilla_sla_configurar',

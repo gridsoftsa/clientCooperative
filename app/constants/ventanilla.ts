@@ -28,15 +28,42 @@ export const VENTANILLA_TRAFFIC_LIGHT_LABELS: Record<VentanillaTrafficLightValue
   red: 'Vencido',
 }
 
+export const VENTANILLA_NOTIFICATION_CHANNEL_LABELS: Record<string, string> = {
+  email: 'Correo',
+  whatsapp: 'WhatsApp',
+  internal: 'Interno',
+}
+
+export const VENTANILLA_NOTIFICATION_EVENT_LABELS: Record<string, string> = {
+  assigned: 'Asignación',
+  sla_alert: 'Alerta SLA',
+  sla_reminder: 'Recordatorio SLA',
+  escalated: 'Escalamiento SLA',
+}
+
 export function ventanillaTrafficLightBadgeVariant(
   status: VentanillaTrafficLightValue | null | undefined,
-): 'default' | 'secondary' | 'destructive' | 'outline' {
+): 'default' | 'secondary' | 'destructive' | 'outline' | 'warning' {
   if (status === 'red') {
     return 'destructive'
   }
   if (status === 'orange') {
-    return 'secondary'
+    return 'warning'
+  }
+
+  if (status === 'green') {
+    return 'outline'
   }
 
   return 'default'
+}
+
+export function ventanillaTrafficLightBadgeClass(
+  status: VentanillaTrafficLightValue | null | undefined,
+): string {
+  if (status === 'green') {
+    return 'border-emerald-600/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+  }
+
+  return ''
 }
