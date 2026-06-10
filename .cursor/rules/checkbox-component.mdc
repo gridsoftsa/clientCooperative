@@ -1,0 +1,37 @@
+---
+description: Checkbox UI — usar siempre el componente Checkbox nativo del proyecto; no Reka UI ni inputs sueltos
+globs: app/**/*.vue
+alwaysApply: true
+---
+
+# Checkbox en el cliente (Nuxt)
+
+## Regla
+
+Usar **solo** el componente auto-importado `Checkbox` (`app/components/ui/checkbox/Checkbox.vue`).
+
+- **No** usar `CheckboxRoot` / Reka UI directamente en páginas o componentes de negocio.
+- **No** añadir `<input type="checkbox">` sueltos salvo listas masivas TRD que ya usen el patrón documentado en catálogo TRD.
+- **No** crear variantes paralelas (`StyledNativeCheckbox`, etc.); el `Checkbox` oficial ya es nativo + estilo shadcn (fondo primary, marca blanca Lucide).
+
+## API
+
+| Patrón | Ejemplo |
+|--------|---------|
+| `v-model` | `<Checkbox v-model="form.is_active" />` |
+| Controlado | `<Checkbox :checked="value" @update:checked="value = $event === true" />` |
+| Con texto integrado | `<Checkbox v-model="x">Activar alertas</Checkbox>` |
+| Dentro de `<label>` con borde | `<label class="flex …"><Checkbox bare :checked="x" @update:checked="x = $event === true" /> Texto</label>` |
+| Con `<Label for>` separado | `<Checkbox id="terms" v-model="accepted" />` + `<Label for="terms">…</Label>` |
+
+Prop `bare`: solo el cuadro (sin `<label>` propio); usar cuando un `<label>` externo envuelve checkbox + texto.
+
+## Por qué
+
+Reka UI `CheckboxRoot` falla en algunos entornos (estado controlado, clics sin respuesta). El `Checkbox` del proyecto usa `<input type="checkbox">` oculto + caja visual; funciona en WSL y muestra el ✓ con `lucide-vue-next` `Check`.
+
+## Al crear pantallas nuevas
+
+1. Importar no hace falta (auto-import).
+2. Preferir `v-model` en formularios; en objetos anidados `:checked` + `@update:checked`.
+3. Si el clic en el texto no marca el check, usar `bare` dentro de un `<label>` o `id` + `<Label for="id">`.

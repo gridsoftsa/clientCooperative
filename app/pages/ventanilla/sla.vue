@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import StyledNativeCheckbox from '~/components/ui/styled-native-checkbox/StyledNativeCheckbox.vue'
 import type {
   VentanillaCatalogData,
   VentanillaColombiaHolidayPreviewData,
@@ -336,7 +335,7 @@ function formatHolidayDate(value: string): string {
                         ? 'border-primary/40 bg-primary/5'
                         : ''"
                     >
-                      <StyledNativeCheckbox
+                      <Checkbox
                         bare
                         :checked="isWorkingDaySelected(day.value)"
                         @update:checked="toggleWorkingDay(day.value, $event)"
@@ -391,12 +390,12 @@ function formatHolidayDate(value: string): string {
                     />
                   </div>
                 </div>
-                <StyledNativeCheckbox
+                <Checkbox
                   :checked="data.settings.alerts_enabled"
                   @update:checked="data.settings.alerts_enabled = $event"
                 >
                   Generar alertas naranja/rojo
-                </StyledNativeCheckbox>
+                </Checkbox>
               </CardContent>
             </Card>
           </div>
@@ -413,7 +412,7 @@ function formatHolidayDate(value: string): string {
             <CardContent class="space-y-4">
               <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <StyledNativeCheckbox
+                  <Checkbox
                     bare
                     :checked="notificationSettings.channel_email_enabled"
                     @update:checked="notificationSettings.channel_email_enabled = $event"
@@ -421,7 +420,7 @@ function formatHolidayDate(value: string): string {
                   Correo electrónico
                 </label>
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <StyledNativeCheckbox
+                  <Checkbox
                     bare
                     :checked="notificationSettings.channel_whatsapp_enabled"
                     @update:checked="notificationSettings.channel_whatsapp_enabled = $event"
@@ -429,7 +428,7 @@ function formatHolidayDate(value: string): string {
                   WhatsApp
                 </label>
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <StyledNativeCheckbox
+                  <Checkbox
                     bare
                     :checked="notificationSettings.channel_internal_enabled"
                     @update:checked="notificationSettings.channel_internal_enabled = $event"
@@ -463,7 +462,7 @@ function formatHolidayDate(value: string): string {
             <CardContent>
               <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <StyledNativeCheckbox
+                  <Checkbox
                     bare
                     :checked="data.settings.notify_assignee"
                     @update:checked="data.settings.notify_assignee = $event"
@@ -471,7 +470,7 @@ function formatHolidayDate(value: string): string {
                   Responsable asignado
                 </label>
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <StyledNativeCheckbox
+                  <Checkbox
                     bare
                     :checked="data.settings.notify_immediate_supervisor"
                     @update:checked="data.settings.notify_immediate_supervisor = $event"
@@ -479,7 +478,7 @@ function formatHolidayDate(value: string): string {
                   Jefe inmediato
                 </label>
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <StyledNativeCheckbox
+                  <Checkbox
                     bare
                     :checked="data.settings.notify_unit_manager"
                     @update:checked="data.settings.notify_unit_manager = $event"
@@ -503,12 +502,12 @@ function formatHolidayDate(value: string): string {
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-4">
-              <StyledNativeCheckbox
+              <Checkbox
                 :checked="data.settings.escalation_enabled"
                 @update:checked="data.settings.escalation_enabled = $event"
               >
                 Activar escalamiento automático
-              </StyledNativeCheckbox>
+              </Checkbox>
               <div class="grid gap-3 sm:grid-cols-2">
                 <div class="space-y-1.5">
                   <Label>Días hábiles vencidos para escalar</Label>
@@ -529,7 +528,7 @@ function formatHolidayDate(value: string): string {
                   class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm"
                   :class="{ 'cursor-not-allowed opacity-50': !data.settings.escalation_enabled }"
                 >
-                  <StyledNativeCheckbox
+                  <Checkbox
                     bare
                     :checked="data.settings.escalation_notify_immediate_supervisor"
                     :disabled="!data.settings.escalation_enabled"
@@ -541,7 +540,7 @@ function formatHolidayDate(value: string): string {
                   class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm"
                   :class="{ 'cursor-not-allowed opacity-50': !data.settings.escalation_enabled }"
                 >
-                  <StyledNativeCheckbox
+                  <Checkbox
                     bare
                     :disabled="!data.settings.escalation_enabled"
                     :checked="data.settings.escalation_notify_unit_manager"
@@ -559,7 +558,7 @@ function formatHolidayDate(value: string): string {
                     class="flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs"
                     :class="{ 'cursor-not-allowed opacity-50': !data.settings.escalation_enabled }"
                   >
-                    <StyledNativeCheckbox
+                    <Checkbox
                       bare
                       :checked="escalationFunctionalTypeKeys.includes(type.key)"
                       :disabled="!data.settings.escalation_enabled"
@@ -601,12 +600,12 @@ function formatHolidayDate(value: string): string {
                     {{ catalogLoading ? 'Importando…' : 'Importar al SLA' }}
                   </Button>
                 </div>
-                <StyledNativeCheckbox
+                <Checkbox
                   :checked="replaceCatalogYear"
                   @update:checked="replaceCatalogYear = $event"
                 >
                   Reemplazar festivos del año antes de importar
-                </StyledNativeCheckbox>
+                </Checkbox>
                 <div
                   v-if="catalogPreview?.holidays.length"
                   class="max-h-56 overflow-auto rounded-lg border"

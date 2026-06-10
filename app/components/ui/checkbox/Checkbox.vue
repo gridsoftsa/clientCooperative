@@ -1,65 +1,100 @@
 <script setup lang="ts">
-import type { CheckboxRootEmits, CheckboxRootProps } from 'reka-ui'
 import type { HTMLAttributes } from 'vue'
 import { Check } from 'lucide-vue-next'
-import { reactiveOmit } from '@vueuse/core'
-import { CheckboxIndicator, CheckboxRoot } from 'reka-ui'
 import { cn } from '@/lib/utils'
 
-const props = defineProps<
-  CheckboxRootProps & {
-    class?: HTMLAttributes['class']
-    /** Alias controlado usado en varias pantallas del proyecto */
+/**
+ * Checkbox basado en <input type="checkbox"> nativo + apariencia shadcn.
+ * No usa Reka UI (evita fallos de estado controlado en WSL/navegador).
+ *
+ * Uso:
+ * - v-model o :checked + @update:checked
+ * - Con texto: <Checkbox v-model="x">Etiqueta</Checkbox>
+ * - Dentro de <label> externo: <Checkbox bare :checked="x" @update:checked="..." />
+ * - Con <Label for="id">: <Checkbox id="id" v-model="x" />
+ */
+const props = withDefaults(
+  defineProps<{
+    modelValue?: boolean | 'indeterminate' | null
     checked?: boolean | 'indeterminate' | null
-  }
->()
+    disabled?: boolean
+    id?: string
+    bare?: boolean
+    class?: HTMLAttributes['class']
+  }>(),
+  {
+    disabled: false,
+    bare: false,
+  },
+)
 
-const emits = defineEmits<
-  CheckboxRootEmits & {
-    'update:checked': [value: boolean | 'indeterminate']
-  }
->()
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean | 'indeterminate']
+  'update:checked': [value: boolean | 'indeterminate']
+}>()
 
-const delegatedProps = reactiveOmit(props, 'class', 'checked', 'modelValue')
+const autoId = useId()
+const inputId = computed(() => props.id ?? `ui-checkbox-${autoId}`)
 
-const resolvedModel = computed((): boolean | 'indeterminate' => {
-  if (props.modelValue !== undefined && props.modelValue !== null) {
-    return props.modelValue
-  }
-  if (props.checked !== undefined && props.checked !== null) {
-    return props.checked
-  }
+const isChecked = computed((): boolean => {
+  const value = props.modelValue !== undefined && props.modelValue !== null
+    ? props.modelValue
+    : props.checked
 
-  return false
+  return value === true
 })
 
-function onModelUpdate(value: boolean | 'indeterminate'): void {
-  emits('update:modelValue', value)
-  emits('update:checked', value)
+const boxClass = computed(() => cn(
+  'pointer-events-none flex size-4 shrink-0 items-center justify-center rounded-[4px] border shadow-xs transition-colors',
+  isChecked.value
+    ? 'border-primary bg-primary text-primary-foreground'
+    : 'border-input bg-background',
+  props.disabled && 'opacity-50',
+  props.class,
+))
+
+function onChange(event: Event): void {
+  const next = (event.target as HTMLInputElement).checked
+  emit('update:modelValue', next)
+  emit('update:checked', next)
 }
 </script>
 
 <template>
-  <CheckboxRoot
-    v-slot="slotProps"
-    data-slot="checkbox"
-    v-bind="delegatedProps"
-    :model-value="resolvedModel"
-    @update:model-value="onModelUpdate"
-    :class="
-      cn(
-        'peer border-input size-4 shrink-0 rounded-[4px] border shadow-xs transition-shadow outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground',
-        props.class,
-      )
-    "
+  <label
+    v-if="!bare"
+    class="inline-flex cursor-pointer items-center gap-2"
+    :class="{ 'cursor-not-allowed opacity-50': disabled }"
   >
-    <CheckboxIndicator
-      data-slot="checkbox-indicator"
-      class="grid place-content-center text-current transition-none"
+    <input
+      :id="inputId"
+      type="checkbox"
+      class="sr-only"
+      :checked="isChecked"
+      :disabled="disabled"
+      @change="onChange"
     >
-      <slot v-bind="slotProps">
-        <Check class="size-3.5" />
-      </slot>
-    </CheckboxIndicator>
-  </CheckboxRoot>
+    <span :class="boxClass" aria-hidden="true">
+      <Check v-if="isChecked" class="size-3.5" :stroke-width="3" />
+    </span>
+    <span v-if="$slots.default" class="text-sm leading-none">
+      <slot />
+    </span>
+  </label>
+  <span
+    v-else
+    class="relative inline-flex shrink-0"
+  >
+    <input
+      :id="inputId"
+      type="checkbox"
+      class="sr-only"
+      :checked="isChecked"
+      :disabled="disabled"
+      @change="onChange"
+    >
+    <span :class="boxClass" aria-hidden="true">
+      <Check v-if="isChecked" class="size-3.5" :stroke-width="3" />
+    </span>
+  </span>
 </template>
