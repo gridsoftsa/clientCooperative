@@ -78,6 +78,50 @@ export interface WorkflowStagePayload {
   is_terminal?: boolean
 }
 
+export interface WorkflowDefinitionSummary {
+  id: number
+  key: string
+  name: string
+}
+
+export interface WorkflowFilingContext {
+  instance: {
+    id: number
+    status: string
+    started_at: string | null
+    completed_at: string | null
+    closure_on_time: boolean | null
+  }
+  workflow: WorkflowDefinitionSummary | null
+  current_stage: { id: number, key: string, name: string } | null
+  open_task: {
+    id: number
+    status: WorkflowTaskStatus
+    traffic_light_status: WorkflowTrafficLight | null
+    due_at: string | null
+    stage: {
+      id: number
+      key: string
+      name: string
+      allows_advance: boolean
+      allows_return: boolean
+      allows_reassign: boolean
+      is_terminal: boolean
+    } | null
+    assignee: { id: number, name: string } | null
+  } | null
+  returnable_stages: Array<{ id: number, key: string, name: string, sort_order: number }>
+  events: Array<{
+    id: number
+    event_type: string
+    description: string | null
+    created_at: string | null
+    created_by: { id: number, name: string } | null
+    stage: { key: string, name: string } | null
+  }>
+  is_active: boolean
+}
+
 export interface WorkflowDefinitionPayload {
   key?: string
   name: string

@@ -42,6 +42,11 @@ export const navMenu: NavMenu[] = [
             permission: 'workflow_ver',
           },
           {
+            title: 'Bandeja lista',
+            link: '/workflow/bandeja',
+            permission: 'workflow_ver',
+          },
+          {
             title: 'Configurar flujos',
             link: '/workflow/configuracion',
             permission: 'workflow_definir',
