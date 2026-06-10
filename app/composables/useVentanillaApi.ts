@@ -8,6 +8,7 @@ import type {
   VentanillaFilingVerificationData,
   VentanillaIntakeRow,
   VentanillaResponsibleUserRow,
+  VentanillaSlaComplianceDashboardData,
   VentanillaSlaSettingsData,
 } from '~/types/ventanilla'
 
@@ -207,6 +208,34 @@ export function useVentanillaApi() {
     })
 
     return res.data
+  }
+
+  async function fetchSlaDashboard(query: Record<string, string | number> = {}): Promise<VentanillaSlaComplianceDashboardData> {
+    const res = await api<{ data: VentanillaSlaComplianceDashboardData }>('/ventanilla/sla-dashboard', { query })
+
+    return res.data
+  }
+
+  async function downloadSlaDashboardExport(query: Record<string, string | number> = {}): Promise<void> {
+    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== '' && value != null) {
+        params.set(key, String(value))
+      }
+    }
+    const qs = params.toString()
+    const url = `${base}/api/ventanilla/sla-dashboard/export${qs ? `?${qs}` : ''}`
+    const blob = await fetchAuthenticatedBlob(url)
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = `ventanilla-cumplimiento-sla-${new Date().toISOString().slice(0, 10)}.csv`
+    anchor.style.cssText = 'position:fixed;left:-9999px;top:0'
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
   }
 
   async function fetchSlaSettings(): Promise<VentanillaSlaSettingsData> {
@@ -472,6 +501,8 @@ export function useVentanillaApi() {
     closeFiling,
     voidFiling,
     refreshSla,
+    fetchSlaDashboard,
+    downloadSlaDashboardExport,
     fetchSlaSettings,
     updateSlaSettings,
     addHoliday,

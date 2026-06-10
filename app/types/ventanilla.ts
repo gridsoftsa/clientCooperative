@@ -176,6 +176,46 @@ export interface VentanillaFilingAlertDeliveryRow {
   recipient_user?: { id: number; name: string } | null
 }
 
+export interface VentanillaSlaComplianceTrendRow {
+  period: string
+  closed_total: number
+  closed_on_time: number
+  closed_late: number
+  compliance_rate: number | null
+}
+
+export interface VentanillaSlaComplianceDashboardData {
+  filters: {
+    org_unit_responsible_id: number | null
+    functional_type_key: string | null
+    filed_from: string | null
+    filed_to: string | null
+  }
+  kpis: {
+    total: number
+    green: number
+    orange: number
+    red: number
+    overdue: number
+    closed_on_time: number
+    closed_late: number
+    open_total: number
+    average_sla_business_days: number | null
+    average_response_business_days: number | null
+  }
+  by_filing_status: {
+    registered: number
+    in_progress: number
+    closed: number
+  }
+  by_traffic_light: {
+    green: number
+    orange: number
+    red: number
+  }
+  compliance_trend: VentanillaSlaComplianceTrendRow[]
+}
+
 export interface VentanillaFilingEscalationRow {
   id: number
   message: string

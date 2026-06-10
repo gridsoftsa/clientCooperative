@@ -61,7 +61,11 @@ const userOptions = ref<Array<{ id: number; label: string }>>([])
 const offices = ref<OrgOffice[]>([])
 const units = ref<OrgUnitRow[]>([])
 const positions = ref<OrgPositionRow[]>([])
+const supervisorUnitOptions = ref<Array<{ id: number; label: string }>>([])
+const supervisorPositions = ref<Array<{ id: number; name: string; code: string }>>([])
 const supervisorChoices = ref<Array<{ id: number; label: string }>>([])
+const supervisorOrgUnitId = ref<number | null>(null)
+const supervisorOrgPositionId = ref<number | null>(null)
 
 const ubicacionForm = ref({
   org_office_id: null as number | null,
@@ -80,6 +84,8 @@ const loadingCatalogs = ref(false)
 
 /** Evita que los watchers de agencia/área borren unidad y cargo mientras rellenamos desde la asignación vigente. */
 const ubicacionHydrating = ref(false)
+/** Evita que los watchers del jefe borren selección mientras rellenamos desde la asignación vigente. */
+const supervisorHydrating = ref(false)
 
 function staffLabel(s: OrgStaffListItem): string {
   const n = [s.first_name, s.second_name, s.first_last_name, s.second_last_name].filter(Boolean).join(' ')
@@ -190,16 +196,88 @@ async function loadEditCatalogs() {
   loadingCatalogs.value = true
   try {
     offices.value = await orgApi.fetchOffices({ activeOnly: false })
-    const allStaff = await orgApi.fetchStaff({ activeOnly: false })
-    supervisorChoices.value = allStaff
-      .filter(s => s.id !== props.staffId)
-      .map(s => ({ id: s.id, label: staffLabel(s) }))
+    const allUnits = await orgApi.fetchUnits({ activeOnly: true })
+    supervisorUnitOptions.value = allUnits.map((u: OrgUnitRow) => ({
+      id: u.id,
+      label: `${u.name} (${u.org_office?.name ?? '—'})`,
+    }))
   } catch {
     offices.value = []
-    supervisorChoices.value = []
+    supervisorUnitOptions.value = []
     toast.error('No se pudieron cargar catálogos de ubicación')
   } finally {
     loadingCatalogs.value = false
+  }
+}
+
+async function loadSupervisorPositions(orgUnitId: number): Promise<void> {
+  supervisorPositions.value = (await orgApi.fetchPositions({
+    activeOnly: true,
+    orgUnitId,
+  })).map(p => ({ id: p.id, name: p.name, code: p.code }))
+}
+
+async function loadSupervisorChoices(orgUnitId: number, orgPositionId: number): Promise<void> {
+  const staff = await orgApi.fetchStaff({
+    activeOnly: true,
+    orgUnitIds: [orgUnitId],
+    orgPositionIds: [orgPositionId],
+  })
+  supervisorChoices.value = staff
+    .filter(s => s.id !== props.staffId)
+    .map(s => ({ id: s.id, label: staffLabel(s) }))
+}
+
+function resetSupervisorSelection(): void {
+  supervisorOrgUnitId.value = null
+  supervisorOrgPositionId.value = null
+  supervisorPositions.value = []
+  supervisorChoices.value = []
+  ubicacionForm.value.immediate_supervisor_staff_id = null
+}
+
+async function hydrateSupervisorFromSaved(supervisorId: number | null): Promise<void> {
+  if (supervisorId == null) {
+    resetSupervisorSelection()
+    return
+  }
+
+  supervisorHydrating.value = true
+  try {
+    const res = await $api<{ data: Record<string, unknown> }>(
+      `/organizational-structure/org-staff/${supervisorId}`,
+    )
+    const assignment = parseCurrentAssignmentFromApi(
+      res.data.current_assignment ?? res.data.currentAssignment,
+    )
+    const unitId = assignment?.org_unit?.id
+    const positionId = assignment?.org_position?.id
+
+    if (unitId == null || positionId == null) {
+      ubicacionForm.value.immediate_supervisor_staff_id = supervisorId
+      supervisorOrgUnitId.value = null
+      supervisorOrgPositionId.value = null
+      supervisorPositions.value = []
+      supervisorChoices.value = [{
+        id: supervisorId,
+        label: staffLabel({
+          ...(res.data as unknown as OrgStaffListItem),
+          current_assignment: assignment,
+        }),
+      }]
+      return
+    }
+
+    supervisorOrgUnitId.value = unitId
+    await loadSupervisorPositions(unitId)
+    supervisorOrgPositionId.value = positionId
+    await loadSupervisorChoices(unitId, positionId)
+    ubicacionForm.value.immediate_supervisor_staff_id = supervisorId
+  } catch {
+    ubicacionForm.value.immediate_supervisor_staff_id = supervisorId
+    toast.error('No se pudo cargar el jefe inmediato guardado')
+  } finally {
+    supervisorHydrating.value = false
   }
 }
 
@@ -224,6 +302,7 @@ async function hydrateUbicacionFormFromCurrentAssignment(): Promise<void> {
     }
     units.value = []
     positions.value = []
+    resetSupervisorSelection()
     return
   }
 
@@ -236,11 +315,11 @@ async function hydrateUbicacionFormFromCurrentAssignment(): Promise<void> {
     ubicacionForm.value.org_unit_id = unitId
     positions.value = await orgApi.fetchPositions({ activeOnly: false, orgUnitId: unitId })
     ubicacionForm.value.org_position_id = positionId
-    ubicacionForm.value.immediate_supervisor_staff_id = ca.immediate_supervisor_staff?.id ?? null
     ubicacionForm.value.effective_from = todayISO()
     ubicacionForm.value.effective_to = ''
     ubicacionForm.value.change_kind = 'assignment'
     ubicacionForm.value.notes = ''
+    await hydrateSupervisorFromSaved(ca.immediate_supervisor_staff?.id ?? null)
   } catch {
     toast.error('No se pudo cargar la ubicación vigente en el formulario')
   } finally {
@@ -278,6 +357,32 @@ watch(
     positions.value = await orgApi.fetchPositions({ activeOnly: true, orgUnitId: id })
   },
 )
+
+watch(supervisorOrgUnitId, async (id: number | null) => {
+  if (props.readOnly || supervisorHydrating.value) {
+    return
+  }
+  supervisorOrgPositionId.value = null
+  ubicacionForm.value.immediate_supervisor_staff_id = null
+  supervisorChoices.value = []
+  if (id == null) {
+    supervisorPositions.value = []
+    return
+  }
+  await loadSupervisorPositions(id)
+})
+
+watch(supervisorOrgPositionId, async (id: number | null) => {
+  if (props.readOnly || supervisorHydrating.value) {
+    return
+  }
+  ubicacionForm.value.immediate_supervisor_staff_id = null
+  if (id == null || supervisorOrgUnitId.value == null) {
+    supervisorChoices.value = []
+    return
+  }
+  await loadSupervisorChoices(supervisorOrgUnitId.value, id)
+})
 
 async function loadAll() {
   loading.value = true
@@ -672,26 +777,84 @@ watch(
 
                       <div class="space-y-3 md:col-span-2">
                         <Label for="sup_p" class="leading-snug">Jefe inmediato (opcional)</Label>
-                        <Select
-                          :model-value="ubicacionForm.immediate_supervisor_staff_id == null ? 'none' : String(ubicacionForm.immediate_supervisor_staff_id)"
-                          @update:model-value="(v) => { ubicacionForm.immediate_supervisor_staff_id = v === 'none' ? null : Number(v) }"
-                        >
-                          <SelectTrigger id="sup_p">
-                            <SelectValue placeholder="Sin definir" />
-                          </SelectTrigger>
-                          <SelectContent class="max-h-56">
-                            <SelectItem value="none">
-                              (Ninguno)
-                            </SelectItem>
-                            <SelectItem
-                              v-for="s in supervisorChoices"
-                              :key="s.id"
-                              :value="String(s.id)"
+                        <p class="text-xs text-muted-foreground leading-relaxed">
+                          Seleccione primero el área y el cargo del jefe; luego el funcionario.
+                        </p>
+                        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                          <div class="space-y-2">
+                            <Label class="text-xs text-muted-foreground">Área del jefe</Label>
+                            <Select
+                              :model-value="supervisorOrgUnitId == null ? 'none' : String(supervisorOrgUnitId)"
+                              @update:model-value="(v) => { supervisorOrgUnitId = v === 'none' ? null : Number(v) }"
                             >
-                              {{ s.label }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccione área" />
+                              </SelectTrigger>
+                              <SelectContent class="max-h-72">
+                                <SelectItem value="none">
+                                  (Sin jefe inmediato)
+                                </SelectItem>
+                                <SelectItem
+                                  v-for="u in supervisorUnitOptions"
+                                  :key="u.id"
+                                  :value="String(u.id)"
+                                >
+                                  {{ u.label }}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div class="space-y-2">
+                            <Label class="text-xs text-muted-foreground">Cargo del jefe</Label>
+                            <Select
+                              :model-value="supervisorOrgPositionId == null ? 'none' : String(supervisorOrgPositionId)"
+                              :disabled="!supervisorOrgUnitId"
+                              @update:model-value="(v) => { supervisorOrgPositionId = v === 'none' ? null : Number(v) }"
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Seleccione cargo" />
+                              </SelectTrigger>
+                              <SelectContent class="max-h-64">
+                                <SelectItem value="none">
+                                  (Ninguno)
+                                </SelectItem>
+                                <SelectItem
+                                  v-for="p in supervisorPositions"
+                                  :key="p.id"
+                                  :value="String(p.id)"
+                                >
+                                  {{ p.name }} — {{ p.code }}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div class="space-y-2">
+                            <Label class="text-xs text-muted-foreground">Funcionario</Label>
+                            <Select
+                              :model-value="ubicacionForm.immediate_supervisor_staff_id == null ? 'none' : String(ubicacionForm.immediate_supervisor_staff_id)"
+                              :disabled="!supervisorOrgPositionId"
+                              @update:model-value="(v) => { ubicacionForm.immediate_supervisor_staff_id = v === 'none' ? null : Number(v) }"
+                            >
+                              <SelectTrigger id="sup_p">
+                                <SelectValue placeholder="Seleccione funcionario" />
+                              </SelectTrigger>
+                              <SelectContent class="max-h-56">
+                                <SelectItem value="none">
+                                  (Ninguno)
+                                </SelectItem>
+                                <SelectItem
+                                  v-for="s in supervisorChoices"
+                                  :key="s.id"
+                                  :value="String(s.id)"
+                                >
+                                  {{ s.label }}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
                       </div>
 
                       <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6">

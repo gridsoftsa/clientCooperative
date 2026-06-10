@@ -104,11 +104,11 @@ watch(() => form.value.org_unit_id, async (id: number | null) => {
   if (id == null) {
     peerPositions.value = []
     reportToStaffOptions.value = []
-    reportToOrgUnitId.value = null
     return
   }
-  reportToOrgUnitId.value = id
-  await loadReportToCandidates(id)
+  if (reportToOrgUnitId.value === id) {
+    await loadReportToCandidates(id)
+  }
 })
 
 watch(reportToOrgUnitId, async (id: number | null) => {
@@ -140,14 +140,6 @@ watch([reportToTargetType, reportToPositionChoiceId, reportToStaffChoiceId], () 
 async function handleSubmit() {
   if (form.value.org_unit_id == null || !form.value.name.trim() || !form.value.code.trim()) {
     toast.error('Área, nombre y código son obligatorios')
-    return
-  }
-  if (
-    form.value.reports_to_position_id != null
-    && reportToOrgUnitId.value != null
-    && reportToOrgUnitId.value !== form.value.org_unit_id
-  ) {
-    toast.error('El jefe inmediato debe pertenecer a la misma área del cargo.')
     return
   }
   saving.value = true
@@ -190,8 +182,7 @@ onMounted(() => {
             Nuevo cargo
           </h2>
           <p class="text-muted-foreground leading-relaxed">
-            En «Reporta a» seleccione el área y luego asocie por cargo o funcionario.
-            La referencia se mantiene en cargos configurados como jefe de área.
+            En «Reporta a» elija el área del jefe inmediato (puede ser distinta al área del cargo) y asocie por cargo o funcionario.
           </p>
         </div>
         <Button variant="outline" class="shrink-0" @click="router.back()">
@@ -206,7 +197,7 @@ onMounted(() => {
             <CardHeader class="gap-2">
               <CardTitle class="leading-snug">Información del cargo</CardTitle>
               <CardDescription class="leading-relaxed">
-                Área de adscripción, identificación del puesto y relación jerárquica dentro del mismo área.
+                Área de adscripción, identificación del puesto y relación jerárquica con su jefe inmediato.
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-6">
@@ -270,8 +261,8 @@ onMounted(() => {
                 <div class="space-y-3 md:col-span-2">
                   <Label for="rep" class="leading-snug">Reporta a (opcional)</Label>
                   <p class="text-xs text-muted-foreground leading-relaxed">
-                    Seleccione primero el área y luego indique si desea asociar por cargo o funcionario.
-                    El jefe inmediato debe pertenecer al mismo área del cargo.
+                    Elija el área donde está el jefe (p. ej. Gerencia) y luego el cargo o funcionario.
+                    Solo aparecen cargos marcados como referencia de jefe de esa área.
                   </p>
                   <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                     <div class="space-y-2">

@@ -408,7 +408,7 @@ function formatHolidayDate(value: string): string {
           <Card>
             <CardHeader class="pb-3">
               <CardTitle class="text-base">
-                Escalamiento (HU-11B)
+                Escalamiento
               </CardTitle>
               <CardDescription>
                 Tras superar el umbral de días hábiles vencidos, notifica a superiores sin reasignar el responsable.
