@@ -28,6 +28,10 @@ export const ARCHIVAL_METADATA_FIELD_DATA_TYPE_LABELS: Record<string, string> = 
   date: 'Fecha',
   boolean: 'Sí/No',
   select: 'Lista de valores',
+  email: 'Correo electrónico',
+  currency: 'Valor monetario (COP)',
+  nit: 'NIT',
+  identifier: 'Identificación numérica',
 }
 
 export const ARCHIVAL_METADATA_FIELD_DATA_TYPE_OPTIONS = Object.entries(

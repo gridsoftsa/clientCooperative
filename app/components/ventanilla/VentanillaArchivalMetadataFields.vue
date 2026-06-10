@@ -1,5 +1,8 @@
 <script setup lang="ts">
+import { onDigitsOnlyInput } from '~/utils/digits-only-input'
 import type { ArchivalMetadataFieldRow, ArchivalMetadataSchemaRow } from '~/composables/useArchivalMetadataApi'
+
+const { formatPesosConSimbolo: formatCurrency, parsePesosInput: parseCurrency } = usePesosFormat()
 
 const props = defineProps<{
   docDocumentTypeId: number | null | undefined
@@ -53,6 +56,23 @@ const activeFields = computed(() =>
 
 function updateField(code: string, raw: unknown) {
   values.value = { ...values.value, [code]: raw }
+}
+
+function currencyDisplay(code: string): string {
+  const raw = values.value[code]
+  if (raw === null || raw === undefined || raw === '') {
+    return ''
+  }
+  const num = typeof raw === 'number' ? raw : parseCurrency(String(raw))
+  return num != null ? formatCurrency(num) : String(raw)
+}
+
+function updateCurrencyField(code: string, input: string | number) {
+  updateField(code, parseCurrency(String(input)) ?? input)
+}
+
+function updateDigitsField(code: string, input: string) {
+  updateField(code, input.replace(/\D+/g, ''))
 }
 
 function fieldId(f: ArchivalMetadataFieldRow, idx: number) {
@@ -129,6 +149,33 @@ defineExpose({
         />
         <span class="text-muted-foreground text-xs">Sí</span>
       </div>
+      <Input
+        v-else-if="field.data_type === 'email'"
+        :id="fieldId(field, idx)"
+        type="email"
+        :model-value="String(values[field.code] ?? '')"
+        :disabled="disabled"
+        placeholder="correo@ejemplo.com"
+        @update:model-value="updateField(field.code, $event)"
+      />
+      <Input
+        v-else-if="field.data_type === 'currency'"
+        :id="fieldId(field, idx)"
+        inputmode="decimal"
+        :model-value="currencyDisplay(field.code)"
+        :disabled="disabled"
+        placeholder="$ 0"
+        @update:model-value="updateCurrencyField(field.code, $event)"
+      />
+      <Input
+        v-else-if="field.data_type === 'nit' || field.data_type === 'identifier'"
+        :id="fieldId(field, idx)"
+        inputmode="numeric"
+        :model-value="String(values[field.code] ?? '')"
+        :disabled="disabled"
+        :placeholder="field.data_type === 'nit' ? 'Solo números (NIT)' : 'Solo números'"
+        @input="onDigitsOnlyInput($event, v => updateDigitsField(field.code, v))"
+      />
       <Select
         v-else-if="field.data_type === 'select'"
         :model-value="values[field.code] != null ? String(values[field.code]) : undefined"

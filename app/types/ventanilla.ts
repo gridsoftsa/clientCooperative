@@ -32,10 +32,23 @@ export interface VentanillaResponsibleUserRow {
   email?: string | null
 }
 
+export interface VentanillaSearchableMetadataFieldRow {
+  code: string
+  name: string
+}
+
+export interface VentanillaReportableMetadataFieldRow {
+  code: string
+  name: string
+  data_type: string
+}
+
 export interface VentanillaCatalogData {
   filing_types: Array<{ value: VentanillaFilingTypeValue; label: string }>
   functional_types: VentanillaFunctionalTypeRow[]
   reception_media: VentanillaReceptionMediumRow[]
+  searchable_metadata_fields?: VentanillaSearchableMetadataFieldRow[]
+  reportable_metadata_fields?: VentanillaReportableMetadataFieldRow[]
 }
 
 export interface VentanillaCatalogSettingsData {
@@ -147,6 +160,42 @@ export interface VentanillaIntakeFileRow {
   created_at: string | null
 }
 
+export interface VentanillaEmailAccountRow {
+  id: number
+  name: string
+  host: string
+  port: number
+  encryption: 'ssl' | 'tls' | 'none'
+  username: string
+  mailbox: string
+  is_active: boolean
+  has_password: boolean
+  last_uid: number | null
+  last_fetched_at: string | null
+  last_fetch_error: string | null
+}
+
+export interface VentanillaClassificationRuleRow {
+  id: number
+  name: string
+  priority: number
+  source: string | null
+  match_field: string
+  match_mode: string
+  pattern: string
+  functional_type_key: string
+  filing_type: string | null
+  is_active: boolean
+}
+
+export interface VentanillaIntakeClassification {
+  rule_id: number
+  rule_name: string
+  matched_field: string
+  functional_type_key: string
+  filing_type: string | null
+}
+
 export interface VentanillaIntakeRow {
   id: number
   source: VentanillaIntakeSourceValue
@@ -162,6 +211,7 @@ export interface VentanillaIntakeRow {
   suggested_filing_type: VentanillaFilingTypeValue | null
   suggested_functional_type_key: string | null
   suggested_reception_medium: string | null
+  classification?: VentanillaIntakeClassification | null
   classified_filing?: { id: number; filing_number: string } | null
   classified_by?: { id: number; name: string } | null
   classified_at: string | null

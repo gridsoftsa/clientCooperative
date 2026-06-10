@@ -7,6 +7,7 @@ import {
   VENTANILLA_NOTIFICATION_EVENT_LABELS,
 } from '~/constants/ventanilla'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
+import { formatArchivalMetadataValue } from '~/utils/archival-metadata-display'
 import type { VentanillaCatalogData, VentanillaFilingDetail } from '~/types/ventanilla'
 
 definePageMeta({
@@ -55,6 +56,7 @@ const metadataRows = computed(() => {
     .map((field: ArchivalMetadataFieldRow) => ({
       code: field.code,
       label: field.name,
+      dataType: field.data_type,
       value: values[field.code],
     }))
     .filter((row: { code: string; label: string; value: unknown }) => row.value !== null && row.value !== undefined && row.value !== '')
@@ -138,15 +140,12 @@ function notificationEventLabel(eventType: string): string {
   return VENTANILLA_NOTIFICATION_EVENT_LABELS[eventType] ?? eventType
 }
 
-function formatMetadataValue(value: unknown): string {
-  if (typeof value === 'boolean') {
-    return value ? 'Sí' : 'No'
-  }
-  if (Array.isArray(value) || (value && typeof value === 'object')) {
+function formatMetadataValue(dataType: string, value: unknown): string {
+  if (Array.isArray(value) || (value && typeof value === 'object' && typeof value !== 'boolean')) {
     return JSON.stringify(value)
   }
 
-  return value == null || value === '' ? '—' : String(value)
+  return formatArchivalMetadataValue(dataType, value)
 }
 
 async function runAction(action: string, callback: () => Promise<VentanillaFilingDetail>) {
@@ -579,7 +578,7 @@ async function viewSticker() {
                   {{ row.label }}
                 </dt>
                 <dd class="mt-1 font-medium break-words">
-                  {{ formatMetadataValue(row.value) }}
+                  {{ formatMetadataValue(row.dataType, row.value) }}
                 </dd>
               </div>
             </dl>

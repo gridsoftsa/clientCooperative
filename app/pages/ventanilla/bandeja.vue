@@ -139,6 +139,13 @@ function sourceLabel(source: string): string {
   return labels[source] ?? source
 }
 
+function functionalTypeLabel(key: string | null | undefined): string {
+  if (!key) {
+    return ''
+  }
+  return catalog.value?.functional_types.find((item: VentanillaFunctionalTypeRow) => item.key === key)?.label ?? key
+}
+
 function statusLabel(status: string): string {
   const labels: Record<string, string> = {
     pending_classification: 'Pendiente',
@@ -342,6 +349,14 @@ async function viewIntakeFile(fileId: number, mimeType?: string | null) {
                 <Badge :variant="intake.status === 'pending_classification' ? 'default' : 'secondary'">
                   {{ statusLabel(intake.status) }}
                 </Badge>
+                <Badge
+                  v-if="intake.classification?.rule_name || intake.suggested_functional_type_key"
+                  variant="secondary"
+                  class="bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-100"
+                >
+                  {{ intake.classification?.rule_name ? `Regla: ${intake.classification.rule_name}` : 'Sugerencia' }}
+                  · {{ functionalTypeLabel(intake.suggested_functional_type_key) }}
+                </Badge>
                 <span class="text-muted-foreground ml-auto text-xs">{{ formatDate(intake.received_at) }}</span>
               </div>
               <p class="mt-2 font-medium">
@@ -381,6 +396,18 @@ async function viewIntakeFile(fileId: number, mimeType?: string | null) {
           <div class="rounded-lg bg-muted/40 p-3 text-sm">
             <p class="font-medium">{{ selectedIntake.subject }}</p>
             <p class="text-muted-foreground">{{ selectedIntake.body ?? 'Sin mensaje adicional.' }}</p>
+            <p
+              v-if="selectedIntake.classification?.rule_name || selectedIntake.suggested_functional_type_key"
+              class="mt-2 text-sky-800 dark:text-sky-200"
+            >
+              <template v-if="selectedIntake.classification?.rule_name">
+                Preclasificación automática ({{ selectedIntake.classification.rule_name }}).
+              </template>
+              <template v-else>
+                Tipo sugerido por el ciudadano.
+              </template>
+              Tipo funcional: {{ functionalTypeLabel(selectedIntake.suggested_functional_type_key) }}.
+            </p>
           </div>
 
           <div class="space-y-2">

@@ -78,6 +78,11 @@ export const navMenu: NavMenu[] = [
             link: '/ventanilla/sla',
             permission: 'ventanilla_sla_configurar',
           },
+          {
+            title: 'Canales automáticos',
+            link: '/ventanilla/canales',
+            permission: 'ventanilla_sla_configurar',
+          },
         ],
       },
     ],

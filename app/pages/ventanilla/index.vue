@@ -8,8 +8,15 @@ import type {
   VentanillaCatalogData,
   VentanillaFilingSummary,
   VentanillaFunctionalTypeRow,
+  VentanillaResponsibleUserRow,
   VentanillaTrafficLightValue,
 } from '~/types/ventanilla'
+
+interface OrgUnitOption {
+  id: number
+  name: string
+  code: string | null
+}
 
 definePageMeta({
   layout: 'default',
@@ -19,12 +26,17 @@ definePageMeta({
 
 const router = useRouter()
 const ventanillaApi = useVentanillaApi()
+const { $api } = useNuxtApp()
 const { hasPermission } = usePermissions()
 
 const filings = ref<VentanillaFilingSummary[]>([])
 const catalog = ref<VentanillaCatalogData | null>(null)
+const orgUnits = ref<OrgUnitOption[]>([])
+const responsibleUsers = ref<VentanillaResponsibleUserRow[]>([])
+const loadingResponsibleUsers = ref(false)
 const loading = ref(false)
 const errorMessage = ref('')
+const showAdvancedSearch = ref(false)
 const search = ref('')
 const filterType = ref('all')
 const filterFunctionalType = ref('all')
@@ -32,8 +44,18 @@ const filterTrafficLight = ref('all')
 const filterStatus = ref('all')
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
+const filterOrgUnitId = ref('all')
+const filterAssignedUserId = ref('all')
+const filterRequiresResponse = ref('all')
+const filterMetadataFieldCode = ref('none')
+const filterMetadataValue = ref('')
 const pagination = ref({ current_page: 1, last_page: 1, per_page: 15, total: 0 })
+const exportingMetadata = ref(false)
 let dateFilterDebounce: ReturnType<typeof setTimeout> | null = null
+
+const searchableMetadataFields = computed(
+  () => catalog.value?.searchable_metadata_fields ?? [],
+)
 
 const canCreate = computed(() => hasPermission('ventanilla_crear'))
 const canClassify = computed(() => hasPermission('ventanilla_clasificar'))
@@ -44,8 +66,77 @@ const hasActiveFilters = computed(() =>
   || filterTrafficLight.value !== 'all'
   || filterStatus.value !== 'all'
   || filterDateFrom.value
-  || filterDateTo.value,
+  || filterDateTo.value
+  || filterOrgUnitId.value !== 'all'
+  || filterAssignedUserId.value !== 'all'
+  || filterRequiresResponse.value !== 'all'
+  || (filterMetadataFieldCode.value !== 'none' && filterMetadataValue.value.trim()),
 )
+
+const hasAdvancedFilters = computed(() =>
+  filterOrgUnitId.value !== 'all'
+  || filterAssignedUserId.value !== 'all'
+  || filterRequiresResponse.value !== 'all'
+  || (filterMetadataFieldCode.value !== 'none' && filterMetadataValue.value.trim()),
+)
+
+function buildListQuery(includePagination = true): Record<string, string | number> {
+  const query: Record<string, string | number> = {}
+  if (includePagination) {
+    query.page = pagination.value.current_page
+    query.per_page = pagination.value.per_page
+  }
+  if (search.value.trim()) {
+    query.search = search.value.trim()
+  }
+  if (filterType.value !== 'all') {
+    query.filing_type = filterType.value
+  }
+  if (filterFunctionalType.value !== 'all') {
+    query.functional_type_key = filterFunctionalType.value
+  }
+  if (filterTrafficLight.value !== 'all') {
+    query.traffic_light_status = filterTrafficLight.value
+  }
+  if (filterStatus.value !== 'all') {
+    query.status = filterStatus.value
+  }
+  if (filterDateFrom.value) {
+    query.filed_from = filterDateFrom.value
+  }
+  if (filterDateTo.value) {
+    query.filed_to = filterDateTo.value
+  }
+  if (filterOrgUnitId.value !== 'all') {
+    query.org_unit_responsible_id = Number(filterOrgUnitId.value)
+  }
+  if (filterAssignedUserId.value !== 'all') {
+    query.assigned_user_id = Number(filterAssignedUserId.value)
+  }
+  if (filterRequiresResponse.value === 'yes') {
+    query.requires_response = 1
+  } else if (filterRequiresResponse.value === 'no') {
+    query.requires_response = 0
+  }
+  if (filterMetadataFieldCode.value !== 'none' && filterMetadataValue.value.trim()) {
+    query.metadata_field_code = filterMetadataFieldCode.value
+    query.metadata_value = filterMetadataValue.value.trim()
+  }
+
+  return query
+}
+
+async function exportMetadataReport() {
+  exportingMetadata.value = true
+  errorMessage.value = ''
+  try {
+    await ventanillaApi.downloadMetadataReportExport(buildListQuery(false))
+  } catch {
+    errorMessage.value = 'No se pudo exportar el reporte de metadatos'
+  } finally {
+    exportingMetadata.value = false
+  }
+}
 
 async function loadList() {
   if (filterDateFrom.value && filterDateTo.value && filterDateFrom.value > filterDateTo.value) {
@@ -56,32 +147,7 @@ async function loadList() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const query: Record<string, string | number> = {
-      page: pagination.value.current_page,
-      per_page: pagination.value.per_page,
-    }
-    if (search.value.trim()) {
-      query.search = search.value.trim()
-    }
-    if (filterType.value !== 'all') {
-      query.filing_type = filterType.value
-    }
-    if (filterFunctionalType.value !== 'all') {
-      query.functional_type_key = filterFunctionalType.value
-    }
-    if (filterTrafficLight.value !== 'all') {
-      query.traffic_light_status = filterTrafficLight.value
-    }
-    if (filterStatus.value !== 'all') {
-      query.status = filterStatus.value
-    }
-    if (filterDateFrom.value) {
-      query.filed_from = filterDateFrom.value
-    }
-    if (filterDateTo.value) {
-      query.filed_to = filterDateTo.value
-    }
-    const res = await ventanillaApi.fetchFilings(query)
+    const res = await ventanillaApi.fetchFilings(buildListQuery())
     filings.value = res.data ?? []
     pagination.value = {
       current_page: res.meta.current_page,
@@ -89,18 +155,54 @@ async function loadList() {
       per_page: res.meta.per_page,
       total: res.meta.total,
     }
-  } catch {
-    errorMessage.value = 'No se pudo cargar el listado de radicados'
+  } catch (e: unknown) {
+    const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
+    errorMessage.value = err?.data?.errors?.metadata_field_code?.[0]
+      ?? err?.data?.errors?.metadata_value?.[0]
+      ?? err?.data?.message
+      ?? 'No se pudo cargar el listado de radicados'
   } finally {
     loading.value = false
   }
 }
 
+async function loadResponsibleUsers(orgUnitId: string): Promise<void> {
+  if (orgUnitId === 'all') {
+    responsibleUsers.value = []
+    filterAssignedUserId.value = 'all'
+    return
+  }
+
+  loadingResponsibleUsers.value = true
+  try {
+    responsibleUsers.value = await ventanillaApi.fetchResponsibleUsers(Number(orgUnitId))
+  } catch {
+    responsibleUsers.value = []
+  } finally {
+    loadingResponsibleUsers.value = false
+  }
+}
+
+watch(filterOrgUnitId, async (orgUnitId, previousOrgUnitId) => {
+  if (orgUnitId !== previousOrgUnitId) {
+    filterAssignedUserId.value = 'all'
+    await loadResponsibleUsers(orgUnitId)
+  }
+})
+
 onMounted(async () => {
   try {
-    catalog.value = await ventanillaApi.fetchCatalog()
+    const [catalogData, orgUnitsRes] = await Promise.all([
+      ventanillaApi.fetchCatalog(),
+      $api<{ data: OrgUnitOption[] }>('/organizational-structure/org-units', {
+        query: { active_only: 1 },
+      }).catch(() => ({ data: [] as OrgUnitOption[] })),
+    ])
+    catalog.value = catalogData
+    orgUnits.value = orgUnitsRes.data ?? []
   } catch {
     catalog.value = null
+    orgUnits.value = []
   }
   await loadList()
 })
@@ -126,6 +228,12 @@ function resetFilters() {
   filterStatus.value = 'all'
   filterDateFrom.value = ''
   filterDateTo.value = ''
+  filterOrgUnitId.value = 'all'
+  filterAssignedUserId.value = 'all'
+  filterRequiresResponse.value = 'all'
+  filterMetadataFieldCode.value = 'none'
+  filterMetadataValue.value = ''
+  responsibleUsers.value = []
   pagination.value.current_page = 1
   loadList()
 }
@@ -183,6 +291,18 @@ function statusLabel(status: string): string {
           <Icon name="i-lucide-list-filter" class="mr-2 size-4" />
           Bandeja
         </Button>
+        <Button
+          variant="outline"
+          :disabled="exportingMetadata"
+          @click="exportMetadataReport"
+        >
+          <Icon
+            :name="exportingMetadata ? 'i-lucide-loader-2' : 'i-lucide-file-down'"
+            class="mr-2 size-4"
+            :class="{ 'animate-spin': exportingMetadata }"
+          />
+          Exportar metadatos
+        </Button>
         <Button v-if="canCreate" @click="router.push('/ventanilla/nueva')">
           <Icon name="i-lucide-plus" class="mr-2 size-4" />
           Radicar documento
@@ -200,7 +320,7 @@ function statusLabel(status: string): string {
             <Input
               id="ventanilla-filter-search"
               v-model="search"
-              placeholder="Número, asunto o remitente…"
+              placeholder="Número, asunto, remitente o destinatario…"
               class="min-w-0"
               @keyup.enter="filterAndLoad"
             />
@@ -315,6 +435,26 @@ function statusLabel(status: string): string {
             </div>
           </div>
           <div class="flex shrink-0 gap-2 xl:pb-0.5">
+            <Button
+              variant="outline"
+              :disabled="loading"
+              @click="showAdvancedSearch = !showAdvancedSearch"
+            >
+              <Icon name="i-lucide-sliders-horizontal" class="mr-2 size-4" />
+              Avanzada
+              <Badge
+                v-if="hasAdvancedFilters"
+                variant="secondary"
+                class="ml-2 px-1.5 py-0 text-[10px]"
+              >
+                {{ [
+                  filterOrgUnitId !== 'all',
+                  filterAssignedUserId !== 'all',
+                  filterRequiresResponse !== 'all',
+                  filterMetadataFieldCode !== 'none' && filterMetadataValue.trim(),
+                ].filter(Boolean).length }}
+              </Badge>
+            </Button>
             <Button variant="secondary" :disabled="loading" @click="filterAndLoad">
               <Icon name="i-lucide-search" class="mr-2 size-4" />
               Buscar
@@ -324,6 +464,117 @@ function statusLabel(status: string): string {
             </Button>
           </div>
         </div>
+        <Collapsible v-model:open="showAdvancedSearch" class="mt-3">
+          <CollapsibleContent>
+            <div class="rounded-lg border bg-background p-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <div class="space-y-1">
+                <Label for="ventanilla-filter-org-unit" class="text-xs text-muted-foreground">
+                  Área responsable
+                </Label>
+                <Select v-model="filterOrgUnitId" @update:model-value="filterAndLoad">
+                  <SelectTrigger id="ventanilla-filter-org-unit">
+                    <SelectValue placeholder="Todas las áreas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      Todas las áreas
+                    </SelectItem>
+                    <SelectItem
+                      v-for="unit in orgUnits"
+                      :key="unit.id"
+                      :value="String(unit.id)"
+                    >
+                      {{ unit.code }} — {{ unit.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="space-y-1">
+                <Label for="ventanilla-filter-assigned-user" class="text-xs text-muted-foreground">
+                  Responsable asignado
+                </Label>
+                <Select
+                  v-model="filterAssignedUserId"
+                  :disabled="filterOrgUnitId === 'all' || loadingResponsibleUsers"
+                  @update:model-value="filterAndLoad"
+                >
+                  <SelectTrigger id="ventanilla-filter-assigned-user">
+                    <SelectValue :placeholder="filterOrgUnitId === 'all' ? 'Seleccione un área' : 'Todos'" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      Todos
+                    </SelectItem>
+                    <SelectItem
+                      v-for="user in responsibleUsers"
+                      :key="user.id"
+                      :value="String(user.id)"
+                    >
+                      {{ user.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="space-y-1">
+                <Label for="ventanilla-filter-requires-response" class="text-xs text-muted-foreground">
+                  Requiere respuesta
+                </Label>
+                <Select v-model="filterRequiresResponse" @update:model-value="filterAndLoad">
+                  <SelectTrigger id="ventanilla-filter-requires-response">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">
+                      Todos
+                    </SelectItem>
+                    <SelectItem value="yes">
+                      Sí
+                    </SelectItem>
+                    <SelectItem value="no">
+                      No
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="space-y-1 md:col-span-2 xl:col-span-2">
+                <Label class="text-xs text-muted-foreground">
+                  Metadato archivístico
+                </Label>
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <Select v-model="filterMetadataFieldCode">
+                    <SelectTrigger>
+                      <SelectValue placeholder="Campo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        Sin filtro por metadato
+                      </SelectItem>
+                      <SelectItem
+                        v-for="field in searchableMetadataFields"
+                        :key="field.code"
+                        :value="field.code"
+                      >
+                        {{ field.name }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    v-model="filterMetadataValue"
+                    :disabled="filterMetadataFieldCode === 'none'"
+                    placeholder="Valor a buscar…"
+                    @keyup.enter="filterAndLoad"
+                  />
+                </div>
+                <p
+                  v-if="searchableMetadataFields.length === 0"
+                  class="text-xs text-muted-foreground"
+                >
+                  No hay campos marcados como buscables en esquemas de metadatos activos.
+                </p>
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
         <p v-if="errorMessage" class="text-destructive mt-2 text-sm">
           {{ errorMessage }}
         </p>

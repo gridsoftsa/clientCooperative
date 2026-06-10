@@ -8,6 +8,8 @@ definePageMeta({
 
 const ventanillaApi = useVentanillaApi()
 
+const functionalTypes = ref<Array<{ key: string; label: string }>>([])
+const functionalTypeKey = ref('')
 const senderName = ref('')
 const senderEmail = ref('')
 const senderIdentifier = ref('')
@@ -17,6 +19,15 @@ const fileRows = ref<Array<{ file: File | null; title: string }>>([{ file: null,
 const saving = ref(false)
 const errorMessage = ref('')
 const receivedId = ref<number | null>(null)
+
+onMounted(async () => {
+  try {
+    const catalog = await ventanillaApi.fetchPublicCatalog()
+    functionalTypes.value = catalog.functional_types ?? []
+  } catch {
+    functionalTypes.value = []
+  }
+})
 
 function addFileRow() {
   fileRows.value.push({ file: null, title: '' })
@@ -73,6 +84,9 @@ async function submit() {
   if (body.value.trim()) {
     fd.append('body', body.value.trim())
   }
+  if (functionalTypeKey.value) {
+    fd.append('functional_type_key', functionalTypeKey.value)
+  }
 
   withFiles.forEach((row: { file: File | null; title: string }, index: number) => {
     if (!row.file) {
@@ -91,6 +105,7 @@ async function submit() {
     senderIdentifier.value = ''
     subject.value = ''
     body.value = ''
+    functionalTypeKey.value = ''
     fileRows.value = [{ file: null, title: 'Documento principal' }]
   } catch (e: unknown) {
     const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
@@ -143,6 +158,22 @@ async function submit() {
               placeholder="Solo números"
               @input="onDigitsOnlyInput($event, v => (senderIdentifier = v))"
             />
+          </div>
+          <div v-if="functionalTypes.length" class="space-y-2 md:col-span-2">
+            <Label>Tipo de solicitud (opcional)</Label>
+            <Select v-model="functionalTypeKey">
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccione si conoce el tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">
+                  Sin especificar
+                </SelectItem>
+                <SelectItem v-for="type in functionalTypes" :key="type.key" :value="type.key">
+                  {{ type.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div class="space-y-2 md:col-span-2">
             <Label>Asunto *</Label>

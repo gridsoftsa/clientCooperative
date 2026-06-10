@@ -1,6 +1,8 @@
 import type {
   VentanillaCatalogData,
   VentanillaCatalogSettingsData,
+  VentanillaClassificationRuleRow,
+  VentanillaEmailAccountRow,
   VentanillaColombiaHolidayImportResult,
   VentanillaColombiaHolidayPreviewData,
   VentanillaFilingDetail,
@@ -24,6 +26,73 @@ export function useVentanillaApi() {
     const res = await api<{ data: VentanillaCatalogData }>('/ventanilla/catalog')
 
     return res.data
+  }
+
+  async function fetchPublicCatalog(): Promise<{ functional_types: Array<{ key: string; label: string }> }> {
+    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const res = await $fetch<{ data: { functional_types: Array<{ key: string; label: string }> } }>(
+      `${base}/api/ventanilla/public-catalog`,
+    )
+
+    return res.data
+  }
+
+  async function fetchEmailAccount(): Promise<VentanillaEmailAccountRow> {
+    const res = await api<{ data: VentanillaEmailAccountRow }>('/ventanilla/email-account')
+
+    return res.data
+  }
+
+  async function updateEmailAccount(payload: Record<string, unknown>): Promise<VentanillaEmailAccountRow> {
+    const res = await api<{ data: VentanillaEmailAccountRow }>('/ventanilla/email-account', {
+      method: 'PUT',
+      body: payload,
+    })
+
+    return res.data
+  }
+
+  async function testEmailAccountConnection(): Promise<string> {
+    const res = await api<{ message: string }>('/ventanilla/email-account/test', { method: 'POST' })
+
+    return res.message
+  }
+
+  async function fetchEmailAccountNow(): Promise<{ created: number; skipped: number; error: string | null; message: string }> {
+    const res = await api<{ data: { created: number; skipped: number; error: string | null }; message: string }>(
+      '/ventanilla/email-account/fetch',
+      { method: 'POST' },
+    )
+
+    return { ...res.data, message: res.message }
+  }
+
+  async function fetchClassificationRules(): Promise<VentanillaClassificationRuleRow[]> {
+    const res = await api<{ data: VentanillaClassificationRuleRow[] }>('/ventanilla/classification-rules')
+
+    return res.data
+  }
+
+  async function createClassificationRule(payload: Record<string, unknown>): Promise<VentanillaClassificationRuleRow> {
+    const res = await api<{ data: VentanillaClassificationRuleRow }>('/ventanilla/classification-rules', {
+      method: 'POST',
+      body: payload,
+    })
+
+    return res.data
+  }
+
+  async function updateClassificationRule(id: number, payload: Record<string, unknown>): Promise<VentanillaClassificationRuleRow> {
+    const res = await api<{ data: VentanillaClassificationRuleRow }>(`/ventanilla/classification-rules/${id}`, {
+      method: 'PUT',
+      body: payload,
+    })
+
+    return res.data
+  }
+
+  async function deleteClassificationRule(id: number): Promise<void> {
+    await api(`/ventanilla/classification-rules/${id}`, { method: 'DELETE' })
   }
 
   async function fetchResponsibleUsers(
@@ -217,6 +286,28 @@ export function useVentanillaApi() {
     const res = await api<{ data: VentanillaSlaComplianceDashboardData }>('/ventanilla/sla-dashboard', { query })
 
     return res.data
+  }
+
+  async function downloadMetadataReportExport(query: Record<string, string | number> = {}): Promise<void> {
+    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== '' && value != null && key !== 'page' && key !== 'per_page') {
+        params.set(key, String(value))
+      }
+    }
+    const qs = params.toString()
+    const url = `${base}/api/ventanilla/filings/metadata-report/export${qs ? `?${qs}` : ''}`
+    const blob = await fetchAuthenticatedBlob(url)
+    const objectUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.download = `ventanilla-metadatos-${new Date().toISOString().slice(0, 10)}.csv`
+    anchor.style.cssText = 'position:fixed;left:-9999px;top:0'
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
   }
 
   async function downloadSlaDashboardExport(query: Record<string, string | number> = {}): Promise<void> {
@@ -519,6 +610,15 @@ export function useVentanillaApi() {
 
   return {
     fetchCatalog,
+    fetchPublicCatalog,
+    fetchEmailAccount,
+    updateEmailAccount,
+    testEmailAccountConnection,
+    fetchEmailAccountNow,
+    fetchClassificationRules,
+    createClassificationRule,
+    updateClassificationRule,
+    deleteClassificationRule,
     fetchResponsibleUsers,
     fetchCatalogSettings,
     createFunctionalType,
@@ -542,6 +642,7 @@ export function useVentanillaApi() {
     voidFiling,
     refreshSla,
     fetchSlaDashboard,
+    downloadMetadataReportExport,
     downloadSlaDashboardExport,
     fetchNotificationSettings,
     updateNotificationSettings,
