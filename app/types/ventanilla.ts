@@ -75,6 +75,49 @@ export interface VentanillaSlaSettingsData {
   holidays: VentanillaBusinessHolidayRow[]
 }
 
+export interface VentanillaNotificationSettingsRow {
+  id: number
+  channel_email_enabled: boolean
+  channel_whatsapp_enabled: boolean
+  channel_internal_enabled: boolean
+  is_active: boolean
+}
+
+export interface VentanillaFilingNotificationDeliveryRow {
+  id: number
+  event_type: string
+  channel: string
+  recipient_role: string | null
+  recipient_address: string | null
+  status: string
+  error_message: string | null
+  sent_at: string | null
+  recipient_user?: { id: number; name: string } | null
+}
+
+export interface VentanillaInboxNotificationRow {
+  id: string
+  read_at: string | null
+  created_at: string | null
+  ventanilla_filing_id: number | null
+  filing_number: string | null
+  event_type: string | null
+  title: string | null
+  message: string | null
+  url: string | null
+}
+
+export interface VentanillaInboxNotificationsData {
+  data: VentanillaInboxNotificationRow[]
+  meta: {
+    current_page: number
+    last_page: number
+    per_page: number
+    total: number
+    unread_count: number
+  }
+}
+
 export interface VentanillaColombiaHolidayPreviewRow {
   date: string
   name: string
@@ -280,6 +323,7 @@ export interface VentanillaFilingDetail extends VentanillaFilingSummary {
   void_reason: string | null
   events?: VentanillaFilingEventRow[]
   alerts?: VentanillaFilingAlertRow[]
+  notification_deliveries?: VentanillaFilingNotificationDeliveryRow[]
   escalation?: VentanillaFilingEscalationRow | null
   files?: VentanillaFilingFileRow[]
 }

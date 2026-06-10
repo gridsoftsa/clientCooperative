@@ -9,6 +9,9 @@ import type {
   VentanillaIntakeRow,
   VentanillaResponsibleUserRow,
   VentanillaSlaComplianceDashboardData,
+  VentanillaInboxNotificationRow,
+  VentanillaInboxNotificationsData,
+  VentanillaNotificationSettingsRow,
   VentanillaSlaSettingsData,
 } from '~/types/ventanilla'
 
@@ -54,7 +57,7 @@ export function useVentanillaApi() {
 
   async function updateFunctionalType(key: string, payload: Record<string, unknown>) {
     const res = await api<{ data: VentanillaCatalogSettingsData['functional_types'][number]; message: string }>(
-      `/ventanilla/catalog-settings/functional-types/${key}`,
+      `/ventanilla/catalog-settings/functional-types/${encodeURIComponent(key)}`,
       { method: 'PUT', body: payload },
     )
 
@@ -236,6 +239,43 @@ export function useVentanillaApi() {
     anchor.click()
     document.body.removeChild(anchor)
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000)
+  }
+
+  async function fetchNotificationSettings(): Promise<VentanillaNotificationSettingsRow> {
+    const res = await api<{ data: VentanillaNotificationSettingsRow }>('/ventanilla/notification-settings')
+
+    return res.data
+  }
+
+  async function updateNotificationSettings(payload: {
+    channel_email_enabled: boolean
+    channel_whatsapp_enabled: boolean
+    channel_internal_enabled: boolean
+  }): Promise<VentanillaNotificationSettingsRow> {
+    const res = await api<{ data: VentanillaNotificationSettingsRow }>('/ventanilla/notification-settings', {
+      method: 'PUT',
+      body: payload,
+    })
+
+    return res.data
+  }
+
+  async function fetchInboxNotifications(query: Record<string, string | number | boolean> = {}): Promise<VentanillaInboxNotificationsData> {
+    const res = await api<VentanillaInboxNotificationsData>('/ventanilla/inbox-notifications', { query })
+
+    return res
+  }
+
+  async function markInboxNotificationRead(id: string): Promise<VentanillaInboxNotificationRow> {
+    const res = await api<{ data: VentanillaInboxNotificationRow }>(`/ventanilla/inbox-notifications/${id}/read`, {
+      method: 'PATCH',
+    })
+
+    return res.data
+  }
+
+  async function markAllInboxNotificationsRead(): Promise<void> {
+    await api('/ventanilla/inbox-notifications/mark-all-read', { method: 'POST' })
   }
 
   async function fetchSlaSettings(): Promise<VentanillaSlaSettingsData> {
@@ -503,6 +543,11 @@ export function useVentanillaApi() {
     refreshSla,
     fetchSlaDashboard,
     downloadSlaDashboardExport,
+    fetchNotificationSettings,
+    updateNotificationSettings,
+    fetchInboxNotifications,
+    markInboxNotificationRead,
+    markAllInboxNotificationsRead,
     fetchSlaSettings,
     updateSlaSettings,
     addHoliday,

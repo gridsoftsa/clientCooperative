@@ -3,6 +3,8 @@ import {
   VENTANILLA_FILING_STATUS_LABELS,
   VENTANILLA_FILING_TYPE_LABELS,
   VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY,
+  VENTANILLA_NOTIFICATION_CHANNEL_LABELS,
+  VENTANILLA_NOTIFICATION_EVENT_LABELS,
 } from '~/constants/ventanilla'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type { VentanillaCatalogData, VentanillaFilingDetail } from '~/types/ventanilla'
@@ -126,6 +128,14 @@ function alertRecipientRoleLabel(role: string): string {
   }
 
   return labels[role] ?? role
+}
+
+function notificationChannelLabel(channel: string): string {
+  return VENTANILLA_NOTIFICATION_CHANNEL_LABELS[channel] ?? channel
+}
+
+function notificationEventLabel(eventType: string): string {
+  return VENTANILLA_NOTIFICATION_EVENT_LABELS[eventType] ?? eventType
 }
 
 function formatMetadataValue(value: unknown): string {
@@ -637,6 +647,44 @@ async function viewSticker() {
           <p v-else class="text-muted-foreground text-sm">
             Sin eventos registrados.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card v-if="filing.notification_deliveries?.length">
+        <CardHeader>
+          <CardTitle>Notificaciones enviadas</CardTitle>
+          <CardDescription>
+            Registro de envíos por correo, WhatsApp e interno (HU-13).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ul class="space-y-2 text-sm">
+            <li
+              v-for="delivery in filing.notification_deliveries"
+              :key="delivery.id"
+              class="rounded-lg border p-3"
+            >
+              <div class="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">
+                  {{ notificationChannelLabel(delivery.channel) }}
+                </Badge>
+                <span class="font-medium">{{ notificationEventLabel(delivery.event_type) }}</span>
+                <Badge v-if="delivery.status === 'failed'" variant="destructive">
+                  Fallido
+                </Badge>
+              </div>
+              <p class="text-muted-foreground mt-1 text-xs">
+                {{ delivery.recipient_user?.name ?? delivery.recipient_address ?? 'Destinatario' }}
+                <template v-if="delivery.recipient_role">
+                  ({{ alertRecipientRoleLabel(delivery.recipient_role) }})
+                </template>
+                · {{ formatDate(delivery.sent_at) }}
+              </p>
+              <p v-if="delivery.error_message" class="mt-1 text-xs text-destructive">
+                {{ delivery.error_message }}
+              </p>
+            </li>
+          </ul>
         </CardContent>
       </Card>
 

@@ -2,6 +2,7 @@
 import type {
   VentanillaCatalogData,
   VentanillaColombiaHolidayPreviewData,
+  VentanillaNotificationSettingsRow,
   VentanillaSlaSettingsData,
 } from '~/types/ventanilla'
 
@@ -17,6 +18,8 @@ const saving = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 const data = ref<VentanillaSlaSettingsData | null>(null)
+const notificationSettings = ref<VentanillaNotificationSettingsRow | null>(null)
+const notificationSaving = ref(false)
 const holidayDate = ref('')
 const holidayName = ref('')
 const catalogYear = ref(new Date().getFullYear())
@@ -66,11 +69,13 @@ async function load() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [settingsData, catalogData] = await Promise.all([
+    const [settingsData, notificationData, catalogData] = await Promise.all([
       api.fetchSlaSettings(),
+      api.fetchNotificationSettings().catch(() => null),
       api.fetchCatalog().catch(() => null),
     ])
     data.value = settingsData
+    notificationSettings.value = notificationData
     catalog.value = catalogData
     if (data.value?.settings) {
       data.value.settings.notify_assignee ??= true
@@ -102,6 +107,28 @@ function toggleWorkingDay(day: number, checked: boolean) {
     set.delete(day)
   }
   settings.working_days = Array.from(set).sort((a: number, b: number) => a - b)
+}
+
+async function saveNotificationSettings() {
+  if (!notificationSettings.value) {
+    return
+  }
+
+  notificationSaving.value = true
+  errorMessage.value = ''
+  successMessage.value = ''
+  try {
+    notificationSettings.value = await api.updateNotificationSettings({
+      channel_email_enabled: notificationSettings.value.channel_email_enabled,
+      channel_whatsapp_enabled: notificationSettings.value.channel_whatsapp_enabled,
+      channel_internal_enabled: notificationSettings.value.channel_internal_enabled,
+    })
+    successMessage.value = 'Canales de notificación guardados'
+  } catch {
+    errorMessage.value = 'No se pudo guardar la configuración de notificaciones'
+  } finally {
+    notificationSaving.value = false
+  }
 }
 
 async function saveSettings() {
@@ -365,6 +392,53 @@ function formatHolidayDate(value: string): string {
               </CardContent>
             </Card>
           </div>
+
+          <Card v-if="notificationSettings">
+            <CardHeader class="pb-3">
+              <CardTitle class="text-base">
+                Canales de notificación (HU-13)
+              </CardTitle>
+              <CardDescription>
+                Correo, WhatsApp e interno para asignación, alertas SLA y escalamiento.
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-4">
+              <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <label class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                  <Checkbox
+                    :checked="notificationSettings.channel_email_enabled"
+                    @update:checked="notificationSettings.channel_email_enabled = Boolean($event)"
+                  />
+                  Correo electrónico
+                </label>
+                <label class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                  <Checkbox
+                    :checked="notificationSettings.channel_whatsapp_enabled"
+                    @update:checked="notificationSettings.channel_whatsapp_enabled = Boolean($event)"
+                  />
+                  WhatsApp
+                </label>
+                <label class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                  <Checkbox
+                    :checked="notificationSettings.channel_internal_enabled"
+                    @update:checked="notificationSettings.channel_internal_enabled = Boolean($event)"
+                  />
+                  Notificación interna
+                </label>
+              </div>
+              <p class="text-muted-foreground text-xs">
+                WhatsApp usa el teléfono del usuario o del funcionario vinculado. Sin Twilio configurado, el envío queda registrado en log.
+              </p>
+              <Button :disabled="notificationSaving" @click="saveNotificationSettings">
+                <Icon
+                  :name="notificationSaving ? 'lucide:loader-2' : 'lucide:save'"
+                  class="mr-1 size-4"
+                  :class="{ 'animate-spin': notificationSaving }"
+                />
+                Guardar canales
+              </Button>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader class="pb-3">
