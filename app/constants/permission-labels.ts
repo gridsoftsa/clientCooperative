@@ -206,6 +206,7 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   workflow_gestionar: 'Gestionar tareas de workflow (avanzar, devolver, comentar)',
   workflow_reasignar: 'Reasignar tareas de workflow',
   workflow_equipo_ver: 'Ver tareas del equipo en workflow',
+  workflow_ver_todas: 'Ver todas las tareas de workflow (supervisión global)',
   workflow_definir: 'Configurar flujos de trabajo',
   ventanilla_ver: 'Ver radicados de ventanilla',
   ventanilla_crear: 'Radicar documentos en ventanilla',

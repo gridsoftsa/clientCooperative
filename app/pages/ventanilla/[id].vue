@@ -19,6 +19,7 @@ definePageMeta({
 const route = useRoute()
 const ventanillaApi = useVentanillaApi()
 const { hasPermission } = usePermissions()
+const { user: authUser } = useAuth()
 const {
   responsibleUsers,
   loadingResponsibleUsers,
@@ -40,12 +41,31 @@ const responseText = ref('')
 const closeReason = ref('')
 const voidReason = ref('')
 
+type VentanillaDetailSection =
+  | 'resumen'
+  | 'gestion'
+  | 'workflow'
+  | 'archivos'
+  | 'trd'
+  | 'metadatos'
+  | 'trazabilidad'
+  | 'notificaciones'
+  | 'alertas'
+  | 'escalamiento'
+
+const activeSection = ref<VentanillaDetailSection>('resumen')
+
 const id = computed(() => Number(route.params.id))
 const isTerminal = computed(() => filing.value?.status === 'closed' || filing.value?.status === 'voided')
 const canAssign = computed(() => hasPermission('ventanilla_asignar') && !isTerminal.value)
 const canManage = computed(() => hasPermission('ventanilla_gestionar') && !isTerminal.value)
 const canVoid = computed(() => hasPermission('ventanilla_anular') && !isTerminal.value)
 const canRefreshSla = computed(() => hasPermission('ventanilla_sla_configurar'))
+const workflowOpenTask = computed(() => filing.value?.workflow?.open_task ?? null)
+const isMyWorkflowTask = computed(() =>
+  workflowOpenTask.value?.assignee?.id != null
+  && workflowOpenTask.value.assignee.id === authUser.value?.id,
+)
 const metadataRows = computed(() => {
   const fields = filing.value?.archival_metadata_schema?.fields ?? []
   const values = filing.value?.metadata_values ?? {}
@@ -60,6 +80,50 @@ const metadataRows = computed(() => {
       value: values[field.code],
     }))
     .filter((row: { code: string; label: string; value: unknown }) => row.value !== null && row.value !== undefined && row.value !== '')
+})
+
+const detailSections = computed(() => {
+  const currentFiling = filing.value
+  if (!currentFiling) {
+    return [] as Array<{ id: VentanillaDetailSection, label: string, icon: string }>
+  }
+
+  const sections: Array<{ id: VentanillaDetailSection, label: string, icon: string }> = [
+    { id: 'resumen', label: 'Resumen', icon: 'i-lucide-layout-list' },
+  ]
+
+  if (canAssign.value || canManage.value || canVoid.value) {
+    sections.push({ id: 'gestion', label: 'Gestión', icon: 'i-lucide-settings-2' })
+  }
+
+  if (hasPermission('workflow_ver')) {
+    sections.push({ id: 'workflow', label: 'Workflow', icon: 'i-lucide-git-branch' })
+  }
+
+  sections.push(
+    { id: 'archivos', label: 'Archivos', icon: 'i-lucide-paperclip' },
+    { id: 'trd', label: 'Clasificación TRD', icon: 'i-lucide-folders' },
+    { id: 'metadatos', label: 'Metadatos', icon: 'i-lucide-tags' },
+    { id: 'trazabilidad', label: 'Trazabilidad', icon: 'i-lucide-history' },
+  )
+
+  if (currentFiling.notification_deliveries?.length) {
+    sections.push({ id: 'notificaciones', label: 'Notificaciones', icon: 'i-lucide-bell' })
+  }
+
+  sections.push({ id: 'alertas', label: 'Alertas SLA', icon: 'i-lucide-triangle-alert' })
+
+  if (currentFiling.escalation) {
+    sections.push({ id: 'escalamiento', label: 'Escalamiento', icon: 'i-lucide-arrow-up-right' })
+  }
+
+  return sections
+})
+
+watch(detailSections, (sections) => {
+  if (!sections.some(section => section.id === activeSection.value)) {
+    activeSection.value = sections[0]?.id ?? 'resumen'
+  }
 })
 
 async function load() {
@@ -263,7 +327,7 @@ async function viewSticker() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-4xl space-y-6 p-4 md:p-6">
+  <div class="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
     <div
       v-if="!loading && filing"
       class="sticky top-0 z-10 -mx-4 space-y-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:-mx-6 md:px-6"
@@ -296,7 +360,23 @@ async function viewSticker() {
         <Badge variant="outline">
           {{ statusLabel(filing.status) }}
         </Badge>
+        <Badge v-if="filing.workflow?.current_stage_name" variant="secondary">
+          {{ filing.workflow.current_stage_name }}
+        </Badge>
+        <VentanillaTrafficLightBadge
+          v-if="workflowOpenTask?.traffic_light_status"
+          :status="workflowOpenTask.traffic_light_status"
+        />
         <div class="ml-auto flex flex-wrap gap-2">
+          <NuxtLink
+            v-if="hasPermission('workflow_ver') && filing.workflow?.is_active"
+            to="/workflow/bandeja"
+          >
+            <Button variant="outline" size="sm">
+              <Icon name="i-lucide-inbox" class="mr-1 size-4" />
+              Bandeja workflow
+            </Button>
+          </NuxtLink>
           <Button
             variant="outline"
             size="sm"
@@ -331,12 +411,57 @@ async function viewSticker() {
         {{ actionMessage }}
       </p>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Resumen</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl class="grid gap-4 text-sm sm:grid-cols-2">
+      <div class="flex flex-col gap-4 lg:flex-row lg:gap-6">
+        <div class="lg:hidden">
+          <div class="-mx-1 overflow-x-auto pb-1">
+            <div class="flex gap-1.5 px-1">
+              <button
+                v-for="section in detailSections"
+                :key="section.id"
+                type="button"
+                class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors"
+                :class="activeSection === section.id
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground'"
+                @click="activeSection = section.id"
+              >
+                {{ section.label }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <nav class="hidden shrink-0 lg:block lg:w-56 xl:w-60 lg:sticky lg:top-36 lg:self-start">
+          <div class="rounded-lg border bg-muted/30 p-2">
+            <p class="mb-2 px-2 text-xs font-medium text-muted-foreground">
+              Secciones
+            </p>
+            <div class="max-h-[calc(100vh-11rem)] space-y-0.5 overflow-y-auto">
+              <button
+                v-for="section in detailSections"
+                :key="section.id"
+                type="button"
+                class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent"
+                :class="activeSection === section.id ? 'bg-accent font-medium' : ''"
+                @click="activeSection = section.id"
+              >
+                <Icon
+                  :name="section.icon"
+                  class="size-4 shrink-0 text-muted-foreground"
+                />
+                <span class="truncate">{{ section.label }}</span>
+              </button>
+            </div>
+          </div>
+        </nav>
+
+        <div class="min-w-0 flex-1 space-y-6">
+          <Card v-show="activeSection === 'resumen'">
+            <CardHeader class="pb-3">
+              <CardTitle>Resumen</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl class="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
             <div class="sm:col-span-2">
               <dt class="text-muted-foreground text-xs">
                 Asunto
@@ -387,10 +512,32 @@ async function viewSticker() {
             </div>
             <div v-if="filing.sla_business_days">
               <dt class="text-muted-foreground text-xs">
-                SLA
+                SLA radicado
               </dt>
               <dd class="mt-1 font-medium">
                 {{ filing.sla_business_days }} días hábiles
+              </dd>
+            </div>
+            <div v-if="filing.workflow?.workflow_name">
+              <dt class="text-muted-foreground text-xs">
+                Flujo workflow
+              </dt>
+              <dd class="mt-1 font-medium">
+                {{ filing.workflow.workflow_name }}
+              </dd>
+            </div>
+            <div v-if="workflowOpenTask?.due_at">
+              <dt class="text-muted-foreground text-xs">
+                Vence etapa actual
+              </dt>
+              <dd class="mt-1 font-medium">
+                {{ formatDate(workflowOpenTask.due_at) }}
+                <span
+                  v-if="workflowOpenTask.days_overdue"
+                  class="text-destructive"
+                >
+                  ({{ workflowOpenTask.days_overdue }} día{{ workflowOpenTask.days_overdue === 1 ? '' : 's' }} de retraso)
+                </span>
               </dd>
             </div>
             <div>
@@ -467,61 +614,165 @@ async function viewSticker() {
               </dd>
             </div>
           </dl>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      <WorkflowFilingPanel :filing-id="id" @changed="load" />
+          <div v-show="activeSection === 'gestion'">
+            <Card v-if="canAssign || canManage || canVoid">
+              <CardHeader>
+                <CardTitle>Gestión del radicado</CardTitle>
+                <CardDescription>
+                  Asignación, respuesta, cierre y anulación conservan trazabilidad.
+                </CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-6">
+                <Button
+                  v-if="canRefreshSla"
+                  variant="outline"
+                  :disabled="actionLoading === 'sla'"
+                  @click="refreshSla"
+                >
+                  {{ actionLoading === 'sla' ? 'Actualizando…' : 'Actualizar semáforo SLA' }}
+                </Button>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Archivos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul v-if="filing.files?.length" class="divide-y">
-            <li
-              v-for="file in filing.files"
-              :key="file.id"
-              class="flex items-center justify-between py-3 text-sm"
-            >
-              <div>
-                <p class="font-medium">
-                  {{ file.title }}
-                  <Badge v-if="file.is_primary" variant="secondary" class="ml-2">
-                    Principal
-                  </Badge>
-                </p>
-                <p class="text-muted-foreground text-xs">
-                  {{ file.original_name }}
-                </p>
-              </div>
-              <Button
-                v-if="hasPermission('ventanilla_archivos_ver')"
-                variant="outline"
-                size="sm"
-                :disabled="openingFileId === file.id"
-                @click="viewFile(file.id, file.mime_type)"
-              >
-                <Icon
-                  :name="openingFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
-                  class="mr-1 size-4"
-                  :class="{ 'animate-spin': openingFileId === file.id }"
-                />
-                {{ openingFileId === file.id ? 'Abriendo…' : 'Ver' }}
-              </Button>
-            </li>
-          </ul>
-          <p v-else class="text-muted-foreground text-sm">
-            Sin archivos adjuntos.
-          </p>
-        </CardContent>
-      </Card>
+                <div v-if="canAssign" class="space-y-3">
+                  <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
+                    <div class="space-y-2">
+                      <Label>Responsable</Label>
+                      <Select
+                        :model-value="selectedAssignedUserId != null ? String(selectedAssignedUserId) : undefined"
+                        :disabled="loadingResponsibleUsers || !responsibleUsers.length"
+                        @update:model-value="selectedAssignedUserId = $event ? Number($event) : null"
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione responsable" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem
+                            v-for="user in responsibleUsers"
+                            :key="user.id"
+                            :value="String(user.id)"
+                          >
+                            {{ user.name }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div class="space-y-2">
+                      <Label>Nota de asignación</Label>
+                      <Input v-model="assignmentNote" placeholder="Opcional" />
+                    </div>
+                    <Button
+                      class="w-full lg:w-auto"
+                      :disabled="actionLoading === 'assign'"
+                      @click="assignResponsible"
+                    >
+                      {{ actionLoading === 'assign' ? 'Asignando…' : 'Asignar' }}
+                    </Button>
+                  </div>
+                  <p
+                    v-if="!loadingResponsibleUsers && !responsibleUsers.length"
+                    class="text-muted-foreground text-xs"
+                  >
+                    No hay usuarios vinculados al área {{ filing.org_unit_responsible?.name ?? 'responsable' }}.
+                  </p>
+                  <p v-else class="text-muted-foreground text-xs">
+                    Usuarios del área {{ filing.org_unit_responsible?.name ?? 'responsable' }}.
+                  </p>
+                </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Clasificación TRD</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl class="grid gap-4 text-sm sm:grid-cols-2">
+                <div v-if="canManage" class="space-y-3">
+                  <Button
+                    v-if="filing.status === 'registered'"
+                    variant="secondary"
+                    :disabled="actionLoading === 'start'"
+                    @click="startManagement"
+                  >
+                    {{ actionLoading === 'start' ? 'Iniciando…' : 'Iniciar gestión' }}
+                  </Button>
+
+                  <div v-if="filing.requires_response" class="space-y-2">
+                    <Label>Respuesta</Label>
+                    <Textarea v-model="responseText" rows="4" placeholder="Registre la respuesta dada al remitente…" />
+                    <Button :disabled="actionLoading === 'respond'" @click="respondAndClose">
+                      {{ actionLoading === 'respond' ? 'Cerrando…' : 'Registrar respuesta y cerrar' }}
+                    </Button>
+                  </div>
+
+                  <div v-else class="space-y-2">
+                    <Label>Motivo de cierre</Label>
+                    <Textarea v-model="closeReason" rows="3" placeholder="Opcional" />
+                    <Button :disabled="actionLoading === 'close'" @click="closeFiling">
+                      {{ actionLoading === 'close' ? 'Cerrando…' : 'Cerrar radicado' }}
+                    </Button>
+                  </div>
+                </div>
+
+                <div v-if="canVoid" class="space-y-2 rounded-lg border border-destructive/30 p-3">
+                  <Label>Motivo de anulación</Label>
+                  <Textarea v-model="voidReason" rows="3" placeholder="Obligatorio para anular" />
+                  <Button variant="destructive" :disabled="actionLoading === 'void'" @click="voidCurrentFiling">
+                    {{ actionLoading === 'void' ? 'Anulando…' : 'Anular radicado' }}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div v-show="activeSection === 'workflow'">
+            <WorkflowFilingPanel :filing-id="id" @changed="load" />
+          </div>
+
+          <Card v-show="activeSection === 'archivos'">
+            <CardHeader>
+              <CardTitle>Archivos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul v-if="filing.files?.length" class="divide-y">
+                <li
+                  v-for="file in filing.files"
+                  :key="file.id"
+                  class="flex items-center justify-between py-3 text-sm"
+                >
+                  <div>
+                    <p class="font-medium">
+                      {{ file.title }}
+                      <Badge v-if="file.is_primary" variant="secondary" class="ml-2">
+                        Principal
+                      </Badge>
+                    </p>
+                    <p class="text-muted-foreground text-xs">
+                      {{ file.original_name }}
+                    </p>
+                  </div>
+                  <Button
+                    v-if="hasPermission('ventanilla_archivos_ver')"
+                    variant="outline"
+                    size="sm"
+                    :disabled="openingFileId === file.id"
+                    @click="viewFile(file.id, file.mime_type)"
+                  >
+                    <Icon
+                      :name="openingFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+                      class="mr-1 size-4"
+                      :class="{ 'animate-spin': openingFileId === file.id }"
+                    />
+                    {{ openingFileId === file.id ? 'Abriendo…' : 'Ver' }}
+                  </Button>
+                </li>
+              </ul>
+              <p v-else class="text-muted-foreground text-sm">
+                Sin archivos adjuntos.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card v-show="activeSection === 'trd'">
+            <CardHeader>
+              <CardTitle>Clasificación TRD</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl class="grid gap-3 text-sm sm:grid-cols-2">
             <div>
               <dt class="text-muted-foreground text-xs">
                 Serie
@@ -554,13 +805,13 @@ async function viewSticker() {
                 v{{ filing.trd_version.version_number }}
               </dd>
             </div>
-          </dl>
-        </CardContent>
-      </Card>
+              </dl>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Metadatos y verificación</CardTitle>
+          <Card v-show="activeSection === 'metadatos'">
+            <CardHeader>
+              <CardTitle>Metadatos y verificación</CardTitle>
           <CardDescription>
             Datos dinámicos capturados y enlace público de verificación del comprobante.
           </CardDescription>
@@ -615,15 +866,15 @@ async function viewSticker() {
               </a>
             </Button>
           </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Trazabilidad</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul v-if="filing.events?.length" class="space-y-4">
+          <Card v-show="activeSection === 'trazabilidad'">
+            <CardHeader>
+              <CardTitle>Trazabilidad</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul v-if="filing.events?.length" class="max-h-[min(70vh,32rem)] space-y-4 overflow-y-auto pr-1">
             <li
               v-for="event in filing.events"
               :key="event.id"
@@ -645,13 +896,13 @@ async function viewSticker() {
               </p>
             </li>
           </ul>
-          <p v-else class="text-muted-foreground text-sm">
-            Sin eventos registrados.
-          </p>
-        </CardContent>
-      </Card>
+              <p v-else class="text-muted-foreground text-sm">
+                Sin eventos registrados.
+              </p>
+            </CardContent>
+          </Card>
 
-      <Card v-if="filing.notification_deliveries?.length">
+          <Card v-if="filing.notification_deliveries?.length" v-show="activeSection === 'notificaciones'">
         <CardHeader>
           <CardTitle>Notificaciones enviadas</CardTitle>
           <CardDescription>
@@ -686,13 +937,13 @@ async function viewSticker() {
               </p>
             </li>
           </ul>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Alertas SLA</CardTitle>
-        </CardHeader>
+          <Card v-show="activeSection === 'alertas'">
+            <CardHeader>
+              <CardTitle>Alertas SLA</CardTitle>
+            </CardHeader>
         <CardContent>
           <ul v-if="filing.alerts?.length" class="space-y-3">
             <li
@@ -715,13 +966,13 @@ async function viewSticker() {
               </ul>
             </li>
           </ul>
-          <p v-else class="text-muted-foreground text-sm">
-            Sin alertas SLA registradas.
-          </p>
-        </CardContent>
-      </Card>
+              <p v-else class="text-muted-foreground text-sm">
+                Sin alertas SLA registradas.
+              </p>
+            </CardContent>
+          </Card>
 
-      <Card v-if="filing.escalation">
+          <Card v-if="filing.escalation" v-show="activeSection === 'escalamiento'">
         <CardHeader>
           <CardTitle>Escalamiento</CardTitle>
         </CardHeader>
@@ -739,108 +990,10 @@ async function viewSticker() {
               ({{ alertRecipientRoleLabel(delivery.recipient_role) }}) · {{ formatDate(delivery.sent_at) }}
             </li>
           </ul>
-        </CardContent>
-      </Card>
-
-      <Card v-if="canAssign || canManage || canVoid">
-        <CardHeader>
-          <CardTitle>Gestión del radicado</CardTitle>
-          <CardDescription>
-            Asignación, respuesta, cierre y anulación conservan trazabilidad.
-          </CardDescription>
-        </CardHeader>
-        <CardContent class="space-y-6">
-          <Button
-            v-if="canRefreshSla"
-            variant="outline"
-            :disabled="actionLoading === 'sla'"
-            @click="refreshSla"
-          >
-            {{ actionLoading === 'sla' ? 'Actualizando…' : 'Actualizar semáforo SLA' }}
-          </Button>
-
-          <div v-if="canAssign" class="space-y-3">
-            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
-              <div class="space-y-2">
-                <Label>Responsable</Label>
-                <Select
-                  :model-value="selectedAssignedUserId != null ? String(selectedAssignedUserId) : undefined"
-                  :disabled="loadingResponsibleUsers || !responsibleUsers.length"
-                  @update:model-value="selectedAssignedUserId = $event ? Number($event) : null"
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccione responsable" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem
-                      v-for="user in responsibleUsers"
-                      :key="user.id"
-                      :value="String(user.id)"
-                    >
-                      {{ user.name }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div class="space-y-2">
-                <Label>Nota de asignación</Label>
-                <Input v-model="assignmentNote" placeholder="Opcional" />
-              </div>
-              <Button
-                class="w-full lg:w-auto"
-                :disabled="actionLoading === 'assign'"
-                @click="assignResponsible"
-              >
-                {{ actionLoading === 'assign' ? 'Asignando…' : 'Asignar' }}
-              </Button>
-            </div>
-            <p
-              v-if="!loadingResponsibleUsers && !responsibleUsers.length"
-              class="text-muted-foreground text-xs"
-            >
-              No hay usuarios vinculados al área {{ filing.org_unit_responsible?.name ?? 'responsable' }}.
-            </p>
-            <p v-else class="text-muted-foreground text-xs">
-              Usuarios del área {{ filing.org_unit_responsible?.name ?? 'responsable' }}.
-            </p>
-          </div>
-
-          <div v-if="canManage" class="space-y-3">
-            <Button
-              v-if="filing.status === 'registered'"
-              variant="secondary"
-              :disabled="actionLoading === 'start'"
-              @click="startManagement"
-            >
-              {{ actionLoading === 'start' ? 'Iniciando…' : 'Iniciar gestión' }}
-            </Button>
-
-            <div v-if="filing.requires_response" class="space-y-2">
-              <Label>Respuesta</Label>
-              <Textarea v-model="responseText" rows="4" placeholder="Registre la respuesta dada al remitente…" />
-              <Button :disabled="actionLoading === 'respond'" @click="respondAndClose">
-                {{ actionLoading === 'respond' ? 'Cerrando…' : 'Registrar respuesta y cerrar' }}
-              </Button>
-            </div>
-
-            <div v-else class="space-y-2">
-              <Label>Motivo de cierre</Label>
-              <Textarea v-model="closeReason" rows="3" placeholder="Opcional" />
-              <Button :disabled="actionLoading === 'close'" @click="closeFiling">
-                {{ actionLoading === 'close' ? 'Cerrando…' : 'Cerrar radicado' }}
-              </Button>
-            </div>
-          </div>
-
-          <div v-if="canVoid" class="space-y-2 rounded-lg border border-destructive/30 p-3">
-            <Label>Motivo de anulación</Label>
-            <Textarea v-model="voidReason" rows="3" placeholder="Obligatorio para anular" />
-            <Button variant="destructive" :disabled="actionLoading === 'void'" @click="voidCurrentFiling">
-              {{ actionLoading === 'void' ? 'Anulando…' : 'Anular radicado' }}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </template>
   </div>
 </template>

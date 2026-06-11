@@ -11,6 +11,7 @@ const emit = defineEmits<{
 }>()
 
 const { hasPermission } = usePermissions()
+const { user: authUser } = useAuth()
 const workflowApi = useWorkflowApi()
 
 const loading = ref(false)
@@ -20,6 +21,11 @@ const actionsOpen = ref(false)
 
 const canView = computed(() => hasPermission('workflow_ver'))
 const canManage = computed(() => hasPermission('workflow_gestionar'))
+const isMyOpenTask = computed(() =>
+  context.value?.open_task?.assignee?.id != null
+  && context.value.open_task.assignee.id === authUser.value?.id,
+)
+const canActOnOpenTask = computed(() => canManage.value && isMyOpenTask.value)
 
 const openTaskCard = computed(() => {
   if (!context.value?.open_task)
@@ -96,10 +102,16 @@ defineExpose({ reload: load })
 </script>
 
 <template>
-  <Card v-if="canView && (loading || context)">
+  <Card
+    v-if="canView && (loading || context)"
+    :class="isMyOpenTask ? 'border-primary ring-1 ring-primary/30' : undefined"
+  >
     <CardHeader>
-      <CardTitle class="text-base">
+      <CardTitle class="text-base flex flex-wrap items-center gap-2">
         Workflow
+        <Badge v-if="isMyOpenTask" variant="default">
+          Su tarea
+        </Badge>
       </CardTitle>
       <CardDescription v-if="context?.workflow">
         {{ context.workflow.name }}
@@ -112,6 +124,19 @@ defineExpose({ reload: load })
       </div>
 
       <template v-else-if="context">
+        <Alert
+          v-for="warning in context.warnings ?? []"
+          :key="warning.code"
+          variant="destructive"
+          class="border-amber-500/50 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+        >
+          <Icon name="i-lucide-triangle-alert" class="size-4" />
+          <AlertTitle>Atención</AlertTitle>
+          <AlertDescription>
+            {{ warning.message }}
+          </AlertDescription>
+        </Alert>
+
         <div class="flex flex-wrap items-center gap-2">
           <Badge variant="outline">
             {{ context.is_active ? 'En curso' : context.instance.status }}
@@ -120,6 +145,13 @@ defineExpose({ reload: load })
             {{ context.current_stage.name }}
           </Badge>
         </div>
+
+        <p v-if="isMyOpenTask" class="text-sm text-primary">
+          Tiene la tarea activa de este radicado. Puede gestionarla aquí o desde la bandeja.
+        </p>
+        <NuxtLink v-if="hasPermission('workflow_ver')" to="/workflow/bandeja" class="inline-block text-sm text-muted-foreground underline-offset-4 hover:underline">
+          Ir a bandeja de tareas
+        </NuxtLink>
 
         <div v-if="context.open_task" class="rounded-lg border p-3 space-y-2">
           <div class="flex items-center gap-2 text-sm">
@@ -133,13 +165,19 @@ defineExpose({ reload: load })
             Vence: {{ new Date(context.open_task.due_at).toLocaleString('es-CO') }}
           </p>
           <Button
-            v-if="canManage && context.open_task"
+            v-if="canActOnOpenTask && context.open_task"
             size="sm"
             variant="outline"
             @click="actionsOpen = true"
           >
             Gestionar tarea
           </Button>
+          <p
+            v-else-if="canManage && context.open_task && !isMyOpenTask"
+            class="text-xs text-muted-foreground"
+          >
+            Solo el responsable asignado puede ejecutar acciones sobre esta tarea.
+          </p>
         </div>
 
         <div v-if="context.events.length" class="space-y-2">

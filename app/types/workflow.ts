@@ -84,6 +84,11 @@ export interface WorkflowDefinitionSummary {
   name: string
 }
 
+export interface WorkflowContextWarning {
+  code: string
+  message: string
+}
+
 export interface WorkflowFilingContext {
   instance: {
     id: number
@@ -120,6 +125,7 @@ export interface WorkflowFilingContext {
     stage: { key: string, name: string } | null
   }>
   is_active: boolean
+  warnings?: WorkflowContextWarning[]
 }
 
 export interface WorkflowDefinitionPayload {

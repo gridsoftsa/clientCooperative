@@ -221,6 +221,27 @@ export interface VentanillaIntakeRow {
   files?: VentanillaIntakeFileRow[]
 }
 
+export interface VentanillaFilingWorkflowOpenTask {
+  id: number
+  status: string
+  traffic_light_status: VentanillaTrafficLightValue | null
+  due_at: string | null
+  days_overdue: number | null
+  stage_name: string | null
+  assignee: { id: number; name: string } | null
+}
+
+export interface VentanillaFilingWorkflowSummary {
+  instance_status: string
+  closure_on_time: boolean | null
+  is_active: boolean
+  workflow_key: string | null
+  workflow_name: string | null
+  current_stage_key: string | null
+  current_stage_name: string | null
+  open_task: VentanillaFilingWorkflowOpenTask | null
+}
+
 export interface VentanillaFilingSummary {
   id: number
   filing_number: string
@@ -236,6 +257,7 @@ export interface VentanillaFilingSummary {
   filed_by?: { id: number; name: string }
   org_unit_responsible?: { id: number; name: string; code: string }
   doc_document_type?: { id: number; code: string; name: string }
+  workflow?: VentanillaFilingWorkflowSummary | null
 }
 
 export interface VentanillaFilingFileRow {

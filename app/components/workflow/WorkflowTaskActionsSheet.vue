@@ -104,16 +104,16 @@ function eventLabel(type: string) {
 
 <template>
   <Sheet :open="open" @update:open="emit('update:open', $event)">
-    <SheetContent class="flex w-full flex-col overflow-hidden sm:max-w-md">
-      <SheetHeader>
+    <SheetContent class="flex w-full flex-col gap-0 overflow-hidden px-8 py-8 sm:max-w-lg">
+      <SheetHeader class="shrink-0 space-y-1.5 p-0 pr-10">
         <SheetTitle>Gestión de tarea</SheetTitle>
         <SheetDescription v-if="task?.subject">
           {{ task.subject.filing_number }} — {{ task.stage?.name }}
         </SheetDescription>
       </SheetHeader>
 
-      <Tabs v-model="activeTab" default-value="actions" class="mt-4 flex min-h-0 flex-1 flex-col">
-        <TabsList class="grid w-full grid-cols-2">
+      <Tabs v-model="activeTab" default-value="actions" class="mt-6 flex min-h-0 flex-1 flex-col">
+        <TabsList class="grid h-10 w-full shrink-0 grid-cols-2 p-1">
           <TabsTrigger value="actions">
             Acciones
           </TabsTrigger>
@@ -122,8 +122,8 @@ function eventLabel(type: string) {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="actions" class="mt-4 space-y-4 overflow-y-auto">
-          <div v-if="task" class="rounded-lg border p-3 text-sm space-y-1">
+        <TabsContent value="actions" class="mt-6 min-h-0 flex-1 space-y-5 overflow-y-auto pr-1 pb-2">
+          <div v-if="task" class="space-y-1.5 rounded-lg border bg-muted/30 p-4 text-sm">
             <p><span class="text-muted-foreground">Responsable:</span> {{ task.assignee?.name ?? 'Sin asignar' }}</p>
             <p v-if="task.due_at">
               <span class="text-muted-foreground">Vence:</span>
@@ -134,21 +134,21 @@ function eventLabel(type: string) {
             </p>
           </div>
 
-          <div class="grid gap-2">
+          <div class="grid gap-2.5">
             <Label>Nota (opcional)</Label>
             <Textarea v-model="note" rows="2" placeholder="Motivo o comentario de la acción" />
           </div>
 
           <Button
             v-if="canManage && stageRules?.allows_advance"
-            class="w-full"
+            class="h-10 w-full"
             :disabled="saving"
             @click="advance"
           >
             Avanzar etapa
           </Button>
 
-          <div v-if="canManage && stageRules?.allows_return && returnableStages.length" class="space-y-2">
+          <div v-if="canManage && stageRules?.allows_return && returnableStages.length" class="space-y-2.5 rounded-lg border bg-muted/20 p-4">
             <Label>Devolver a etapa</Label>
             <Select v-model="returnStageId">
               <SelectTrigger>
@@ -164,12 +164,12 @@ function eventLabel(type: string) {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" class="w-full" :disabled="saving || !returnStageId" @click="returnTask">
+            <Button variant="outline" class="h-10 w-full" :disabled="saving || !returnStageId" @click="returnTask">
               Devolver
             </Button>
           </div>
 
-          <div v-if="canReassign && stageRules?.allows_reassign" class="space-y-2">
+          <div v-if="canReassign && stageRules?.allows_reassign" class="space-y-2.5 rounded-lg border bg-muted/20 p-4">
             <Label>Reasignar a</Label>
             <Select v-model="reassignUserId">
               <SelectTrigger>
@@ -181,26 +181,26 @@ function eventLabel(type: string) {
                 </SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" class="w-full" :disabled="saving || !reassignUserId" @click="reassign">
+            <Button variant="outline" class="h-10 w-full" :disabled="saving || !reassignUserId" @click="reassign">
               Reasignar
             </Button>
           </div>
 
-          <div v-if="canManage" class="space-y-2 border-t pt-4">
+          <div v-if="canManage" class="space-y-2.5 border-t pt-5">
             <Label>Comentario</Label>
             <Textarea v-model="comment" rows="2" placeholder="Agregar comentario al historial" />
-            <Button variant="secondary" class="w-full" :disabled="saving || !comment.trim()" @click="submitComment">
+            <Button variant="secondary" class="h-10 w-full" :disabled="saving || !comment.trim()" @click="submitComment">
               Registrar comentario
             </Button>
           </div>
         </TabsContent>
 
-        <TabsContent value="history" class="mt-4 min-h-0 flex-1 overflow-y-auto">
+        <TabsContent value="history" class="mt-6 min-h-0 flex-1 overflow-y-auto pr-1 pb-2">
           <div v-if="context?.events?.length" class="space-y-3">
             <div
               v-for="event in context.events"
               :key="event.id"
-              class="rounded-lg border px-3 py-2 text-sm"
+              class="rounded-lg border bg-muted/20 px-4 py-3 text-sm"
             >
               <div class="flex items-center justify-between gap-2">
                 <Badge variant="outline">

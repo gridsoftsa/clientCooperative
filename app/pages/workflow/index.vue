@@ -15,8 +15,9 @@ const workflowApi = useWorkflowApi()
 const loading = ref(true)
 const board = ref<WorkflowBoardData>({ definition: null, columns: [] })
 const definitions = ref<Array<{ id: number, key: string, name: string }>>([])
-const definitionId = ref<string>('')
-const scope = ref<'mine' | 'area'>('mine')
+const ALL_DEFINITIONS = 'all'
+const definitionId = ref<string>(ALL_DEFINITIONS)
+const { scope, canViewTeam, canViewAllTasks } = useWorkflowInboxScope()
 const statusFilter = ref<'open' | 'overdue' | 'due_soon'>('open')
 const functionalTypeKey = ref<string>('')
 
@@ -26,7 +27,6 @@ const selectedTask = ref<WorkflowTaskCard | null>(null)
 const taskContext = ref<WorkflowFilingContext | null>(null)
 
 const canManage = computed(() => hasPermission('workflow_gestionar'))
-const canViewTeam = computed(() => hasPermission('workflow_equipo_ver'))
 
 async function loadDefinitions() {
   try {
@@ -49,8 +49,9 @@ async function loadBoard() {
     if (functionalTypeKey.value)
       query.functional_type_key = functionalTypeKey.value
 
-    if (definitionId.value)
+    if (definitionId.value && definitionId.value !== ALL_DEFINITIONS) {
       query.workflow_definition_id = definitionId.value
+    }
 
     board.value = await workflowApi.fetchBoard(query)
   }
@@ -137,6 +138,9 @@ onMounted(async () => {
               <TabsTrigger v-if="canViewTeam" value="area">
                 Mi equipo
               </TabsTrigger>
+              <TabsTrigger v-if="canViewAllTasks" value="all">
+                Todas
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -162,8 +166,8 @@ onMounted(async () => {
               <SelectValue placeholder="Flujo de trabajo" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">
-                Flujo por defecto
+              <SelectItem :value="ALL_DEFINITIONS">
+                Todos los flujos
               </SelectItem>
               <SelectItem
                 v-for="def in definitions"
@@ -195,6 +199,7 @@ onMounted(async () => {
     </Card>
 
     <WorkflowTaskActionsSheet
+      v-if="actionsOpen && selectedTask"
       v-model:open="actionsOpen"
       :task="selectedTask"
       :context="taskContext"

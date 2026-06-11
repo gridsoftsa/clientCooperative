@@ -214,6 +214,32 @@ onUnmounted(() => {
   }
 })
 
+function workflowStageLabel(row: VentanillaFilingSummary): string {
+  const workflow = row.workflow
+
+  if (!workflow) {
+    return '—'
+  }
+
+  if (workflow.open_task?.stage_name) {
+    return workflow.open_task.stage_name
+  }
+
+  if (workflow.current_stage_name) {
+    return workflow.current_stage_name
+  }
+
+  if (workflow.instance_status === 'completed') {
+    return 'Proceso completado'
+  }
+
+  if (workflow.instance_status === 'cancelled') {
+    return 'Proceso cancelado'
+  }
+
+  return '—'
+}
+
 function functionalLabel(row: VentanillaFilingSummary): string {
   return row.functional_type_label
     ?? catalog.value?.functional_types.find((t: VentanillaFunctionalTypeRow) => t.key === row.functional_type_key)?.label
@@ -593,7 +619,9 @@ function statusLabel(status: string): string {
               <TableHead>Área responsable</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead>SLA</TableHead>
+              <TableHead>SLA radicado</TableHead>
+              <TableHead>Etapa workflow</TableHead>
+              <TableHead>SLA etapa</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -632,6 +660,16 @@ function statusLabel(status: string): string {
                   :status="row.traffic_light_status"
                   :requires-response="row.requires_response"
                 />
+              </TableCell>
+              <TableCell class="max-w-[140px] truncate text-xs">
+                {{ workflowStageLabel(row) }}
+              </TableCell>
+              <TableCell>
+                <VentanillaTrafficLightBadge
+                  v-if="row.workflow?.open_task?.traffic_light_status"
+                  :status="row.workflow.open_task.traffic_light_status"
+                />
+                <span v-else class="text-muted-foreground text-xs">—</span>
               </TableCell>
               <TableCell>
                 <Button variant="ghost" size="sm" @click.stop="router.push(`/ventanilla/${row.id}`)">

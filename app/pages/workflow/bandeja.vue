@@ -15,10 +15,11 @@ const workflowApi = useWorkflowApi()
 const loading = ref(true)
 const tasks = ref<WorkflowTaskCard[]>([])
 const meta = ref({ current_page: 1, last_page: 1, per_page: 20, total: 0 })
-const scope = ref<'mine' | 'area'>('mine')
+const { scope, canViewTeam, canViewAllTasks } = useWorkflowInboxScope()
 const statusFilter = ref<'open' | 'overdue' | 'due_soon' | 'completed'>('open')
 const definitions = ref<Array<{ id: number, key: string, name: string }>>([])
-const definitionId = ref<string>('')
+const ALL_DEFINITIONS = 'all'
+const definitionId = ref<string>(ALL_DEFINITIONS)
 
 const users = ref<Array<{ id: number, name: string }>>([])
 const actionsOpen = ref(false)
@@ -26,7 +27,6 @@ const selectedTask = ref<WorkflowTaskCard | null>(null)
 const taskContext = ref<WorkflowFilingContext | null>(null)
 
 const canManage = computed(() => hasPermission('workflow_gestionar'))
-const canViewTeam = computed(() => hasPermission('workflow_equipo_ver'))
 
 async function loadDefinitions() {
   try {
@@ -48,8 +48,9 @@ async function loadTasks(page = 1) {
       per_page: meta.value.per_page,
     }
 
-    if (definitionId.value)
+    if (definitionId.value && definitionId.value !== ALL_DEFINITIONS) {
       query.workflow_definition_id = Number(definitionId.value)
+    }
 
     const result = await workflowApi.fetchTasks(query)
     tasks.value = result.data
@@ -128,16 +129,37 @@ onMounted(async () => {
     <Card>
       <CardHeader class="pb-3">
         <div class="flex flex-wrap gap-3">
-          <Tabs v-model="scope" default-value="mine">
-            <TabsList>
-              <TabsTrigger value="mine">
-                Mis tareas
-              </TabsTrigger>
-              <TabsTrigger v-if="canViewTeam" value="area">
-                Mi equipo
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div class="inline-flex rounded-lg border bg-muted/40 p-0.5">
+            <Button
+              type="button"
+              size="sm"
+              :variant="scope === 'mine' ? 'default' : 'ghost'"
+              class="h-8"
+              @click="scope = 'mine'"
+            >
+              Mis tareas
+            </Button>
+            <Button
+              v-if="canViewTeam"
+              type="button"
+              size="sm"
+              :variant="scope === 'area' ? 'default' : 'ghost'"
+              class="h-8"
+              @click="scope = 'area'"
+            >
+              Mi equipo
+            </Button>
+            <Button
+              v-if="canViewAllTasks"
+              type="button"
+              size="sm"
+              :variant="scope === 'all' ? 'default' : 'ghost'"
+              class="h-8"
+              @click="scope = 'all'"
+            >
+              Todas
+            </Button>
+          </div>
 
           <Select v-model="statusFilter">
             <SelectTrigger class="w-[180px]">
@@ -164,7 +186,7 @@ onMounted(async () => {
               <SelectValue placeholder="Todos los flujos" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">
+              <SelectItem :value="ALL_DEFINITIONS">
                 Todos los flujos
               </SelectItem>
               <SelectItem v-for="def in definitions" :key="def.id" :value="String(def.id)">
@@ -179,8 +201,14 @@ onMounted(async () => {
           <Skeleton v-for="i in 5" :key="i" class="h-14 w-full" />
         </div>
 
-        <div v-else-if="tasks.length === 0" class="py-10 text-center text-muted-foreground">
-          No hay tareas con estos filtros.
+        <div v-else-if="tasks.length === 0" class="space-y-2 py-10 text-center text-muted-foreground">
+          <p>No hay tareas con estos filtros.</p>
+          <p v-if="scope === 'mine'" class="text-xs">
+            Solo se listan tareas donde usted es el responsable. Las de etapa «Asignar responsable» van al jefe del área.
+            <template v-if="canViewTeam">
+              Pruebe <button type="button" class="text-primary underline-offset-4 hover:underline" @click="scope = 'area'">Mi equipo</button>.
+            </template>
+          </p>
         </div>
 
         <div v-else class="divide-y rounded-lg border">
@@ -191,7 +219,7 @@ onMounted(async () => {
           >
             <div class="min-w-0 flex-1 cursor-pointer" @click="openFiling(task)">
               <div class="flex items-center gap-2 text-sm">
-                <Icon name="lucide:circle" class="size-3" :class="trafficClass(task.traffic_light_status)" />
+                <Icon name="i-lucide-circle" class="size-3" :class="trafficClass(task.traffic_light_status)" />
                 <span class="font-medium">{{ task.subject?.filing_number ?? `Tarea #${task.id}` }}</span>
                 <Badge variant="outline">
                   {{ task.stage?.name }}
@@ -242,6 +270,7 @@ onMounted(async () => {
     </Card>
 
     <WorkflowTaskActionsSheet
+      v-if="actionsOpen && selectedTask"
       v-model:open="actionsOpen"
       :task="selectedTask"
       :context="taskContext"
