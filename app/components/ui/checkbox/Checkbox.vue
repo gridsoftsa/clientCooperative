@@ -2,16 +2,11 @@
 import type { HTMLAttributes } from 'vue'
 import { Check } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
+import { coerceBoolean } from '@/utils/coerce-boolean'
 
 /**
  * Checkbox basado en <input type="checkbox"> nativo + apariencia shadcn.
- * No usa Reka UI (evita fallos de estado controlado en WSL/navegador).
- *
- * Uso:
- * - v-model o :checked + @update:checked
- * - Con texto: <Checkbox v-model="x">Etiqueta</Checkbox>
- * - Dentro de <label> externo: <Checkbox bare :checked="x" @update:checked="..." />
- * - Con <Label for="id">: <Checkbox id="id" v-model="x" />
+ * Misma base que StyledNativeCheckbox (sin Reka UI).
  */
 const props = withDefaults(
   defineProps<{
@@ -35,14 +30,19 @@ const emit = defineEmits<{
 
 const autoId = useId()
 const inputId = computed(() => props.id ?? `ui-checkbox-${autoId}`)
+const inputRef = ref<HTMLInputElement | null>(null)
 
-const isChecked = computed((): boolean => {
-  const value = props.modelValue !== undefined && props.modelValue !== null
-    ? props.modelValue
-    : props.checked
+const resolvedValue = computed((): boolean | 'indeterminate' | null | undefined => {
+  if (props.modelValue !== undefined && props.modelValue !== null) {
+    return props.modelValue
+  }
 
-  return value === true
+  return props.checked
 })
+
+const isChecked = computed((): boolean => coerceBoolean(resolvedValue.value))
+
+const isIndeterminate = computed((): boolean => resolvedValue.value === 'indeterminate')
 
 const boxClass = computed(() => cn(
   'pointer-events-none flex size-4 shrink-0 items-center justify-center rounded-[4px] border shadow-xs transition-colors',
@@ -53,8 +53,23 @@ const boxClass = computed(() => cn(
   props.class,
 ))
 
+function syncIndeterminate(): void {
+  if (!inputRef.value) {
+    return
+  }
+
+  inputRef.value.indeterminate = isIndeterminate.value
+}
+
+watch(isIndeterminate, syncIndeterminate)
+onMounted(syncIndeterminate)
+
 function onChange(event: Event): void {
-  const next = (event.target as HTMLInputElement).checked
+  const input = event.target as HTMLInputElement
+  const next: boolean | 'indeterminate' = input.indeterminate
+    ? 'indeterminate'
+    : input.checked
+
   emit('update:modelValue', next)
   emit('update:checked', next)
 }
@@ -63,11 +78,13 @@ function onChange(event: Event): void {
 <template>
   <label
     v-if="!bare"
+    :for="inputId"
     class="inline-flex cursor-pointer items-center gap-2"
     :class="{ 'cursor-not-allowed opacity-50': disabled }"
   >
     <input
       :id="inputId"
+      ref="inputRef"
       type="checkbox"
       class="sr-only"
       :checked="isChecked"
@@ -87,6 +104,7 @@ function onChange(event: Event): void {
   >
     <input
       :id="inputId"
+      ref="inputRef"
       type="checkbox"
       class="sr-only"
       :checked="isChecked"

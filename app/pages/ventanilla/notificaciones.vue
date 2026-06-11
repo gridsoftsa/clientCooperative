@@ -88,7 +88,7 @@ onMounted(() => load())
           Notificaciones internas
         </h1>
         <p class="text-muted-foreground text-sm">
-          Bandeja de avisos de ventanilla (HU-13)
+          Bandeja de avisos de ventanilla
         </p>
       </div>
       <div class="flex flex-wrap gap-2">

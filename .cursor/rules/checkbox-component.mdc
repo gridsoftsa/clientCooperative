@@ -19,7 +19,7 @@ Usar **solo** el componente auto-importado `Checkbox` (`app/components/ui/checkb
 | Patrón | Ejemplo |
 |--------|---------|
 | `v-model` | `<Checkbox v-model="form.is_active" />` |
-| Controlado | `<Checkbox :checked="value" @update:checked="value = $event === true" />` |
+| Controlado | `<Checkbox :checked="value" @update:checked="value = $event === true" />` (el componente también acepta `1`/`"true"` en `:checked`) |
 | Con texto integrado | `<Checkbox v-model="x">Activar alertas</Checkbox>` |
 | Dentro de `<label>` con borde | `<label class="flex …"><Checkbox bare :checked="x" @update:checked="x = $event === true" /> Texto</label>` |
 | Con `<Label for>` separado | `<Checkbox id="terms" v-model="accepted" />` + `<Label for="terms">…</Label>` |

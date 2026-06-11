@@ -4,7 +4,10 @@ import type {
   VentanillaColombiaHolidayPreviewData,
   VentanillaNotificationSettingsRow,
   VentanillaSlaSettingsData,
+  VentanillaSlaSettingsRow,
 } from '~/types/ventanilla'
+import { coerceBoolean } from '@/utils/coerce-boolean'
+import StyledNativeCheckbox from '~/components/ui/styled-native-checkbox/StyledNativeCheckbox.vue'
 
 definePageMeta({
   layout: 'default',
@@ -63,10 +66,60 @@ const weekDays = [
   { value: 7, label: 'Domingo' },
 ]
 
+function normalizeWorkingDays(days: unknown): number[] {
+  let raw: unknown[] = []
+
+  if (Array.isArray(days)) {
+    raw = days
+  } else if (days && typeof days === 'object') {
+    raw = Object.values(days as Record<string, unknown>)
+  } else if (typeof days === 'string' && days.trim() !== '') {
+    try {
+      const parsed: unknown = JSON.parse(days)
+      if (Array.isArray(parsed)) {
+        raw = parsed
+      }
+    } catch {
+      raw = []
+    }
+  }
+
+  return Array.from(
+    new Set(
+      raw
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value >= 1 && value <= 7),
+    ),
+  ).sort((a, b) => a - b)
+}
+
+function normalizeSlaSettings(settings: VentanillaSlaSettingsRow): VentanillaSlaSettingsRow {
+  return {
+    ...settings,
+    working_days: normalizeWorkingDays(settings.working_days),
+    alerts_enabled: coerceBoolean(settings.alerts_enabled),
+    notify_assignee: coerceBoolean(settings.notify_assignee),
+    notify_immediate_supervisor: coerceBoolean(settings.notify_immediate_supervisor),
+    notify_unit_manager: coerceBoolean(settings.notify_unit_manager),
+    escalation_enabled: coerceBoolean(settings.escalation_enabled),
+    escalation_notify_immediate_supervisor: coerceBoolean(
+      settings.escalation_notify_immediate_supervisor,
+    ),
+    escalation_notify_unit_manager: coerceBoolean(settings.escalation_notify_unit_manager),
+  }
+}
+
 function isWorkingDaySelected(day: number): boolean {
   const days = data.value?.settings.working_days ?? []
 
   return days.some((value: number) => Number(value) === day)
+}
+
+function assignSlaData(payload: VentanillaSlaSettingsData): void {
+  data.value = {
+    ...payload,
+    settings: normalizeSlaSettings(payload.settings),
+  }
 }
 
 onMounted(() => load())
@@ -80,11 +133,13 @@ async function load() {
       api.fetchNotificationSettings().catch(() => null),
       api.fetchCatalog().catch(() => null),
     ])
-    data.value = settingsData
+    assignSlaData(settingsData)
     notificationSettings.value = notificationData
     catalog.value = catalogData
     if (data.value?.settings) {
-      data.value.settings.working_days = (data.value.settings.working_days ?? []).map((day: number) => Number(day))
+      if (data.value.settings.working_days.length === 0) {
+        data.value.settings.working_days = [1, 2, 3, 4, 5]
+      }
       data.value.settings.notify_assignee ??= true
       data.value.settings.notify_immediate_supervisor ??= true
       data.value.settings.notify_unit_manager ??= false
@@ -94,6 +149,17 @@ async function load() {
       data.value.settings.escalation_notify_immediate_supervisor ??= true
       data.value.settings.escalation_notify_unit_manager ??= true
       data.value.settings.escalation_functional_type_keys ??= null
+    }
+    if (notificationSettings.value) {
+      notificationSettings.value.channel_email_enabled = coerceBoolean(
+        notificationSettings.value.channel_email_enabled,
+      )
+      notificationSettings.value.channel_whatsapp_enabled = coerceBoolean(
+        notificationSettings.value.channel_whatsapp_enabled,
+      )
+      notificationSettings.value.channel_internal_enabled = coerceBoolean(
+        notificationSettings.value.channel_internal_enabled,
+      )
     }
   } catch {
     errorMessage.value = 'No se pudo cargar la configuración SLA'
@@ -151,7 +217,7 @@ async function saveSettings() {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    data.value = await api.updateSlaSettings({
+    const updated = await api.updateSlaSettings({
       calendar_name: data.value.settings.calendar_name,
       working_days: data.value.settings.working_days,
       orange_model: data.value.settings.orange_model,
@@ -168,6 +234,7 @@ async function saveSettings() {
       escalation_notify_unit_manager: data.value.settings.escalation_notify_unit_manager,
       escalation_functional_type_keys: data.value.settings.escalation_functional_type_keys,
     })
+    assignSlaData(updated)
     successMessage.value = 'Configuración SLA guardada'
   } catch {
     errorMessage.value = 'No se pudo guardar la configuración SLA'
@@ -185,7 +252,7 @@ async function addHoliday() {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    data.value = await api.addHoliday({ date: holidayDate.value, name: holidayName.value.trim() })
+    assignSlaData(await api.addHoliday({ date: holidayDate.value, name: holidayName.value.trim() }))
     holidayDate.value = ''
     holidayName.value = ''
     successMessage.value = 'Festivo guardado'
@@ -201,7 +268,7 @@ async function removeHoliday(id: number) {
   errorMessage.value = ''
   successMessage.value = ''
   try {
-    data.value = await api.removeHoliday(id)
+    assignSlaData(await api.removeHoliday(id))
     successMessage.value = 'Festivo eliminado'
   } catch {
     errorMessage.value = 'No se pudo eliminar el festivo'
@@ -230,7 +297,7 @@ async function importColombiaHolidays() {
   successMessage.value = ''
   try {
     const result = await api.importColombiaHolidays(catalogYear.value, replaceCatalogYear.value)
-    data.value = result.data
+    assignSlaData(result.data)
     catalogPreview.value = await api.previewColombiaHolidays(catalogYear.value)
     successMessage.value = result.message
   } catch {
@@ -335,7 +402,7 @@ function formatHolidayDate(value: string): string {
                         ? 'border-primary/40 bg-primary/5'
                         : ''"
                     >
-                      <Checkbox
+                      <StyledNativeCheckbox
                         bare
                         :checked="isWorkingDaySelected(day.value)"
                         @update:checked="toggleWorkingDay(day.value, $event)"
@@ -390,12 +457,12 @@ function formatHolidayDate(value: string): string {
                     />
                   </div>
                 </div>
-                <Checkbox
+                <StyledNativeCheckbox
                   :checked="data.settings.alerts_enabled"
                   @update:checked="data.settings.alerts_enabled = $event"
                 >
                   Generar alertas naranja/rojo
-                </Checkbox>
+                </StyledNativeCheckbox>
               </CardContent>
             </Card>
           </div>
@@ -403,7 +470,7 @@ function formatHolidayDate(value: string): string {
           <Card v-if="notificationSettings">
             <CardHeader class="pb-3">
               <CardTitle class="text-base">
-                Canales de notificación (HU-13)
+                Canales de notificación
               </CardTitle>
               <CardDescription>
                 Correo, WhatsApp e interno para asignación, alertas SLA y escalamiento.
@@ -412,7 +479,7 @@ function formatHolidayDate(value: string): string {
             <CardContent class="space-y-4">
               <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <Checkbox
+                  <StyledNativeCheckbox
                     bare
                     :checked="notificationSettings.channel_email_enabled"
                     @update:checked="notificationSettings.channel_email_enabled = $event"
@@ -420,7 +487,7 @@ function formatHolidayDate(value: string): string {
                   Correo electrónico
                 </label>
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <Checkbox
+                  <StyledNativeCheckbox
                     bare
                     :checked="notificationSettings.channel_whatsapp_enabled"
                     @update:checked="notificationSettings.channel_whatsapp_enabled = $event"
@@ -428,7 +495,7 @@ function formatHolidayDate(value: string): string {
                   WhatsApp
                 </label>
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <Checkbox
+                  <StyledNativeCheckbox
                     bare
                     :checked="notificationSettings.channel_internal_enabled"
                     @update:checked="notificationSettings.channel_internal_enabled = $event"
@@ -462,7 +529,7 @@ function formatHolidayDate(value: string): string {
             <CardContent>
               <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <Checkbox
+                  <StyledNativeCheckbox
                     bare
                     :checked="data.settings.notify_assignee"
                     @update:checked="data.settings.notify_assignee = $event"
@@ -470,7 +537,7 @@ function formatHolidayDate(value: string): string {
                   Responsable asignado
                 </label>
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <Checkbox
+                  <StyledNativeCheckbox
                     bare
                     :checked="data.settings.notify_immediate_supervisor"
                     @update:checked="data.settings.notify_immediate_supervisor = $event"
@@ -478,7 +545,7 @@ function formatHolidayDate(value: string): string {
                   Jefe inmediato
                 </label>
                 <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                  <Checkbox
+                  <StyledNativeCheckbox
                     bare
                     :checked="data.settings.notify_unit_manager"
                     @update:checked="data.settings.notify_unit_manager = $event"
@@ -502,12 +569,12 @@ function formatHolidayDate(value: string): string {
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-4">
-              <Checkbox
+              <StyledNativeCheckbox
                 :checked="data.settings.escalation_enabled"
                 @update:checked="data.settings.escalation_enabled = $event"
               >
                 Activar escalamiento automático
-              </Checkbox>
+              </StyledNativeCheckbox>
               <div class="grid gap-3 sm:grid-cols-2">
                 <div class="space-y-1.5">
                   <Label>Días hábiles vencidos para escalar</Label>
@@ -528,7 +595,7 @@ function formatHolidayDate(value: string): string {
                   class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm"
                   :class="{ 'cursor-not-allowed opacity-50': !data.settings.escalation_enabled }"
                 >
-                  <Checkbox
+                  <StyledNativeCheckbox
                     bare
                     :checked="data.settings.escalation_notify_immediate_supervisor"
                     :disabled="!data.settings.escalation_enabled"
@@ -540,7 +607,7 @@ function formatHolidayDate(value: string): string {
                   class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm"
                   :class="{ 'cursor-not-allowed opacity-50': !data.settings.escalation_enabled }"
                 >
-                  <Checkbox
+                  <StyledNativeCheckbox
                     bare
                     :disabled="!data.settings.escalation_enabled"
                     :checked="data.settings.escalation_notify_unit_manager"
@@ -558,7 +625,7 @@ function formatHolidayDate(value: string): string {
                     class="flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs"
                     :class="{ 'cursor-not-allowed opacity-50': !data.settings.escalation_enabled }"
                   >
-                    <Checkbox
+                    <StyledNativeCheckbox
                       bare
                       :checked="escalationFunctionalTypeKeys.includes(type.key)"
                       :disabled="!data.settings.escalation_enabled"
@@ -600,12 +667,12 @@ function formatHolidayDate(value: string): string {
                     {{ catalogLoading ? 'Importando…' : 'Importar al SLA' }}
                   </Button>
                 </div>
-                <Checkbox
+                <StyledNativeCheckbox
                   :checked="replaceCatalogYear"
                   @update:checked="replaceCatalogYear = $event"
                 >
                   Reemplazar festivos del año antes de importar
-                </Checkbox>
+                </StyledNativeCheckbox>
                 <div
                   v-if="catalogPreview?.holidays.length"
                   class="max-h-56 overflow-auto rounded-lg border"

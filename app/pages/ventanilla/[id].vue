@@ -655,7 +655,7 @@ async function viewSticker() {
         <CardHeader>
           <CardTitle>Notificaciones enviadas</CardTitle>
           <CardDescription>
-            Registro de envíos por correo, WhatsApp e interno (HU-13).
+            Registro de envíos por correo, WhatsApp e interno.
           </CardDescription>
         </CardHeader>
         <CardContent>
