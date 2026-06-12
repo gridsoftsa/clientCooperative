@@ -3,6 +3,7 @@ import type {
   WorkflowDefinition,
   WorkflowDefinitionPayload,
   WorkflowFilingContext,
+  WorkflowBindingCoverageRow,
   WorkflowFunctionalTypeOption,
   WorkflowStagePayload,
   WorkflowTaskCard,
@@ -135,6 +136,12 @@ export function useWorkflowApi() {
     return await api<{ message: string }>(`/workflow/stages/${stageId}`, { method: 'DELETE' })
   }
 
+  async function fetchBindingsCoverage(): Promise<WorkflowBindingCoverageRow[]> {
+    const res = await api<{ data: WorkflowBindingCoverageRow[] }>('/workflow/bindings-coverage')
+
+    return res.data
+  }
+
   async function upsertBinding(workflowDefinitionId: number, functionalTypeKey: string, isActive = true) {
     const res = await api<{ data: { id: number, functional_type_key: string, is_active: boolean }, message: string }>(
       '/workflow/functional-bindings',
@@ -170,5 +177,6 @@ export function useWorkflowApi() {
     updateStage,
     deleteStage,
     upsertBinding,
+    fetchBindingsCoverage,
   }
 }

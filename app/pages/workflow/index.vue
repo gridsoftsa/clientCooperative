@@ -27,6 +27,7 @@ const selectedTask = ref<WorkflowTaskCard | null>(null)
 const taskContext = ref<WorkflowFilingContext | null>(null)
 
 const canManage = computed(() => hasPermission('workflow_gestionar'))
+const { ensureLoaded } = useVentanillaFunctionalTypeLabels()
 
 async function loadDefinitions() {
   try {
@@ -90,7 +91,7 @@ watch([scope, statusFilter, functionalTypeKey, definitionId], () => {
 })
 
 onMounted(async () => {
-  await loadDefinitions()
+  await Promise.all([ensureLoaded(), loadDefinitions()])
   await loadBoard()
 })
 </script>

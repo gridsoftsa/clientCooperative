@@ -39,6 +39,10 @@ export const VENTANILLA_NOTIFICATION_EVENT_LABELS: Record<string, string> = {
   sla_alert: 'Alerta SLA',
   sla_reminder: 'Recordatorio SLA',
   escalated: 'Escalamiento SLA',
+  workflow_task_assigned: 'Tarea workflow',
+  workflow_sla_alert: 'Alerta SLA etapa',
+  workflow_sla_reminder: 'Recordatorio SLA etapa',
+  workflow_escalated: 'Escalamiento SLA etapa',
 }
 
 export function ventanillaTrafficLightBadgeVariant(

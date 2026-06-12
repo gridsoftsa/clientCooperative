@@ -144,7 +144,19 @@ async function load() {
   }
 }
 
-onMounted(() => load())
+function applySectionFromQuery() {
+  const section = route.query.section
+  if (typeof section === 'string' && detailSections.value.some(item => item.id === section)) {
+    activeSection.value = section as VentanillaDetailSection
+  }
+}
+
+onMounted(async () => {
+  await load()
+  applySectionFromQuery()
+})
+
+watch(() => route.query.section, () => applySectionFromQuery())
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) {
@@ -350,6 +362,7 @@ async function viewSticker() {
         <VentanillaTrafficLightBadge
           :status="filing.traffic_light_status"
           :requires-response="filing.requires_response"
+          scope-label="SLA radicado"
         />
         <Badge
           v-if="filing.functional_type_key === VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY"
@@ -366,6 +379,7 @@ async function viewSticker() {
         <VentanillaTrafficLightBadge
           v-if="workflowOpenTask?.traffic_light_status"
           :status="workflowOpenTask.traffic_light_status"
+          scope-label="SLA etapa"
         />
         <div class="ml-auto flex flex-wrap gap-2">
           <NuxtLink

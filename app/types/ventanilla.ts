@@ -229,6 +229,12 @@ export interface VentanillaFilingWorkflowOpenTask {
   days_overdue: number | null
   stage_name: string | null
   assignee: { id: number; name: string } | null
+  escalation?: {
+    id: number
+    message: string
+    business_days_overdue: number
+    escalated_at: string | null
+  } | null
 }
 
 export interface VentanillaFilingWorkflowSummary {

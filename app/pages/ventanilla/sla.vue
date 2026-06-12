@@ -566,6 +566,7 @@ function formatHolidayDate(value: string): string {
               </CardTitle>
               <CardDescription>
                 Tras superar el umbral de días hábiles vencidos, notifica a superiores sin reasignar el responsable.
+                Aplica al SLA del radicado y al SLA de la tarea activa en workflow.
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-4">

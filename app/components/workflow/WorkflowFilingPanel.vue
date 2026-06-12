@@ -37,9 +37,9 @@ const openTaskCard = computed(() => {
     id: task.id,
     status: task.status,
     traffic_light_status: task.traffic_light_status,
-    started_at: null,
+    started_at: task.started_at,
     due_at: task.due_at,
-    days_overdue: task.due_at && new Date(task.due_at) < new Date() ? 1 : null,
+    days_overdue: task.days_overdue,
     stage: task.stage,
     assignee: task.assignee,
     instance: context.value.instance ? { id: context.value.instance.id, status: context.value.instance.status } : null,
@@ -47,6 +47,8 @@ const openTaskCard = computed(() => {
     workflow: context.value.workflow,
   }
 })
+
+const slaAlertMessage = computed(() => context.value?.sla_alerts?.[0]?.message ?? null)
 
 async function load() {
   if (!canView.value)
@@ -80,6 +82,7 @@ function eventLabel(type: string) {
     comment: 'Comentario',
     completed: 'Proceso cerrado',
     cancelled: 'Proceso cancelado',
+    escalated: 'Escalamiento SLA etapa',
   }
 
   return labels[type] ?? type
@@ -153,16 +156,56 @@ defineExpose({ reload: load })
           Ir a bandeja de tareas
         </NuxtLink>
 
+        <Alert
+          v-if="context.task_escalation"
+          variant="destructive"
+        >
+          <Icon name="i-lucide-arrow-up-right" class="size-4" />
+          <AlertTitle>Escalamiento de etapa</AlertTitle>
+          <AlertDescription class="space-y-1">
+            <p>{{ context.task_escalation.message }}</p>
+            <p class="text-xs opacity-90">
+              {{ context.task_escalation.business_days_overdue }} día{{ context.task_escalation.business_days_overdue === 1 ? '' : 's' }} hábil{{ context.task_escalation.business_days_overdue === 1 ? '' : 'es' }} vencido{{ context.task_escalation.business_days_overdue === 1 ? '' : 's' }}
+              <span v-if="context.task_escalation.escalated_at">
+                · {{ new Date(context.task_escalation.escalated_at).toLocaleString('es-CO') }}
+              </span>
+            </p>
+          </AlertDescription>
+        </Alert>
+
+        <Alert
+          v-else-if="slaAlertMessage"
+          variant="destructive"
+          class="border-amber-500/50 bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+        >
+          <Icon name="i-lucide-clock" class="size-4" />
+          <AlertTitle>SLA de etapa</AlertTitle>
+          <AlertDescription>
+            {{ slaAlertMessage }}
+          </AlertDescription>
+        </Alert>
+
         <div v-if="context.open_task" class="rounded-lg border p-3 space-y-2">
-          <div class="flex items-center gap-2 text-sm">
+          <div class="flex flex-wrap items-center gap-2 text-sm">
             <span class="inline-block size-2.5 rounded-full" :class="trafficClass(context.open_task.traffic_light_status)" />
             <span class="font-medium">Tarea activa</span>
+            <VentanillaTrafficLightBadge
+              v-if="context.open_task.traffic_light_status"
+              :status="context.open_task.traffic_light_status"
+              scope-label="SLA etapa"
+            />
           </div>
           <p class="text-sm text-muted-foreground">
             Responsable: {{ context.open_task.assignee?.name ?? 'Sin asignar' }}
           </p>
           <p v-if="context.open_task.due_at" class="text-sm text-muted-foreground">
-            Vence: {{ new Date(context.open_task.due_at).toLocaleString('es-CO') }}
+            Vence etapa: {{ new Date(context.open_task.due_at).toLocaleString('es-CO') }}
+            <span
+              v-if="context.open_task.days_overdue"
+              class="text-destructive"
+            >
+              ({{ context.open_task.days_overdue }} día{{ context.open_task.days_overdue === 1 ? '' : 's' }} de retraso)
+            </span>
           </p>
           <Button
             v-if="canActOnOpenTask && context.open_task"

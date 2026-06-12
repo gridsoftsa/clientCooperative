@@ -47,6 +47,11 @@ export const navMenu: NavMenu[] = [
             permission: 'workflow_ver',
           },
           {
+            title: 'Reportes',
+            link: '/workflow/reportes',
+            permission: 'workflow_ver',
+          },
+          {
             title: 'Configurar flujos',
             link: '/workflow/configuracion',
             permission: 'workflow_definir',

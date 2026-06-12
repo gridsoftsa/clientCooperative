@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { WorkflowDefinition } from '~/types/workflow'
+import type { WorkflowBindingCoverageRow, WorkflowDefinition } from '~/types/workflow'
 
 definePageMeta({
   layout: 'default',
@@ -13,6 +13,7 @@ const workflowApi = useWorkflowApi()
 
 const loading = ref(true)
 const definitions = ref<WorkflowDefinition[]>([])
+const coverage = ref<WorkflowBindingCoverageRow[]>([])
 const createDialogOpen = ref(false)
 const creating = ref(false)
 
@@ -35,11 +36,18 @@ function bindingCount(def: WorkflowDefinition) {
   return bindings.filter(b => b.is_active).length
 }
 
+const uncoveredTypes = computed(() => coverage.value.filter(row => !row.has_active_binding))
+
 async function load() {
   loading.value = true
 
   try {
-    definitions.value = await workflowApi.fetchDefinitions()
+    const [defs, coverageRows] = await Promise.all([
+      workflowApi.fetchDefinitions(),
+      workflowApi.fetchBindingsCoverage(),
+    ])
+    definitions.value = defs
+    coverage.value = coverageRows
   }
   catch {
     toast.error('No se pudieron cargar los flujos.')
@@ -114,6 +122,14 @@ onMounted(() => {
         </Button>
       </div>
     </div>
+
+    <Alert v-if="!loading && uncoveredTypes.length" variant="destructive">
+      <Icon name="lucide:alert-triangle" class="size-4" />
+      <AlertTitle>Tipos funcionales sin flujo</AlertTitle>
+      <AlertDescription>
+        {{ uncoveredTypes.map(t => t.functional_type_label).join(', ') }} — no podrán radicarse hasta asociar un flujo activo.
+      </AlertDescription>
+    </Alert>
 
     <div v-if="loading" class="space-y-3">
       <Skeleton class="h-28 w-full" />

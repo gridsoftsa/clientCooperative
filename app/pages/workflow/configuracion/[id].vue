@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import {
   labelForWorkflowAssigneeType,
   labelForWorkflowStageType,
+  labelForWorkflowVentanillaRole,
 } from '~/constants/workflow'
 import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureApi'
 import type { WorkflowDefinition, WorkflowStage } from '~/types/workflow'
@@ -300,6 +301,9 @@ onMounted(async () => {
                     → {{ assigneeDetail(stage) }}
                   </span>
                   <span v-if="stage.sla_business_days">{{ stage.sla_business_days }} días SLA</span>
+                  <span v-if="stage.ventanilla_role">
+                    {{ labelForWorkflowVentanillaRole(stage.ventanilla_role) }}
+                  </span>
                 </div>
                 <div class="flex flex-wrap gap-2">
                   <Badge v-if="stage.allows_advance" variant="outline" class="text-xs">

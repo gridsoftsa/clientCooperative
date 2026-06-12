@@ -13,6 +13,12 @@ const emit = defineEmits<{
   manage: [task: WorkflowTaskCard]
 }>()
 
+const { ensureLoaded, labelFor } = useVentanillaFunctionalTypeLabels()
+
+onMounted(() => {
+  ensureLoaded()
+})
+
 function trafficLightClass(status: WorkflowTaskCard['traffic_light_status']) {
   if (status === 'red')
     return 'bg-destructive'
@@ -41,6 +47,13 @@ function taskTitle(task: WorkflowTaskCard) {
 
 function taskReference(task: WorkflowTaskCard) {
   return task.subject?.filing_number ?? `WF-${task.id}`
+}
+
+function functionalTypeLabel(task: WorkflowTaskCard) {
+  return labelFor(
+    task.subject?.functional_type_key,
+    task.subject?.functional_type_label,
+  )
 }
 </script>
 
@@ -119,8 +132,8 @@ function taskReference(task: WorkflowTaskCard) {
           </p>
 
           <div class="mt-2 flex flex-wrap gap-1">
-            <Badge v-if="task.subject?.functional_type_key" variant="outline" class="text-[10px] uppercase">
-              {{ task.subject.functional_type_key }}
+            <Badge v-if="functionalTypeLabel(task)" variant="outline" class="text-[10px] font-normal">
+              {{ functionalTypeLabel(task) }}
             </Badge>
             <Badge
               v-if="task.days_overdue"

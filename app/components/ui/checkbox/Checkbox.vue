@@ -98,9 +98,11 @@ function onChange(event: Event): void {
       <slot />
     </span>
   </label>
-  <span
+  <label
     v-else
-    class="relative inline-flex shrink-0"
+    :for="inputId"
+    class="inline-flex shrink-0 cursor-pointer"
+    :class="{ 'cursor-not-allowed opacity-50': disabled }"
   >
     <input
       :id="inputId"
@@ -114,5 +116,5 @@ function onChange(event: Event): void {
     <span :class="boxClass" aria-hidden="true">
       <Check v-if="isChecked" class="size-3.5" :stroke-width="3" />
     </span>
-  </span>
+  </label>
 </template>

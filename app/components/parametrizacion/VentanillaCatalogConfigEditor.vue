@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { VentanillaFunctionalTypeRow, VentanillaReceptionMediumRow } from '~/types/ventanilla'
+import { coerceBoolean } from '~/utils/coerce-boolean'
 
 export type VentanillaCatalogEditorKind = 'functional-types' | 'reception-media'
 
@@ -79,10 +80,10 @@ function cloneFunctional(rows: VentanillaFunctionalTypeRow[]): FunctionalDraft[]
       typeKey,
       originalKey: typeKey,
       label: row.label,
-      requires_response_default: Boolean(row.requires_response_default),
+      requires_response_default: coerceBoolean(row.requires_response_default),
       sla_business_days: row.sla_business_days != null ? String(row.sla_business_days) : '',
       sort_order: String(row.sort_order ?? 0),
-      is_active: row.is_active ?? true,
+      is_active: row.is_active === undefined ? true : coerceBoolean(row.is_active),
     }
   })
 }
@@ -130,20 +131,16 @@ function cancelEditing() {
   editing.value = false
 }
 
-function visibleFunctionalRows(): FunctionalDraft[] {
-  return functionalDraft.value.filter(row => !row._removed)
-}
+const visibleFunctionalRows = computed(() => functionalDraft.value.filter(row => !row._removed))
 
-function visibleReceptionRows(): ReceptionDraft[] {
-  return receptionDraft.value.filter(row => !row._removed)
-}
+const visibleReceptionRows = computed(() => receptionDraft.value.filter(row => !row._removed))
 
 function functionalRowKey(row: FunctionalDraft): string {
   return String(row.originalKey ?? row.typeKey ?? '').trim()
 }
 
 function addFunctionalRow() {
-  const maxOrder = visibleFunctionalRows().reduce(
+  const maxOrder = visibleFunctionalRows.value.reduce(
     (max, row) => Math.max(max, Number(row.sort_order) || 0),
     0,
   )
@@ -159,7 +156,7 @@ function addFunctionalRow() {
 }
 
 function addReceptionRow() {
-  const maxOrder = visibleReceptionRows().reduce(
+  const maxOrder = visibleReceptionRows.value.reduce(
     (max, row) => Math.max(max, Number(row.sort_order) || 0),
     0,
   )
@@ -173,7 +170,7 @@ function addReceptionRow() {
 }
 
 function removeFunctionalRow(index: number) {
-  const row = visibleFunctionalRows()[index]
+  const row = visibleFunctionalRows.value[index]
   if (!row) {
     return
   }
@@ -188,7 +185,7 @@ function removeFunctionalRow(index: number) {
 }
 
 function removeReceptionRow(index: number) {
-  const row = visibleReceptionRows()[index]
+  const row = visibleReceptionRows.value[index]
   if (!row) {
     return
   }
@@ -217,7 +214,7 @@ function validateFunctionalKey(row: FunctionalDraft): string {
 
 function validateAndSave() {
   if (props.kind === 'functional-types') {
-    const active = visibleFunctionalRows()
+    const active = visibleFunctionalRows.value
     if (active.length === 0) {
       toast.error('Añade al menos un tipo funcional.')
       return
@@ -237,7 +234,7 @@ function validateAndSave() {
     return
   }
 
-  const active = visibleReceptionRows()
+  const active = visibleReceptionRows.value
   if (active.length === 0) {
     toast.error('Añade al menos un medio de recepción.')
     return
@@ -278,6 +275,7 @@ watch(
         </h4>
         <p class="text-xs text-muted-foreground">
           {{ helperText }}
+          <span v-if="canEdit && !editing"> Pulse <strong>Editar</strong> para cambiar respuesta, SLA y estado activo.</span>
         </p>
       </div>
       <div v-if="canEdit" class="flex gap-2">
@@ -312,7 +310,7 @@ watch(
           <span v-if="editing && canEdit" class="w-9 shrink-0" />
         </div>
         <div
-          v-for="(row, idx) in visibleReceptionRows()"
+          v-for="(row, idx) in visibleReceptionRows"
           :key="`${row.value || 'new'}-${idx}`"
           class="grid min-w-[12rem] grid-cols-[1fr_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
         >
@@ -335,7 +333,7 @@ watch(
           </Button>
         </div>
         <p
-          v-if="visibleReceptionRows().length === 0"
+          v-if="visibleReceptionRows.length === 0"
           class="px-3 py-6 text-center text-sm text-muted-foreground"
         >
           No hay medios de recepción configurados.
@@ -367,7 +365,7 @@ watch(
           <span v-if="editing && canEdit" class="w-9 shrink-0" />
         </div>
         <div
-          v-for="(row, idx) in visibleFunctionalRows()"
+          v-for="(row, idx) in visibleFunctionalRows"
           :key="`${functionalRowKey(row) || 'new'}-${idx}`"
           class="grid min-w-[48rem] grid-cols-[minmax(10rem,1.4fr)_minmax(8rem,1fr)_5.5rem_5rem_4.5rem_4.5rem_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
         >
@@ -383,11 +381,11 @@ watch(
             :disabled="!editing || !canEdit || !row._isNew"
             placeholder="pqrsfd"
           />
-          <div class="flex justify-center">
+          <div class="flex justify-center py-0.5">
             <Checkbox
-              :checked="row.requires_response_default"
+              v-model="row.requires_response_default"
+              bare
               :disabled="!editing || !canEdit"
-              @update:checked="(v: boolean | 'indeterminate') => { row.requires_response_default = v === true }"
             />
           </div>
           <Input
@@ -406,11 +404,11 @@ watch(
             class="h-9"
             :disabled="!editing || !canEdit"
           />
-          <div class="flex justify-center">
+          <div class="flex justify-center py-0.5">
             <Checkbox
-              :checked="row.is_active"
+              v-model="row.is_active"
+              bare
               :disabled="!editing || !canEdit"
-              @update:checked="(v: boolean | 'indeterminate') => { row.is_active = v === true }"
             />
           </div>
           <Button
@@ -426,7 +424,7 @@ watch(
           </Button>
         </div>
         <p
-          v-if="visibleFunctionalRows().length === 0"
+          v-if="visibleFunctionalRows.length === 0"
           class="px-3 py-6 text-center text-sm text-muted-foreground"
         >
           No hay tipos funcionales configurados.

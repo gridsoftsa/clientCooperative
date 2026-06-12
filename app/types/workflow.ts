@@ -7,6 +7,7 @@ export interface WorkflowSubjectSummary {
   filing_number: string
   subject: string
   functional_type_key: string
+  functional_type_label?: string | null
   status: string
   traffic_light_status: WorkflowTrafficLight | null
 }
@@ -52,6 +53,7 @@ export interface WorkflowStage {
   allows_return: boolean
   allows_reassign: boolean
   is_terminal: boolean
+  ventanilla_role?: string | null
   assignee_user?: { id: number, name: string } | null
   assignee_org_unit?: { id: number, name: string, code?: string } | null
   assignee_position?: { id: number, name: string, code?: string } | null
@@ -76,6 +78,16 @@ export interface WorkflowStagePayload {
   allows_return?: boolean
   allows_reassign?: boolean
   is_terminal?: boolean
+  ventanilla_role?: string | null
+}
+
+export interface WorkflowBindingCoverageRow {
+  functional_type_key: string
+  functional_type_label: string
+  has_active_binding: boolean
+  workflow_definition_id: number | null
+  workflow_key: string | null
+  workflow_name: string | null
 }
 
 export interface WorkflowDefinitionSummary {
@@ -87,6 +99,20 @@ export interface WorkflowDefinitionSummary {
 export interface WorkflowContextWarning {
   code: string
   message: string
+}
+
+export interface WorkflowTaskEscalationSummary {
+  id: number
+  message: string
+  business_days_overdue: number
+  escalated_at: string | null
+  deliveries?: Array<{
+    id: number
+    recipient_role: string
+    channel: string
+    sent_at: string | null
+    recipient_user: { id: number, name: string } | null
+  }>
 }
 
 export interface WorkflowFilingContext {
@@ -103,7 +129,9 @@ export interface WorkflowFilingContext {
     id: number
     status: WorkflowTaskStatus
     traffic_light_status: WorkflowTrafficLight | null
+    started_at: string | null
     due_at: string | null
+    days_overdue: number | null
     stage: {
       id: number
       key: string
@@ -126,6 +154,14 @@ export interface WorkflowFilingContext {
   }>
   is_active: boolean
   warnings?: WorkflowContextWarning[]
+  task_escalation?: WorkflowTaskEscalationSummary | null
+  sla_alerts?: Array<{
+    id: number
+    alert_type: string
+    traffic_light_status: string | null
+    message: string
+    triggered_at: string | null
+  }>
 }
 
 export interface WorkflowDefinitionPayload {

@@ -9,14 +9,19 @@ import type { VentanillaTrafficLightValue } from '~/types/ventanilla'
 const props = defineProps<{
   status: VentanillaTrafficLightValue | null | undefined
   requiresResponse?: boolean
+  scopeLabel?: string
 }>()
 
 const label = computed(() => {
-  if (!props.status) {
-    return 'Sin SLA'
+  const statusLabel = !props.status
+    ? 'Sin SLA'
+    : (VENTANILLA_TRAFFIC_LIGHT_LABELS[props.status] ?? props.status)
+
+  if (props.scopeLabel) {
+    return `${props.scopeLabel}: ${statusLabel}`
   }
 
-  return VENTANILLA_TRAFFIC_LIGHT_LABELS[props.status] ?? props.status
+  return statusLabel
 })
 
 const variant = computed(() => ventanillaTrafficLightBadgeVariant(props.status))

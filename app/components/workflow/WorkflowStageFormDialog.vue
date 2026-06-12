@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import {
   WORKFLOW_ASSIGNEE_TYPE_OPTIONS,
   WORKFLOW_STAGE_TYPE_OPTIONS,
+  WORKFLOW_VENTANILLA_ROLE_OPTIONS,
 } from '~/constants/workflow'
 import type { WorkflowStage, WorkflowStagePayload } from '~/types/workflow'
 import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureApi'
@@ -41,6 +42,7 @@ const form = reactive({
   allows_return: false,
   allows_reassign: true,
   is_terminal: false,
+  ventanilla_role: 'none' as string,
 })
 
 watch(() => props.open, (isOpen) => {
@@ -61,6 +63,7 @@ watch(() => props.open, (isOpen) => {
     form.allows_return = props.stage.allows_return
     form.allows_reassign = props.stage.allows_reassign
     form.is_terminal = props.stage.is_terminal
+    form.ventanilla_role = props.stage.ventanilla_role ?? 'none'
   }
   else {
     form.key = ''
@@ -76,6 +79,7 @@ watch(() => props.open, (isOpen) => {
     form.allows_return = false
     form.allows_reassign = true
     form.is_terminal = false
+    form.ventanilla_role = 'none'
   }
 })
 
@@ -91,6 +95,7 @@ function buildPayload(): WorkflowStagePayload {
     allows_reassign: form.allows_reassign,
     is_terminal: form.is_terminal,
     sla_business_days: form.sla_business_days,
+    ventanilla_role: form.ventanilla_role === 'none' ? null : form.ventanilla_role,
     assignee_user_id: null,
     assignee_org_unit_id: null,
     assignee_position_id: null,
@@ -279,6 +284,27 @@ async function save() {
               </SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div class="grid gap-2">
+          <Label>Integración con ventanilla</Label>
+          <Select v-model="form.ventanilla_role" :disabled="locked">
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="opt in WORKFLOW_VENTANILLA_ROLE_OPTIONS"
+                :key="opt.value"
+                :value="opt.value"
+              >
+                {{ opt.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p class="text-xs text-muted-foreground">
+            Vincula esta etapa con acciones del radicado (asignar, iniciar gestión, cerrar).
+          </p>
         </div>
 
         <div class="grid gap-2">

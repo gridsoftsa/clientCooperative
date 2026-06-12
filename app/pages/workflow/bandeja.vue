@@ -27,6 +27,7 @@ const selectedTask = ref<WorkflowTaskCard | null>(null)
 const taskContext = ref<WorkflowFilingContext | null>(null)
 
 const canManage = computed(() => hasPermission('workflow_gestionar'))
+const { ensureLoaded, labelFor } = useVentanillaFunctionalTypeLabels()
 
 async function loadDefinitions() {
   try {
@@ -86,6 +87,15 @@ function openFiling(task: WorkflowTaskCard) {
     router.push(`/ventanilla/${task.subject.id}`)
 }
 
+function functionalTypeLabel(task: WorkflowTaskCard) {
+  const label = labelFor(
+    task.subject?.functional_type_key,
+    task.subject?.functional_type_label,
+  )
+
+  return label || null
+}
+
 function trafficClass(status: WorkflowTaskCard['traffic_light_status']) {
   if (status === 'red')
     return 'text-destructive'
@@ -98,7 +108,7 @@ function trafficClass(status: WorkflowTaskCard['traffic_light_status']) {
 watch([scope, statusFilter, definitionId], () => loadTasks(1))
 
 onMounted(async () => {
-  await loadDefinitions()
+  await Promise.all([ensureLoaded(), loadDefinitions()])
   await loadTasks()
 })
 </script>
@@ -223,6 +233,9 @@ onMounted(async () => {
                 <span class="font-medium">{{ task.subject?.filing_number ?? `Tarea #${task.id}` }}</span>
                 <Badge variant="outline">
                   {{ task.stage?.name }}
+                </Badge>
+                <Badge v-if="functionalTypeLabel(task)" variant="secondary" class="text-xs font-normal">
+                  {{ functionalTypeLabel(task) }}
                 </Badge>
               </div>
               <p class="truncate text-sm text-muted-foreground">
