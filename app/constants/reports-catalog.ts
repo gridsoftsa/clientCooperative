@@ -22,6 +22,15 @@ export interface ReportCatalogItem {
 /** Alcance actual: Solicitudes tramitadas — SOLIC APROBADAS — ANALISIS — DEVUELTAS Y NEGADAS — NEGADAS O RETIRADAS — PROMEDIO DEMORA — EXPECIONES — PRIVILEGIADOS */
 export const REPORTS_CATALOG: ReportCatalogItem[] = [
   {
+    slug: 'avanzado',
+    title: 'Reporte avanzado',
+    summary: 'Arme su propio reporte: elija los campos a incluir (radicación, sucursal, asesor, deudor, codeudores, score, documentación y tiempos) y combínelos libremente. Filtros por fecha, sucursal y estado, con vista previa y exportación a Excel o PDF.',
+    excelSheet: 'Personalizado',
+    status: 'available',
+    dataSource: 'mixed',
+    note: 'Constructor de columnas: una fila por radicación con los campos que usted seleccione. Múltiples combinaciones posibles.',
+  },
+  {
     slug: 'tramitadas-sucursal',
     title: 'Solicitudes tramitadas',
     summary: 'Por rango de fechas: cantidad de radicaciones generadas y suma de montos solicitados, por sucursal de la radicación y por mes.',

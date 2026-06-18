@@ -33,7 +33,7 @@ export function useReportExport() {
 
   async function downloadReportFile(
     path: string,
-    query: Record<string, string | number | null | undefined>,
+    query: Record<string, string | number | null | undefined | Array<string | number>>,
     filename: string,
     acceptMime: string,
   ): Promise<void> {
@@ -44,6 +44,14 @@ export function useReportExport() {
     const token = readXsrfCookie()
     const params = new URLSearchParams()
     Object.entries(query).forEach(([k, v]) => {
+      if (Array.isArray(v)) {
+        v.forEach((item) => {
+          if (item !== undefined && item !== null && String(item) !== '') {
+            params.append(`${k}[]`, String(item))
+          }
+        })
+        return
+      }
       if (v !== undefined && v !== null && String(v) !== '') {
         params.set(k, String(v))
       }
