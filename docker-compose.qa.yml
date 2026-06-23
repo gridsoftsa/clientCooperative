@@ -70,11 +70,13 @@ services:
       - cooperative_qa
 
   client:
+    image: ${CLIENT_QA_IMAGE:-cooperative_qa_client:latest}
     build:
       context: .
       dockerfile: Dockerfile
       args:
         NUXT_PUBLIC_API_BASE: ${NUXT_PUBLIC_API_BASE:-https://api-qa-gd.tecnologicaslf.com}
+        NODE_MAX_OLD_SPACE_SIZE: ${NODE_MAX_OLD_SPACE_SIZE:-6144}
     container_name: cooperative_qa_client
     restart: unless-stopped
     ports:

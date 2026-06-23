@@ -15,8 +15,11 @@ COPY . .
 ARG NUXT_PUBLIC_API_BASE
 ENV NUXT_PUBLIC_API_BASE=${NUXT_PUBLIC_API_BASE:-http://localhost:8000}
 
-# Aumentar heap de Node para evitar "JavaScript heap out of memory" en VPS con poca RAM
-ENV NODE_OPTIONS="--max-old-space-size=4096"
+# Aumentar heap de Node (fallback si se usa Dockerfile con build dentro de Docker)
+ARG NODE_MAX_OLD_SPACE_SIZE=6144
+ENV NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}"
+ENV NUXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
 
 RUN pnpm run build 2>/dev/null || npm run build
 

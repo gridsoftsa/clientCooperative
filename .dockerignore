@@ -1,5 +1,7 @@
 /node_modules
 .output
+!.output/
+!.output/**
 .nuxt
 .git
 .env
