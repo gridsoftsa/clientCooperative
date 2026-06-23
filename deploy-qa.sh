@@ -19,18 +19,37 @@ fi
 export NUXT_PUBLIC_API_BASE="${NUXT_PUBLIC_API_BASE:-https://api-qa-gd.tecnologicaslf.com}"
 export NODE_ENV=production
 export NUXT_TELEMETRY_DISABLED=1
-export NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE:-6144}"
 
 cd "$CLIENT_DIR"
 
-echo "→ Build Nuxt en el host..."
-if command -v pnpm >/dev/null 2>&1; then
-  pnpm install --frozen-lockfile
-  pnpm run build
-else
-  npm ci
-  npm run build
-fi
+HEAP_MB="${NODE_MAX_OLD_SPACE_SIZE:-6144}"
+NODE_OPTIONS="--max-old-space-size=${HEAP_MB}"
+
+build_nuxt() {
+  if command -v pnpm >/dev/null 2>&1; then
+    echo "→ Build Nuxt en el host (pnpm)..."
+    pnpm install --frozen-lockfile
+    pnpm run build
+  elif command -v npm >/dev/null 2>&1; then
+    echo "→ Build Nuxt en el host (npm)..."
+    npm ci
+    npm run build
+  else
+    echo "→ Build Nuxt con contenedor Node (sin Node en el host)..."
+    sudo docker run --rm \
+      -v "$CLIENT_DIR:/app" \
+      -v cooperative_qa_nuxt_node_modules:/app/node_modules \
+      -w /app \
+      -e NUXT_PUBLIC_API_BASE="$NUXT_PUBLIC_API_BASE" \
+      -e NODE_ENV=production \
+      -e NUXT_TELEMETRY_DISABLED=1 \
+      -e NODE_OPTIONS="$NODE_OPTIONS" \
+      node:22-alpine \
+      sh -ec 'corepack enable && corepack prepare pnpm@10.10.0 --activate && pnpm install --frozen-lockfile && pnpm run build'
+  fi
+}
+
+build_nuxt
 
 if [[ ! -f .output/server/index.mjs ]]; then
   echo "ERROR: no se generó .output/server/index.mjs" >&2
