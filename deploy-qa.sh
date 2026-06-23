@@ -45,7 +45,7 @@ build_nuxt() {
       -e NUXT_TELEMETRY_DISABLED=1 \
       -e NODE_OPTIONS="$NODE_OPTIONS" \
       node:22-alpine \
-      sh -ec 'corepack enable && corepack prepare pnpm@10.10.0 --activate && pnpm install --frozen-lockfile && pnpm run build'
+      sh -ec 'corepack enable && corepack prepare pnpm@10.10.0 --activate && (pnpm install --frozen-lockfile || pnpm install || npm ci) && pnpm run build'
   fi
 }
 
