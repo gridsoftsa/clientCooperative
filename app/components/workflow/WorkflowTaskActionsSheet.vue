@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { WorkflowFilingContext, WorkflowTaskCard } from '~/types/workflow'
+import { extractApiErrorMessage, isOpenWorkflowTaskStatus } from '~/utils/workflow-task-ui'
 
 const props = defineProps<{
   open: boolean
@@ -29,6 +30,17 @@ const canReassign = computed(() => hasPermission('workflow_reasignar'))
 
 const stageRules = computed(() => props.context?.open_task?.stage ?? null)
 const returnableStages = computed(() => props.context?.returnable_stages ?? [])
+const advanceGuidance = computed(() => props.context?.advance_guidance ?? null)
+const canAdvanceTask = computed(() =>
+  isOpenWorkflowTaskStatus(props.task?.status)
+  && props.context?.is_active !== false,
+)
+const showAdvanceButton = computed(() =>
+  canManage.value
+  && stageRules.value?.allows_advance
+  && canAdvanceTask.value
+  && !advanceGuidance.value,
+)
 
 watch(() => props.open, (isOpen) => {
   if (!isOpen) {
@@ -48,8 +60,8 @@ async function runAction(action: () => Promise<unknown>, success: string) {
     emit('update:open', false)
     emit('changed')
   }
-  catch {
-    toast.error('No se pudo completar la acción.')
+  catch (error) {
+    toast.error(extractApiErrorMessage(error))
   }
   finally {
     saving.value = false
@@ -139,8 +151,24 @@ function eventLabel(type: string) {
             <Textarea v-model="note" rows="2" placeholder="Motivo o comentario de la acción" />
           </div>
 
+          <Alert v-if="advanceGuidance" class="border-primary/40 bg-primary/5">
+            <Icon name="i-lucide-info" class="size-4" />
+            <AlertTitle>Cierre desde ventanilla</AlertTitle>
+            <AlertDescription>
+              {{ advanceGuidance }}
+            </AlertDescription>
+          </Alert>
+
+          <Alert v-else-if="!canAdvanceTask" variant="secondary">
+            <Icon name="i-lucide-circle-check" class="size-4" />
+            <AlertTitle>Tarea no activa</AlertTitle>
+            <AlertDescription>
+              Esta tarea ya fue completada o el proceso está cerrado. Actualice la bandeja o el radicado.
+            </AlertDescription>
+          </Alert>
+
           <Button
-            v-if="canManage && stageRules?.allows_advance"
+            v-if="showAdvanceButton"
             class="h-10 w-full"
             :disabled="saving"
             @click="advance"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import type { OrgDelegationDetail } from '~/types/org-structure'
 
 definePageMeta({
   layout: 'default',
@@ -10,9 +11,11 @@ definePageMeta({
 const router = useRouter()
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
+const autoOpenReceipt = computed(() => route.query.receipt === '1')
 const { $api } = useNuxtApp()
 
 const loading = ref(true)
+const delegation = ref<OrgDelegationDetail | null>(null)
 const form = ref({
   starts_on: '',
   ends_on: '',
@@ -25,18 +28,13 @@ const saving = ref(false)
 async function load() {
   loading.value = true
   try {
-    const res = await $api<{ data: {
-      starts_on: string
-      ends_on: string
-      reason?: string | null
-      is_active: boolean
-    } }>(`/organizational-structure/org-delegations/${id.value}`)
-    const d = res.data
+    const res = await $api<{ data: OrgDelegationDetail }>(`/organizational-structure/org-delegations/${id.value}`)
+    delegation.value = res.data
     form.value = {
-      starts_on: String(d.starts_on).slice(0, 10),
-      ends_on: String(d.ends_on).slice(0, 10),
-      reason: d.reason ?? '',
-      is_active: Boolean(d.is_active),
+      starts_on: String(res.data.starts_on).slice(0, 10),
+      ends_on: String(res.data.ends_on).slice(0, 10),
+      reason: res.data.reason ?? '',
+      is_active: Boolean(res.data.is_active),
     }
   } catch {
     toast.error('No se encontró la delegación')
@@ -49,7 +47,7 @@ async function load() {
 async function handleSubmit() {
   saving.value = true
   try {
-    await $api(`/organizational-structure/org-delegations/${id.value}`, {
+    const res = await $api<{ data: OrgDelegationDetail }>(`/organizational-structure/org-delegations/${id.value}`, {
       method: 'PUT',
       body: {
         starts_on: form.value.starts_on,
@@ -58,10 +56,11 @@ async function handleSubmit() {
         is_active: form.value.is_active,
       },
     })
-    toast.success('Delegación actualizada')
-    router.push('/settings/organizational-structure/delegations')
-  } catch (e: any) {
-    toast.error(e?.data?.message || 'Error al guardar')
+    delegation.value = res.data
+    toast.success('Delegación actualizada. Puede generar el comprobante actualizado.')
+  } catch (e: unknown) {
+    const err = e as { data?: { message?: string } }
+    toast.error(err?.data?.message || 'Error al guardar')
   } finally {
     saving.value = false
   }
@@ -77,8 +76,8 @@ onMounted(() => {
     <div v-if="loading" class="flex justify-center py-12">
       <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
     </div>
-    <div v-else class="w-full flex flex-col gap-4 max-w-xl">
-      <div class="flex justify-between gap-4">
+    <div v-else class="w-full flex flex-col gap-4 max-w-2xl">
+      <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-2xl font-bold tracking-tight">
           Editar delegación
         </h2>
@@ -86,10 +85,23 @@ onMounted(() => {
           Volver
         </Button>
       </div>
+
+      <OrgStructureDelegationReceiptPanel
+        :delegation-id="id"
+        :delegation="delegation"
+        :auto-open="autoOpenReceipt"
+      />
+
       <form class="grid gap-6" @submit.prevent="handleSubmit">
         <Card>
-          <CardContent class="space-y-5 pt-6">
-            <div class="grid grid-cols-2 gap-4">
+          <CardHeader>
+            <CardTitle>Vigencia y estado</CardTitle>
+            <CardDescription>
+              Los cambios se reflejan en el comprobante PDF al guardar.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-5">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div class="space-y-2">
                 <Label for="ed1">Inicio *</Label>
                 <Input id="ed1" v-model="form.starts_on" type="date" required />

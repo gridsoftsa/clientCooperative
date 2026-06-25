@@ -16,8 +16,10 @@ const workflowApi = useWorkflowApi()
 
 const loading = ref(false)
 const context = ref<WorkflowFilingContext | null>(null)
+const loadError = ref<string | null>(null)
 const users = ref<Array<{ id: number, name: string }>>([])
 const actionsOpen = ref(false)
+const loadingUsers = ref(false)
 
 const canView = computed(() => hasPermission('workflow_ver'))
 const canManage = computed(() => hasPermission('workflow_gestionar'))
@@ -51,25 +53,50 @@ const openTaskCard = computed(() => {
 const slaAlertMessage = computed(() => context.value?.sla_alerts?.[0]?.message ?? null)
 
 async function load() {
-  if (!canView.value)
+  if (!canView.value) {
     return
+  }
 
   loading.value = true
+  loadError.value = null
 
   try {
-    const [ctx, userList] = await Promise.all([
-      workflowApi.fetchFilingContext(props.filingId),
-      workflowApi.fetchAssignableUsers(),
-    ])
-    context.value = ctx
-    users.value = userList
+    context.value = await workflowApi.fetchFilingContext(props.filingId)
   }
   catch {
     context.value = null
+    loadError.value = 'No se pudo cargar el estado del workflow.'
   }
   finally {
     loading.value = false
   }
+}
+
+async function ensureAssignableUsers(): Promise<void> {
+  if (users.value.length > 0 || loadingUsers.value) {
+    return
+  }
+
+  loadingUsers.value = true
+  try {
+    users.value = await workflowApi.fetchAssignableUsers()
+  }
+  catch {
+    users.value = []
+  }
+  finally {
+    loadingUsers.value = false
+  }
+}
+
+async function openTaskActions() {
+  await load()
+  if (!context.value?.open_task) {
+    toast.error('No hay tarea activa en este proceso. Actualice la vista.')
+    return
+  }
+  await ensureAssignableUsers()
+  actionsOpen.value = true
 }
 
 function eventLabel(type: string) {
@@ -106,7 +133,7 @@ defineExpose({ reload: load })
 
 <template>
   <Card
-    v-if="canView && (loading || context)"
+    v-if="canView"
     :class="isMyOpenTask ? 'border-primary ring-1 ring-primary/30' : undefined"
   >
     <CardHeader>
@@ -126,7 +153,22 @@ defineExpose({ reload: load })
         <Skeleton class="h-16 w-full" />
       </div>
 
-      <template v-else-if="context">
+      <Alert v-else-if="loadError" variant="destructive">
+        <Icon name="i-lucide-circle-alert" class="size-4" />
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription class="space-y-2">
+          <p>{{ loadError }}</p>
+          <Button size="sm" variant="outline" @click="load">
+            Reintentar
+          </Button>
+        </AlertDescription>
+      </Alert>
+
+      <p v-else-if="!context" class="text-sm text-muted-foreground">
+        Este radicado no tiene un proceso de workflow activo o histórico.
+      </p>
+
+      <template v-else>
         <Alert
           v-for="warning in context.warnings ?? []"
           :key="warning.code"
@@ -137,6 +179,28 @@ defineExpose({ reload: load })
           <AlertTitle>Atención</AlertTitle>
           <AlertDescription>
             {{ warning.message }}
+          </AlertDescription>
+        </Alert>
+
+        <Alert v-if="!context.is_active" class="border-emerald-500/40 bg-emerald-50 text-emerald-950 dark:bg-emerald-950/30 dark:text-emerald-100">
+          <Icon name="i-lucide-circle-check" class="size-4" />
+          <AlertTitle>Proceso completado</AlertTitle>
+          <AlertDescription>
+            El workflow de este radicado ya finalizó
+            <span v-if="context.instance.completed_at">
+              el {{ new Date(context.instance.completed_at).toLocaleString('es-CO') }}
+            </span>.
+          </AlertDescription>
+        </Alert>
+
+        <Alert
+          v-else-if="context.advance_guidance"
+          class="border-primary/40 bg-primary/5"
+        >
+          <Icon name="i-lucide-info" class="size-4" />
+          <AlertTitle>Etapa de cierre</AlertTitle>
+          <AlertDescription>
+            {{ context.advance_guidance }}
           </AlertDescription>
         </Alert>
 
@@ -211,7 +275,7 @@ defineExpose({ reload: load })
             v-if="canActOnOpenTask && context.open_task"
             size="sm"
             variant="outline"
-            @click="actionsOpen = true"
+            @click="openTaskActions"
           >
             Gestionar tarea
           </Button>

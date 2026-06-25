@@ -153,6 +153,7 @@ export interface WorkflowFilingContext {
     stage: { key: string, name: string } | null
   }>
   is_active: boolean
+  advance_guidance?: string | null
   warnings?: WorkflowContextWarning[]
   task_escalation?: WorkflowTaskEscalationSummary | null
   sla_alerts?: Array<{

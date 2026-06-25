@@ -60,3 +60,34 @@ export interface OrgStaffListItem {
     immediate_supervisor_staff?: { id: number; first_name: string; first_last_name: string } | null
   } | null
 }
+
+export interface OrgDelegationDetail {
+  id: number
+  receipt_number?: string | null
+  receipt_token?: string | null
+  starts_on: string
+  ends_on: string
+  reason?: string | null
+  is_active: boolean
+  assignor_staff?: {
+    first_name?: string | null
+    second_name?: string | null
+    first_last_name?: string | null
+    second_last_name?: string | null
+    document_type?: string | null
+    document_number?: string | null
+    email?: string | null
+  } | null
+  delegate_staff?: {
+    first_name?: string | null
+    second_name?: string | null
+    first_last_name?: string | null
+    second_last_name?: string | null
+    document_type?: string | null
+    document_number?: string | null
+    email?: string | null
+  } | null
+  org_unit?: { id: number; name: string; code: string } | null
+  assignor_org_position?: { id: number; name: string; code: string } | null
+  delegate_org_position?: { id: number; name: string; code: string } | null
+}

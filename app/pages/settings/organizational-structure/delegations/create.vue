@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import Multiselect from '@vueform/multiselect'
 import { toast } from 'vue-sonner'
 import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureApi'
 import type { OrgStaffListItem } from '~/types/org-structure'
+import { orgStaffOptionLabel } from '~/utils/org-staff-option-label'
 
 definePageMeta({
   layout: 'default',
@@ -9,13 +11,15 @@ definePageMeta({
   permissions: ['estructura_org_editar', 'suplencias_delegaciones_crear'],
 })
 
+const ALL_POSITIONS_VALUE = 0
+
 const router = useRouter()
 const { $api } = useNuxtApp()
 const orgApi = useOrgStructureApi()
 
 const units = ref<OrgUnitRow[]>([])
 const positions = ref<OrgPositionRow[]>([])
-const staffChoices = ref<Array<{ id: number; label: string }>>([])
+const staffInUnit = ref<OrgStaffListItem[]>([])
 
 const selectedOrgUnitId = ref<number | null>(null)
 /** When set, only staff with this cargo in the selected area appear in titular/suplente. */
@@ -34,35 +38,84 @@ const loadingUnits = ref(true)
 const loadingPositions = ref(false)
 const loadingStaff = ref(false)
 
-function displayStaffName(s: OrgStaffListItem): string {
-  if (s.full_name) {
-    return s.full_name
-  }
-  return [s.first_name, s.second_name, s.first_last_name, s.second_last_name].filter(Boolean).join(' ')
+const unitSelectOptions = computed(() =>
+  units.value.map((unit) => ({
+    value: unit.id,
+    label: unit.org_office
+      ? `${unit.code} — ${unit.name} · ${unit.org_office.name}`
+      : `${unit.code} — ${unit.name}`,
+  })),
+)
+
+function staffCountForPosition(positionId: number): number {
+  return staffInUnit.value.filter(
+    staff => staff.current_assignment?.org_position?.id === positionId,
+  ).length
 }
+
+function positionOptionLabel(position: OrgPositionRow): string {
+  const base = position.code ? `${position.code} — ${position.name}` : position.name
+  const count = staffCountForPosition(position.id)
+
+  if (count === 0) {
+    return `${base} (sin funcionarios vigentes)`
+  }
+
+  if (count === 1) {
+    return `${base} (1 funcionario)`
+  }
+
+  return `${base} (${count} funcionarios)`
+}
+
+const positionSelectOptions = computed(() => [
+  { value: ALL_POSITIONS_VALUE, label: 'Todos los cargos del área' },
+  ...positions.value.map(position => ({
+    value: position.id,
+    label: positionOptionLabel(position),
+  })),
+])
+
+const positionFilterSelectValue = computed({
+  get: () => positionFilterId.value ?? ALL_POSITIONS_VALUE,
+  set: (value: number | null) => {
+    positionFilterId.value = value === ALL_POSITIONS_VALUE || value == null ? null : Number(value)
+  },
+})
+
+const filteredStaff = computed(() => {
+  if (positionFilterId.value == null) {
+    return staffInUnit.value
+  }
+
+  return staffInUnit.value.filter(
+    staff => staff.current_assignment?.org_position?.id === positionFilterId.value,
+  )
+})
+
+const staffSelectOptions = computed(() =>
+  filteredStaff.value.map(staff => ({
+    value: staff.id,
+    label: orgStaffOptionLabel(staff),
+  })),
+)
 
 async function reloadStaff() {
   const unitId = selectedOrgUnitId.value
   if (unitId == null) {
-    staffChoices.value = []
+    staffInUnit.value = []
     return
   }
+
   loadingStaff.value = true
   try {
-    const staff = await orgApi.fetchStaff({
+    staffInUnit.value = await orgApi.fetchStaff({
       activeOnly: true,
       orgUnitIds: [unitId],
-      ...(positionFilterId.value != null ? { orgPositionIds: [positionFilterId.value] } : {}),
-    })
-    staffChoices.value = staff.map((s: OrgStaffListItem) => {
-      const name = displayStaffName(s) + (s.document_number ? ` · ${s.document_number}` : '')
-      const cargo = s.current_assignment?.org_position?.name
-      const label = cargo ? `${name} (${cargo})` : name
-      return { id: s.id, label }
     })
   } catch {
     toast.error('No se pudo cargar funcionarios del área')
-    staffChoices.value = []
+    staffInUnit.value = []
   } finally {
     loadingStaff.value = false
   }
@@ -73,14 +126,19 @@ watch(selectedOrgUnitId, async (unitId) => {
   form.value.assignor_staff_id = null
   form.value.delegate_staff_id = null
   positions.value = []
-  staffChoices.value = []
+  staffInUnit.value = []
+
   if (unitId == null) {
     return
   }
+
   loadingPositions.value = true
   try {
-    positions.value = await orgApi.fetchPositions({ activeOnly: true, orgUnitId: unitId })
-    await reloadStaff()
+    const [loadedPositions] = await Promise.all([
+      orgApi.fetchPositions({ activeOnly: true, orgUnitId: unitId }),
+      reloadStaff(),
+    ])
+    positions.value = loadedPositions
   } catch {
     toast.error('No se pudieron cargar cargos del área')
     positions.value = []
@@ -89,13 +147,9 @@ watch(selectedOrgUnitId, async (unitId) => {
   }
 })
 
-watch(positionFilterId, async () => {
+watch(positionFilterId, () => {
   form.value.assignor_staff_id = null
   form.value.delegate_staff_id = null
-  if (selectedOrgUnitId.value == null) {
-    return
-  }
-  await reloadStaff()
 })
 
 onMounted(async () => {
@@ -119,9 +173,10 @@ async function handleSubmit() {
     toast.error('Titular, suplente y fechas son obligatorios')
     return
   }
+
   saving.value = true
   try {
-    await $api('/organizational-structure/org-delegations', {
+    const res = await $api<{ data: { id: number } }>('/organizational-structure/org-delegations', {
       method: 'POST',
       body: {
         org_unit_id: selectedOrgUnitId.value,
@@ -133,9 +188,15 @@ async function handleSubmit() {
       },
     })
     toast.success('Delegación creada')
-    router.push('/settings/organizational-structure/delegations')
-  } catch (e: any) {
-    toast.error(e?.data?.message || 'Error al crear')
+    try {
+      await orgApi.viewDelegationReceiptInNewTab(res.data.id)
+    } catch {
+      toast.error('Delegación guardada, pero no se pudo abrir el comprobante PDF')
+    }
+    await router.push(`/settings/organizational-structure/delegations/${res.data.id}/edit`)
+  } catch (e: unknown) {
+    const err = e as { data?: { message?: string } }
+    toast.error(err?.data?.message || 'Error al crear')
   } finally {
     saving.value = false
   }
@@ -154,14 +215,14 @@ async function handleSubmit() {
         </Button>
       </div>
       <p class="text-sm text-muted-foreground leading-relaxed">
-        Elija el área y, si lo desea, limite por cargo; luego seleccione titular y suplente entre quienes tienen asignación vigente en ese contexto.
+        Elija el área y, si lo desea, limite por cargo; luego seleccione titular y suplente. En funcionarios se muestra nombre, documento y cargo para distinguir varias personas en el mismo cargo.
       </p>
       <form class="grid gap-6" @submit.prevent="handleSubmit">
         <Card>
           <CardHeader>
             <CardTitle>Contexto organizacional</CardTitle>
             <CardDescription>
-              Área obligatoria; el filtro por cargo reduce la lista de funcionarios.
+              Área obligatoria; el filtro por cargo reduce la lista de funcionarios y muestra cuántos hay por cargo.
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-5">
@@ -171,51 +232,41 @@ async function handleSubmit() {
                 <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin shrink-0" />
                 Cargando áreas…
               </div>
-              <Select
+              <Multiselect
                 v-else
                 id="del_unit"
-                :model-value="selectedOrgUnitId == null ? undefined : String(selectedOrgUnitId)"
-                @update:model-value="(v) => { selectedOrgUnitId = v ? Number(v) : null }"
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione un área" />
-                </SelectTrigger>
-                <SelectContent class="max-h-72">
-                  <SelectItem
-                    v-for="u in units"
-                    :key="u.id"
-                    :value="String(u.id)"
-                  >
-                    {{ u.name }}
-                    <span v-if="u.org_office" class="text-muted-foreground"> — {{ u.org_office.name }}</span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                v-model="selectedOrgUnitId"
+                mode="single"
+                :object="false"
+                :options="unitSelectOptions"
+                value-prop="value"
+                label="label"
+                :searchable="true"
+                :can-clear="false"
+                placeholder="Seleccione un área"
+                no-options-text="Sin áreas disponibles"
+                no-results-text="Sin coincidencias"
+                class="delegation-single-multiselect"
+              />
             </div>
             <div class="space-y-2">
               <Label for="del_pos_filter">Cargo (opcional, filtra titular y suplente)</Label>
-              <Select
+              <Multiselect
                 id="del_pos_filter"
+                v-model="positionFilterSelectValue"
+                mode="single"
+                :object="false"
+                :options="positionSelectOptions"
+                value-prop="value"
+                label="label"
+                :searchable="true"
+                :can-clear="false"
                 :disabled="selectedOrgUnitId == null || loadingPositions"
-                :model-value="positionFilterId == null ? 'all' : String(positionFilterId)"
-                @update:model-value="(v) => { positionFilterId = v === 'all' ? null : Number(v) }"
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos los cargos del área" />
-                </SelectTrigger>
-                <SelectContent class="max-h-64">
-                  <SelectItem value="all">
-                    Todos los cargos del área
-                  </SelectItem>
-                  <SelectItem
-                    v-for="p in positions"
-                    :key="p.id"
-                    :value="String(p.id)"
-                  >
-                    {{ p.name }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                placeholder="Todos los cargos del área"
+                no-options-text="Sin cargos en el área"
+                no-results-text="Sin coincidencias"
+                class="delegation-single-multiselect"
+              />
             </div>
           </CardContent>
         </Card>
@@ -224,57 +275,61 @@ async function handleSubmit() {
           <CardHeader>
             <CardTitle>Titular y suplente</CardTitle>
             <CardDescription>
-              Solo aparecen funcionarios con ubicación vigente en el área (y cargo, si aplica).
+              Nombre · documento · cargo (código) · área · correo cuando aplique.
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-5">
             <div class="space-y-2">
               <Label>Titular *</Label>
-              <div v-if="selectedOrgUnitId == null" class="text-sm text-muted-foreground py-1">
+              <p v-if="selectedOrgUnitId == null" class="text-sm text-muted-foreground py-1">
                 Seleccione un área primero.
-              </div>
+              </p>
               <div v-else-if="loadingStaff" class="flex items-center gap-2 text-sm text-muted-foreground py-2">
                 <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin shrink-0" />
                 Cargando funcionarios…
               </div>
-              <Select
+              <Multiselect
                 v-else
-                :model-value="form.assignor_staff_id == null ? undefined : String(form.assignor_staff_id)"
-                @update:model-value="(v) => { form.assignor_staff_id = v ? Number(v) : null }"
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione titular" />
-                </SelectTrigger>
-                <SelectContent class="max-h-72">
-                  <SelectItem v-for="s in staffChoices" :key="s.id" :value="String(s.id)">
-                    {{ s.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                v-model="form.assignor_staff_id"
+                mode="single"
+                :object="false"
+                :options="staffSelectOptions"
+                value-prop="value"
+                label="label"
+                :searchable="true"
+                :can-clear="false"
+                :disabled="staffSelectOptions.length === 0"
+                placeholder="Seleccione titular"
+                no-options-text="Sin funcionarios en el contexto"
+                no-results-text="Sin coincidencias"
+                class="delegation-single-multiselect"
+              />
             </div>
             <div class="space-y-2">
               <Label>Suplente *</Label>
-              <div v-if="selectedOrgUnitId == null" class="text-sm text-muted-foreground py-1">
+              <p v-if="selectedOrgUnitId == null" class="text-sm text-muted-foreground py-1">
                 Seleccione un área primero.
-              </div>
+              </p>
               <div v-else-if="loadingStaff" class="flex items-center gap-2 text-sm text-muted-foreground py-2">
                 <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin shrink-0" />
                 Cargando funcionarios…
               </div>
-              <Select
+              <Multiselect
                 v-else
-                :model-value="form.delegate_staff_id == null ? undefined : String(form.delegate_staff_id)"
-                @update:model-value="(v) => { form.delegate_staff_id = v ? Number(v) : null }"
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione suplente" />
-                </SelectTrigger>
-                <SelectContent class="max-h-72">
-                  <SelectItem v-for="s in staffChoices" :key="`d-${s.id}`" :value="String(s.id)">
-                    {{ s.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                v-model="form.delegate_staff_id"
+                mode="single"
+                :object="false"
+                :options="staffSelectOptions"
+                value-prop="value"
+                label="label"
+                :searchable="true"
+                :can-clear="false"
+                :disabled="staffSelectOptions.length === 0"
+                placeholder="Seleccione suplente"
+                no-options-text="Sin funcionarios en el contexto"
+                no-results-text="Sin coincidencias"
+                class="delegation-single-multiselect"
+              />
             </div>
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div class="space-y-2">
@@ -304,3 +359,23 @@ async function handleSubmit() {
     </div>
   </SettingsLayout>
 </template>
+
+<style scoped>
+.delegation-single-multiselect {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.delegation-single-multiselect :deep(.multiselect-single-label),
+.delegation-single-multiselect :deep(.multiselect-placeholder) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delegation-single-multiselect :deep(.multiselect-option) {
+  white-space: normal;
+  line-height: 1.35;
+}
+</style>

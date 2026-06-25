@@ -256,6 +256,7 @@ export interface VentanillaFilingWorkflowSummary {
   workflow_name: string | null
   current_stage_key: string | null
   current_stage_name: string | null
+  advance_guidance?: string | null
   open_task: VentanillaFilingWorkflowOpenTask | null
 }
 

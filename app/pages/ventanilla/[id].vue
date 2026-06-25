@@ -62,6 +62,7 @@ const canManage = computed(() => hasPermission('ventanilla_gestionar') && !isTer
 const canVoid = computed(() => hasPermission('ventanilla_anular') && !isTerminal.value)
 const canRefreshSla = computed(() => hasPermission('ventanilla_sla_configurar'))
 const workflowOpenTask = computed(() => filing.value?.workflow?.open_task ?? null)
+const workflowAdvanceGuidance = computed(() => filing.value?.workflow?.advance_guidance ?? null)
 const awaitsWorkflowAssignment = computed(() =>
   filing.value?.workflow?.current_stage_key === 'assign'
   && !filing.value?.assigned_user?.id,
@@ -652,6 +653,17 @@ async function viewSticker() {
                 >
                   {{ actionLoading === 'sla' ? 'Actualizando…' : 'Actualizar semáforo SLA' }}
                 </Button>
+
+                <Alert
+                  v-if="workflowAdvanceGuidance"
+                  class="border-primary/40 bg-primary/5"
+                >
+                  <Icon name="i-lucide-info" class="size-4" />
+                  <AlertTitle>Etapa final del workflow</AlertTitle>
+                  <AlertDescription>
+                    {{ workflowAdvanceGuidance }}
+                  </AlertDescription>
+                </Alert>
 
                 <Alert
                   v-if="awaitsWorkflowAssignment"

@@ -108,11 +108,95 @@ export function useOrgStructureApi() {
     return res.data
   }
 
+  function delegationReceiptUrl(delegationId: number): string {
+    const config = useRuntimeConfig()
+    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+
+    return `${base}/api/organizational-structure/org-delegations/${delegationId}/receipt`
+  }
+
+  function openBlobInNewTab(blob: Blob, mimeType?: string): void {
+    if (import.meta.server) {
+      return
+    }
+
+    const typedBlob = mimeType && blob.type !== mimeType
+      ? new Blob([blob], { type: mimeType })
+      : blob
+    const objectUrl = URL.createObjectURL(typedBlob)
+    const anchor = document.createElement('a')
+    anchor.href = objectUrl
+    anchor.target = '_blank'
+    anchor.rel = 'noopener noreferrer'
+    anchor.style.cssText = 'position:fixed;left:-9999px;top:0'
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000)
+  }
+
+  async function fetchAuthenticatedBlob(url: string): Promise<Blob> {
+    if (import.meta.server) {
+      throw new Error('No disponible en servidor.')
+    }
+
+    const config = useRuntimeConfig()
+    const apiBase = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/)
+    let token = match?.[1] ? decodeURIComponent(match[1]) : ''
+    if (!token) {
+      try {
+        await $fetch('/sanctum/csrf-cookie', {
+          baseURL: apiBase,
+          credentials: 'include',
+        })
+      } catch {
+        // ignore
+      }
+      const retry = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/)
+      token = retry?.[1] ? decodeURIComponent(retry[1]) : ''
+    }
+
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers: {
+        Accept: '*/*',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(token ? { 'X-XSRF-TOKEN': token } : {}),
+      },
+    })
+
+    if (!res.ok) {
+      let message = 'No se pudo obtener el comprobante.'
+      try {
+        const contentType = res.headers.get('Content-Type') ?? ''
+        if (contentType.includes('application/json')) {
+          const body = await res.json() as { message?: string }
+          if (body?.message) {
+            message = body.message
+          }
+        }
+      } catch {
+        // keep default
+      }
+      throw new Error(message)
+    }
+
+    return await res.blob()
+  }
+
+  async function viewDelegationReceiptInNewTab(delegationId: number): Promise<void> {
+    const blob = await fetchAuthenticatedBlob(delegationReceiptUrl(delegationId))
+    openBlobInNewTab(blob, 'application/pdf')
+  }
+
   return {
     fetchOffices,
     fetchUnits,
     fetchPositions,
     fetchStaff,
     fetchInstitutionalProcesses,
+    delegationReceiptUrl,
+    viewDelegationReceiptInNewTab,
   }
 }
