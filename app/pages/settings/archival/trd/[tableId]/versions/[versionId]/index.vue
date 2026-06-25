@@ -341,8 +341,16 @@ const filteredCatalogTree = computed(() => {
   const q = catalogFilterText.value.trim().toLowerCase()
   const association = catalogAssociationFilter.value
 
+  if (!q && association === 'all') {
+    return catalogTree.value
+  }
+
   return catalogTree.value
     .map((serie) => {
+      const serieMatchesSearch = q
+        ? serie.code.toLowerCase().includes(q) || serie.name.toLowerCase().includes(q)
+        : false
+
       const subseries = serie.subseries
         .map((sub) => {
           let types = sub.document_types
@@ -353,22 +361,36 @@ const filteredCatalogTree = computed(() => {
             types = types.filter(t => !isTypeSelected(t.id))
           }
 
+          const subMatchesSearch = q
+            ? sub.code.toLowerCase().includes(q) || sub.name.toLowerCase().includes(q)
+            : false
+
           if (q) {
             types = types.filter(t =>
               t.code.toLowerCase().includes(q)
               || t.name.toLowerCase().includes(q)
-              || sub.code.toLowerCase().includes(q)
-              || sub.name.toLowerCase().includes(q)
-              || serie.code.toLowerCase().includes(q)
-              || serie.name.toLowerCase().includes(q),
+              || subMatchesSearch
+              || serieMatchesSearch,
             )
           }
 
-          return types.length ? { ...sub, document_types: types } : null
+          if (types.length > 0) {
+            return { ...sub, document_types: types }
+          }
+
+          if (association === 'all' && !q) {
+            return { ...sub, document_types: types }
+          }
+
+          return null
         })
         .filter((sub): sub is NonNullable<typeof sub> => sub !== null)
 
-      return subseries.length ? { ...serie, subseries } : null
+      if (subseries.length > 0 || serieMatchesSearch) {
+        return { ...serie, subseries }
+      }
+
+      return null
     })
     .filter((serie): serie is NonNullable<typeof serie> => serie !== null)
 })
@@ -1011,6 +1033,20 @@ onActivated(async () => {
     await reloadCatalogTree()
   }
 })
+
+watch(
+  () => route.fullPath,
+  async (path, previousPath) => {
+    if (
+      path === catalogReturnTo.value
+      && previousPath?.includes('/settings/archival/catalog/')
+      && table.value
+      && !loading.value
+    ) {
+      await reloadCatalogTree()
+    }
+  },
+)
 </script>
 
 <template>
@@ -1271,9 +1307,17 @@ onActivated(async () => {
               </div>
               <div
                 v-else-if="!filteredCatalogTree.length"
-                class="text-sm text-muted-foreground py-8 text-center border border-dashed rounded-lg"
+                class="text-sm text-muted-foreground py-8 text-center border border-dashed rounded-lg space-y-2"
               >
-                No hay tipos que coincidan con la búsqueda o el filtro.
+                <p>No hay tipos que coincidan con la búsqueda o el filtro.</p>
+                <Button
+                  v-if="catalogFilterText || catalogAssociationFilter !== 'all'"
+                  variant="ghost"
+                  size="sm"
+                  @click="clearCatalogFilters"
+                >
+                  Limpiar filtros
+                </Button>
               </div>
               <div v-for="serie in filteredCatalogTree" :key="serie.id" class="border rounded-lg p-4 space-y-3">
                 <div class="flex flex-wrap items-center justify-between gap-2">

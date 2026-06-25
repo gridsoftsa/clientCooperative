@@ -24,6 +24,16 @@ function displayName(s: OrgStaffListItem): string {
   return [s.first_name, s.second_name, s.first_last_name, s.second_last_name].filter(Boolean).join(' ')
 }
 
+function displayDocument(s: OrgStaffListItem): string {
+  if (!s.document_number) {
+    return '—'
+  }
+  if (s.document_type) {
+    return `${s.document_type} ${s.document_number}`
+  }
+  return s.document_number
+}
+
 async function fetchStaff() {
   loading.value = true
   try {
@@ -134,7 +144,7 @@ onMounted(() => {
                 <TableCell class="font-medium">
                   {{ displayName(s) }}
                 </TableCell>
-                <TableCell>{{ s.document_number ?? '—' }}</TableCell>
+                <TableCell>{{ displayDocument(s) }}</TableCell>
                 <TableCell>{{ s.user?.email ?? '—' }}</TableCell>
                 <TableCell class="text-sm text-muted-foreground max-w-xs">
                   <template v-if="s.current_assignment?.org_office">

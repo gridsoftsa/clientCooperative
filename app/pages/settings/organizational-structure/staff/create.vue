@@ -21,6 +21,12 @@ const route = useRoute()
 const { $api } = useNuxtApp()
 const { hasPermission } = usePermissions()
 
+const { options: documentTypeOptions, fetchOptions: fetchDocumentTypeOptions } = useTemplateFlatCatalogOptions('tipo-documento', [
+  { value: 'CC', label: 'Cédula de Ciudadanía' },
+  { value: 'CE', label: 'Cédula de Extranjería' },
+  { value: 'NIT', label: 'NIT' },
+])
+
 const form = ref({
   user_id: null as number | null,
   first_name: '',
@@ -30,6 +36,7 @@ const form = ref({
   email: '',
   phone: '',
   extension: '',
+  document_type: 'CC',
   document_number: '',
   is_active: true,
 })
@@ -136,6 +143,12 @@ async function handleSubmit() {
     toast.error('Primer nombre y primer apellido son obligatorios')
     return
   }
+  const docNumber = form.value.document_number.trim()
+  const docType = form.value.document_type.trim()
+  if ((docNumber && !docType) || (docType && !docNumber)) {
+    toast.error('Indique tipo y número de documento')
+    return
+  }
   saving.value = true
   try {
     const res = await $api<{ data: { id: number } }>('/organizational-structure/org-staff', {
@@ -149,7 +162,8 @@ async function handleSubmit() {
         email: form.value.email.trim() || undefined,
         phone: form.value.phone.trim() || undefined,
         extension: form.value.extension.trim() || undefined,
-        document_number: form.value.document_number.trim() || undefined,
+        document_type: docType || undefined,
+        document_number: docNumber || undefined,
         is_active: form.value.is_active,
       },
     })
@@ -168,7 +182,7 @@ async function handleSubmit() {
 
 onMounted(async () => {
   restoreDraftFromStorage()
-  await loadUsersIfAllowed()
+  await Promise.all([loadUsersIfAllowed(), fetchDocumentTypeOptions()])
   applyReturnedUserFromQuery()
 })
 </script>
@@ -192,122 +206,177 @@ onMounted(async () => {
       </div>
 
       <form @submit.prevent="handleSubmit">
-        <div class="grid gap-6">
+        <div class="mx-auto w-full max-w-5xl space-y-6">
           <Card>
             <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Información personal y contacto</CardTitle>
+              <CardTitle class="leading-snug">Datos del funcionario</CardTitle>
               <CardDescription class="leading-relaxed">
-                Nombre completo obligatorio conforme registros institucionales; el resto es opcional.
+                Nombre completo obligatorio conforme registros institucionales; contacto y usuario son opcionales.
               </CardDescription>
             </CardHeader>
-            <CardContent class="space-y-6">
-              <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
-                <div class="space-y-3">
-                  <Label for="fn" class="leading-snug">Primer nombre *</Label>
-                  <Input id="fn" v-model="form.first_name" required />
-                </div>
-                <div class="space-y-3">
-                  <Label for="sn" class="leading-snug">Segundo nombre</Label>
-                  <Input id="sn" v-model="form.second_name" />
-                </div>
-                <div class="space-y-3">
-                  <Label for="fl" class="leading-snug">Primer apellido *</Label>
-                  <Input id="fl" v-model="form.first_last_name" required />
-                </div>
-                <div class="space-y-3">
-                  <Label for="sl" class="leading-snug">Segundo apellido</Label>
-                  <Input id="sl" v-model="form.second_last_name" />
-                </div>
-
-                <div class="space-y-3 md:col-span-2">
-                  <Label for="em" class="leading-snug">Correo</Label>
-                  <Input id="em" v-model="form.email" type="email" />
-                </div>
-
-                <div class="space-y-3 md:grid md:grid-cols-2 md:gap-x-6 md:col-span-2">
-                  <div class="space-y-3 md:col-span-1">
-                    <Label for="ph" class="leading-snug">Teléfono</Label>
-                    <Input id="ph" v-model="form.phone" />
+            <CardContent class="space-y-8">
+              <section class="space-y-4">
+                <p class="text-sm font-medium text-foreground">
+                  Identificación
+                </p>
+                <div class="flex flex-wrap gap-x-8 gap-y-5">
+                  <div class="staff-field-doc-type space-y-2">
+                    <Label for="doc_type" class="leading-snug">Tipo de documento</Label>
+                    <Multiselect
+                      id="doc_type"
+                      v-model="form.document_type"
+                      mode="single"
+                      :object="false"
+                      :options="documentTypeOptions"
+                      value-prop="value"
+                      label="label"
+                      :searchable="true"
+                      :can-clear="false"
+                      placeholder="Seleccione…"
+                      no-options-text="Sin opciones"
+                      no-results-text="Sin coincidencias"
+                      class="multiselect-roles"
+                    />
                   </div>
-                  <div class="space-y-3 md:col-span-1">
+                  <div class="staff-field-doc space-y-2">
+                    <Label for="doc" class="leading-snug">Número de documento</Label>
+                    <Input id="doc" v-model="form.document_number" inputmode="numeric" />
+                  </div>
+                </div>
+              </section>
+
+              <Separator />
+
+              <section class="space-y-4">
+                <p class="text-sm font-medium text-foreground">
+                  Nombres y apellidos
+                </p>
+                <div class="flex flex-wrap gap-x-8 gap-y-5">
+                  <div class="staff-field space-y-2">
+                    <Label for="fn" class="leading-snug">Primer nombre *</Label>
+                    <Input id="fn" v-model="form.first_name" required autocomplete="given-name" />
+                  </div>
+                  <div class="staff-field space-y-2">
+                    <Label for="sn" class="leading-snug">Segundo nombre</Label>
+                    <Input id="sn" v-model="form.second_name" autocomplete="additional-name" />
+                  </div>
+                  <div class="staff-field space-y-2">
+                    <Label for="fl" class="leading-snug">Primer apellido *</Label>
+                    <Input id="fl" v-model="form.first_last_name" required autocomplete="family-name" />
+                  </div>
+                  <div class="staff-field space-y-2">
+                    <Label for="sl" class="leading-snug">Segundo apellido</Label>
+                    <Input id="sl" v-model="form.second_last_name" />
+                  </div>
+                </div>
+              </section>
+
+              <Separator />
+
+              <section class="space-y-4">
+                <p class="text-sm font-medium text-foreground">
+                  Contacto
+                </p>
+                <div class="flex flex-wrap gap-x-8 gap-y-5">
+                  <div class="staff-field-email space-y-2">
+                    <Label for="em" class="leading-snug">Correo</Label>
+                    <Input
+                      id="em"
+                      v-model="form.email"
+                      type="email"
+                      autocomplete="email"
+                    />
+                  </div>
+                  <div class="staff-field-phone space-y-2">
+                    <Label for="ph" class="leading-snug">Teléfono</Label>
+                    <Input id="ph" v-model="form.phone" type="tel" autocomplete="tel" />
+                  </div>
+                  <div class="staff-field-extension space-y-2">
                     <Label for="ex" class="leading-snug">Extensión</Label>
                     <Input id="ex" v-model="form.extension" />
                   </div>
                 </div>
+              </section>
 
-                <div class="space-y-3 md:col-span-2">
-                  <Label for="doc" class="leading-snug">Documento</Label>
-                  <Input id="doc" v-model="form.document_number" />
+              <template v-if="hasPermission('usuarios_ver')">
+                <Separator />
+                <section class="space-y-4">
+                  <div class="space-y-1">
+                    <p class="text-sm font-medium text-foreground">
+                      Vínculo con usuario del sistema
+                    </p>
+                    <p class="text-sm text-muted-foreground leading-relaxed">
+                      Opcional: asocie una cuenta existente sin funcionario vinculado.
+                    </p>
+                  </div>
+                  <div class="space-y-2">
+                    <Label for="usr" class="leading-snug">Usuario</Label>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <div class="staff-field-user min-w-0">
+                        <Multiselect
+                          id="usr"
+                          v-model="form.user_id"
+                          mode="single"
+                          :object="false"
+                          :options="userSelectOptions"
+                          value-prop="value"
+                          label="label"
+                          :searchable="true"
+                          :can-clear="true"
+                          placeholder="Sin vínculo — busque usuario…"
+                          no-options-text="No hay usuarios sin funcionario vinculado"
+                          no-results-text="Sin coincidencias"
+                          class="multiselect-roles"
+                        />
+                      </div>
+                      <PermissionGate permission="usuarios_crear">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          class="shrink-0"
+                          @click="saveDraftAndGoCreateUser"
+                        >
+                          <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                          Crear usuario
+                        </Button>
+                      </PermissionGate>
+                    </div>
+                  </div>
+                </section>
+              </template>
+
+              <p
+                v-else
+                class="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground leading-relaxed"
+              >
+                No tiene permiso para listar usuarios; puede crear el funcionario sin vínculo y asociarlo después desde la edición, si corresponde.
+              </p>
+
+              <Separator />
+
+              <section class="space-y-4">
+                <div class="space-y-1">
+                  <p class="text-sm font-medium text-foreground">
+                    Estado del registro
+                  </p>
+                  <p class="text-sm text-muted-foreground leading-relaxed">
+                    Por defecto queda activo; desactive si el alta es provisional.
+                  </p>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card v-if="hasPermission('usuarios_ver')">
-            <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Vínculo con usuario del sistema</CardTitle>
-              <CardDescription class="leading-relaxed">
-                Opcional: asocie este funcionario a una cuenta ya existente sin funcionario vinculado.
-              </CardDescription>
-            </CardHeader>
-            <CardContent class="space-y-6">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <div class="min-w-0 flex-1 space-y-3">
-                  <Label for="usr" class="leading-snug">Usuario (opcional)</Label>
-                  <Multiselect
-                    id="usr"
-                    v-model="form.user_id"
-                    mode="single"
-                    :object="false"
-                    :options="userSelectOptions"
-                    value-prop="value"
-                    label="label"
-                    :searchable="true"
-                    :can-clear="true"
-                    placeholder="Sin vínculo — busque usuario…"
-                    no-options-text="No hay usuarios sin funcionario vinculado"
-                    no-results-text="Sin coincidencias"
-                    class="multiselect-roles"
+                <div class="staff-field-status">
+                  <OrgStructureActiveMultiselect
+                    :model-value="form.is_active"
+                    gender="masculine"
+                    input-id="staff_create_active_ms"
+                    :show-label="false"
+                    @update:model-value="onStaffActiveChange"
                   />
                 </div>
-                <PermissionGate permission="usuarios_crear">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    class="shrink-0 sm:mb-0.5"
-                    @click="saveDraftAndGoCreateUser"
-                  >
-                    <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-                    Crear usuario
-                  </Button>
-                </PermissionGate>
-              </div>
+              </section>
             </CardContent>
           </Card>
 
-          <p v-if="!hasPermission('usuarios_ver')" class="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground leading-relaxed">
-            No tiene permiso para listar usuarios; puede crear el funcionario sin vínculo y asociarlo después desde la edición, si corresponde.
-          </p>
-
-          <Card>
-            <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Estado del registro</CardTitle>
-              <CardDescription class="leading-relaxed">
-                Por defecto queda <strong>activo</strong>; desactive el interruptor si el alta es provisional.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <OrgStructureActiveMultiselect
-                :model-value="form.is_active"
-                gender="masculine"
-                input-id="staff_create_active_ms"
-                :show-label="false"
-                @update:model-value="onStaffActiveChange"
-              />
-            </CardContent>
-          </Card>
-
-          <div class="flex justify-end gap-4">
+          <div class="flex flex-wrap justify-end gap-3">
             <Button type="button" variant="outline" @click="router.back()">
               Cancelar
             </Button>
@@ -324,6 +393,46 @@ onMounted(async () => {
 
 <style src="@vueform/multiselect/themes/default.css"></style>
 <style scoped>
+.staff-field {
+  width: 100%;
+  max-width: 13rem;
+}
+
+.staff-field-email {
+  width: 100%;
+  max-width: 18rem;
+}
+
+.staff-field-phone {
+  width: 100%;
+  max-width: 11rem;
+}
+
+.staff-field-extension {
+  width: 100%;
+  max-width: 6.5rem;
+}
+
+.staff-field-doc-type {
+  width: 100%;
+  max-width: 14rem;
+}
+
+.staff-field-doc {
+  width: 100%;
+  max-width: 11rem;
+}
+
+.staff-field-user {
+  width: 100%;
+  max-width: 18rem;
+}
+
+.staff-field-status {
+  width: 100%;
+  max-width: 11rem;
+}
+
 .multiselect-roles {
   --ms-font-size: 0.875rem;
   --ms-line-height: 1.25rem;
@@ -332,7 +441,7 @@ onMounted(async () => {
   --ms-bg: var(--background);
   --ms-py: 0.5rem;
   --ms-dropdown-radius: 0.375rem;
-  min-height: 2.75rem;
+  min-height: 2.25rem;
   width: 100%;
   min-width: 0;
 }

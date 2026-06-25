@@ -62,6 +62,10 @@ const canManage = computed(() => hasPermission('ventanilla_gestionar') && !isTer
 const canVoid = computed(() => hasPermission('ventanilla_anular') && !isTerminal.value)
 const canRefreshSla = computed(() => hasPermission('ventanilla_sla_configurar'))
 const workflowOpenTask = computed(() => filing.value?.workflow?.open_task ?? null)
+const awaitsWorkflowAssignment = computed(() =>
+  filing.value?.workflow?.current_stage_key === 'assign'
+  && !filing.value?.assigned_user?.id,
+)
 const isMyWorkflowTask = computed(() =>
   workflowOpenTask.value?.assignee?.id != null
   && workflowOpenTask.value.assignee.id === authUser.value?.id,
@@ -649,6 +653,19 @@ async function viewSticker() {
                   {{ actionLoading === 'sla' ? 'Actualizando…' : 'Actualizar semáforo SLA' }}
                 </Button>
 
+                <Alert
+                  v-if="awaitsWorkflowAssignment"
+                  class="border-primary/40 bg-primary/5"
+                >
+                  <Icon name="i-lucide-info" class="size-4" />
+                  <AlertTitle>Asignación pendiente en el workflow</AlertTitle>
+                  <AlertDescription>
+                    Seleccione el responsable y pulse <strong>Asignar</strong>. Ese paso cierra la etapa
+                    «{{ filing.workflow?.current_stage_name ?? 'Asignar revisor' }}» y avanza el flujo.
+                    «Iniciar gestión» es un paso distinto y no guarda el responsable.
+                  </AlertDescription>
+                </Alert>
+
                 <div v-if="canAssign" class="space-y-3">
                   <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end">
                     <div class="space-y-2">
@@ -678,7 +695,8 @@ async function viewSticker() {
                     </div>
                     <Button
                       class="w-full lg:w-auto"
-                      :disabled="actionLoading === 'assign'"
+                      :variant="awaitsWorkflowAssignment ? 'default' : 'outline'"
+                      :disabled="actionLoading === 'assign' || !selectedAssignedUserId"
                       @click="assignResponsible"
                     >
                       {{ actionLoading === 'assign' ? 'Asignando…' : 'Asignar' }}
@@ -697,7 +715,7 @@ async function viewSticker() {
 
                 <div v-if="canManage" class="space-y-3">
                   <Button
-                    v-if="filing.status === 'registered'"
+                    v-if="filing.status === 'registered' && !awaitsWorkflowAssignment"
                     variant="secondary"
                     :disabled="actionLoading === 'start'"
                     @click="startManagement"

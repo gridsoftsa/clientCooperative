@@ -9,6 +9,7 @@ import type { OrgStaffListItem } from '~/types/org-structure'
 import { onDigitsOnlyInput, filterDigitsOnly } from '~/utils/digits-only-input'
 import { validateVentanillaCoreFilingForm } from '~/utils/ventanilla-filing-form-validation'
 import Multiselect from '@vueform/multiselect'
+import { toast } from 'vue-sonner'
 
 interface VentanillaOrgUnitOption {
   id: number
@@ -33,8 +34,6 @@ const {
   loadResponsibleUsers,
   clearAssignedUserIfMissing,
 } = useVentanillaResponsibleUsers()
-const { $api } = useNuxtApp()
-
 const catalog = ref<VentanillaCatalogData | null>(null)
 const saving = ref(false)
 const errorMessage = ref('')
@@ -56,6 +55,12 @@ const assignedUserId = ref<number | null>(null)
 const metadataValues = ref<Record<string, unknown>>({})
 
 const orgUnits = ref<VentanillaOrgUnitOption[]>([])
+const producerOrgUnits = computed(() =>
+  orgUnits.value.filter((unit: VentanillaOrgUnitOption) => unit.is_document_producer),
+)
+const producerAreaOptions = computed(() =>
+  producerOrgUnits.value.length > 0 ? producerOrgUnits.value : orgUnits.value,
+)
 const staffOptions = ref<OrgStaffListItem[]>([])
 const senderStaffId = ref<number | null>(null)
 const recipientStaffId = ref<number | null>(null)
@@ -117,9 +122,57 @@ const responsibleOrgUnitId = computed(() => {
   return producerOrgUnitId.value
 })
 
+const trdOrgUnitRoleLabel = computed(() => {
+  if (filingType.value === 'incoming') {
+    return 'el área destinataria'
+  }
+
+  return 'el área productora'
+})
+
 const selectedFunctionalType = computed(() =>
   catalog.value?.functional_types.find((t: VentanillaFunctionalTypeRow) => t.key === functionalTypeKey.value),
 )
+
+const functionalTypeOptions = computed(() =>
+  (catalog.value?.functional_types ?? []).map((t: VentanillaFunctionalTypeRow) => ({
+    value: t.key,
+    label: t.label,
+  })),
+)
+
+const orgUnitSelectOptions = computed(() =>
+  orgUnits.value.map((u: VentanillaOrgUnitOption) => ({
+    value: u.id,
+    label: `${u.code} — ${u.name}`,
+  })),
+)
+
+const producerAreaSelectOptions = computed(() =>
+  producerAreaOptions.value.map((u: VentanillaOrgUnitOption) => ({
+    value: u.id,
+    label: `${u.code} — ${u.name}`,
+  })),
+)
+
+const responsibleUserSelectOptions = computed(() =>
+  responsibleUsers.value.map((user) => ({
+    value: user.id,
+    label: user.name,
+  })),
+)
+
+const receptionMediumSelectOptions = computed(() =>
+  (catalog.value?.reception_media ?? []).map((m) => ({
+    value: m.value,
+    label: m.label,
+  })),
+)
+
+const requiresResponseSelectOptions = [
+  { value: true, label: 'Requiere respuesta' },
+  { value: false, label: 'No requiere respuesta' },
+] as const
 
 const effectiveRequiresResponse = computed(() => {
   if (requiresResponseOverride.value !== null) {
@@ -189,21 +242,31 @@ watch(recipientStaffId, (id) => {
 })
 
 onMounted(async () => {
-  catalog.value = await ventanillaApi.fetchCatalog()
   try {
-    const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promise<T>
-    const res = await api<{ data: VentanillaOrgUnitOption[] }>('/organizational-structure/org-units', {
-      query: { per_page: 200, is_active: true },
-    })
-    orgUnits.value = res.data ?? []
+    catalog.value = await ventanillaApi.fetchCatalog()
+    orgUnits.value = catalog.value.org_units ?? []
+    staffOptions.value = catalog.value.org_staff ?? []
   } catch {
-    orgUnits.value = []
+    catalog.value = null
+    toast.error('No se pudo cargar el catálogo de ventanilla')
   }
 
-  try {
-    staffOptions.value = await orgApi.fetchStaff({ activeOnly: true })
-  } catch {
-    staffOptions.value = []
+  if (orgUnits.value.length === 0) {
+    try {
+      orgUnits.value = await orgApi.fetchUnits({ activeOnly: true })
+    } catch {
+      orgUnits.value = []
+      toast.error('No se pudieron cargar las áreas organizacionales')
+    }
+  }
+
+  if (staffOptions.value.length === 0) {
+    try {
+      staffOptions.value = await orgApi.fetchStaff({ activeOnly: true })
+    } catch {
+      staffOptions.value = []
+      toast.error('No se pudieron cargar los funcionarios')
+    }
   }
 })
 
@@ -230,10 +293,6 @@ function toggleResponseOverride(value: boolean | 'indeterminate') {
   requiresResponseOverride.value = enabled
     ? !selectedFunctionalType.value.requires_response_default
     : null
-}
-
-function setRequiresResponseFromSelect(value: unknown) {
-  requiresResponseOverride.value = String(value) === '1'
 }
 
 function onFileChange(index: number, event: Event) {
@@ -466,20 +525,20 @@ async function submit() {
         <CardContent class="grid gap-4">
           <div class="space-y-2">
             <Label>Tipo funcional *</Label>
-            <Select v-model="functionalTypeKey">
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="t in catalog?.functional_types ?? []"
-                  :key="t.key"
-                  :value="t.key"
-                >
-                  {{ t.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <Multiselect
+              v-model="functionalTypeKey"
+              mode="single"
+              :object="false"
+              :options="functionalTypeOptions"
+              value-prop="value"
+              label="label"
+              :searchable="true"
+              :can-clear="false"
+              placeholder="Seleccione…"
+              no-options-text="Sin opciones"
+              no-results-text="Sin coincidencias"
+              class="ventanilla-single-multiselect"
+            />
           </div>
           <p v-if="selectedFunctionalType" class="text-muted-foreground text-xs">
             <template v-if="effectiveRequiresResponse">
@@ -503,23 +562,18 @@ async function submit() {
             <Label class="font-normal">
               Ajustar manualmente obligación de respuesta
             </Label>
-            <Select
+            <Multiselect
               v-if="requiresResponseOverride !== null"
-              :model-value="requiresResponseOverride ? '1' : '0'"
-              @update:model-value="setRequiresResponseFromSelect"
-            >
-              <SelectTrigger class="w-[200px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">
-                  Requiere respuesta
-                </SelectItem>
-                <SelectItem value="0">
-                  No requiere respuesta
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              v-model="requiresResponseOverride"
+              mode="single"
+              :object="false"
+              :options="requiresResponseSelectOptions"
+              value-prop="value"
+              label="label"
+              :can-clear="false"
+              :searchable="false"
+              class="ventanilla-single-multiselect w-[220px]"
+            />
           </div>
         </CardContent>
       </Card>
@@ -531,76 +585,72 @@ async function submit() {
         <CardContent class="grid min-w-0 gap-4 md:grid-cols-2">
           <div v-if="filingType === 'incoming'" class="space-y-2 md:col-span-2">
             <Label>Área destinataria *</Label>
-            <Select
-              :model-value="recipientOrgUnitId != null ? String(recipientOrgUnitId) : undefined"
-              @update:model-value="recipientOrgUnitId = $event ? Number($event) : null"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione área" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="u in orgUnits"
-                  :key="u.id"
-                  :value="String(u.id)"
-                >
-                  {{ u.code }} — {{ u.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <Multiselect
+              v-model="recipientOrgUnitId"
+              mode="single"
+              :object="false"
+              :options="orgUnitSelectOptions"
+              value-prop="value"
+              label="label"
+              :searchable="true"
+              :can-clear="false"
+              placeholder="Seleccione área"
+              no-options-text="Sin áreas disponibles"
+              no-results-text="Sin coincidencias"
+              class="ventanilla-single-multiselect"
+            />
           </div>
           <div v-else class="space-y-2 md:col-span-2">
             <Label>Área productora *</Label>
-            <Select
-              :model-value="producerOrgUnitId != null ? String(producerOrgUnitId) : undefined"
-              @update:model-value="producerOrgUnitId = $event ? Number($event) : null"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione área" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="u in orgUnits"
-                  :key="u.id"
-                  :value="String(u.id)"
-                >
-                  {{ u.code }} — {{ u.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <Multiselect
+              v-model="producerOrgUnitId"
+              mode="single"
+              :object="false"
+              :options="producerAreaSelectOptions"
+              value-prop="value"
+              label="label"
+              :searchable="true"
+              :can-clear="false"
+              placeholder="Seleccione área"
+              no-options-text="Sin áreas productoras"
+              no-results-text="Sin coincidencias"
+              class="ventanilla-single-multiselect"
+            />
           </div>
           <div v-if="filingType === 'internal'" class="space-y-2 md:col-span-2">
             <Label>Área destinataria *</Label>
-            <Select
-              :model-value="recipientOrgUnitId != null ? String(recipientOrgUnitId) : undefined"
-              @update:model-value="recipientOrgUnitId = $event ? Number($event) : null"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione área destino" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="u in orgUnits"
-                  :key="`int-dest-${u.id}`"
-                  :value="String(u.id)"
-                >
-                  {{ u.code }} — {{ u.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <Multiselect
+              v-model="recipientOrgUnitId"
+              mode="single"
+              :object="false"
+              :options="orgUnitSelectOptions"
+              value-prop="value"
+              label="label"
+              :searchable="true"
+              :can-clear="false"
+              placeholder="Seleccione área destino"
+              no-options-text="Sin áreas disponibles"
+              no-results-text="Sin coincidencias"
+              class="ventanilla-single-multiselect"
+            />
           </div>
           <div class="min-w-0 space-y-2">
             <Label>{{ filingType === 'incoming' ? 'Remitente *' : 'Remitente *' }}</Label>
             <Multiselect
               v-if="filingType !== 'incoming'"
               v-model="senderStaffId"
-              class="ventanilla-staff-multiselect"
+              mode="single"
+              :object="false"
+              class="ventanilla-single-multiselect"
               :options="senderStaffChoices"
               value-prop="value"
               label="label"
               :searchable="true"
+              :can-clear="false"
               :disabled="!producerOrgUnitId"
               placeholder="Seleccione remitente"
+              no-options-text="Sin funcionarios en el área"
+              no-results-text="Sin coincidencias"
             />
             <Input v-else v-model="senderName" placeholder="Nombre" />
           </div>
@@ -620,13 +670,18 @@ async function submit() {
             <Multiselect
               v-if="filingType === 'incoming' || filingType === 'internal'"
               v-model="recipientStaffId"
-              class="ventanilla-staff-multiselect"
+              mode="single"
+              :object="false"
+              class="ventanilla-single-multiselect"
               :options="recipientStaffChoices"
               value-prop="value"
               label="label"
               :searchable="true"
+              :can-clear="false"
               :disabled="!recipientOrgUnitId"
               placeholder="Seleccione destinatario"
+              no-options-text="Sin funcionarios en el área"
+              no-results-text="Sin coincidencias"
             />
             <Input v-else v-model="recipientName" placeholder="Nombre" />
           </div>
@@ -653,24 +708,21 @@ async function submit() {
             <p class="text-muted-foreground text-xs">
               Solo usuarios vinculados al área responsable del radicado.
             </p>
-            <Select
-              :model-value="assignedUserId != null ? String(assignedUserId) : undefined"
+            <Multiselect
+              v-model="assignedUserId"
+              mode="single"
+              :object="false"
+              :options="responsibleUserSelectOptions"
+              value-prop="value"
+              label="label"
+              :searchable="true"
+              :can-clear="true"
               :disabled="!responsibleOrgUnitId || loadingResponsibleUsers"
-              @update:model-value="assignedUserId = $event ? Number($event) : null"
-            >
-              <SelectTrigger>
-                <SelectValue :placeholder="responsibleOrgUnitId ? 'Opcional' : 'Seleccione primero el área'" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="user in responsibleUsers"
-                  :key="user.id"
-                  :value="String(user.id)"
-                >
-                  {{ user.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              :placeholder="responsibleOrgUnitId ? 'Opcional' : 'Seleccione primero el área'"
+              no-options-text="Sin usuarios en el área"
+              no-results-text="Sin coincidencias"
+              class="ventanilla-single-multiselect"
+            />
             <p
               v-if="responsibleOrgUnitId && !loadingResponsibleUsers && !responsibleUsers.length"
               class="text-muted-foreground text-xs"
@@ -680,20 +732,20 @@ async function submit() {
           </div>
           <div class="space-y-2">
             <Label>Medio de recepción</Label>
-            <Select v-model="receptionMedium">
-              <SelectTrigger>
-                <SelectValue placeholder="Opcional" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="m in catalog?.reception_media ?? []"
-                  :key="m.value"
-                  :value="m.value"
-                >
-                  {{ m.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <Multiselect
+              v-model="receptionMedium"
+              mode="single"
+              :object="false"
+              :options="receptionMediumSelectOptions"
+              value-prop="value"
+              label="label"
+              :searchable="true"
+              :can-clear="true"
+              placeholder="Opcional"
+              no-options-text="Sin medios configurados"
+              no-results-text="Sin coincidencias"
+              class="ventanilla-single-multiselect"
+            />
           </div>
           <div class="space-y-2 md:col-span-2">
             <Label>Observaciones</Label>
@@ -706,12 +758,13 @@ async function submit() {
         <CardHeader>
           <CardTitle>Clasificación archivística (TRD)</CardTitle>
           <CardDescription>
-            Según el área responsable y la TRD vigente
+            Según la TRD vigente del área productora (en interna y salida) o del área destinataria (en entrada).
           </CardDescription>
         </CardHeader>
         <CardContent class="min-w-0">
           <VentanillaTrdPicker
             :org-unit-id="responsibleOrgUnitId"
+            :org-unit-role-label="trdOrgUnitRoleLabel"
             v-model:doc-document-type-id="docDocumentTypeId"
           />
         </CardContent>
@@ -786,14 +839,14 @@ async function submit() {
 
 <style src="@vueform/multiselect/themes/default.css"></style>
 <style scoped>
-.ventanilla-staff-multiselect {
+.ventanilla-single-multiselect {
   width: 100%;
   min-width: 0;
   max-width: 100%;
 }
 
-.ventanilla-staff-multiselect :deep(.multiselect-single-label),
-.ventanilla-staff-multiselect :deep(.multiselect-placeholder) {
+.ventanilla-single-multiselect :deep(.multiselect-single-label),
+.ventanilla-single-multiselect :deep(.multiselect-placeholder) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -208,6 +208,7 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   workflow_equipo_ver: 'Ver tareas del equipo en workflow',
   workflow_ver_todas: 'Ver todas las tareas de workflow (supervisión global)',
   workflow_definir: 'Configurar flujos de trabajo',
+  workflow_tipos_funcionales_parametrizar: 'Parametrizar tipos funcionales desde workflow',
   ventanilla_ver: 'Ver radicados de ventanilla',
   ventanilla_crear: 'Radicar documentos en ventanilla',
   ventanilla_clasificar: 'Clasificar entradas de ventanilla',

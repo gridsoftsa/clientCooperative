@@ -23,11 +23,37 @@ const props = withDefaults(
 )
 
 const router = useRouter()
+const route = useRoute()
 const ventanillaApi = useVentanillaApi()
 const { hasPermission } = usePermissions()
 
-const canEdit = computed(() =>
+const canEditFunctionalTypes = computed(() =>
+  hasPermission('ventanilla_configurar')
+  || hasPermission('plantillas_ver')
+  || hasPermission('workflow_tipos_funcionales_parametrizar'),
+)
+
+const canEditReception = computed(() =>
   hasPermission('ventanilla_configurar') || hasPermission('plantillas_ver'),
+)
+
+const visibleCatalogSections = computed(() =>
+  catalogSections.filter((section) =>
+    section.value === 'functional-types' ? canEditFunctionalTypes.value : canEditReception.value,
+  ),
+)
+
+const effectiveBackTo = computed(() => {
+  const returnTo = route.query.return_to
+  if (typeof returnTo === 'string' && returnTo.startsWith('/')) {
+    return returnTo
+  }
+
+  return props.backTo
+})
+
+const canEdit = computed(() =>
+  selectedSection.value === 'functional-types' ? canEditFunctionalTypes.value : canEditReception.value,
 )
 
 const loading = ref(true)
@@ -44,7 +70,7 @@ const catalogSections: Array<{ value: CatalogSection, label: string, icon: strin
 ]
 
 const selectedCatalogLabel = computed(() =>
-  catalogSections.find(s => s.value === selectedSection.value)?.label ?? '',
+  visibleCatalogSections.value.find(s => s.value === selectedSection.value)?.label ?? '',
 )
 
 async function loadCatalog() {
@@ -170,6 +196,9 @@ async function saveReception(rows: Array<{
 }
 
 onMounted(() => {
+  if (visibleCatalogSections.value.length > 0) {
+    selectedSection.value = visibleCatalogSections.value[0]!.value
+  }
   loadCatalog()
 })
 </script>
@@ -210,7 +239,7 @@ onMounted(() => {
             {{ sisterLink.label }}
           </NuxtLink>
         </Button>
-        <Button variant="outline" @click="router.push(backTo)">
+        <Button variant="outline" @click="router.push(effectiveBackTo)">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>
@@ -235,7 +264,7 @@ onMounted(() => {
                     Ventanilla única
                   </p>
                   <button
-                    v-for="section in catalogSections"
+                    v-for="section in visibleCatalogSections"
                     :key="section.value"
                     type="button"
                     class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"

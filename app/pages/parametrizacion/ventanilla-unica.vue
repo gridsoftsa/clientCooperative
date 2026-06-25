@@ -2,7 +2,7 @@
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'ventanilla_configurar|plantillas_ver',
+  permissions: 'ventanilla_configurar|plantillas_ver|workflow_tipos_funcionales_parametrizar',
 })
 </script>
 

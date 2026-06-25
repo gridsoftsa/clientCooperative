@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import Multiselect from '@vueform/multiselect'
 import { ORG_ASSIGNMENT_CHANGE_KIND_OPTIONS } from '~/constants/org-structure-assignments'
 import type { OrgOffice, OrgStaffListItem } from '~/types/org-structure'
 import { toDateInputValue } from '~/utils/dateInputValue'
 import type { OrgUnitRow, OrgPositionRow } from '~/composables/useOrgStructureApi'
 import type { PaginatedUsers, User } from '~/types/user'
+import {
+  hasStaffPersonalInfoForUserPrefill,
+  staffEditDraftKey,
+  staffEditReturnPath,
+  userCreatePrefillFromStaff,
+  USER_CREATE_PREFILL_FROM_STAFF_KEY,
+} from '~/utils/staff-user-create-bridge'
 
 const props = withDefaults(
   defineProps<{
@@ -17,6 +25,7 @@ const props = withDefaults(
 )
 
 const router = useRouter()
+const route = useRoute()
 const { $api } = useNuxtApp()
 const orgApi = useOrgStructureApi()
 const { hasPermission } = usePermissions()
@@ -52,11 +61,87 @@ const datosForm = ref({
   email: '',
   phone: '',
   extension: '',
+  document_type: 'CC',
   document_number: '',
   is_active: true,
 })
 
 const userOptions = ref<Array<{ id: number; label: string }>>([])
+
+const userSelectOptions = computed(() =>
+  userOptions.value.map(u => ({
+    value: u.id,
+    label: u.label,
+  })),
+)
+
+function restoreDraftFromStorage() {
+  if (!import.meta.client) {
+    return false
+  }
+  const raw = sessionStorage.getItem(staffEditDraftKey(props.staffId))
+  if (!raw) {
+    return false
+  }
+  try {
+    const parsed = JSON.parse(raw) as typeof datosForm.value
+    datosForm.value = { ...datosForm.value, ...parsed }
+  } catch {
+    // ignore corrupt draft
+  } finally {
+    sessionStorage.removeItem(staffEditDraftKey(props.staffId))
+  }
+  return true
+}
+
+function saveDraftAndGoCreateUser() {
+  if (!import.meta.client) {
+    return
+  }
+  sessionStorage.setItem(staffEditDraftKey(props.staffId), JSON.stringify(datosForm.value))
+  if (hasStaffPersonalInfoForUserPrefill(datosForm.value)) {
+    sessionStorage.setItem(
+      USER_CREATE_PREFILL_FROM_STAFF_KEY,
+      JSON.stringify(userCreatePrefillFromStaff(datosForm.value)),
+    )
+  } else {
+    sessionStorage.removeItem(USER_CREATE_PREFILL_FROM_STAFF_KEY)
+  }
+  router.push({
+    path: '/settings/users/create',
+    query: { returnTo: staffEditReturnPath(props.staffId) },
+  })
+}
+
+async function ensureSelectedUserInOptions(userId: number) {
+  if (userOptions.value.some(u => u.id === userId)) {
+    return
+  }
+  try {
+    const res = await $api<{ data: User }>(`/users/${userId}`)
+    const u = res.data
+    if (u.org_staff_id == null || u.org_staff_id === props.staffId) {
+      userOptions.value = [
+        ...userOptions.value,
+        { id: u.id, label: `${u.name || u.email} · ${u.email}` },
+      ]
+    }
+  } catch {
+    // ignore — multiselect may still show id if options load later
+  }
+}
+
+function applyReturnedUserFromQuery() {
+  const raw = route.query.user_id
+  const userId = typeof raw === 'string' ? Number(raw) : null
+  if (userId != null && Number.isFinite(userId) && userId > 0) {
+    datosForm.value.user_id = userId
+    void ensureSelectedUserInOptions(userId)
+    const nextQuery = { ...route.query }
+    delete nextQuery.user_id
+    router.replace({ path: route.path, query: nextQuery })
+  }
+}
 
 const offices = ref<OrgOffice[]>([])
 const units = ref<OrgUnitRow[]>([])
@@ -87,6 +172,41 @@ const ubicacionHydrating = ref(false)
 /** Evita que los watchers del jefe borren selección mientras rellenamos desde la asignación vigente. */
 const supervisorHydrating = ref(false)
 
+const { options: documentTypeOptions, fetchOptions: fetchDocumentTypeOptions, labelForValue: documentTypeLabel } =
+  useTemplateFlatCatalogOptions('tipo-documento', [
+    { value: 'CC', label: 'Cédula de Ciudadanía' },
+    { value: 'CE', label: 'Cédula de Extranjería' },
+    { value: 'NIT', label: 'NIT' },
+  ])
+
+const officeSelectOptions = computed(() =>
+  offices.value.map(o => ({ value: o.id, label: o.name })),
+)
+
+const unitSelectOptions = computed(() =>
+  units.value.map(u => ({ value: u.id, label: `${u.name} — ${u.code}` })),
+)
+
+const positionSelectOptions = computed(() =>
+  positions.value.map(p => ({ value: p.id, label: `${p.name} — ${p.code}` })),
+)
+
+const supervisorUnitSelectOptions = computed(() =>
+  supervisorUnitOptions.value.map(u => ({ value: u.id, label: u.label })),
+)
+
+const supervisorPositionSelectOptions = computed(() =>
+  supervisorPositions.value.map(p => ({ value: p.id, label: `${p.name} — ${p.code}` })),
+)
+
+const supervisorStaffSelectOptions = computed(() =>
+  supervisorChoices.value.map(s => ({ value: s.id, label: s.label })),
+)
+
+const changeKindSelectOptions = computed(() =>
+  ORG_ASSIGNMENT_CHANGE_KIND_OPTIONS.map(o => ({ value: o.value, label: o.label })),
+)
+
 function staffLabel(s: OrgStaffListItem): string {
   const n = [s.first_name, s.second_name, s.first_last_name, s.second_last_name].filter(Boolean).join(' ')
   return `${n}${s.document_number ? ` · ${s.document_number}` : ''}`
@@ -98,14 +218,17 @@ function onStaffActiveChange(value: boolean) {
 
 async function loadUsersIfAllowed() {
   if (!hasPermission('usuarios_ver')) {
+    userOptions.value = []
     return
   }
   try {
     const res = await $api<PaginatedUsers>('/users', { query: { per_page: 200, page: 1 } })
-    userOptions.value = res.data.map((u: User) => ({
-      id: u.id,
-      label: `${u.name || u.email} · ${u.email}`,
-    }))
+    userOptions.value = res.data
+      .filter((u: User) => u.org_staff_id == null || u.org_staff_id === props.staffId)
+      .map((u: User) => ({
+        id: u.id,
+        label: `${u.name || u.email} · ${u.email}`,
+      }))
   } catch {
     userOptions.value = []
   }
@@ -184,6 +307,7 @@ async function loadStaffRecord() {
     email: s.email ?? '',
     phone: s.phone ?? '',
     extension: s.extension ?? '',
+    document_type: s.document_type ?? 'CC',
     document_number: s.document_number ?? '',
     is_active: Boolean(s.is_active),
   }
@@ -388,9 +512,13 @@ async function loadAll() {
   loading.value = true
   try {
     if (!props.readOnly) {
-      await loadUsersIfAllowed()
+      await Promise.all([loadUsersIfAllowed(), fetchDocumentTypeOptions()])
+    } else {
+      await fetchDocumentTypeOptions()
     }
     await loadStaffRecord()
+    restoreDraftFromStorage()
+    applyReturnedUserFromQuery()
     await loadEditCatalogs()
     await hydrateUbicacionFormFromCurrentAssignment()
   } catch {
@@ -403,6 +531,12 @@ async function loadAll() {
 
 async function handleSubmitDatos() {
   if (props.readOnly) {
+    return
+  }
+  const docNumber = datosForm.value.document_number.trim()
+  const docType = datosForm.value.document_type.trim()
+  if ((docNumber && !docType) || (docType && !docNumber)) {
+    toast.error('Indique tipo y número de documento')
     return
   }
   savingDatos.value = true
@@ -418,7 +552,8 @@ async function handleSubmitDatos() {
         email: datosForm.value.email.trim() || null,
         phone: datosForm.value.phone.trim() || null,
         extension: datosForm.value.extension.trim() || null,
-        document_number: datosForm.value.document_number.trim() || null,
+        document_type: docType || null,
+        document_number: docNumber || null,
         is_active: datosForm.value.is_active,
       },
     })
@@ -519,54 +654,6 @@ watch(
       <TabsContent value="datos" class="mt-4">
         <form @submit.prevent="handleSubmitDatos">
           <div class="grid gap-6">
-            <Card v-if="hasPermission('usuarios_ver') && !readOnly">
-              <CardHeader class="gap-2">
-                <CardTitle class="leading-snug">Vínculo con usuario del sistema</CardTitle>
-                <CardDescription class="leading-relaxed">
-                  Asocie o quite la cuenta vinculada a este funcionario.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div class="space-y-3">
-                  <Label for="usr_panel" class="leading-snug">Usuario del sistema</Label>
-                  <Select
-                    :model-value="datosForm.user_id == null ? 'none' : String(datosForm.user_id)"
-                    @update:model-value="(v) => { datosForm.user_id = v === 'none' ? null : Number(v) }"
-                  >
-                    <SelectTrigger id="usr_panel">
-                      <SelectValue placeholder="Sin vínculo" />
-                    </SelectTrigger>
-                    <SelectContent class="max-h-60">
-                      <SelectItem value="none">
-                        (Sin usuario)
-                      </SelectItem>
-                      <SelectItem
-                        v-for="u in userOptions"
-                        :key="u.id"
-                        :value="String(u.id)"
-                      >
-                        {{ u.label }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card v-else-if="readOnly">
-              <CardHeader class="gap-2">
-                <CardTitle class="leading-snug">Usuario del sistema</CardTitle>
-              </CardHeader>
-              <CardContent class="text-sm leading-relaxed">
-                <p v-if="summary?.user?.email" class="text-foreground">
-                  {{ summary.user.email }}
-                </p>
-                <p v-else class="text-muted-foreground">
-                  Sin vínculo con cuenta de usuario.
-                </p>
-              </CardContent>
-            </Card>
-
             <Card>
               <CardHeader class="gap-2">
                 <CardTitle class="leading-snug">Información personal y contacto</CardTitle>
@@ -574,46 +661,162 @@ watch(
                   Mantenga coherentes nombre y datos de contacto con los registros institucionales.
                 </CardDescription>
               </CardHeader>
-              <CardContent class="space-y-6">
-                <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
-                  <div class="space-y-3">
-                    <Label for="fn_p" class="leading-snug">Primer nombre <span v-if="!readOnly">*</span></Label>
-                    <Input id="fn_p" v-model="datosForm.first_name" :readonly="readOnly" :required="!readOnly" />
-                  </div>
-                  <div class="space-y-3">
-                    <Label for="sn_p" class="leading-snug">Segundo nombre</Label>
-                    <Input id="sn_p" v-model="datosForm.second_name" :readonly="readOnly" />
-                  </div>
-                  <div class="space-y-3">
-                    <Label for="fl_p" class="leading-snug">Primer apellido <span v-if="!readOnly">*</span></Label>
-                    <Input id="fl_p" v-model="datosForm.first_last_name" :readonly="readOnly" :required="!readOnly" />
-                  </div>
-                  <div class="space-y-3">
-                    <Label for="sl_p" class="leading-snug">Segundo apellido</Label>
-                    <Input id="sl_p" v-model="datosForm.second_last_name" :readonly="readOnly" />
-                  </div>
-
-                  <div class="space-y-3 md:col-span-2">
-                    <Label for="em_p" class="leading-snug">Correo</Label>
-                    <Input id="em_p" v-model="datosForm.email" type="email" :readonly="readOnly" />
-                  </div>
-
-                  <div class="space-y-3 md:grid md:grid-cols-2 md:gap-x-6 md:col-span-2">
-                    <div class="space-y-3 md:col-span-1">
-                      <Label for="ph_p" class="leading-snug">Teléfono</Label>
-                      <Input id="ph_p" v-model="datosForm.phone" :readonly="readOnly" />
+              <CardContent class="space-y-8">
+                <section class="space-y-4">
+                  <p class="text-sm font-medium text-foreground">
+                    Identificación
+                  </p>
+                  <div class="flex flex-wrap gap-x-8 gap-y-5">
+                    <div class="staff-field-doc-type space-y-2">
+                      <Label for="doc_type_p" class="leading-snug">Tipo de documento</Label>
+                      <p v-if="readOnly" class="text-sm leading-relaxed">
+                        {{ documentTypeLabel(datosForm.document_type) }}
+                      </p>
+                      <Multiselect
+                        v-else
+                        id="doc_type_p"
+                        v-model="datosForm.document_type"
+                        mode="single"
+                        :object="false"
+                        :options="documentTypeOptions"
+                        value-prop="value"
+                        label="label"
+                        :searchable="true"
+                        :can-clear="false"
+                        placeholder="Seleccione…"
+                        no-options-text="Sin opciones"
+                        no-results-text="Sin coincidencias"
+                        class="multiselect-roles"
+                      />
                     </div>
-                    <div class="space-y-3 md:col-span-1">
+                    <div class="staff-field-doc space-y-2">
+                      <Label for="doc_p" class="leading-snug">Número de documento</Label>
+                      <Input
+                        id="doc_p"
+                        v-model="datosForm.document_number"
+                        inputmode="numeric"
+                        :readonly="readOnly"
+                      />
+                    </div>
+                  </div>
+                </section>
+
+                <Separator v-if="!readOnly || datosForm.document_number" />
+
+                <section class="space-y-4">
+                  <p class="text-sm font-medium text-foreground">
+                    Nombres y apellidos
+                  </p>
+                  <div class="flex flex-wrap gap-x-8 gap-y-5">
+                    <div class="staff-field space-y-2">
+                      <Label for="fn_p" class="leading-snug">Primer nombre <span v-if="!readOnly">*</span></Label>
+                      <Input id="fn_p" v-model="datosForm.first_name" :readonly="readOnly" :required="!readOnly" />
+                    </div>
+                    <div class="staff-field space-y-2">
+                      <Label for="sn_p" class="leading-snug">Segundo nombre</Label>
+                      <Input id="sn_p" v-model="datosForm.second_name" :readonly="readOnly" />
+                    </div>
+                    <div class="staff-field space-y-2">
+                      <Label for="fl_p" class="leading-snug">Primer apellido <span v-if="!readOnly">*</span></Label>
+                      <Input id="fl_p" v-model="datosForm.first_last_name" :readonly="readOnly" :required="!readOnly" />
+                    </div>
+                    <div class="staff-field space-y-2">
+                      <Label for="sl_p" class="leading-snug">Segundo apellido</Label>
+                      <Input id="sl_p" v-model="datosForm.second_last_name" :readonly="readOnly" />
+                    </div>
+                  </div>
+                </section>
+
+                <Separator />
+
+                <section class="space-y-4">
+                  <p class="text-sm font-medium text-foreground">
+                    Contacto
+                  </p>
+                  <div class="flex flex-wrap gap-x-8 gap-y-5">
+                    <div class="staff-field-email space-y-2">
+                      <Label for="em_p" class="leading-snug">Correo</Label>
+                      <Input id="em_p" v-model="datosForm.email" type="email" :readonly="readOnly" />
+                    </div>
+                    <div class="staff-field-phone space-y-2">
+                      <Label for="ph_p" class="leading-snug">Teléfono</Label>
+                      <Input id="ph_p" v-model="datosForm.phone" type="tel" :readonly="readOnly" />
+                    </div>
+                    <div class="staff-field-extension space-y-2">
                       <Label for="ex_p" class="leading-snug">Extensión</Label>
                       <Input id="ex_p" v-model="datosForm.extension" :readonly="readOnly" />
                     </div>
                   </div>
+                </section>
 
-                  <div class="space-y-3 md:col-span-2">
-                    <Label for="doc_p" class="leading-snug">Documento</Label>
-                    <Input id="doc_p" v-model="datosForm.document_number" :readonly="readOnly" />
-                  </div>
-                </div>
+                <template v-if="hasPermission('usuarios_ver') && !readOnly">
+                  <Separator />
+                  <section class="space-y-4">
+                    <div class="space-y-1">
+                      <p class="text-sm font-medium text-foreground">
+                        Vínculo con usuario del sistema
+                      </p>
+                      <p class="text-sm text-muted-foreground leading-relaxed">
+                        Opcional: asocie una cuenta existente sin funcionario vinculado o cree una nueva.
+                      </p>
+                    </div>
+                    <div class="space-y-2">
+                      <Label for="usr_panel" class="leading-snug">Usuario</Label>
+                      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <div class="staff-field-user min-w-0">
+                          <Multiselect
+                            id="usr_panel"
+                            v-model="datosForm.user_id"
+                            mode="single"
+                            :object="false"
+                            :options="userSelectOptions"
+                            value-prop="value"
+                            label="label"
+                            :searchable="true"
+                            :can-clear="true"
+                            placeholder="Sin vínculo — busque usuario…"
+                            no-options-text="No hay usuarios sin funcionario vinculado"
+                            no-results-text="Sin coincidencias"
+                            class="multiselect-roles"
+                          />
+                        </div>
+                        <PermissionGate permission="usuarios_crear">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            class="shrink-0"
+                            @click="saveDraftAndGoCreateUser"
+                          >
+                            <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                            Crear usuario
+                          </Button>
+                        </PermissionGate>
+                      </div>
+                    </div>
+                  </section>
+                </template>
+
+                <template v-else-if="readOnly">
+                  <Separator />
+                  <section class="space-y-4">
+                    <p class="text-sm font-medium text-foreground">
+                      Usuario del sistema
+                    </p>
+                    <p v-if="summary?.user?.email" class="text-sm leading-relaxed text-foreground">
+                      {{ summary.user.email }}
+                    </p>
+                    <p v-else class="text-sm text-muted-foreground leading-relaxed">
+                      Sin vínculo con cuenta de usuario.
+                    </p>
+                  </section>
+                </template>
+
+                <p
+                  v-else-if="!readOnly"
+                  class="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground leading-relaxed"
+                >
+                  No tiene permiso para listar usuarios; puede guardar el funcionario sin vínculo y asociarlo después, si corresponde.
+                </p>
               </CardContent>
             </Card>
 
@@ -708,156 +911,145 @@ watch(
                       Si hay asignación vigente, los campos se cargan con esos valores para que pueda revisarlos o ajustarlos; indique la fecha desde la cual aplica el nuevo movimiento y guarde.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent class="space-y-6">
-                    <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
-                      <div class="space-y-3 md:col-span-2">
-                        <Label for="of_p" class="leading-snug">Agencia principal *</Label>
-                        <Select
-                          :model-value="ubicacionForm.org_office_id == null ? undefined : String(ubicacionForm.org_office_id)"
-                          @update:model-value="(v) => { ubicacionForm.org_office_id = v ? Number(v) : null }"
-                        >
-                          <SelectTrigger id="of_p">
-                            <SelectValue placeholder="Seleccione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem
-                              v-for="o in offices"
-                              :key="o.id"
-                              :value="String(o.id)"
-                            >
-                              {{ o.name }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                  <CardContent class="space-y-8">
+                    <div class="space-y-4">
+                      <p class="text-sm font-medium text-foreground leading-snug">
+                        Ubicación organizacional
+                      </p>
+                      <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 md:gap-x-6 md:gap-y-5">
+                        <div class="space-y-3">
+                          <Label for="of_p" class="leading-snug">Agencia principal *</Label>
+                          <Multiselect
+                            id="of_p"
+                            v-model="ubicacionForm.org_office_id"
+                            mode="single"
+                            :object="false"
+                            :options="officeSelectOptions"
+                            value-prop="value"
+                            label="label"
+                            :searchable="true"
+                            :can-clear="false"
+                            placeholder="Seleccione…"
+                            no-options-text="No hay agencias configuradas"
+                            no-results-text="Sin coincidencias"
+                            class="multiselect-roles"
+                          />
+                        </div>
 
-                      <div class="space-y-3 md:col-span-2">
-                        <Label for="un_p" class="leading-snug">Área principal *</Label>
-                        <Select
-                          :model-value="ubicacionForm.org_unit_id == null ? undefined : String(ubicacionForm.org_unit_id)"
-                          :disabled="!ubicacionForm.org_office_id"
-                          @update:model-value="(v) => { ubicacionForm.org_unit_id = v ? Number(v) : null }"
-                        >
-                          <SelectTrigger id="un_p">
-                            <SelectValue placeholder="Seleccione área" />
-                          </SelectTrigger>
-                          <SelectContent class="max-h-64">
-                            <SelectItem
-                              v-for="u in units"
-                              :key="u.id"
-                              :value="String(u.id)"
-                            >
-                              {{ u.name }} — {{ u.code }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                        <div class="space-y-3">
+                          <Label for="un_p" class="leading-snug">Área principal *</Label>
+                          <Multiselect
+                            id="un_p"
+                            v-model="ubicacionForm.org_unit_id"
+                            mode="single"
+                            :object="false"
+                            :options="unitSelectOptions"
+                            value-prop="value"
+                            label="label"
+                            :searchable="true"
+                            :can-clear="false"
+                            :disabled="!ubicacionForm.org_office_id"
+                            placeholder="Seleccione área…"
+                            no-options-text="No hay áreas en esta agencia"
+                            no-results-text="Sin coincidencias"
+                            class="multiselect-roles"
+                          />
+                        </div>
 
-                      <div class="space-y-3 md:col-span-2">
-                        <Label for="pos_p" class="leading-snug">Cargo principal *</Label>
-                        <Select
-                          :model-value="ubicacionForm.org_position_id == null ? undefined : String(ubicacionForm.org_position_id)"
-                          :disabled="!ubicacionForm.org_unit_id"
-                          @update:model-value="(v) => { ubicacionForm.org_position_id = v ? Number(v) : null }"
-                        >
-                          <SelectTrigger id="pos_p">
-                            <SelectValue placeholder="Seleccione cargo" />
-                          </SelectTrigger>
-                          <SelectContent class="max-h-64">
-                            <SelectItem
-                              v-for="p in positions"
-                              :key="p.id"
-                              :value="String(p.id)"
-                            >
-                              {{ p.name }} — {{ p.code }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <div class="space-y-3 md:col-span-2 xl:col-span-1">
+                          <Label for="pos_p" class="leading-snug">Cargo principal *</Label>
+                          <Multiselect
+                            id="pos_p"
+                            v-model="ubicacionForm.org_position_id"
+                            mode="single"
+                            :object="false"
+                            :options="positionSelectOptions"
+                            value-prop="value"
+                            label="label"
+                            :searchable="true"
+                            :can-clear="false"
+                            :disabled="!ubicacionForm.org_unit_id"
+                            placeholder="Seleccione cargo…"
+                            no-options-text="No hay cargos en esta área"
+                            no-results-text="Sin coincidencias"
+                            class="multiselect-roles"
+                          />
+                        </div>
                       </div>
+                    </div>
 
-                      <div class="space-y-3 md:col-span-2">
+                    <div class="space-y-4 rounded-lg border p-4 md:p-5">
+                      <div class="space-y-1">
                         <Label for="sup_p" class="leading-snug">Jefe inmediato (opcional)</Label>
                         <p class="text-xs text-muted-foreground leading-relaxed">
                           Seleccione primero el área y el cargo del jefe; luego el funcionario.
                         </p>
-                        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                          <div class="space-y-2">
-                            <Label class="text-xs text-muted-foreground">Área del jefe</Label>
-                            <Select
-                              :model-value="supervisorOrgUnitId == null ? 'none' : String(supervisorOrgUnitId)"
-                              @update:model-value="(v) => { supervisorOrgUnitId = v === 'none' ? null : Number(v) }"
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccione área" />
-                              </SelectTrigger>
-                              <SelectContent class="max-h-72">
-                                <SelectItem value="none">
-                                  (Sin jefe inmediato)
-                                </SelectItem>
-                                <SelectItem
-                                  v-for="u in supervisorUnitOptions"
-                                  :key="u.id"
-                                  :value="String(u.id)"
-                                >
-                                  {{ u.label }}
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                      </div>
+                      <div class="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-x-6">
+                        <div class="space-y-2">
+                          <Label class="text-xs text-muted-foreground">Área del jefe</Label>
+                          <Multiselect
+                            v-model="supervisorOrgUnitId"
+                            mode="single"
+                            :object="false"
+                            :options="supervisorUnitSelectOptions"
+                            value-prop="value"
+                            label="label"
+                            :searchable="true"
+                            :can-clear="true"
+                            placeholder="Sin jefe inmediato…"
+                            no-options-text="No hay áreas disponibles"
+                            no-results-text="Sin coincidencias"
+                            class="multiselect-roles"
+                          />
+                        </div>
 
-                          <div class="space-y-2">
-                            <Label class="text-xs text-muted-foreground">Cargo del jefe</Label>
-                            <Select
-                              :model-value="supervisorOrgPositionId == null ? 'none' : String(supervisorOrgPositionId)"
-                              :disabled="!supervisorOrgUnitId"
-                              @update:model-value="(v) => { supervisorOrgPositionId = v === 'none' ? null : Number(v) }"
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Seleccione cargo" />
-                              </SelectTrigger>
-                              <SelectContent class="max-h-64">
-                                <SelectItem value="none">
-                                  (Ninguno)
-                                </SelectItem>
-                                <SelectItem
-                                  v-for="p in supervisorPositions"
-                                  :key="p.id"
-                                  :value="String(p.id)"
-                                >
-                                  {{ p.name }} — {{ p.code }}
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                        <div class="space-y-2">
+                          <Label class="text-xs text-muted-foreground">Cargo del jefe</Label>
+                          <Multiselect
+                            v-model="supervisorOrgPositionId"
+                            mode="single"
+                            :object="false"
+                            :options="supervisorPositionSelectOptions"
+                            value-prop="value"
+                            label="label"
+                            :searchable="true"
+                            :can-clear="true"
+                            :disabled="!supervisorOrgUnitId"
+                            placeholder="Seleccione cargo…"
+                            no-options-text="No hay cargos en esta área"
+                            no-results-text="Sin coincidencias"
+                            class="multiselect-roles"
+                          />
+                        </div>
 
-                          <div class="space-y-2">
-                            <Label class="text-xs text-muted-foreground">Funcionario</Label>
-                            <Select
-                              :model-value="ubicacionForm.immediate_supervisor_staff_id == null ? 'none' : String(ubicacionForm.immediate_supervisor_staff_id)"
-                              :disabled="!supervisorOrgPositionId"
-                              @update:model-value="(v) => { ubicacionForm.immediate_supervisor_staff_id = v === 'none' ? null : Number(v) }"
-                            >
-                              <SelectTrigger id="sup_p">
-                                <SelectValue placeholder="Seleccione funcionario" />
-                              </SelectTrigger>
-                              <SelectContent class="max-h-56">
-                                <SelectItem value="none">
-                                  (Ninguno)
-                                </SelectItem>
-                                <SelectItem
-                                  v-for="s in supervisorChoices"
-                                  :key="s.id"
-                                  :value="String(s.id)"
-                                >
-                                  {{ s.label }}
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
+                        <div class="space-y-2">
+                          <Label class="text-xs text-muted-foreground">Funcionario</Label>
+                          <Multiselect
+                            id="sup_p"
+                            v-model="ubicacionForm.immediate_supervisor_staff_id"
+                            mode="single"
+                            :object="false"
+                            :options="supervisorStaffSelectOptions"
+                            value-prop="value"
+                            label="label"
+                            :searchable="true"
+                            :can-clear="true"
+                            :disabled="!supervisorOrgPositionId"
+                            placeholder="Seleccione funcionario…"
+                            no-options-text="No hay funcionarios en este cargo"
+                            no-results-text="Sin coincidencias"
+                            class="multiselect-roles"
+                          />
                         </div>
                       </div>
+                    </div>
 
-                      <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6">
+                    <div class="space-y-4">
+                      <p class="text-sm font-medium text-foreground leading-snug">
+                        Vigencia y detalle del movimiento
+                      </p>
+                      <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 md:gap-x-6 md:gap-y-5">
                         <div class="space-y-3">
                           <Label for="eff_p" class="leading-snug">Vigencia desde *</Label>
                           <Input id="eff_p" v-model="ubicacionForm.effective_from" type="date" required />
@@ -866,32 +1058,32 @@ watch(
                           <Label for="eff_to_p" class="leading-snug">Vigente hasta (opcional)</Label>
                           <Input id="eff_to_p" v-model="ubicacionForm.effective_to" type="date" />
                           <p class="text-xs text-muted-foreground leading-relaxed">
-                            Si la deja vacía, el tramo queda abierto hasta un nuevo movimiento. Si indica fin, ese tramo no se considera «asignación vigente» en listados que solo muestran la ubicación actual.
+                            Vacío = tramo abierto hasta un nuevo movimiento.
                           </p>
                         </div>
-                      </div>
+                        <div class="space-y-3 md:col-span-2 xl:col-span-1">
+                          <Label for="ck_p" class="leading-snug">Tipo de movimiento</Label>
+                          <Multiselect
+                            id="ck_p"
+                            v-model="ubicacionForm.change_kind"
+                            mode="single"
+                            :object="false"
+                            :options="changeKindSelectOptions"
+                            value-prop="value"
+                            label="label"
+                            :searchable="true"
+                            :can-clear="false"
+                            placeholder="Seleccione…"
+                            no-options-text="Sin opciones"
+                            no-results-text="Sin coincidencias"
+                            class="multiselect-roles"
+                          />
+                        </div>
 
-                      <div class="space-y-3 md:col-span-2">
-                        <Label for="ck_p" class="leading-snug">Tipo de movimiento</Label>
-                        <Select v-model="ubicacionForm.change_kind">
-                          <SelectTrigger id="ck_p">
-                            <SelectValue placeholder="Seleccione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem
-                              v-for="opt in ORG_ASSIGNMENT_CHANGE_KIND_OPTIONS"
-                              :key="opt.value"
-                              :value="opt.value"
-                            >
-                              {{ opt.label }}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div class="space-y-3 md:col-span-2">
-                        <Label for="nts_p" class="leading-snug">Notas</Label>
-                        <Textarea id="nts_p" v-model="ubicacionForm.notes" rows="3" placeholder="Opcional…" class="resize-y min-h-[4.5rem]" />
+                        <div class="space-y-3 md:col-span-2 xl:col-span-3">
+                          <Label for="nts_p" class="leading-snug">Notas</Label>
+                          <Textarea id="nts_p" v-model="ubicacionForm.notes" rows="3" placeholder="Opcional…" class="resize-y min-h-[4.5rem]" />
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -914,3 +1106,54 @@ watch(
     </Tabs>
   </div>
 </template>
+
+<style src="@vueform/multiselect/themes/default.css"></style>
+<style scoped>
+.staff-field {
+  width: 100%;
+  max-width: 13rem;
+}
+
+.staff-field-email {
+  width: 100%;
+  max-width: 18rem;
+}
+
+.staff-field-phone {
+  width: 100%;
+  max-width: 11rem;
+}
+
+.staff-field-extension {
+  width: 100%;
+  max-width: 6.5rem;
+}
+
+.staff-field-doc-type {
+  width: 100%;
+  max-width: 14rem;
+}
+
+.staff-field-doc {
+  width: 100%;
+  max-width: 11rem;
+}
+
+.staff-field-user {
+  width: 100%;
+  max-width: 18rem;
+}
+
+.multiselect-roles {
+  --ms-font-size: 0.875rem;
+  --ms-line-height: 1.25rem;
+  --ms-radius: 0.375rem;
+  --ms-border-color: var(--border);
+  --ms-bg: var(--background);
+  --ms-py: 0.5rem;
+  --ms-dropdown-radius: 0.375rem;
+  min-height: 2.25rem;
+  width: 100%;
+  min-width: 0;
+}
+</style>

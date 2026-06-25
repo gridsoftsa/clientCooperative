@@ -5,10 +5,16 @@ import type { Role } from '~/types/role'
 import type { UserAccountStatus } from '~/types/user'
 import { ACCOUNT_STATUS_FORM_OPTIONS } from '~/utils/accountStatus'
 import {
-  STAFF_CREATE_RETURN_PATH,
+  isStaffUserCreateReturnPath,
   USER_CREATE_PREFILL_FROM_STAFF_KEY,
   type UserCreatePrefillFromStaff,
 } from '~/utils/staff-user-create-bridge'
+import {
+  USER_CREATE_RETURN_PATH,
+  clearUserCreateDraft,
+  readUserCreateDraft,
+  saveUserCreateDraft,
+} from '~/utils/user-create-draft'
 
 definePageMeta({
   layout: 'default',
@@ -25,7 +31,9 @@ const returnTo = computed(() => {
   return typeof value === 'string' && value.startsWith('/') ? value : null
 })
 
-const fromStaffCreate = computed(() => returnTo.value === STAFF_CREATE_RETURN_PATH)
+const fromStaffFlow = computed(() =>
+  returnTo.value != null && isStaffUserCreateReturnPath(returnTo.value),
+)
 
 const form = ref({
   name: '',
@@ -117,7 +125,7 @@ const fetchLinkableStaff = async () => {
 }
 
 function restorePrefillFromStaffCreate() {
-  if (!fromStaffCreate.value || !import.meta.client) {
+  if (!fromStaffFlow.value || !import.meta.client) {
     return
   }
   const raw = sessionStorage.getItem(USER_CREATE_PREFILL_FROM_STAFF_KEY)
@@ -145,13 +153,69 @@ function restorePrefillFromStaffCreate() {
   }
 }
 
+function restoreDraftFromStorage(): boolean {
+  const draft = readUserCreateDraft()
+  if (!draft) {
+    return false
+  }
+
+  form.value = { ...form.value, ...draft.form }
+  accountStatus.value = draft.accountStatus
+  selectedRole.value = draft.selectedRole
+
+  if (draft.returnTo && draft.returnTo !== returnTo.value) {
+    router.replace({
+      path: route.path,
+      query: {
+        ...route.query,
+        returnTo: draft.returnTo,
+      },
+    })
+  }
+
+  clearUserCreateDraft()
+  return true
+}
+
+function saveDraftAndGoCreateRole() {
+  if (!import.meta.client) {
+    return
+  }
+
+  saveUserCreateDraft({
+    form: { ...form.value },
+    accountStatus: accountStatus.value,
+    selectedRole: selectedRole.value,
+    returnTo: returnTo.value,
+  })
+
+  router.push({
+    path: '/settings/roles/create',
+    query: { returnTo: USER_CREATE_RETURN_PATH },
+  })
+}
+
+function applyReturnedRoleFromQuery() {
+  const raw = route.query.role_name
+  const roleName = typeof raw === 'string' ? raw.trim() : ''
+  if (!roleName) {
+    return
+  }
+
+  selectedRole.value = roleName
+
+  const nextQuery = { ...route.query }
+  delete nextQuery.role_name
+  router.replace({ path: route.path, query: nextQuery })
+}
+
 const handleSubmit = async () => {
   if (!form.value.name.trim() || !form.value.email.trim() || !form.value.password || !form.value.sucursal_id) {
     toast.error('Completa todos los campos requeridos')
     return
   }
 
-  if (!fromStaffCreate.value && form.value.org_staff_id == null) {
+  if (!fromStaffFlow.value && form.value.org_staff_id == null) {
     toast.error('Debe seleccionar el funcionario organizacional')
     return
   }
@@ -208,13 +272,18 @@ const handleSubmit = async () => {
   }
 }
 
-onMounted(() => {
-  restorePrefillFromStaffCreate()
+onMounted(async () => {
+  const restoredDraft = restoreDraftFromStorage()
+  if (!restoredDraft) {
+    restorePrefillFromStaffCreate()
+  }
+
   const tasks: Promise<void>[] = [fetchRoles(), fetchSucursales()]
-  if (!fromStaffCreate.value) {
+  if (!fromStaffFlow.value) {
     tasks.push(fetchLinkableStaff())
   }
-  Promise.all(tasks)
+  await Promise.all(tasks)
+  applyReturnedRoleFromQuery()
 })
 
 watch(selectedRole, (role) => {
@@ -231,12 +300,12 @@ watch(selectedRole, (role) => {
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1">
           <h2 class="text-2xl font-bold tracking-tight">
-            {{ fromStaffCreate ? 'Crear usuario para funcionario' : 'Crear Nuevo Usuario' }}
+            {{ fromStaffFlow ? 'Crear usuario para funcionario' : 'Crear Nuevo Usuario' }}
           </h2>
           <p class="text-muted-foreground leading-relaxed">
             {{
-              fromStaffCreate
-                ? 'Al guardar volverá al alta de funcionario con este usuario preseleccionado.'
+              fromStaffFlow
+                ? 'Al guardar volverá al formulario de funcionario con este usuario preseleccionado.'
                 : 'Crea un nuevo usuario y asigna sus roles'
             }}
           </p>
@@ -322,7 +391,7 @@ watch(selectedRole, (role) => {
                   </Select>
                 </div>
 
-                <div v-if="!fromStaffCreate" class="space-y-3 md:col-span-2">
+                <div v-if="!fromStaffFlow" class="space-y-3 md:col-span-2">
                   <Label for="org_staff" class="leading-snug">Funcionario organizacional *</Label>
                   <p class="text-sm text-muted-foreground leading-relaxed">
                     Cada usuario debe corresponder a un funcionario del módulo de estructura organizacional (solo aparecen los que aún no tienen cuenta).
@@ -433,25 +502,37 @@ watch(selectedRole, (role) => {
                 <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
               </div>
 
-              <div v-else class="space-y-2">
+              <div v-else class="space-y-3">
                 <Label class="leading-snug">Roles asignados</Label>
-                <Multiselect
-                  v-model="selectedRole"
-                  mode="single"
-                  :object="false"
-                  :options="roleSelectOptions"
-                  value-prop="value"
-                  label="label"
-                  :searchable="true"
-                  :close-on-select="true"
-                  placeholder="Seleccione…"
-                  no-options-text="No hay roles configurados"
-                  no-results-text="Sin coincidencias"
-                  class="multiselect-roles"
-                />
-                <p v-if="roles.length === 0" class="text-center py-4 text-sm text-muted-foreground">
-                  No hay roles disponibles
-                </p>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div class="w-full min-w-0 max-w-md">
+                    <Multiselect
+                      v-model="selectedRole"
+                      mode="single"
+                      :object="false"
+                      :options="roleSelectOptions"
+                      value-prop="value"
+                      label="label"
+                      :searchable="true"
+                      :close-on-select="true"
+                      placeholder="Seleccione…"
+                      no-options-text="No hay roles configurados"
+                      no-results-text="Sin coincidencias"
+                      class="multiselect-roles"
+                    />
+                  </div>
+                  <PermissionGate permission="roles_crear">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      class="shrink-0"
+                      @click="saveDraftAndGoCreateRole"
+                    >
+                      <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                      Crear rol
+                    </Button>
+                  </PermissionGate>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -462,7 +543,7 @@ watch(selectedRole, (role) => {
             </Button>
             <Button type="submit" :disabled="saving">
               <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              {{ saving ? 'Guardando...' : (fromStaffCreate ? 'Crear y volver al funcionario' : 'Crear Usuario') }}
+              {{ saving ? 'Guardando...' : (fromStaffFlow ? 'Crear y volver al funcionario' : 'Crear Usuario') }}
             </Button>
           </div>
         </div>

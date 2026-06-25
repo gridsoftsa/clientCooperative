@@ -43,12 +43,23 @@ export interface VentanillaReportableMetadataFieldRow {
   data_type: string
 }
 
+import type { OrgStaffListItem } from '~/types/org-structure'
+
+export interface VentanillaCatalogOrgUnitRow {
+  id: number
+  name: string
+  code: string
+  is_document_producer?: boolean
+}
+
 export interface VentanillaCatalogData {
   filing_types: Array<{ value: VentanillaFilingTypeValue; label: string }>
   functional_types: VentanillaFunctionalTypeRow[]
   reception_media: VentanillaReceptionMediumRow[]
   searchable_metadata_fields?: VentanillaSearchableMetadataFieldRow[]
   reportable_metadata_fields?: VentanillaReportableMetadataFieldRow[]
+  org_units?: VentanillaCatalogOrgUnitRow[]
+  org_staff?: OrgStaffListItem[]
 }
 
 export interface VentanillaCatalogSettingsData {

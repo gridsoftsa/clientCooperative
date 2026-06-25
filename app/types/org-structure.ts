@@ -44,6 +44,7 @@ export interface OrgStaffListItem {
   email?: string | null
   phone?: string | null
   extension?: string | null
+  document_type?: string | null
   document_number?: string | null
   user_id?: number | null
   is_active: boolean

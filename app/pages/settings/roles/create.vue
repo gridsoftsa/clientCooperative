@@ -17,6 +17,22 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
+const route = useRoute()
+
+const returnTo = computed(() => {
+  const value = route.query.returnTo
+  return typeof value === 'string' && value.startsWith('/') ? value : null
+})
+
+const fromUserCreate = computed(() => returnTo.value === '/settings/users/create')
+
+function goBack() {
+  if (returnTo.value) {
+    router.push(returnTo.value)
+    return
+  }
+  router.back()
+}
 
 const formData = ref({
   name: '',
@@ -103,11 +119,18 @@ const handleSubmit = async () => {
   }
   saving.value = true
   try {
-    await $api('/roles', {
+    const res = await $api<{ data: { name: string } }>('/roles', {
       method: 'POST',
       body: { name: formData.value.name, permissions: formData.value.permissions },
     })
     toast.success('Rol creado correctamente')
+    if (returnTo.value) {
+      await router.push({
+        path: returnTo.value,
+        query: { role_name: res.data.name },
+      })
+      return
+    }
     router.push('/settings/roles')
   } catch (error: any) {
     const message = error?.data?.message || error?.data?.errors?.name?.[0] || 'Error al crear el rol'
@@ -126,9 +149,15 @@ onMounted(() => fetchPermissions())
     <div class="flex items-center justify-between">
       <div>
         <h2 class="text-2xl font-bold tracking-tight">Crear Nuevo Rol</h2>
-        <p class="text-muted-foreground">Define un nuevo rol y asigna sus permisos</p>
+        <p class="text-muted-foreground">
+          {{
+            fromUserCreate
+              ? 'Al guardar volverá al alta de usuario con este rol preseleccionado.'
+              : 'Define un nuevo rol y asigna sus permisos'
+          }}
+        </p>
       </div>
-      <Button variant="outline" @click="router.back()">
+      <Button variant="outline" @click="goBack">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>
@@ -261,10 +290,10 @@ onMounted(() => fetchPermissions())
         </Card>
 
         <div class="flex justify-end gap-4">
-          <Button type="button" variant="outline" @click="router.back()">Cancelar</Button>
+          <Button type="button" variant="outline" @click="goBack">Cancelar</Button>
           <Button type="submit" :disabled="saving">
             <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-            {{ saving ? 'Guardando...' : 'Crear Rol' }}
+            {{ saving ? 'Guardando...' : (fromUserCreate ? 'Crear y volver al usuario' : 'Crear Rol') }}
           </Button>
         </div>
       </div>

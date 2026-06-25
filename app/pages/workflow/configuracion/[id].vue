@@ -18,6 +18,11 @@ const route = useRoute()
 const router = useRouter()
 const workflowApi = useWorkflowApi()
 const orgApi = useOrgStructureApi()
+const deleteWithReason = useApiDeleteWithReason()
+
+const deleteStageDialogOpen = ref(false)
+const stagePendingDelete = ref<WorkflowStage | null>(null)
+const deletingStage = ref(false)
 
 const definitionId = computed(() => Number(route.params.id))
 const loading = ref(true)
@@ -139,20 +144,36 @@ function openEditStage(stage: WorkflowStage) {
   stageDialogOpen.value = true
 }
 
-async function deleteStage(stage: WorkflowStage) {
-  if (isLocked.value)
+function openDeleteStageDialog(stage: WorkflowStage) {
+  if (isLocked.value || stages.value.length <= 1)
     return
 
-  if (!confirm(`¿Eliminar la etapa «${stage.name}»?`))
+  stagePendingDelete.value = stage
+  deleteStageDialogOpen.value = true
+}
+
+async function onDeleteStageConfirm(reason: string) {
+  const stage = stagePendingDelete.value
+  if (!stage || deletingStage.value)
     return
+
+  deletingStage.value = true
 
   try {
-    await workflowApi.deleteStage(stage.id)
+    await deleteWithReason(`/workflow/stages/${stage.id}`, reason)
+    deleteStageDialogOpen.value = false
+    stagePendingDelete.value = null
     toast.success('Etapa eliminada.')
     await loadDefinition()
   }
-  catch {
-    toast.error('No se pudo eliminar la etapa.')
+  catch (error: any) {
+    const message = error?.data?.message
+      || error?.data?.errors?.stage?.[0]
+      || 'No se pudo eliminar la etapa.'
+    toast.error(message)
+  }
+  finally {
+    deletingStage.value = false
   }
 }
 
@@ -179,8 +200,27 @@ function isTypeBoundToThis(key: string) {
   return bindingsForDefinition.value.some(b => b.functional_type_key === key)
 }
 
+const functionalTypesParametrizationPath = computed(() => {
+  const query = new URLSearchParams({
+    return_to: `/workflow/configuracion/${definitionId.value}`,
+  })
+
+  return `/parametrizacion/ventanilla-unica?${query.toString()}`
+})
+
 onMounted(async () => {
   await Promise.all([loadCatalogs(), loadDefinition()])
+})
+
+onActivated(async () => {
+  if (!loading.value) {
+    await loadCatalogs()
+  }
+})
+
+watch(deleteStageDialogOpen, (open) => {
+  if (!open)
+    stagePendingDelete.value = null
 })
 </script>
 
@@ -326,7 +366,7 @@ onMounted(async () => {
                   size="sm"
                   class="text-destructive"
                   :disabled="stages.length <= 1"
-                  @click="deleteStage(stage)"
+                  @click="openDeleteStageDialog(stage)"
                 >
                   Eliminar
                 </Button>
@@ -338,13 +378,50 @@ onMounted(async () => {
 
       <TabsContent value="bindings" class="mt-4">
         <Card>
-          <CardHeader>
-            <CardTitle>Asociar a tipos funcionales</CardTitle>
-            <CardDescription>
-              Cada tipo funcional de ventanilla puede tener un flujo activo. Al radicar, se usa el flujo asociado.
-            </CardDescription>
+          <CardHeader class="gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div class="space-y-1">
+              <CardTitle>Asociar a tipos funcionales</CardTitle>
+              <CardDescription>
+                Cada tipo funcional de ventanilla puede tener un flujo activo. Al radicar, se usa el flujo asociado.
+              </CardDescription>
+            </div>
+            <PermissionGate
+              :any-permission="['workflow_tipos_funcionales_parametrizar', 'ventanilla_configurar', 'plantillas_ver']"
+            >
+              <Button variant="outline" size="sm" as-child>
+                <NuxtLink :to="functionalTypesParametrizationPath">
+                  <Icon name="lucide:plus" class="mr-1 size-4" />
+                  Crear tipo funcional
+                </NuxtLink>
+              </Button>
+            </PermissionGate>
           </CardHeader>
-          <CardContent class="divide-y">
+          <CardContent>
+            <div
+              v-if="functionalTypes.length === 0"
+              class="rounded-lg border border-dashed p-8 text-center space-y-4"
+            >
+              <p class="text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto">
+                No hay tipos funcionales configurados en ventanilla. Créelos en parametrización y regrese aquí para asociarlos a este flujo.
+              </p>
+              <PermissionGate
+                :any-permission="['workflow_tipos_funcionales_parametrizar', 'ventanilla_configurar', 'plantillas_ver']"
+                :fallback="true"
+              >
+                <Button as-child>
+                  <NuxtLink :to="functionalTypesParametrizationPath">
+                    <Icon name="lucide:plus" class="mr-2 size-4" />
+                    Ir a crear tipo funcional
+                  </NuxtLink>
+                </Button>
+                <template #fallback>
+                  <p class="text-xs text-amber-700 dark:text-amber-400">
+                    Necesita el permiso «Parametrizar tipos funcionales desde workflow» o configuración de ventanilla para crearlos desde aquí.
+                  </p>
+                </template>
+              </PermissionGate>
+            </div>
+            <div v-else class="divide-y">
             <div
               v-for="ft in functionalTypes"
               :key="ft.key"
@@ -372,6 +449,7 @@ onMounted(async () => {
                 </Button>
               </div>
             </div>
+            </div>
           </CardContent>
         </Card>
       </TabsContent>
@@ -388,6 +466,20 @@ onMounted(async () => {
       :org-units="orgUnits"
       :positions="positions"
       @saved="loadDefinition"
+    />
+
+    <ConfirmWithReasonDialog
+      v-model:open="deleteStageDialogOpen"
+      title="Eliminar etapa"
+      :description="stagePendingDelete
+        ? `Se eliminará la etapa «${stagePendingDelete.name}» (${stagePendingDelete.key}) del flujo. Esta acción no se puede deshacer.`
+        : ''"
+      reason-label="Motivo de la eliminación"
+      reason-placeholder="Indica por qué se elimina esta etapa del flujo…"
+      confirm-text="Eliminar etapa"
+      cancel-text="Cancelar"
+      :loading="deletingStage"
+      @confirm="onDeleteStageConfirm"
     />
   </div>
 </template>

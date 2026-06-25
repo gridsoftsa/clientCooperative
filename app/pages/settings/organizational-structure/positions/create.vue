@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import Multiselect from '@vueform/multiselect'
 import type { OrgYesNoChoice } from '~/constants/org-structure'
 import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
 import type { OrgStaffListItem } from '~/types/org-structure'
@@ -205,23 +206,21 @@ onMounted(() => {
                 <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6 md:gap-y-5 md:items-start">
                   <div class="space-y-3">
                     <Label for="unit_p" class="leading-snug">Área *</Label>
-                    <Select
-                      :model-value="form.org_unit_id == null ? undefined : String(form.org_unit_id)"
-                      @update:model-value="(v) => { form.org_unit_id = v ? Number(v) : null }"
-                    >
-                      <SelectTrigger id="unit_p">
-                        <SelectValue placeholder="Seleccione área" />
-                      </SelectTrigger>
-                      <SelectContent class="max-h-72">
-                        <SelectItem
-                          v-for="u in unitOptions"
-                          :key="u.id"
-                          :value="String(u.id)"
-                        >
-                          {{ u.label }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Multiselect
+                      id="unit_p"
+                      v-model="form.org_unit_id"
+                      mode="single"
+                      :object="false"
+                      :options="unitOptions"
+                      value-prop="id"
+                      label="label"
+                      :searchable="true"
+                      :can-clear="false"
+                      placeholder="Seleccione área…"
+                      no-options-text="No hay áreas configuradas"
+                      no-results-text="Sin coincidencias"
+                      class="multiselect-roles"
+                    />
                   </div>
                   <OrgYesNoMultiselect
                     v-model="chargesSelectedArea"
@@ -403,3 +402,19 @@ onMounted(() => {
     </div>
   </SettingsLayout>
 </template>
+
+<style src="@vueform/multiselect/themes/default.css"></style>
+<style scoped>
+.multiselect-roles {
+  --ms-font-size: 0.875rem;
+  --ms-line-height: 1.25rem;
+  --ms-radius: 0.375rem;
+  --ms-border-color: var(--border);
+  --ms-bg: var(--background);
+  --ms-py: 0.5rem;
+  --ms-dropdown-radius: 0.375rem;
+  min-height: 2.75rem;
+  width: 100%;
+  min-width: 0;
+}
+</style>

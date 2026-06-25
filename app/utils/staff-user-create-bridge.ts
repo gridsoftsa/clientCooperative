@@ -7,6 +7,7 @@ export interface StaffCreateDraft {
   email: string
   phone: string
   extension: string
+  document_type: string
   document_number: string
   is_active: boolean
 }
@@ -19,8 +20,23 @@ export interface UserCreatePrefillFromStaff {
 }
 
 export const STAFF_CREATE_DRAFT_KEY = 'org-staff-create-draft'
+export const STAFF_EDIT_DRAFT_KEY_PREFIX = 'org-staff-edit-draft-'
 export const USER_CREATE_PREFILL_FROM_STAFF_KEY = 'user-create-prefill-from-staff'
 export const STAFF_CREATE_RETURN_PATH = '/settings/organizational-structure/staff/create'
+
+export function staffEditDraftKey(staffId: number): string {
+  return `${STAFF_EDIT_DRAFT_KEY_PREFIX}${staffId}`
+}
+
+export function staffEditReturnPath(staffId: number): string {
+  return `/settings/organizational-structure/staff/${staffId}/edit`
+}
+
+const STAFF_EDIT_RETURN_PATH_PATTERN = /^\/settings\/organizational-structure\/staff\/\d+\/edit$/
+
+export function isStaffUserCreateReturnPath(path: string): boolean {
+  return path === STAFF_CREATE_RETURN_PATH || STAFF_EDIT_RETURN_PATH_PATTERN.test(path)
+}
 
 export function buildFullNameFromStaffParts(
   firstName: string,
