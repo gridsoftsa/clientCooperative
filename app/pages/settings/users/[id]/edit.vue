@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import type { User } from '~/types/user'
 import { normalizeRoleNames } from '~/utils/userRoles'
+import { PASSWORD_REQUIREMENTS, validateRobustPassword } from '~/utils/password'
 import type { Role } from '~/types/role'
 
 definePageMeta({
@@ -158,8 +159,9 @@ const handleSubmit = async () => {
       return
     }
 
-    if (form.value.password.length < 8) {
-      toast.error('La contraseña debe tener al menos 8 caracteres')
+    const passwordError = validateRobustPassword(form.value.password)
+    if (passwordError) {
+      toast.error(passwordError)
       return
     }
   }
@@ -343,11 +345,14 @@ onMounted(async () => {
               <div v-if="changePassword" class="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div class="space-y-3">
                   <Label for="password" class="leading-snug">Nueva Contraseña *</Label>
+                  <p class="text-xs text-muted-foreground">
+                    {{ PASSWORD_REQUIREMENTS }}
+                  </p>
                   <PasswordInput
                     id="password"
                     v-model="form.password"
                     required
-                    placeholder="Mínimo 8 caracteres"
+                    placeholder="Contraseña robusta"
                   />
                 </div>
 

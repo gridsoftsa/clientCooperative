@@ -1,13 +1,23 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { PASSWORD_REQUIREMENTS, validateRobustPassword } from '~/utils/password'
 
 const { $api, $csrf } = useNuxtApp()
 const { user, refetchUserSilently } = useAuth()
-
 const saving = ref(false)
 const currentPassword = ref('')
 const password = ref('')
 const passwordConfirmation = ref('')
+
+const showExpiryWarning = computed(() =>
+  Boolean(
+    user.value?.password_expiration_enabled
+    && !user.value?.password_expired
+    && user.value?.days_until_password_expiry != null
+    && user.value.days_until_password_expiry <= 14
+    && user.value.days_until_password_expiry >= 0,
+  ),
+)
 
 async function handleSubmit() {
   if (saving.value) {
@@ -21,8 +31,9 @@ async function handleSubmit() {
     toast.error('La nueva contraseña y la confirmación no coinciden')
     return
   }
-  if (password.value.length < 8) {
-    toast.error('La nueva contraseña debe tener al menos 8 caracteres')
+  const passwordError = validateRobustPassword(password.value)
+  if (passwordError) {
+    toast.error(passwordError)
     return
   }
 
@@ -71,6 +82,15 @@ async function handleSubmit() {
     </div>
     <Separator />
 
+    <div
+      v-if="showExpiryWarning"
+      class="rounded-lg border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200"
+    >
+      Tu contraseña vence en {{ user?.days_until_password_expiry }}
+      {{ user?.days_until_password_expiry === 1 ? 'día' : 'días' }}.
+      Te recomendamos cambiarla ahora para evitar interrupciones.
+    </div>
+
     <form class="max-w-md space-y-4" @submit.prevent="handleSubmit">
       <div class="space-y-2">
         <Label for="acct-current-password">Contraseña actual *</Label>
@@ -83,11 +103,14 @@ async function handleSubmit() {
       </div>
       <div class="space-y-2">
         <Label for="acct-new-password">Nueva contraseña *</Label>
+        <p class="text-xs text-muted-foreground">
+          {{ PASSWORD_REQUIREMENTS }}
+        </p>
         <PasswordInput
           id="acct-new-password"
           v-model="password"
           autocomplete="new-password"
-          placeholder="Mínimo 8 caracteres"
+          placeholder="Contraseña robusta"
         />
       </div>
       <div class="space-y-2">

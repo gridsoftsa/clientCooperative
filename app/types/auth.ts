@@ -4,6 +4,11 @@ export interface AuthUser {
   full_name?: string | null
   phone?: string | null
   is_active?: boolean
+  must_change_password?: boolean
+  password_expires_at?: string | null
+  password_expired?: boolean
+  days_until_password_expiry?: number | null
+  password_expiration_enabled?: boolean
   email: string
   email_verified_at?: string | null
   created_at?: string

@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import type { Role } from '~/types/role'
+import { generateRobustPassword, PASSWORD_REQUIREMENTS, validateRobustPassword } from '~/utils/password'
 
 definePageMeta({
   layout: 'default',
@@ -20,10 +21,18 @@ const form = ref({
   email: '',
   password: '',
   password_confirmation: '',
+  send_welcome_email: true,
   sucursal_id: null as number | null,
   allowed_sucursal_ids: [] as number[],
   roles: [] as string[],
 })
+
+function generatePassword() {
+  const password = generateRobustPassword()
+  form.value.password = password
+  form.value.password_confirmation = password
+  toast.success('Contraseña robusta generada')
+}
 
 const roles = ref<Role[]>([])
 const selectedRole = ref<string | null>(null)
@@ -83,40 +92,53 @@ const fetchRoles = async () => {
 }
 
 const handleSubmit = async () => {
-  if (!form.value.name.trim() || !form.value.email.trim() || !form.value.password || !form.value.sucursal_id) {
+  if (!form.value.name.trim() || !form.value.email.trim() || !form.value.sucursal_id) {
     toast.error('Completa todos los campos requeridos')
     return
   }
 
-  if (form.value.password !== form.value.password_confirmation) {
+  if (form.value.password && form.value.password !== form.value.password_confirmation) {
     toast.error('Las contraseñas no coinciden')
     return
   }
 
-  if (form.value.password.length < 8) {
-    toast.error('La contraseña debe tener al menos 8 caracteres')
-    return
+  if (form.value.password) {
+    const passwordError = validateRobustPassword(form.value.password)
+    if (passwordError) {
+      toast.error(passwordError)
+      return
+    }
   }
 
   saving.value = true
   try {
-    await $api('/users', {
+    const body: Record<string, unknown> = {
+      name: form.value.name,
+      full_name: form.value.full_name?.trim() || undefined,
+      phone: form.value.phone?.trim() || undefined,
+      is_active: accountStatus.value === 'active',
+      email: form.value.email,
+      send_welcome_email: form.value.send_welcome_email,
+      sucursal_id: form.value.sucursal_id,
+      allowed_sucursal_ids: form.value.allowed_sucursal_ids,
+      roles: form.value.roles,
+    }
+
+    if (form.value.password) {
+      body.password = form.value.password
+      body.password_confirmation = form.value.password_confirmation
+    }
+
+    const res = await $api<{ data: unknown; temporary_password?: string }>('/users', {
       method: 'POST',
-      body: {
-        name: form.value.name,
-        full_name: form.value.full_name?.trim() || undefined,
-        phone: form.value.phone?.trim() || undefined,
-        is_active: accountStatus.value === 'active',
-        email: form.value.email,
-        password: form.value.password,
-        password_confirmation: form.value.password_confirmation,
-        sucursal_id: form.value.sucursal_id,
-        allowed_sucursal_ids: form.value.allowed_sucursal_ids,
-        roles: form.value.roles,
-      },
+      body,
     })
-    
-    toast.success('Usuario creado correctamente')
+
+    if (res.temporary_password) {
+      toast.success(`Usuario creado. Contraseña temporal: ${res.temporary_password}`, { duration: 15000 })
+    } else {
+      toast.success('Usuario creado correctamente')
+    }
     router.push('/settings/users')
   } catch (error: any) {
     console.error('Error saving user:', error)
@@ -254,24 +276,38 @@ watch(selectedRole, (role) => {
 
             <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div class="space-y-3">
-                <Label for="password" class="leading-snug">Contraseña *</Label>
+                <div class="flex items-center justify-between gap-2">
+                  <Label for="password" class="leading-snug">Contraseña</Label>
+                  <Button type="button" variant="outline" size="sm" @click="generatePassword">
+                    <Icon name="i-lucide-refresh-cw" class="mr-1.5 h-3.5 w-3.5" />
+                    Generar
+                  </Button>
+                </div>
+                <p class="text-xs text-muted-foreground">
+                  Opcional. Si la dejas vacía, se generará automáticamente y se enviará por correo. {{ PASSWORD_REQUIREMENTS }}
+                </p>
                 <PasswordInput
                   id="password"
                   v-model="form.password"
-                  required
-                  placeholder="Mínimo 8 caracteres"
+                  placeholder="Contraseña robusta (opcional)"
                 />
               </div>
 
               <div class="space-y-3">
-                <Label for="password_confirmation" class="leading-snug">Confirmar Contraseña *</Label>
+                <Label for="password_confirmation" class="leading-snug">Confirmar contraseña</Label>
                 <PasswordInput
                   id="password_confirmation"
                   v-model="form.password_confirmation"
-                  required
                   placeholder="Repite la contraseña"
                 />
               </div>
+            </div>
+
+            <div class="flex items-center gap-2 md:col-span-2">
+              <Checkbox id="send_welcome_email" v-model:checked="form.send_welcome_email" />
+              <Label for="send_welcome_email" class="text-sm font-normal leading-snug">
+                Enviar credenciales por correo al usuario
+              </Label>
             </div>
           </CardContent>
         </Card>

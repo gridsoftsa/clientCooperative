@@ -1,10 +1,11 @@
 export default defineNuxtRouteMiddleware(async (to) => {
   const publicPages = new Set(['/login', '/forgot-password', '/reset-password', '/register', '/unauthorized'])
   const guestOnly = new Set(['/login', '/forgot-password', '/reset-password', '/register'])
+  const changePasswordPage = '/change-password'
 
   // En el servidor, solo permitir páginas públicas
   if (import.meta.server) {
-    if (!publicPages.has(to.path)) {
+    if (!publicPages.has(to.path) && to.path !== changePasswordPage) {
       // En SSR, no podemos redirigir, pero el cliente lo hará inmediatamente
       return
     }
@@ -29,6 +30,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
     }
     
     if (user.value && guestOnly.has(to.path)) {
+      if (user.value.must_change_password) {
+        return navigateTo(changePasswordPage)
+      }
       const { hasPermission } = usePermissions()
       const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
       return navigateTo(target)
@@ -61,6 +65,17 @@ export default defineNuxtRouteMiddleware(async (to) => {
       return navigateTo('/login')
     }
     return
+  }
+
+  // Forzar cambio de contraseña en primer acceso
+  if (user.value?.must_change_password && to.path !== changePasswordPage) {
+    return navigateTo(changePasswordPage)
+  }
+
+  if (!user.value?.must_change_password && to.path === changePasswordPage) {
+    const { hasPermission } = usePermissions()
+    const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
+    return navigateTo(target)
   }
 
   // Si está logueado y está en una página de invitados, redirigir al dashboard
