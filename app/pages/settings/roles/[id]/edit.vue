@@ -2,13 +2,6 @@
 import { useDebounceFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import type { Role, Permission } from '~/types/role'
-import {
-  PERMISSION_CATEGORY_LABELS,
-  PERMISSION_CATEGORY_SECTION_TITLES,
-  formatPermissionDisplayName,
-  groupRadicacionPermissions,
-  sortPermissionCategoryKeys,
-} from '~/constants/permission-labels'
 
 definePageMeta({
   layout: 'default',
@@ -34,73 +27,6 @@ const saving = ref(false)
 const savingPermissions = ref(false)
 /** Evita PUT al hidratar el rol desde el servidor. */
 const skipPermissionAutoSave = ref(true)
-
-const groupedPermissions = computed(() => {
-  const groups: Record<string, Permission[]> = {}
-  for (const p of permissions.value) {
-    const category = p.name.split('_')[0] ?? 'otros'
-    if (!groups[category]) groups[category] = []
-    groups[category].push(p)
-  }
-  return groups
-})
-
-const orderedCategoryKeys = computed(() =>
-  sortPermissionCategoryKeys(Object.keys(groupedPermissions.value)),
-)
-
-/** Subsecciones dentro del bloque Radicación (documentos, análisis, etc.). */
-const radicacionSubgroups = computed(() =>
-  groupRadicacionPermissions(groupedPermissions.value['radicacion'] ?? []),
-)
-
-const getCategoryLabel = (key: string) =>
-  PERMISSION_CATEGORY_SECTION_TITLES[key] ?? PERMISSION_CATEGORY_LABELS[key] ?? key
-
-const openCategories = ref<Record<string, boolean>>({})
-
-const collapseAll = () => {
-  openCategories.value = Object.fromEntries(
-    Object.keys(groupedPermissions.value).map((c) => [c, false]),
-  )
-}
-
-const expandAll = () => {
-  openCategories.value = Object.fromEntries(
-    Object.keys(groupedPermissions.value).map((c) => [c, true]),
-  )
-}
-
-const setCategoryOpen = (category: string, open: boolean) => {
-  openCategories.value = { ...openCategories.value, [category]: open }
-}
-
-const togglePermission = (name: string, checked: boolean) => {
-  if (checked) {
-    if (!formData.value.permissions.includes(name)) {
-      formData.value.permissions = [...formData.value.permissions, name]
-    }
-  } else {
-    formData.value.permissions = formData.value.permissions.filter(p => p !== name)
-  }
-}
-
-const toggleCategory = (category: string) => {
-  const list = groupedPermissions.value[category] ?? []
-  const allSelected = list.every(p => formData.value.permissions.includes(p.name))
-  if (allSelected) {
-    formData.value.permissions = formData.value.permissions.filter(
-      p => !list.some(l => l.name === p),
-    )
-  } else {
-    const toAdd = list.filter(p => !formData.value.permissions.includes(p.name)).map(p => p.name)
-    formData.value.permissions = [...formData.value.permissions, ...toAdd]
-  }
-}
-
-function countSelectedInList(list: { name: string }[]): number {
-  return list.filter(p => formData.value.permissions.includes(p.name)).length
-}
 
 const debouncedPersistPermissions = useDebounceFn(async () => {
   if (skipPermissionAutoSave.value || !role.value) {
@@ -253,117 +179,23 @@ onMounted(async () => {
             <div class="min-w-0 flex-1">
               <CardTitle>Permisos</CardTitle>
               <CardDescription>
-                Se guardan al marcar o desmarcar. El botón inferior solo aplica si cambias el nombre del rol.
+                Busca por nombre o módulo. Los cambios se guardan automáticamente al marcar o desmarcar.
               </CardDescription>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <span
-                v-if="savingPermissions"
-                class="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-              >
-                <Icon name="i-lucide-loader-2" class="h-3.5 w-3.5 animate-spin" />
-                Guardando permisos…
-              </span>
-              <Button type="button" variant="outline" size="sm" @click="expandAll">
-                <Icon name="i-lucide-chevrons-down" class="mr-2 h-4 w-4" />
-                Expandir todo
-              </Button>
-              <Button type="button" variant="outline" size="sm" @click="collapseAll">
-                <Icon name="i-lucide-chevrons-up" class="mr-2 h-4 w-4" />
-                Contraer todo
-              </Button>
-            </div>
+            <span
+              v-if="savingPermissions"
+              class="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+            >
+              <Icon name="i-lucide-loader-2" class="h-3.5 w-3.5 animate-spin" />
+              Guardando permisos…
+            </span>
           </CardHeader>
           <CardContent>
-            <div class="space-y-2">
-              <Collapsible
-                v-for="category in orderedCategoryKeys"
-                :key="category"
-                :open="openCategories[category] ?? false"
-                class="group/perm border rounded-lg"
-                @update:open="(v: boolean) => setCategoryOpen(category, v)"
-              >
-                <div class="flex items-center justify-between px-4 py-2 bg-muted/50 rounded-t-lg">
-                  <CollapsibleTrigger as-child>
-                    <button
-                      type="button"
-                      class="flex min-w-0 flex-1 items-center gap-2 text-left font-semibold hover:opacity-80"
-                    >
-                      <Icon
-                        name="i-lucide-chevron-down"
-                        class="h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/perm:rotate-180"
-                      />
-                      <span class="min-w-0 truncate">{{ getCategoryLabel(category) }}</span>
-                      <Badge variant="secondary" class="ml-1 shrink-0 tabular-nums">
-                        {{ countSelectedInList(groupedPermissions[category] ?? []) }}/{{ (groupedPermissions[category] ?? []).length }} activos
-                      </Badge>
-                    </button>
-                  </CollapsibleTrigger>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    @click.stop="toggleCategory(category)"
-                  >
-                    {{ (groupedPermissions[category] ?? []).every(p => formData.permissions.includes(p.name)) ? 'Deseleccionar' : 'Seleccionar' }} todos
-                  </Button>
-                </div>
-                <CollapsibleContent>
-                  <div v-if="category === 'radicacion'" class="divide-y border-t">
-                    <div
-                      v-for="sub in radicacionSubgroups"
-                      :key="sub.key"
-                      class="px-4 py-3"
-                    >
-                      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                        <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          {{ sub.label }}
-                        </p>
-                        <Badge variant="outline" class="tabular-nums text-xs font-normal">
-                          {{ countSelectedInList(sub.items) }}/{{ sub.items.length }} activos
-                        </Badge>
-                      </div>
-                      <div class="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
-                        <div
-                          v-for="p in sub.items"
-                          :key="p.id"
-                          class="flex items-center space-x-2"
-                        >
-                          <Checkbox
-                            :id="`permission-${p.id}`"
-                            :model-value="formData.permissions.includes(p.name)"
-                            @update:model-value="(v: boolean | 'indeterminate') => togglePermission(p.name, v === true)"
-                          />
-                          <Label :for="`permission-${p.id}`" class="cursor-pointer text-sm font-normal">
-                            {{ formatPermissionDisplayName(p.name) }}
-                          </Label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else class="grid grid-cols-1 gap-2 border-t p-4 md:grid-cols-2 lg:grid-cols-3">
-                    <div
-                      v-for="p in groupedPermissions[category] ?? []"
-                      :key="p.id"
-                      class="flex items-center space-x-2"
-                    >
-                      <Checkbox
-                        :id="`permission-${p.id}`"
-                        :model-value="formData.permissions.includes(p.name)"
-                        @update:model-value="(v: boolean | 'indeterminate') => togglePermission(p.name, v === true)"
-                      />
-                      <Label :for="`permission-${p.id}`" class="cursor-pointer text-sm font-normal">
-                        {{ formatPermissionDisplayName(p.name) }}
-                      </Label>
-                    </div>
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-
-              <p v-if="Object.keys(groupedPermissions).length === 0" class="text-center py-8 text-muted-foreground">
-                No hay permisos disponibles
-              </p>
-            </div>
+            <SettingsRolePermissionsPicker
+              v-model="formData.permissions"
+              :permissions="permissions"
+              :loading="loading"
+            />
           </CardContent>
         </Card>
 

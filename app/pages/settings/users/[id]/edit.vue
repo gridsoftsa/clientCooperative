@@ -54,6 +54,7 @@ function rolesMultipleLabel(values: unknown): string {
 const sucursales = ref<Array<{ id: number; name: string; code: string | null; is_main?: boolean }>>([])
 const loading = ref(false)
 const saving = ref(false)
+const resendingCredentials = ref(false)
 const changePassword = ref(false)
 
 const showAllowedSucursales = computed(() => form.value.roles.includes('admin') && !form.value.roles.includes('super_admin'))
@@ -199,6 +200,41 @@ const handleSubmit = async () => {
     toast.error(message)
   } finally {
     saving.value = false
+  }
+}
+
+async function handleResendCredentials() {
+  if (resendingCredentials.value || !user.value) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Se generará una nueva contraseña temporal y se enviará por correo a ${form.value.email}. La contraseña anterior dejará de funcionar. ¿Continuar?`,
+  )
+  if (!confirmed) {
+    return
+  }
+
+  resendingCredentials.value = true
+  try {
+    const res = await $api<{
+      ok: boolean
+      message: string
+      temporary_password?: string
+    }>(`/users/${userId}/resend-credentials`, { method: 'POST' })
+
+    if (res.temporary_password) {
+      toast.success(res.message, {
+        description: `Contraseña temporal: ${res.temporary_password}`,
+        duration: 20000,
+      })
+    } else {
+      toast.success(res.message)
+    }
+  } catch (error: any) {
+    toast.error(error?.data?.message || 'No se pudo reenviar el correo')
+  } finally {
+    resendingCredentials.value = false
   }
 }
 
@@ -367,6 +403,35 @@ onMounted(async () => {
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Credenciales de acceso</CardTitle>
+            <CardDescription>
+              Si el usuario no recibió el correo de bienvenida, puedes reenviarlo. Se generará una
+              <span class="font-medium text-foreground">nueva contraseña temporal</span> y la anterior dejará de servir.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm text-muted-foreground">
+              Correo de destino: <span class="font-medium text-foreground">{{ form.email }}</span>
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              :disabled="resendingCredentials || !form.email || accountStatus === 'inactive'"
+              @click="handleResendCredentials"
+            >
+              <Icon
+                v-if="resendingCredentials"
+                name="i-lucide-loader-2"
+                class="mr-2 h-4 w-4 animate-spin"
+              />
+              <Icon v-else name="i-lucide-mail" class="mr-2 h-4 w-4" />
+              Reenviar credenciales por correo
+            </Button>
           </CardContent>
         </Card>
 

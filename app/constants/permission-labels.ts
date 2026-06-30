@@ -23,6 +23,7 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
   display: 'Visualización',
   sucursales: 'Sucursales',
   empresa: 'Empresa',
+  seguridad: 'Seguridad',
   plantillas: 'Plantillas',
   plantilla: 'Plantilla SCORE',
   /** Corto: se usa en chips/listados («Ver Radicación», «Ver Solicitantes»). */
@@ -57,6 +58,7 @@ export const PERMISSION_CATEGORY_ORDER: string[] = [
   'notificaciones',
   'display',
   'empresa',
+  'seguridad',
   'sucursales',
   'usuarios',
   'roles',
