@@ -1,13 +1,16 @@
 import type {
   ArchivalFile,
+  ArchivalFileAccessGrant,
   ArchivalFileAlert,
   ArchivalFileAlertCatalog,
   ArchivalFileAlertSettingsPayload,
+  ArchivalFileClosureReadiness,
   ArchivalFileMetadataOcrResult,
   ArchivalFileMetadataSuggestion,
   ArchivalFileRequiredDocumentsEvaluation,
   ArchivalFileTreeNode,
   ArchivalFileType,
+  ArchivalPhaseTarget,
 } from '~/types/archival-file'
 
 export function useArchivalFileApi() {
@@ -15,10 +18,23 @@ export function useArchivalFileApi() {
   const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promise<T>
 
   async function fetchFiles(query: Record<string, string | number> = {}) {
-    return await api<{
+    const res = await api<{
       data: ArchivalFile[]
-      meta: { current_page: number, last_page: number, per_page: number, total: number }
+      current_page?: number
+      last_page?: number
+      per_page?: number
+      total?: number
+      meta?: { current_page: number, last_page: number, per_page: number, total: number }
     }>('/archival-files', { query })
+
+    const meta = res.meta ?? {
+      current_page: res.current_page ?? 1,
+      last_page: res.last_page ?? 1,
+      per_page: res.per_page ?? 15,
+      total: res.total ?? res.data.length,
+    }
+
+    return { data: res.data, meta }
   }
 
   async function fetchFile(id: number) {
@@ -44,6 +60,12 @@ export function useArchivalFileApi() {
 
   async function fetchRequiredDocuments(id: number) {
     const res = await api<{ data: ArchivalFileRequiredDocumentsEvaluation }>(`/archival-files/${id}/required-documents`)
+
+    return res.data
+  }
+
+  async function fetchClosureReadiness(id: number) {
+    const res = await api<{ data: ArchivalFileClosureReadiness }>(`/archival-files/${id}/closure-readiness`)
 
     return res.data
   }
@@ -177,6 +199,44 @@ export function useArchivalFileApi() {
     return res.data
   }
 
+  async function fetchConsolidationMeta() {
+    const res = await api<{ data: import('~/types/archival-file').ArchivalFileConsolidationMeta }>(
+      '/archival-files/meta/consolidation',
+    )
+
+    return res.data
+  }
+
+  async function fetchEvents(fileId: number, page = 1) {
+    return await api<{
+      data: import('~/types/archival-file').ArchivalFileEvent[]
+      meta: { current_page: number, last_page: number, per_page: number, total: number }
+    }>(`/archival-files/${fileId}/events`, { query: { page } })
+  }
+
+  async function uploadAreaDocument(formData: FormData) {
+    const res = await api<{ data: Record<string, unknown>, message: string }>('/archival-files/area/documents', {
+      method: 'POST',
+      body: formData,
+    })
+
+    return res
+  }
+
+  async function fetchRetentionReport(query: Record<string, string | number | boolean> = {}) {
+    return await api<{
+      data: Array<Record<string, unknown>>
+      meta: { current_page: number, last_page: number, per_page: number, total: number }
+    }>('/archival-files/reports/retention', { query })
+  }
+
+  async function fetchIncompleteReport(query: Record<string, string | number | boolean> = {}) {
+    return await api<{
+      data: Array<Record<string, unknown>>
+      meta: { current_page: number, last_page: number, per_page: number, total: number }
+    }>('/archival-files/reports/incomplete', { query })
+  }
+
   async function fetchReportsSummary() {
     const res = await api<{ data: Record<string, number> }>('/archival-files/reports/summary')
 
@@ -228,12 +288,86 @@ export function useArchivalFileApi() {
     return res
   }
 
+  async function fetchAccessGrantOptions() {
+    const res = await api<{
+      data: {
+        users: Array<{ id: number, name: string, email?: string }>
+        roles: Array<{ id: number, name: string }>
+        file_types: Array<{ id: number, name: string }>
+      }
+    }>('/archival-files/access-grants/options')
+
+    return res.data
+  }
+
+  async function fetchAccessGrants(query: Record<string, string | number> = {}) {
+    const res = await api<{ data: ArchivalFileAccessGrant[] }>('/archival-files/access-grants', { query })
+
+    return res.data
+  }
+
+  async function createAccessGrant(payload: Record<string, unknown>) {
+    const res = await api<{ data: ArchivalFileAccessGrant, message: string }>('/archival-files/access-grants', {
+      method: 'POST',
+      body: payload,
+    })
+
+    return res
+  }
+
+  async function updateAccessGrant(id: number, payload: Record<string, unknown>) {
+    const res = await api<{ data: ArchivalFileAccessGrant, message: string }>(`/archival-files/access-grants/${id}`, {
+      method: 'PUT',
+      body: payload,
+    })
+
+    return res
+  }
+
+  async function deleteAccessGrant(id: number) {
+    return await api<{ message: string }>(`/archival-files/access-grants/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async function createDocumentReference(fileId: number, payload: { referenced_document_id: number, archival_file_node_id?: number | null }) {
+    const res = await api<{ data: Record<string, unknown>, message: string }>(`/archival-files/${fileId}/documents/reference`, {
+      method: 'POST',
+      body: payload,
+    })
+
+    return res
+  }
+
+  async function replaceDocumentVersion(fileId: number, documentId: number, formData: FormData) {
+    const res = await api<{ data: Record<string, unknown>, message: string }>(
+      `/archival-files/${fileId}/documents/${documentId}/version`,
+      { method: 'POST', body: formData },
+    )
+
+    return res
+  }
+
+  async function transferFile(id: number, payload: { target_phase: ArchivalPhaseTarget, reason?: string | null }) {
+    const res = await api<{ data: ArchivalFile, message: string }>(`/archival-files/${id}/transfer`, {
+      method: 'POST',
+      body: payload,
+    })
+
+    return res
+  }
+
+  function documentDownloadUrl(fileId: number, documentId: number) {
+    return `/api/archival-files/${fileId}/documents/${documentId}/download`
+  }
+
   return {
     fetchFiles,
     fetchFile,
     createFile,
     fetchTree,
     fetchRequiredDocuments,
+    fetchClosureReadiness,
     updateMetadata,
     closeFile,
     consolidateFile,
@@ -249,6 +383,12 @@ export function useArchivalFileApi() {
     deleteFileType,
     syncRequiredDocuments,
     fetchAreaRepository,
+    fetchConsolidationMeta,
+    fetchEvents,
+    transferFile,
+    uploadAreaDocument,
+    fetchRetentionReport,
+    fetchIncompleteReport,
     fetchReportsSummary,
     fetchAccessControlReport,
     fetchFileAlerts,
@@ -256,5 +396,13 @@ export function useArchivalFileApi() {
     refreshAlerts,
     fetchAlertsCatalog,
     updateAlertsSettings,
+    fetchAccessGrants,
+    fetchAccessGrantOptions,
+    createAccessGrant,
+    updateAccessGrant,
+    deleteAccessGrant,
+    createDocumentReference,
+    replaceDocumentVersion,
+    documentDownloadUrl,
   }
 }

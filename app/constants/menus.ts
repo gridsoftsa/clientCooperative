@@ -104,6 +104,7 @@ export const navMenu: NavMenu[] = [
           'expedientes_tipos_configurar',
           'expedientes_reportes_ver',
           'expedientes_alertas_configurar',
+          'expedientes_acceso_gestionar',
         ],
         children: [
           {
@@ -130,6 +131,11 @@ export const navMenu: NavMenu[] = [
             title: 'Config. alertas',
             link: '/expedientes/alertas',
             permission: 'expedientes_alertas_configurar',
+          },
+          {
+            title: 'Control de acceso',
+            link: '/expedientes/acceso',
+            permission: 'expedientes_acceso_gestionar',
           },
         ],
       },

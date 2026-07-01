@@ -9,7 +9,21 @@ const props = defineProps<{
   alerts: ArchivalFileAlert[]
   loading?: boolean
   compact?: boolean
+  canTransfer?: boolean
 }>()
+
+const emit = defineEmits<{
+  transfer: [alert: ArchivalFileAlert]
+}>()
+
+const transferAlertTypes = new Set<ArchivalFileAlertType | string>([
+  'retention_management_overdue',
+  'retention_central_overdue',
+  'retention_historical_overdue',
+  'retention_management_upcoming',
+  'retention_central_upcoming',
+  'retention_historical_upcoming',
+])
 
 function alertTypeLabel(type: string): string {
   return ARCHIVAL_FILE_ALERT_TYPE_LABELS[type as ArchivalFileAlertType] ?? type
@@ -29,6 +43,10 @@ function severityVariant(severity: string) {
 
 function severityLabel(severity: string): string {
   return ARCHIVAL_FILE_ALERT_SEVERITY_LABELS[severity] ?? severity
+}
+
+function isTransferAlert(alert: ArchivalFileAlert): boolean {
+  return transferAlertTypes.has(alert.alert_type)
 }
 </script>
 
@@ -63,6 +81,16 @@ function severityLabel(severity: string): string {
       <p v-if="alert.updated_at" class="mt-1 text-xs text-muted-foreground">
         Actualizada: {{ new Date(alert.updated_at).toLocaleString('es-CO') }}
       </p>
+      <div v-if="canTransfer && isTransferAlert(alert)" class="mt-3">
+        <Button
+          variant="outline"
+          size="sm"
+          type="button"
+          @click="emit('transfer', alert)"
+        >
+          Transferir expediente
+        </Button>
+      </div>
     </div>
   </div>
 </template>

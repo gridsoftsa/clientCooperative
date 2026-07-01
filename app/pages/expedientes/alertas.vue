@@ -24,6 +24,9 @@ const catalog = ref<ArchivalFileAlertCatalog | null>(null)
 
 const formGlobal = ref({
   enabled: true,
+  email_enabled: false,
+  notify_creator: true,
+  notify_unit_manager: true,
   retention_upcoming_days: 30,
   stale_draft_days: 30,
   consolidation_reminder_days: 7,
@@ -95,6 +98,9 @@ function syncForm(data: ArchivalFileAlertCatalog) {
   catalog.value = data
   formGlobal.value = {
     enabled: data.global.enabled,
+    email_enabled: data.global.email_enabled,
+    notify_creator: data.global.notify_creator,
+    notify_unit_manager: data.global.notify_unit_manager,
     retention_upcoming_days: data.global.retention_upcoming_days,
     stale_draft_days: data.global.stale_draft_days,
     consolidation_reminder_days: data.global.consolidation_reminder_days,
@@ -282,6 +288,51 @@ onMounted(() => load())
               type="number"
               min="1"
               :disabled="!canEdit"
+            />
+          </div>
+
+          <div class="flex items-center justify-between gap-4 rounded-lg border p-4 md:col-span-2">
+            <div>
+              <p class="font-medium">
+                Notificaciones por correo
+              </p>
+              <p class="text-sm text-muted-foreground">
+                Envía correo cuando se genera o actualiza una alerta de expediente.
+              </p>
+            </div>
+            <Switch
+              v-model="formGlobal.email_enabled"
+              :disabled="!canEdit"
+            />
+          </div>
+
+          <div class="flex items-center justify-between gap-4 rounded-lg border p-4">
+            <div>
+              <p class="font-medium">
+                Notificar al creador
+              </p>
+              <p class="text-sm text-muted-foreground">
+                Incluye al usuario que creó el expediente.
+              </p>
+            </div>
+            <Switch
+              v-model="formGlobal.notify_creator"
+              :disabled="!canEdit || !formGlobal.email_enabled"
+            />
+          </div>
+
+          <div class="flex items-center justify-between gap-4 rounded-lg border p-4">
+            <div>
+              <p class="font-medium">
+                Notificar al jefe de área
+              </p>
+              <p class="text-sm text-muted-foreground">
+                Incluye al jefe del área productora.
+              </p>
+            </div>
+            <Switch
+              v-model="formGlobal.notify_unit_manager"
+              :disabled="!canEdit || !formGlobal.email_enabled"
             />
           </div>
         </CardContent>

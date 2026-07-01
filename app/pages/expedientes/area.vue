@@ -15,6 +15,13 @@ const orgUnits = ref<Array<{ id: number, name: string }>>([])
 const orgUnitId = ref('')
 const loading = ref(false)
 const tree = ref<ArchivalFileTreeNode | null>(null)
+const selectedFileId = ref<number | null>(null)
+
+function handleSelectFile(node: ArchivalFileTreeNode) {
+  if (node.archival_file_id) {
+    selectedFileId.value = node.archival_file_id
+  }
+}
 
 async function loadOrgUnits() {
   try {
@@ -33,6 +40,7 @@ async function loadRepository() {
     return
 
   loading.value = true
+  selectedFileId.value = null
 
   try {
     tree.value = await archivalApi.fetchAreaRepository(Number(orgUnitId.value))
@@ -92,10 +100,22 @@ onMounted(async () => {
         <div v-if="loading" class="py-10 text-center text-muted-foreground">
           Cargando repositorio...
         </div>
-        <ArchivalFileTreeItem v-else-if="tree" :node="tree" />
+        <ArchivalFileTreeItem
+          v-else-if="tree"
+          :node="tree"
+          @click-file="handleSelectFile"
+        />
         <div v-else class="py-10 text-center text-muted-foreground">
           Seleccione un área para consultar su documentación.
         </div>
+
+        <ArchivalFileAreaDocumentUploadForm
+          v-if="selectedFileId && orgUnitId"
+          class="mt-6"
+          :org-unit-id="Number(orgUnitId)"
+          :archival-file-id="selectedFileId"
+          @uploaded="loadRepository"
+        />
       </CardContent>
     </Card>
   </div>

@@ -19,6 +19,8 @@ const { hasPermission } = usePermissions()
 const summary = ref<Record<string, number> | null>(null)
 const accessRows = ref<Array<Record<string, unknown>>>([])
 const alerts = ref<ArchivalFileAlert[]>([])
+const retentionRows = ref<Array<Record<string, unknown>>>([])
+const incompleteRows = ref<Array<Record<string, unknown>>>([])
 const loading = ref(true)
 const refreshing = ref(false)
 
@@ -36,14 +38,18 @@ async function load() {
   loading.value = true
 
   try {
-    const [summaryData, accessData, alertsData] = await Promise.all([
+    const [summaryData, accessData, alertsData, retentionData, incompleteData] = await Promise.all([
       archivalApi.fetchReportsSummary(),
       archivalApi.fetchAccessControlReport(),
       archivalApi.fetchAlertsReport({ per_page: 50 }),
+      archivalApi.fetchRetentionReport({ per_page: 25, upcoming_only: 1 }),
+      archivalApi.fetchIncompleteReport({ per_page: 25 }),
     ])
     summary.value = summaryData
     accessRows.value = accessData
     alerts.value = alertsData.data
+    retentionRows.value = retentionData.data
+    incompleteRows.value = incompleteData.data
   }
   catch {
     toast.error('No se pudieron cargar los reportes.')
@@ -189,6 +195,80 @@ onMounted(() => load())
                     variant="outline"
                     size="sm"
                     @click="router.push(`/expedientes/${alert.file!.id}`)"
+                  >
+                    Ver
+                  </Button>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Retención próxima</CardTitle>
+          <CardDescription>
+            Expedientes con fin de retención en la ventana configurada.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div v-if="retentionRows.length === 0" class="text-sm text-muted-foreground">
+            No hay expedientes con retención próxima.
+          </div>
+          <Table v-else>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Expediente</TableHead>
+                <TableHead>Fase</TableHead>
+                <TableHead>Fin retención</TableHead>
+                <TableHead>Días restantes</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-for="row in retentionRows" :key="String(row.id)">
+                <TableCell class="font-mono text-xs">{{ row.file_number }}</TableCell>
+                <TableCell>{{ row.status_label }}</TableCell>
+                <TableCell>{{ row.retention_ends_at }}</TableCell>
+                <TableCell>{{ row.days_left }}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Expedientes incompletos</CardTitle>
+          <CardDescription>
+            Activos o en revisión con documentos obligatorios pendientes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div v-if="incompleteRows.length === 0" class="text-sm text-muted-foreground">
+            No hay expedientes incompletos en el reporte.
+          </div>
+          <Table v-else>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Expediente</TableHead>
+                <TableHead>Estado</TableHead>
+                <TableHead>Faltantes</TableHead>
+                <TableHead class="text-right">
+                  Acción
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-for="row in incompleteRows" :key="String(row.id)">
+                <TableCell class="font-mono text-xs">{{ row.file_number }}</TableCell>
+                <TableCell>{{ row.status_label }}</TableCell>
+                <TableCell>{{ row.missing_count }}</TableCell>
+                <TableCell class="text-right">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    @click="router.push(`/expedientes/${row.id}`)"
                   >
                     Ver
                   </Button>

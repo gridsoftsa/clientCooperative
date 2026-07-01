@@ -107,6 +107,17 @@ export interface ArchivalFileRequiredDocumentsEvaluation {
   fulfilled: Array<{ doc_document_type_id: number, label: string }>
 }
 
+export interface ArchivalFileClosureBlockingItem {
+  code: 'required_documents' | 'metadata' | 'document_classification' | 'workflow' | string
+  message: string
+  details: unknown
+}
+
+export interface ArchivalFileClosureReadiness {
+  ready: boolean
+  blocking: ArchivalFileClosureBlockingItem[]
+}
+
 export type ArchivalFileAlertType =
   | 'missing_required_documents'
   | 'closure_ready'
@@ -161,6 +172,9 @@ export interface ArchivalFileAlertCatalogType {
 export interface ArchivalFileAlertSettingsPayload {
   global?: {
     enabled?: boolean
+    email_enabled?: boolean
+    notify_creator?: boolean
+    notify_unit_manager?: boolean
     retention_upcoming_days?: number
     stale_draft_days?: number
     consolidation_reminder_days?: number
@@ -179,6 +193,9 @@ export interface ArchivalFileAlertSettingsPayload {
 export interface ArchivalFileAlertCatalog {
   global: {
     enabled: boolean
+    email_enabled: boolean
+    notify_creator: boolean
+    notify_unit_manager: boolean
     retention_upcoming_days: number
     stale_draft_days: number
     consolidation_reminder_days: number
@@ -189,6 +206,36 @@ export interface ArchivalFileAlertCatalog {
   parameters: ArchivalFileAlertCatalogParameter[]
   types: ArchivalFileAlertCatalogType[]
   categories: Array<{ key: string, label: string }>
+}
+
+export type ArchivalFileEventType =
+  | 'created'
+  | 'document_uploaded'
+  | 'document_referenced'
+  | 'document_viewed'
+  | 'document_downloaded'
+  | 'metadata_updated'
+  | 'status_changed'
+  | 'closed'
+  | 'consolidated'
+  | 'transferred'
+  | 'disposition_final'
+  | 'access_report_exported'
+
+export interface ArchivalFileEvent {
+  id: number
+  archival_file_id: number
+  event_type: ArchivalFileEventType | string
+  description?: string | null
+  metadata?: Record<string, unknown> | null
+  created_at?: string | null
+  created_by?: { id: number, name: string } | null
+  document?: { id: number, title: string } | null
+}
+
+export interface ArchivalFileConsolidationMeta {
+  allow_reconsolidation: boolean
+  include_qr_code: boolean
 }
 
 export interface ArchivalFileMetadataSuggestion {
@@ -206,6 +253,60 @@ export interface ArchivalFileMetadataOcrResult {
   ocr_text: string | null
   engine: string
   processed: boolean
+}
+
+export type ArchivalFileAccessPermission =
+  | 'view'
+  | 'create'
+  | 'edit'
+  | 'download'
+  | 'attach'
+  | 'close'
+  | 'transfer'
+  | 'void'
+
+export type ArchivalPhaseTarget = 'management' | 'central' | 'historical' | 'disposed'
+
+export interface ArchivalFileAccessGrant {
+  id: number
+  grantable_type: 'user' | 'role'
+  grantable_id: number
+  grantable_label?: string | null
+  archival_file_type_id?: number | null
+  file_type?: string | null
+  doc_series_id?: number | null
+  doc_subseries_id?: number | null
+  doc_document_type_id?: number | null
+  archival_file_id?: number | null
+  file_number?: string | null
+  file_title?: string | null
+  permission: ArchivalFileAccessPermission
+  permission_label?: string
+  status: 'active' | 'inactive' | string
+  starts_at?: string | null
+  ends_at?: string | null
+  authorized_by?: string | null
+  authorized_by_user_id?: number | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export const ARCHIVAL_FILE_ACCESS_PERMISSION_LABELS: Record<ArchivalFileAccessPermission, string> = {
+  view: 'Ver',
+  create: 'Crear',
+  edit: 'Editar',
+  download: 'Descargar',
+  attach: 'Anexar documentos',
+  close: 'Cerrar expediente',
+  transfer: 'Transferir',
+  void: 'Eliminar/anular',
+}
+
+export const ARCHIVAL_PHASE_TARGET_LABELS: Record<ArchivalPhaseTarget, string> = {
+  management: 'Archivo de gestión',
+  central: 'Archivo central',
+  historical: 'Archivo histórico',
+  disposed: 'Disposición final',
 }
 
 export const ARCHIVAL_FILE_STATUS_LABELS: Record<ArchivalFileStatus, string> = {
