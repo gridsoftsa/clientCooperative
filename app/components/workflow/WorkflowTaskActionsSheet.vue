@@ -25,6 +25,12 @@ const returnStageId = ref<string>('')
 const reassignUserId = ref<string>('')
 const saving = ref(false)
 
+const canUploadArchival = computed(() =>
+  hasPermission('expedientes_documentos_adjuntar') || hasPermission('expedientes_editar'),
+)
+const showArchivalTab = computed(() =>
+  Boolean(props.context?.archival_file?.can_upload && canUploadArchival.value && props.context?.open_task),
+)
 const canManage = computed(() => hasPermission('workflow_gestionar'))
 const canReassign = computed(() => hasPermission('workflow_reasignar'))
 
@@ -125,9 +131,12 @@ function eventLabel(type: string) {
       </SheetHeader>
 
       <Tabs v-model="activeTab" default-value="actions" class="mt-6 flex min-h-0 flex-1 flex-col">
-        <TabsList class="grid h-10 w-full shrink-0 grid-cols-2 p-1">
+        <TabsList class="grid h-10 w-full shrink-0 p-1" :class="showArchivalTab ? 'grid-cols-3' : 'grid-cols-2'">
           <TabsTrigger value="actions">
             Acciones
+          </TabsTrigger>
+          <TabsTrigger v-if="showArchivalTab" value="archival">
+            Expediente
           </TabsTrigger>
           <TabsTrigger value="history">
             Historial
@@ -221,6 +230,13 @@ function eventLabel(type: string) {
               Registrar comentario
             </Button>
           </div>
+        </TabsContent>
+
+        <TabsContent v-if="showArchivalTab && context?.archival_file" value="archival" class="mt-6 min-h-0 flex-1 overflow-y-auto pr-1 pb-2">
+          <ArchivalFileWorkflowUploadPanel
+            :archival-context="context.archival_file"
+            @uploaded="emit('changed')"
+          />
         </TabsContent>
 
         <TabsContent value="history" class="mt-6 min-h-0 flex-1 overflow-y-auto pr-1 pb-2">

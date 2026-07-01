@@ -115,6 +115,29 @@ export interface WorkflowTaskEscalationSummary {
   }>
 }
 
+export interface WorkflowArchivalFileContext {
+  id: number
+  file_number: string
+  title: string
+  status: string
+  workflow_task_id: number | null
+  workflow_stage_key: string | null
+  archival_file_node_id: number | null
+  stage_folder_name: string | null
+  default_doc_document_type_id: number | null
+  can_upload: boolean
+  required_documents_stage: {
+    complete: boolean
+    missing: Array<{ doc_document_type_id: number, label: string, workflow_stage_key: string | null }>
+    fulfilled: Array<{ doc_document_type_id: number, label: string }>
+  } | null
+  required_documents_overall: {
+    complete: boolean
+    missing: Array<{ doc_document_type_id: number, label: string, workflow_stage_key: string | null }>
+    fulfilled: Array<{ doc_document_type_id: number, label: string }>
+  }
+}
+
 export interface WorkflowFilingContext {
   instance: {
     id: number
@@ -156,6 +179,7 @@ export interface WorkflowFilingContext {
   advance_guidance?: string | null
   warnings?: WorkflowContextWarning[]
   task_escalation?: WorkflowTaskEscalationSummary | null
+  archival_file?: WorkflowArchivalFileContext | null
   sla_alerts?: Array<{
     id: number
     alert_type: string

@@ -19,6 +19,21 @@ function isSubRouteActive(link: string): boolean {
     return true
   if (link === '/')
     return false
+
+  const hasMoreSpecificSibling = props.item.children.some((child) => {
+    if (child.link === link)
+      return false
+    if (child.link === route.path)
+      return true
+    if (child.link.startsWith(`${link}/`) && route.path.startsWith(`${child.link}/`))
+      return true
+
+    return false
+  })
+
+  if (hasMoreSpecificSibling)
+    return false
+
   return route.path.startsWith(`${link}/`)
 }
 

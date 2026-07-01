@@ -95,6 +95,44 @@ export const navMenu: NavMenu[] = [
           },
         ],
       },
+      {
+        title: 'Expedientes',
+        icon: 'i-lucide-archive',
+        anyPermission: [
+          'expedientes_ver',
+          'expedientes_area_ver',
+          'expedientes_tipos_configurar',
+          'expedientes_reportes_ver',
+          'expedientes_alertas_configurar',
+        ],
+        children: [
+          {
+            title: 'Listado',
+            link: '/expedientes',
+            permission: 'expedientes_ver',
+          },
+          {
+            title: 'Repositorio por área',
+            link: '/expedientes/area',
+            permission: 'expedientes_area_ver',
+          },
+          {
+            title: 'Tipos de expediente',
+            link: '/expedientes/tipos',
+            permission: 'expedientes_tipos_configurar',
+          },
+          {
+            title: 'Reportes',
+            link: '/expedientes/reportes',
+            permission: 'expedientes_reportes_ver',
+          },
+          {
+            title: 'Config. alertas',
+            link: '/expedientes/alertas',
+            permission: 'expedientes_alertas_configurar',
+          },
+        ],
+      },
     ],
   },
   {

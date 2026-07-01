@@ -249,6 +249,12 @@ defineExpose({ reload: load })
           </AlertDescription>
         </Alert>
 
+        <ArchivalFileWorkflowUploadPanel
+          v-if="context.archival_file && context.open_task && canActOnOpenTask"
+          :archival-context="context.archival_file"
+          @uploaded="load(); emit('changed')"
+        />
+
         <div v-if="context.open_task" class="rounded-lg border p-3 space-y-2">
           <div class="flex flex-wrap items-center gap-2 text-sm">
             <span class="inline-block size-2.5 rounded-full" :class="trafficClass(context.open_task.traffic_light_status)" />
