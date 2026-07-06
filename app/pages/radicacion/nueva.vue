@@ -47,7 +47,6 @@ definePageMeta({
 
 const { $api, $csrf } = useNuxtApp()
 const router = useRouter()
-const { user: authUser } = useAuth()
 const { hasPermission } = usePermissions()
 
 const { options: creditDestinationOptions, fetchOptions: fetchCreditDestinationOptions } = useTemplateFlatCatalogOptions(
@@ -77,7 +76,6 @@ const loadingApplication = ref(false)
 const submitDirectorDialogOpen = ref(false)
 /** Error visual al enviar al director sin radicado externo (solo flujo deudor). */
 const radicadoExternoDirectorError = ref(false)
-const agencies = ref<Array<{ id: number; sucursal_id?: number; name: string; code?: string }>>([])
 /** Solicitud existente cargada para agregar codeudor (por numero_radicado_externo) */
 const existingApplication = ref<Record<string, unknown> | null>(null)
 
@@ -163,6 +161,18 @@ const form = ref<CreditApplicationForm>({
   privileged_justification: '',
 })
 
+const {
+  assignedSucursalLabel,
+  hasAssignedSucursal,
+  isAssignedSucursalActive,
+  hasValidSucursalSelection,
+  initRadicacionSucursalContext,
+  defaultAgencyError,
+} = useRadicacionAssignedSucursal(computed({
+  get: () => form.value.agency_id,
+  set: (v: number) => { form.value.agency_id = v },
+}))
+
 watch(
   () => form.value.numero_radicado_externo,
   (v) => {
@@ -210,44 +220,11 @@ const stepsCodeudor = [
 
 const steps = computed(() => (mode.value === 'codeudor' ? stepsCodeudor : stepsDeudor))
 const maxStep = computed(() => steps.value.length)
-const userSucursalId = computed<number | null>(() => authUser.value?.sucursal_id ?? null)
-const availableAgencies = computed(() => {
-  const sucursalId = userSucursalId.value
-  if (!sucursalId) {
-    return agencies.value
-  }
-  const matched = agencies.value.filter(a => a.sucursal_id === sucursalId)
-  return matched.length ? matched : agencies.value
-})
-
-function resolveDefaultAgencyId(): number {
-  const current = form.value.agency_id
-  if (current > 0 && availableAgencies.value.some(a => a.id === current)) {
-    return current
-  }
-  return availableAgencies.value[0]?.id ?? agencies.value[0]?.id ?? 0
-}
-
-function applyDefaultAgencyId(): void {
-  const defaultId = resolveDefaultAgencyId()
-  if (defaultId > 0) {
-    form.value.agency_id = defaultId
-  }
-}
 
 async function fetchCatalogs() {
-  try {
-    await $csrf()
-    const agenciesRes = await $api<{ data: typeof agencies.value }>('/catalogs/agencies')
-    const list = agenciesRes.data
-    agencies.value = Array.isArray(list) ? list : []
-    applyDefaultAgencyId()
-  } catch (e: unknown) {
-    console.error('Error cargando agencias (catálogo):', e)
-    agencies.value = []
-    toast.error(
-      messageFromFetchError(e, 'No se pudieron cargar las agencias. Revise la conexión con el servidor o su sesión.'),
-    )
+  await initRadicacionSucursalContext()
+  if (defaultAgencyError.value) {
+    toast.error(defaultAgencyError.value)
   }
 }
 
@@ -727,7 +704,7 @@ function canProceedStep2(): boolean {
   if (
     form.value.amount_requested <= 0
     || form.value.term_months <= 0
-    || form.value.agency_id <= 0
+    || !hasValidSucursalSelection()
     || !form.value.destination?.trim()
   ) {
     return false
@@ -801,7 +778,7 @@ function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
 /** Payload para auto-guardado: usa valores por defecto si faltan (permite crear borrador temprano) */
 function payloadForAutoSave(): Record<string, unknown> {
   const base = payloadWithoutDocuments('Draft')
-  const agencyId = resolveDefaultAgencyId()
+  const agencyId = form.value.agency_id
   return {
     ...base,
     amount_requested: form.value.amount_requested > 0 ? form.value.amount_requested : 1,
@@ -814,7 +791,7 @@ function payloadForAutoSave(): Record<string, unknown> {
 function canCreateDraft(): boolean {
   if (mode.value !== 'deudor' || addingCodeudor.value) return false
   if (!canProceedStep1()) return false
-  if (!agencies.value.length) return false
+  if (!hasValidSucursalSelection()) return false
   return true
 }
 
@@ -1256,8 +1233,14 @@ async function saveDraft() {
     toast.error(identityErr)
     return
   }
-  if (!agencies.value.length) {
-    toast.error('No hay sucursales disponibles. Espere a que carguen los datos o contacte al administrador.')
+  if (!hasValidSucursalSelection()) {
+    if (!hasAssignedSucursal.value) {
+      toast.error('Debe tener una sucursal asignada. Contacte al administrador.')
+    } else if (!isAssignedSucursalActive.value) {
+      toast.error('Su sucursal asignada no está activa. Contacte al administrador.')
+    } else {
+      toast.error(defaultAgencyError.value || 'No hay agencia activa configurada. Contacte al administrador.')
+    }
     return
   }
   if (!validatePrivilegedFieldsForSave()) {
@@ -1449,8 +1432,14 @@ async function nextStep() {
       toast.error('Indique el plazo en meses')
       return
     }
-    if (form.value.agency_id <= 0) {
-      toast.error('Seleccione la sucursal')
+    if (!hasValidSucursalSelection()) {
+      if (!hasAssignedSucursal.value) {
+        toast.error('Debe tener una sucursal asignada')
+      } else if (!isAssignedSucursalActive.value) {
+        toast.error('Su sucursal asignada no está activa')
+      } else {
+        toast.error('No hay agencia activa configurada')
+      }
       return
     }
     if (!form.value.destination?.trim()) {
@@ -1869,21 +1858,18 @@ onMounted(() => {
               />
             </div>
             <div class="space-y-1.5">
-              <Label for="agency">Sucursal *</Label>
-              <Select v-model="form.agency_id">
-                <SelectTrigger id="agency">
-                  <SelectValue placeholder="Seleccionar agencia" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem
-                    v-for="a in availableAgencies"
-                    :key="a.id"
-                    :value="a.id"
-                  >
-                    {{ a.name }}{{ a.code ? ` (${a.code})` : '' }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <Label for="agency-sucursal">Sucursal *</Label>
+              <Input
+                v-if="hasAssignedSucursal"
+                id="agency-sucursal"
+                :model-value="assignedSucursalLabel"
+                readonly
+                disabled
+                class="bg-muted"
+              />
+              <p v-else class="text-sm text-destructive">
+                No tiene sucursal asignada. Contacte al administrador.
+              </p>
             </div>
             <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
               <Label for="destination">Destino del crédito *</Label>

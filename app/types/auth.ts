@@ -14,7 +14,7 @@ export interface AuthUser {
   created_at?: string
   updated_at?: string
   sucursal_id?: number | null
-  sucursal?: { id: number; name: string; code: string | null } | null
+  sucursal?: { id: number; name: string; code: string | null; is_active?: boolean; is_main?: boolean } | null
   roles?: string[]
   permissions?: string[]
 }
