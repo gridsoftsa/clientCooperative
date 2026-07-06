@@ -77,7 +77,7 @@ const loadingApplication = ref(false)
 const submitDirectorDialogOpen = ref(false)
 /** Error visual al enviar al director sin radicado externo (solo flujo deudor). */
 const radicadoExternoDirectorError = ref(false)
-const agencies = ref<Array<{ id: number; name: string; code?: string }>>([])
+const agencies = ref<Array<{ id: number; sucursal_id?: number; name: string; code?: string }>>([])
 /** Solicitud existente cargada para agregar codeudor (por numero_radicado_externo) */
 const existingApplication = ref<Record<string, unknown> | null>(null)
 
@@ -212,12 +212,28 @@ const steps = computed(() => (mode.value === 'codeudor' ? stepsCodeudor : stepsD
 const maxStep = computed(() => steps.value.length)
 const userSucursalId = computed<number | null>(() => authUser.value?.sucursal_id ?? null)
 const availableAgencies = computed(() => {
-  const userAgencyId = userSucursalId.value
-  if (!userAgencyId) {
+  const sucursalId = userSucursalId.value
+  if (!sucursalId) {
     return agencies.value
   }
-  return agencies.value.filter(a => a.id === userAgencyId)
+  const matched = agencies.value.filter(a => a.sucursal_id === sucursalId)
+  return matched.length ? matched : agencies.value
 })
+
+function resolveDefaultAgencyId(): number {
+  const current = form.value.agency_id
+  if (current > 0 && availableAgencies.value.some(a => a.id === current)) {
+    return current
+  }
+  return availableAgencies.value[0]?.id ?? agencies.value[0]?.id ?? 0
+}
+
+function applyDefaultAgencyId(): void {
+  const defaultId = resolveDefaultAgencyId()
+  if (defaultId > 0) {
+    form.value.agency_id = defaultId
+  }
+}
 
 async function fetchCatalogs() {
   try {
@@ -225,11 +241,7 @@ async function fetchCatalogs() {
     const agenciesRes = await $api<{ data: typeof agencies.value }>('/catalogs/agencies')
     const list = agenciesRes.data
     agencies.value = Array.isArray(list) ? list : []
-    if (userSucursalId.value && agencies.value.some(a => a.id === userSucursalId.value)) {
-      form.value.agency_id = userSucursalId.value
-    } else if (agencies.value.length && !form.value.agency_id) {
-      form.value.agency_id = agencies.value[0]?.id ?? 0
-    }
+    applyDefaultAgencyId()
   } catch (e: unknown) {
     console.error('Error cargando agencias (catálogo):', e)
     agencies.value = []
@@ -789,9 +801,7 @@ function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
 /** Payload para auto-guardado: usa valores por defecto si faltan (permite crear borrador temprano) */
 function payloadForAutoSave(): Record<string, unknown> {
   const base = payloadWithoutDocuments('Draft')
-  const agencyId = form.value.agency_id > 0
-    ? form.value.agency_id
-    : (availableAgencies.value[0]?.id ?? agencies.value[0]?.id ?? 0)
+  const agencyId = resolveDefaultAgencyId()
   return {
     ...base,
     amount_requested: form.value.amount_requested > 0 ? form.value.amount_requested : 1,
