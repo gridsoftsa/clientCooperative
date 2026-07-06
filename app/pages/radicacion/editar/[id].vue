@@ -1275,19 +1275,9 @@ async function saveChanges() {
       await uploadAllDocuments(application.value.id, application.value)
       toast.success('Documentos guardados correctamente')
       router.push('/radicacion')
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Error guardando:', e)
-      let msg = 'Error al guardar'
-      if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
-        msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
-      } else if (e?.data?.errors && typeof e.data.errors === 'object') {
-        msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
-      } else if (e?.data?.message) {
-        msg = e.data.message
-      } else if (e?.message) {
-        msg = e.message
-      }
-      toast.error(msg)
+      toast.error(messageFromFetchError(e, 'Error al guardar'))
     } finally {
       saving.value = false
     }
@@ -1326,19 +1316,9 @@ async function saveChanges() {
     await uploadAllDocuments(updated.id, updated)
     toast.success('Cambios guardados correctamente')
     router.push('/radicacion')
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Error guardando:', e)
-    let msg = 'Error al guardar'
-    if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
-      msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
-    } else if (e?.data?.errors && typeof e.data.errors === 'object') {
-      msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
-    } else if (e?.data?.message) {
-      msg = e.data.message
-    } else if (e?.message) {
-      msg = e.message
-    }
-    toast.error(msg)
+    toast.error(messageFromFetchError(e, 'Error al guardar'))
   } finally {
     saving.value = false
   }
@@ -1401,19 +1381,9 @@ async function submitToDirectorReview() {
     const submitRes = await $api<{ message?: string }>(`/credit-applications/${applicationIdForSubmit}/submit-to-director-review`, { method: 'PATCH' })
     toast.success(submitRes?.message ?? 'Solicitud enviada al director de agencia.')
     await navigateTo('/radicacion')
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Error enviando al director:', e)
-    let msg = 'Error al enviar al director'
-    if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
-      msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
-    } else if (e?.data?.errors && typeof e.data.errors === 'object') {
-      msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
-    } else if (e?.data?.message) {
-      msg = e.data.message
-    } else if (e?.message) {
-      msg = e.message
-    }
-    toast.error(msg)
+    toast.error(messageFromFetchError(e, 'Error al enviar al director'))
   } finally {
     saving.value = false
   }

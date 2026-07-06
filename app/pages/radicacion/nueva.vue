@@ -1269,17 +1269,14 @@ async function saveDraft() {
     clearLocalDraft()
     toast.success('Borrador guardado. Puedes retomarlo más tarde.')
     await navigateTo(`/radicacion/editar/${application.id}`)
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Error guardando:', e)
-    let msg = 'Error al guardar'
-    if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
-      msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
-    } else if (e?.data?.errors && typeof e.data.errors === 'object') {
-      msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
-    } else if (e?.data?.message) {
-      msg = e.data.message
-    } else if (e?.message) {
-      msg = e.message
+    let msg = messageFromFetchError(e, 'Error al guardar')
+    if (e && typeof e === 'object') {
+      const err = e as Record<string, unknown>
+      if (err.status === 413 || err.statusCode === 413) {
+        msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
+      }
     }
     toast.error(msg)
   } finally {
@@ -1342,19 +1339,9 @@ async function submitApplication() {
     clearLocalDraft()
     toast.success('Solicitud enviada al director de agencia.')
     await navigateTo('/radicacion')
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Error enviando:', e)
-    let msg = 'Error al enviar'
-    if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
-      msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
-    } else if (e?.data?.errors && typeof e.data.errors === 'object') {
-      msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
-    } else if (e?.data?.message) {
-      msg = e.data.message
-    } else if (e?.message) {
-      msg = e.message
-    }
-    toast.error(msg)
+    toast.error(messageFromFetchError(e, 'Error al enviar'))
   } finally {
     saving.value = false
   }

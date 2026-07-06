@@ -183,10 +183,12 @@ Copiar las configuraciones del repo a Nginx:
 
 ```bash
 sudo cp clientCooperative/vps-nginx/apicooperative.tecnologicaslf.com.conf /etc/nginx/sites-available/
+sudo cp clientCooperative/vps-nginx/api-gd.tecnologicaslf.com.conf /etc/nginx/sites-available/
 sudo cp clientCooperative/vps-nginx/cooperative.tecnologicaslf.com.conf /etc/nginx/sites-available/
 sudo cp clientCooperative/vps-nginx/s3.tecnologicaslf.com.conf /etc/nginx/sites-available/
 
 sudo ln -s /etc/nginx/sites-available/apicooperative.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/api-gd.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
 sudo ln -s /etc/nginx/sites-available/cooperative.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
 sudo ln -s /etc/nginx/sites-available/s3.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
 ```
@@ -197,6 +199,8 @@ Comprobar y recargar Nginx:
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+> **Si al guardar borrador o enviar al director aparece `Failed to fetch` al subir documentos** (`POST .../credit-applications/{id}/documents`): el Nginx del VPS suele tener por defecto `client_max_body_size` de **1 MB**. Los adjuntos de radicación permiten hasta **10 MB**. En el `server` del dominio de la API (`api-gd` o `apicooperative`) debe existir `client_max_body_size 12M;` (ya incluido en los `.conf` de `vps-nginx/`). Tras copiar el archivo, ejecute `sudo nginx -t && sudo systemctl reload nginx`. Verifique también MinIO/S3 (`AWS_*` en `apiCooperative/.env`).
 
 Comprueba en el navegador (aún en HTTP):
 
