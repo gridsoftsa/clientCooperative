@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, watch } from 'vue'
+import { nextTick, onUnmounted, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import type { ApplicantForm, FinancialInfoForm } from '~/types/credit-application'
 import {
@@ -13,6 +13,8 @@ import {
 } from '~/constants/auxiliary-documents-checklist'
 import { messageFromFetchError } from '~/utils/http-error-message'
 import { creditApplicationDocumentIdEquals, parseFinancialChecklistDocumentIdMap } from '~/utils/financial-checklist-document-id-map'
+import { resolveDocumentPreviewKind, type DocumentPreviewKind } from '~/utils/document-preview'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -57,7 +59,7 @@ const emit = defineEmits<{
 }>()
 
 const { $api } = useNuxtApp()
-const { viewDocumentInNewTab } = useDocumentDownload()
+const { fetchApplicationDocument } = useDocumentDownload()
 
 const loadingConfig = ref(false)
 const itemsByActivity = ref<Record<string, AuxiliaryChecklistItem[]>>({})
@@ -266,40 +268,6 @@ function onFileInput(key: string, event: Event): void {
   pickAuxiliaryFile(key, file)
 }
 
-function onAuxiliaryDragOver(e: DragEvent): void {
-  e.preventDefault()
-  if (e.dataTransfer) {
-    e.dataTransfer.dropEffect = 'copy'
-  }
-}
-
-function onAuxiliaryDragOverWrapper(key: string, e: DragEvent): void {
-  if (uploadBlockedForKey(key)) {
-    return
-  }
-  onAuxiliaryDragOver(e)
-}
-
-function onAuxiliaryDropWrapper(key: string, e: DragEvent): void {
-  if (uploadBlockedForKey(key)) {
-    return
-  }
-  onAuxiliaryDrop(key, e)
-}
-
-function onAuxiliaryKeyActivateWrapper(key: string, idx: number, e: KeyboardEvent): void {
-  if (uploadBlockedForKey(key)) {
-    return
-  }
-  onAuxiliaryUploadZoneActivate(key, idx, e)
-}
-
-function onAuxiliaryDrop(key: string, e: DragEvent): void {
-  e.preventDefault()
-  const file = e.dataTransfer?.files?.[0]
-  pickAuxiliaryFile(key, file)
-}
-
 function clearPending(key: string): void {
   patchPendingFiles({ [key]: undefined })
 }
@@ -323,21 +291,94 @@ function safeInputId(key: string, index: number): string {
   return `aux_doc_${index}_${slug}`
 }
 
-async function openAuxiliaryDocumentInPreview(key: string): Promise<void> {
-  const meta = docMetaForKey(key)
-  const appId = props.creditApplicationId
-  if (!meta?.id || !appId) {
-    toast.error('No hay documento para abrir.')
-    return
-  }
-  try {
-    await viewDocumentInNewTab(appId, meta.id)
-  } catch (e: unknown) {
-    toast.error(messageFromFetchError(e, 'No se pudo abrir el archivo.'))
+const inlinePreviewOpen = ref(false)
+const inlinePreviewLoading = ref(false)
+const inlinePreviewTitle = ref('Vista previa')
+const inlinePreviewUrl = ref<string | null>(null)
+const inlinePreviewKind = ref<DocumentPreviewKind | null>(null)
+
+function revokeInlinePreviewUrl(): void {
+  if (inlinePreviewUrl.value) {
+    URL.revokeObjectURL(inlinePreviewUrl.value)
+    inlinePreviewUrl.value = null
   }
 }
 
-/** Safari iOS no abre bien el file picker si hay `<button>`/`<a>` dentro de `<label for="file">`; usamos click programático. */
+function resetInlinePreview(): void {
+  revokeInlinePreviewUrl()
+  inlinePreviewLoading.value = false
+  inlinePreviewTitle.value = 'Vista previa'
+  inlinePreviewKind.value = null
+}
+
+watch(inlinePreviewOpen, (isOpen) => {
+  if (!isOpen) {
+    resetInlinePreview()
+  }
+})
+
+function canPreviewAuxiliaryDocument(key: string): boolean {
+  return Boolean(pendingFileFor(key) || docMetaForKey(key))
+}
+
+async function openAuxiliaryDocumentInlinePreview(key: string): Promise<void> {
+  resetInlinePreview()
+  inlinePreviewOpen.value = true
+  inlinePreviewLoading.value = true
+
+  const pending = pendingFileFor(key)
+  if (pending) {
+    inlinePreviewTitle.value = pending.name
+    inlinePreviewKind.value = resolveDocumentPreviewKind(pending.name, pending.type)
+    if (inlinePreviewKind.value === 'pdf' || inlinePreviewKind.value === 'image') {
+      inlinePreviewUrl.value = URL.createObjectURL(pending)
+    }
+    inlinePreviewLoading.value = false
+    return
+  }
+
+  const meta = docMetaForKey(key)
+  const appId = props.creditApplicationId
+  if (!meta?.id || !appId) {
+    inlinePreviewOpen.value = false
+    toast.error('No hay documento para previsualizar.')
+    resetInlinePreview()
+    return
+  }
+
+  try {
+    const { blob, dispositionFilename } = await fetchApplicationDocument(appId, meta.id)
+    const fileName = meta.original_name || dispositionFilename || 'documento'
+    inlinePreviewTitle.value = fileName
+    inlinePreviewKind.value = resolveDocumentPreviewKind(fileName, blob.type)
+    if (inlinePreviewKind.value === 'pdf' || inlinePreviewKind.value === 'image') {
+      inlinePreviewUrl.value = URL.createObjectURL(blob)
+    }
+  } catch (e: unknown) {
+    inlinePreviewOpen.value = false
+    toast.error(messageFromFetchError(e, 'No se pudo cargar la vista previa.'))
+    resetInlinePreview()
+  } finally {
+    inlinePreviewLoading.value = false
+  }
+}
+
+onUnmounted(() => {
+  revokeInlinePreviewUrl()
+})
+
+function triggerAuxiliaryFileInput(key: string, idx: number): void {
+  if (uploadBlockedForKey(key)) {
+    return
+  }
+  const input = document.getElementById(safeInputId(key, idx)) as HTMLInputElement | null
+  if (!input || input.disabled) {
+    return
+  }
+  input.click()
+}
+
+/** Safari iOS no abre bien el file picker si hay `<button>`/`<a>` dentro de `<label for="file">`; usamos click programático en la zona. */
 function onAuxiliaryUploadZoneActivate(key: string, idx: number, event?: MouseEvent | KeyboardEvent): void {
   if (uploadBlockedForKey(key)) {
     return
@@ -347,11 +388,7 @@ function onAuxiliaryUploadZoneActivate(key: string, idx: number, event?: MouseEv
       return
     }
   }
-  const input = document.getElementById(safeInputId(key, idx)) as HTMLInputElement | null
-  if (!input || input.disabled) {
-    return
-  }
-  input.click()
+  triggerAuxiliaryFileInput(key, idx)
 }
 
 function pendingFileFor(key: string): File | undefined {
@@ -378,6 +415,7 @@ function validateRequiredAuxiliaryUploads(): boolean {
   const missing = checklistRows.value.filter(r => r.required && !hasSatisfiedUploadForKey(r.key))
   if (missing.length > 0) {
     highlightMissingRequired.value = true
+    docFilter.value = 'pending'
     toast.error('Adjunta los documentos obligatorios del checklist antes de continuar.')
     void nextTick(() => {
       document.querySelector('[data-aux-doc-error="1"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -388,161 +426,263 @@ function validateRequiredAuxiliaryUploads(): boolean {
   return true
 }
 
+type DocFilter = 'all' | 'pending' | 'done'
+
+const docFilter = ref<DocFilter>('all')
+
+const uploadStats = computed(() => {
+  const rows = checklistRows.value
+  const required = rows.filter(r => r.required)
+  const done = rows.filter(r => hasSatisfiedUploadForKey(r.key))
+  const requiredDone = required.filter(r => hasSatisfiedUploadForKey(r.key))
+  return {
+    total: rows.length,
+    done: done.length,
+    requiredTotal: required.length,
+    requiredDone: requiredDone.length,
+    requiredPending: required.length - requiredDone.length,
+    percent: rows.length ? Math.round((done.length / rows.length) * 100) : 0,
+  }
+})
+
+const displayedRows = computed(() => {
+  const rows = checklistRows.value
+  if (docFilter.value === 'pending') {
+    return rows.filter(r => !hasSatisfiedUploadForKey(r.key))
+  }
+  if (docFilter.value === 'done') {
+    return rows.filter(r => hasSatisfiedUploadForKey(r.key))
+  }
+  return rows
+})
+
+function rowStatusIcon(row: AuxiliaryChecklistItem): 'done' | 'missing' | 'optional' {
+  if (hasSatisfiedUploadForKey(row.key)) {
+    return 'done'
+  }
+  if (row.required) {
+    return 'missing'
+  }
+  return 'optional'
+}
+
+function displayFileNameForKey(key: string): string | null {
+  const pending = pendingFileFor(key)
+  if (pending) {
+    return pending.name
+  }
+  const meta = docMetaForKey(key)
+  if (meta?.original_name) {
+    return meta.original_name
+  }
+  return null
+}
+
 defineExpose({
   validateRequiredAuxiliaryUploads,
 })
 </script>
 
 <template>
-  <div id="radicacion-auxiliary-documents" class="space-y-4">
+  <div id="radicacion-auxiliary-documents" class="space-y-3">
     <div v-if="loadingConfig" class="text-sm text-muted-foreground">
       Cargando listado de documentos…
     </div>
     <template v-else>
-      <p v-if="!activityType" class="text-sm text-muted-foreground">
-        Selecciona el tipo de actividad económica en la sección anterior de este formulario para mostrar aquí los
-        documentos solicitados.
+      <p v-if="!activityType" class="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+        Seleccione el <span class="font-medium text-foreground">tipo de actividad económica</span> arriba para ver los documentos requeridos.
       </p>
-      <p v-else-if="checklistRows.length === 0" class="text-sm text-muted-foreground">
-        No hay documentos parametrizados para «{{ activityType }}». Revise Parametrización → Radicación → Documentos (módulo auxiliar).
+      <p v-else-if="checklistRows.length === 0" class="rounded-lg border border-dashed border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+        No hay documentos parametrizados para «{{ activityType }}».
       </p>
-      <ScrollArea v-else class="h-[min(65vh,28rem)] w-full rounded-lg border border-border bg-muted/15 p-2 sm:p-3">
-        <ul class="list-none space-y-4 p-0 pr-3">
-        <li
-          v-for="(row, idx) in checklistRows"
-          :key="`${row.key}-${idx}`"
-          class="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color]"
-          :class="rowMissingRequired(row)
-            ? 'border-destructive ring-2 ring-destructive/25'
-            : 'border-border'"
-          :data-aux-doc-error="rowMissingRequired(row) ? '1' : undefined"
-        >
-          <!-- Encabezado: requisito + nombre del documento (sin columna vacía lateral) -->
-          <div
-            class="border-b border-border px-4 py-3 sm:px-5"
-            :class="rowMissingRequired(row) ? 'bg-destructive/[0.06]' : 'bg-muted/40'"
-          >
-            <div class="flex flex-wrap items-center gap-2">
-              <span
-                class="inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
-                :class="row.required
-                  ? 'border-amber-600/35 bg-amber-500/10 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100'
-                  : 'border-muted-foreground/25 bg-background text-muted-foreground'"
-              >
-                {{ row.required ? 'Obligatorio' : 'Opcional' }}
-              </span>
-              <span class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Checklist
-              </span>
-            </div>
-            <p class="mt-2.5 min-w-0 break-words text-sm font-medium leading-snug text-foreground">
-              {{ row.label }}
-            </p>
-            <p
-              v-if="rowMissingRequired(row)"
-              class="mt-2 flex items-start gap-1.5 text-xs font-medium text-destructive"
-            >
-              <Icon name="i-lucide-alert-circle" class="mt-0.5 size-4 shrink-0" />
-              Falta adjuntar el archivo. Use el área de abajo.
-            </p>
-          </div>
-
-          <!-- Zona de carga a todo ancho -->
-          <div class="p-4 sm:p-5">
-            <input
-              :id="safeInputId(row.key, idx)"
-              type="file"
-              accept=".pdf,.zip,.png,.jpg,.jpeg,.gif,.webp,.bmp,application/pdf,application/zip,image/*"
-              class="sr-only"
-              :disabled="uploadBlockedForKey(row.key)"
-              @change="onFileInput(row.key, $event)"
-            >
+      <template v-else>
+        <!-- Resumen y filtros -->
+        <div class="sticky top-0 z-10 space-y-3 rounded-lg border border-border bg-background/95 p-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div class="flex flex-wrap items-center gap-3">
             <div
-              :role="uploadBlockedForKey(row.key) ? undefined : 'button'"
-              :tabindex="uploadBlockedForKey(row.key) ? undefined : 0"
-              :aria-label="uploadBlockedForKey(row.key) ? undefined : `Adjuntar archivo: ${row.label}`"
-              class="flex min-h-[6.5rem] touch-manipulation flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-4 text-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              :class="[
-                uploadBlockedForKey(row.key) ? 'cursor-default opacity-95' : 'cursor-pointer hover:border-primary/45 hover:bg-muted/30 active:bg-muted/35',
-                rowMissingRequired(row)
-                  ? 'border-destructive/50 bg-destructive/[0.04]'
-                  : 'border-muted-foreground/25 bg-muted/20',
-              ]"
-              @click="onAuxiliaryUploadZoneActivate(row.key, idx, $event)"
-              @keydown.enter.prevent="onAuxiliaryKeyActivateWrapper(row.key, idx, $event)"
-              @keydown.space.prevent="onAuxiliaryKeyActivateWrapper(row.key, idx, $event)"
-              @dragover="onAuxiliaryDragOverWrapper(row.key, $event)"
-              @drop="onAuxiliaryDropWrapper(row.key, $event)"
+              class="flex size-11 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold tabular-nums"
+              :class="uploadStats.requiredPending > 0
+                ? 'border-amber-500/50 bg-amber-500/10 text-amber-900 dark:text-amber-100'
+                : 'border-green-500/50 bg-green-500/10 text-green-800 dark:text-green-200'"
             >
-              <template v-if="pendingFileFor(row.key)">
-                <Icon name="i-lucide-file-check" class="size-7 text-green-600 dark:text-green-500" />
-                <span class="w-full max-w-full whitespace-normal break-words px-2 text-center text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere]">
-                  {{ pendingFileFor(row.key)!.name }}
-                </span>
-                <span class="text-xs text-muted-foreground">
-                  {{ formatFileSize(pendingFileFor(row.key)!.size) }}
-                </span>
-                <span v-if="!uploadBlockedForKey(row.key)" class="text-xs text-amber-700 dark:text-amber-400">
-                  {{
-                    auxiliaryPendingUploadHint === 'immediate'
-                      ? 'Se sube automáticamente en unos segundos…'
-                      : 'Se subirá al guardar la solicitud'
-                  }}
-                </span>
-                <button
-                  v-if="!uploadBlockedForKey(row.key)"
+              {{ uploadStats.done }}/{{ uploadStats.total }}
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-semibold text-foreground">
+                {{ uploadStats.done }} de {{ uploadStats.total }} documentos listos
+              </p>
+              <p class="text-xs text-muted-foreground">
+                <template v-if="uploadStats.requiredPending > 0">
+                  Faltan <span class="font-medium text-amber-700 dark:text-amber-300">{{ uploadStats.requiredPending }} obligatorio(s)</span>
+                </template>
+                <template v-else>
+                  Todos los obligatorios están adjuntos
+                </template>
+                · PDF, ZIP o imagen · máx. 10 MB
+              </p>
+            </div>
+          </div>
+          <Progress :model-value="uploadStats.percent" class="h-1.5" />
+          <div class="flex flex-wrap gap-1.5">
+            <Button
+              type="button"
+              size="sm"
+              :variant="docFilter === 'all' ? 'default' : 'outline'"
+              class="h-8"
+              @click="docFilter = 'all'"
+            >
+              Todos ({{ uploadStats.total }})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              :variant="docFilter === 'pending' ? 'default' : 'outline'"
+              class="h-8"
+              @click="docFilter = 'pending'"
+            >
+              Pendientes ({{ uploadStats.total - uploadStats.done }})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              :variant="docFilter === 'done' ? 'default' : 'outline'"
+              class="h-8"
+              @click="docFilter = 'done'"
+            >
+              Listos ({{ uploadStats.done }})
+            </Button>
+          </div>
+        </div>
+
+        <p v-if="displayedRows.length === 0" class="text-center text-sm text-muted-foreground py-6">
+          No hay documentos en esta vista. Pruebe otro filtro.
+        </p>
+
+        <ul
+          v-else
+          class="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card"
+        >
+          <li
+            v-for="(row, idx) in displayedRows"
+            :key="`${row.key}-${idx}`"
+            class="transition-colors hover:bg-muted/25"
+            :class="rowMissingRequired(row) ? 'bg-destructive/[0.04]' : ''"
+            :data-aux-doc-error="rowMissingRequired(row) ? '1' : undefined"
+          >
+            <div class="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3">
+              <!-- Estado + título -->
+              <div class="flex min-w-0 flex-1 items-start gap-2.5">
+                <div
+                  class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full"
+                  :class="{
+                    'bg-green-500/15 text-green-700 dark:text-green-400': rowStatusIcon(row) === 'done',
+                    'bg-amber-500/15 text-amber-800 dark:text-amber-300': rowStatusIcon(row) === 'missing',
+                    'bg-muted text-muted-foreground': rowStatusIcon(row) === 'optional',
+                  }"
+                >
+                  <Icon
+                    :name="rowStatusIcon(row) === 'done' ? 'i-lucide-check' : rowStatusIcon(row) === 'missing' ? 'i-lucide-circle-alert' : 'i-lucide-circle-dashed'"
+                    class="size-4"
+                  />
+                </div>
+                <div class="min-w-0 flex-1 space-y-1">
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <Badge
+                      variant="outline"
+                      class="h-5 px-1.5 text-[10px] font-semibold uppercase"
+                      :class="row.required
+                        ? 'border-amber-600/40 text-amber-900 dark:text-amber-100'
+                        : 'text-muted-foreground'"
+                    >
+                      {{ row.required ? 'Obligatorio' : 'Opcional' }}
+                    </Badge>
+                  </div>
+                  <p
+                    class="text-sm font-medium leading-snug text-foreground line-clamp-2"
+                    :title="row.label"
+                  >
+                    {{ row.label }}
+                  </p>
+                  <p
+                    v-if="displayFileNameForKey(row.key)"
+                    class="truncate text-xs text-muted-foreground"
+                    :title="displayFileNameForKey(row.key) ?? undefined"
+                  >
+                    <Icon name="i-lucide-paperclip" class="mr-1 inline size-3" />
+                    {{ displayFileNameForKey(row.key) }}
+                    <span v-if="pendingFileFor(row.key)">
+                      ({{ formatFileSize(pendingFileFor(row.key)!.size) }})
+                    </span>
+                    <span v-if="pendingFileFor(row.key)" class="text-amber-700 dark:text-amber-400">
+                      · pendiente de guardar
+                    </span>
+                  </p>
+                  <p
+                    v-else-if="rowMissingRequired(row)"
+                    class="text-xs font-medium text-destructive"
+                  >
+                    Falta adjuntar el archivo
+                  </p>
+                </div>
+              </div>
+
+              <!-- Acciones -->
+              <div class="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:pl-2">
+                <input
+                  :id="safeInputId(row.key, idx)"
+                  type="file"
+                  accept=".pdf,.zip,.png,.jpg,.jpeg,.gif,.webp,.bmp,application/pdf,application/zip,image/*"
+                  class="sr-only"
+                  :disabled="uploadBlockedForKey(row.key)"
+                  @change="onFileInput(row.key, $event)"
+                >
+                <Button
+                  v-if="canPreviewAuxiliaryDocument(row.key)"
                   type="button"
-                  class="text-xs font-medium text-primary underline underline-offset-2"
+                  variant="outline"
+                  size="sm"
+                  class="h-8 gap-1.5"
+                  @click="void openAuxiliaryDocumentInlinePreview(row.key)"
+                >
+                  <Icon name="i-lucide-eye" class="size-3.5" />
+                  Ver
+                </Button>
+                <template v-if="showChecklistEmptyReadOnlyState(row.key) && !canPreviewAuxiliaryDocument(row.key)">
+                  <span class="text-xs text-muted-foreground">Sin archivo</span>
+                </template>
+                <Button
+                  v-else-if="!uploadBlockedForKey(row.key)"
+                  type="button"
+                  size="sm"
+                  :variant="hasSatisfiedUploadForKey(row.key) ? 'outline' : 'default'"
+                  class="h-8 gap-1.5"
+                  @click="triggerAuxiliaryFileInput(row.key, idx)"
+                >
+                  <Icon :name="hasSatisfiedUploadForKey(row.key) ? 'i-lucide-refresh-cw' : 'i-lucide-upload'" class="size-3.5" />
+                  {{ hasSatisfiedUploadForKey(row.key) ? 'Cambiar' : 'Adjuntar' }}
+                </Button>
+                <button
+                  v-if="pendingFileFor(row.key) && !uploadBlockedForKey(row.key)"
+                  type="button"
+                  class="text-xs font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
                   @click.stop.prevent="clearPending(row.key)"
                 >
-                  Quitar selección
+                  Quitar
                 </button>
-              </template>
-              <template v-else-if="docMetaForKey(row.key)">
-                <Icon name="i-lucide-file-text" class="size-7 text-primary" />
                 <button
-                  type="button"
-                  class="inline-block w-full max-w-full cursor-pointer whitespace-normal break-words bg-transparent px-2 text-center text-sm font-medium leading-snug text-primary underline underline-offset-2 [overflow-wrap:anywhere]"
-                  @click.stop="void openAuxiliaryDocumentInPreview(row.key)"
-                >
-                  {{ docMetaForKey(row.key)?.original_name || 'Ver archivo' }}
-                </button>
-                <span class="text-xs text-muted-foreground">Archivo en la solicitud</span>
-                <button
-                  v-if="allowsRemoveUploaded"
+                  v-if="allowsRemoveUploaded && docMetaForKey(row.key) && !pendingFileFor(row.key)"
                   type="button"
                   class="text-xs font-medium text-destructive underline underline-offset-2"
                   @click.stop.prevent="removeUploaded(row.key)"
                 >
                   Eliminar
                 </button>
-              </template>
-              <template v-else-if="showChecklistEmptyReadOnlyState(row.key)">
-                <Icon name="i-lucide-file-warning" class="size-7 text-muted-foreground" />
-                <span class="max-w-sm text-sm font-medium leading-snug text-muted-foreground">
-                  Sin archivo en la solicitud para este requisito.
-                </span>
-              </template>
-              <template v-else>
-                <div class="flex size-10 items-center justify-center rounded-full bg-muted">
-                  <Icon
-                    name="i-lucide-upload"
-                    class="size-5 shrink-0"
-                    :class="rowMissingRequired(row) ? 'text-destructive' : 'text-muted-foreground'"
-                  />
-                </div>
-                <span
-                  class="max-w-sm text-sm font-medium leading-snug"
-                  :class="rowMissingRequired(row) ? 'text-destructive' : 'text-foreground'"
-                >
-                  Arrastre el archivo aquí o haga clic para elegir
-                </span>
-                <span class="text-xs text-muted-foreground">PDF, ZIP o imagen · máximo 10 MB</span>
-              </template>
+              </div>
             </div>
+
             <div
               v-if="showDocumentReviewControls && documentReviewRowForKey(row.key)"
-              class="mt-4 space-y-3 border-t border-border pt-4"
+              class="flex flex-wrap items-center gap-3 border-t border-border bg-muted/20 px-3 py-2"
             >
               <div class="flex items-center gap-2">
                 <Checkbox
@@ -550,23 +690,28 @@ defineExpose({
                   :model-value="Boolean(documentReviewRowForKey(row.key)?.is_reviewed)"
                   @update:model-value="setDocumentReviewChecked(row.key, $event)"
                 />
-                <Label
-                  :for="auxiliaryReviewDomId(row.key)"
-                  class="text-xs font-medium cursor-pointer"
-                >
+                <Label :for="auxiliaryReviewDomId(row.key)" class="cursor-pointer text-xs font-medium">
                   Revisado
                 </Label>
               </div>
               <Input
+                class="h-8 min-w-[12rem] flex-1 text-xs"
                 :model-value="documentReviewRowForKey(row.key)?.review_comment ?? ''"
-                placeholder="Descripción corta de revisión"
+                placeholder="Nota de revisión (opcional)"
                 @update:model-value="setDocumentReviewComment(row.key, $event)"
               />
             </div>
-          </div>
-        </li>
+          </li>
         </ul>
-      </ScrollArea>
+      </template>
     </template>
+
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :loading="inlinePreviewLoading"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>

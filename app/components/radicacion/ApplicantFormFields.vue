@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/components/ui/collapsible'
 import Multiselect from '@vueform/multiselect'
 import type { ApplicantForm, ApplicantDocumentForm, FinancialInfoForm } from '~/types/credit-application'
 import { normalizeStoredActivityType } from '~/constants/auxiliary-documents-checklist'
@@ -248,17 +247,19 @@ const freeAttachmentsVisible = computed(
     && (props.showSearch || props.showCoDebtorConcept),
 )
 
-/** Con checklist auxiliar, mostrar el contenido expandido por defecto (la lista no debe quedar «vacía» hasta abrir). */
-const documentosAdjuntosOpen = ref(props.showDocumentosAuxiliarChecklist)
-
-watch(
-  () => props.showDocumentosAuxiliarChecklist,
-  (show) => {
-    if (show) {
-      documentosAdjuntosOpen.value = true
-    }
-  },
-)
+const freeAttachmentStats = computed(() => {
+  const rows = documents.value ?? []
+  const withFile = rows.filter(d =>
+    (d.file instanceof File) || Boolean(d.original_name?.trim()),
+  ).length
+  const withTitle = rows.filter(d => d.title?.trim()).length
+  return {
+    total: rows.length,
+    withFile,
+    withTitle,
+    percent: rows.length ? Math.round((withFile / rows.length) * 100) : 0,
+  }
+})
 
 type AuxiliaryDocumentsSectionExpose = {
   validateRequiredAuxiliaryUploads: () => boolean
@@ -728,6 +729,15 @@ function freeDocumentFileInputId(index: number): string {
   return `doc_file_${index}`
 }
 
+function triggerFreeDocumentFileInput(index: number): void {
+  const doc = documents.value[index]
+  if (!doc || !canPickDocumentFile(doc)) {
+    return
+  }
+  const el = document.getElementById(freeDocumentFileInputId(index)) as HTMLInputElement | null
+  el?.click()
+}
+
 /** Misma razón que AuxiliaryDocumentsSection: evitar `<label>` envolviendo controles interactivos (iOS Safari). */
 function onDocumentUploadZoneActivate(index: number, event?: MouseEvent | KeyboardEvent): void {
   const doc = documents.value[index]
@@ -739,8 +749,7 @@ function onDocumentUploadZoneActivate(index: number, event?: MouseEvent | Keyboa
       return
     }
   }
-  const el = document.getElementById(freeDocumentFileInputId(index)) as HTMLInputElement | null
-  el?.click()
+  triggerFreeDocumentFileInput(index)
 }
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
@@ -1209,15 +1218,13 @@ function formatFileSize(bytes: number): string {
       v-if="auxiliaryChecklistVisible"
       :class="sectionClass"
     >
-      <div class="space-y-3 rounded-lg border border-border bg-muted/25 p-4">
-        <div class="space-y-1">
+      <div class="space-y-3 rounded-lg border border-border bg-muted/20 p-3 sm:p-4">
+        <div class="space-y-0.5">
           <h3 class="text-sm font-semibold text-foreground">
             Documentos adjuntos
           </h3>
           <p class="text-xs text-muted-foreground leading-snug">
-            Según el <span class="font-medium text-foreground">tipo de actividad económica</span> elegido arriba se
-            muestran los documentos definidos en Parametrización → Radicación → Documentos (módulo auxiliar). PDF, ZIP
-            o imagen; máx. 10 MB por archivo.
+            Checklist según actividad económica. Use los filtros para ver pendientes o listos.
           </p>
         </div>
         <AuxiliaryDocumentsSection
@@ -1666,55 +1673,45 @@ function formatFileSize(bytes: number): string {
 
     <!-- Documentos adjuntos (filas libres; el checklist auxiliar va junto a «Actividad económica» arriba) -->
     <section v-if="freeAttachmentsVisible" :class="sectionClass">
-      <Collapsible
-        v-model:open="documentosAdjuntosOpen"
-      >
-        <CollapsibleTrigger as-child>
-          <button
-            type="button"
-            class="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3 text-left transition-colors hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <div class="min-w-0 flex-1 space-y-1">
-              <h3 class="text-sm font-semibold text-foreground">
-                Documentos adjuntos
-              </h3>
-              <p class="text-xs text-muted-foreground leading-snug">
-                Adjunte documentos con título descriptivo. Formatos: PDF, JPG, PNG, DOC, DOCX. Máx. 10 MB cada uno.
-              </p>
-            </div>
-            <Icon
-              name="i-lucide-chevron-down"
-              class="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200"
-              :class="documentosAdjuntosOpen ? 'rotate-180' : ''"
-            />
-          </button>
-        </CollapsibleTrigger>
-        <CollapsibleContent class="space-y-3 pt-3">
-          <template v-if="!showOnlyFinancial && (showSearch || showCoDebtorConcept)">
-            <ScrollArea class="h-[min(55vh,26rem)] w-full rounded-lg border border-border bg-muted/10 p-2">
-              <div class="space-y-3 pr-3">
-                <div
-                  v-for="(doc, idx) in documents"
-                  :key="idx"
-                  class="overflow-hidden rounded-xl border border-border bg-card shadow-sm"
-                >
-                <div class="border-b border-border bg-muted/40 px-4 py-3">
-                  <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Documento adjunto {{ idx + 1 }}
-                  </p>
-                  <div :class="fieldClass" class="mt-2">
-                    <Label :for="`doc_title_${idx}`" class="text-xs">Título del documento *</Label>
-                    <Input
-                      :id="`doc_title_${idx}`"
-                      :model-value="doc.title"
-                      placeholder="Ej: Cédula, Certificado laboral..."
-                      :readonly="!canEditDocumentTitle(doc)"
-                      @update:model-value="updateDocument(idx, { title: String($event ?? '') })"
-                      @blur="onDocumentTitleBlur(idx)"
-                    />
-                  </div>
+      <div class="space-y-3 rounded-lg border border-border bg-muted/20 p-3 sm:p-4">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0 space-y-0.5">
+            <h3 class="text-sm font-semibold text-foreground">
+              Documentos adjuntos
+            </h3>
+            <p class="text-xs text-muted-foreground leading-snug">
+              Agregue filas con título y archivo. PDF, JPG, PNG, DOC, DOCX · máx. 10 MB.
+            </p>
+          </div>
+          <Badge variant="outline" class="shrink-0 tabular-nums">
+            {{ freeAttachmentStats.withFile }}/{{ freeAttachmentStats.total }} con archivo
+          </Badge>
+        </div>
+        <Progress :model-value="freeAttachmentStats.percent" class="h-1.5" />
+
+        <template v-if="!showOnlyFinancial && (showSearch || showCoDebtorConcept)">
+          <ul class="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+            <li
+              v-for="(doc, idx) in documents"
+              :key="idx"
+              class="p-3 transition-colors hover:bg-muted/20"
+            >
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-end">
+                <div class="min-w-0 flex-1 space-y-1.5">
+                  <Label :for="`doc_title_${idx}`" class="text-xs text-muted-foreground">
+                    Título del documento {{ idx + 1 }} *
+                  </Label>
+                  <Input
+                    :id="`doc_title_${idx}`"
+                    :model-value="doc.title"
+                    placeholder="Ej: Cédula, certificado laboral…"
+                    :readonly="!canEditDocumentTitle(doc)"
+                    class="h-9"
+                    @update:model-value="updateDocument(idx, { title: String($event ?? '') })"
+                    @blur="onDocumentTitleBlur(idx)"
+                  />
                 </div>
-                <div class="p-4">
+                <div class="flex flex-wrap items-center gap-2 lg:shrink-0">
                   <input
                     :id="freeDocumentFileInputId(idx)"
                     type="file"
@@ -1722,82 +1719,47 @@ function formatFileSize(bytes: number): string {
                     class="sr-only"
                     @change="onDocumentFileChange(idx, $event)"
                   >
-                  <div
-                    role="button"
-                    tabindex="0"
-                    aria-label="Seleccionar archivo para este documento"
-                    class="flex min-h-[6.5rem] touch-manipulation flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 px-4 py-4 text-center transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    :class="canPickDocumentFile(doc) ? 'cursor-pointer hover:border-primary/45 hover:bg-muted/35 active:bg-muted/40' : 'cursor-not-allowed opacity-60 pointer-events-none'"
-                    @click="onDocumentUploadZoneActivate(idx, $event)"
-                    @keydown.enter.prevent="onDocumentUploadZoneActivate(idx, $event)"
-                    @keydown.space.prevent="onDocumentUploadZoneActivate(idx, $event)"
-                    @dragover="onDocumentDragOver"
-                    @drop="onDocumentDrop(idx, $event)"
-                  >
-                    <template v-if="doc.file">
-                      <Icon name="i-lucide-file-check" class="h-7 w-7 text-green-600 dark:text-green-500" />
-                      <span class="w-full max-w-full whitespace-normal break-words text-center text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere]">
-                        {{ doc.file.name }}
-                      </span>
-                      <span class="text-xs text-muted-foreground">
-                        {{ formatFileSize(doc.file.size) }}
-                      </span>
-                      <span class="text-xs font-medium text-primary">Clic para cambiar</span>
-                    </template>
-                    <template v-else-if="doc.original_name">
-                      <Icon name="i-lucide-file-text" class="h-7 w-7 text-primary" />
-                      <span class="w-full max-w-full whitespace-normal break-words text-center text-sm font-medium leading-snug text-foreground [overflow-wrap:anywhere]">
-                        {{ doc.original_name }}
-                      </span>
-                      <span
-                        v-if="doc.is_reviewed"
-                        class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                      >
-                        Revisado
-                      </span>
-                      <span
-                        v-if="doc.review_comment"
-                        class="max-w-full break-words text-center text-xs text-amber-700 dark:text-amber-300"
-                        :title="doc.review_comment"
-                      >
-                        Nota revisión: {{ doc.review_comment }}
-                      </span>
-                      <span class="text-xs text-muted-foreground">Archivo existente</span>
-                      <span class="text-xs font-medium text-primary">Clic para reemplazar</span>
-                    </template>
-                    <template v-else>
-                      <div class="flex size-10 items-center justify-center rounded-full bg-muted">
-                        <Icon name="i-lucide-upload" class="size-5 text-muted-foreground" />
-                      </div>
-                      <span class="max-w-sm text-center text-sm font-medium text-foreground">
-                        Arrastre aquí o haga clic para seleccionar
-                      </span>
-                      <span class="text-xs text-muted-foreground">PDF, JPG, PNG, DOC · máx. 10 MB</span>
-                    </template>
+                  <div class="min-w-0 max-w-[14rem]">
+                    <p
+                      v-if="doc.file || doc.original_name"
+                      class="truncate text-xs text-muted-foreground"
+                      :title="doc.file?.name ?? doc.original_name ?? ''"
+                    >
+                      {{ doc.file?.name ?? doc.original_name }}
+                      <span v-if="doc.file" class="text-foreground/70">· {{ formatFileSize(doc.file.size) }}</span>
+                    </p>
                   </div>
-                </div>
-                <div v-if="canRemoveDocumentRow(doc)" class="flex justify-end border-t border-border px-4 py-3">
                   <Button
+                    v-if="canPickDocumentFile(doc)"
                     type="button"
-                    variant="destructive"
                     size="sm"
-                    class="h-9 gap-1.5 px-2.5"
+                    :variant="doc.file || doc.original_name ? 'outline' : 'default'"
+                    class="h-9 gap-1.5"
+                    @click="triggerFreeDocumentFileInput(idx)"
+                  >
+                    <Icon :name="doc.file || doc.original_name ? 'i-lucide-refresh-cw' : 'i-lucide-upload'" class="size-3.5" />
+                    {{ doc.file || doc.original_name ? 'Cambiar' : 'Adjuntar' }}
+                  </Button>
+                  <Button
+                    v-if="canRemoveDocumentRow(doc)"
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="h-9 text-destructive hover:text-destructive"
                     @click="removeDocument(idx)"
                   >
-                    <Icon name="i-lucide-trash" class="h-4 w-4 shrink-0" />
-                    Quitar
+                    <Icon name="i-lucide-trash" class="size-4" />
                   </Button>
                 </div>
-                </div>
               </div>
-            </ScrollArea>
-            <Button v-if="docCanSubir" type="button" variant="outline" size="sm" @click="addDocument">
-              <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-              Agregar documento
-            </Button>
-          </template>
-        </CollapsibleContent>
-      </Collapsible>
+            </li>
+          </ul>
+          <Button v-if="docCanSubir" type="button" variant="outline" size="sm" class="w-full sm:w-auto" @click="addDocument">
+            <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+            Agregar otro documento
+          </Button>
+        </template>
+      </div>
     </section>
   </div>
 </template>

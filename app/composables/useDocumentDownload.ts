@@ -223,5 +223,5 @@ export function useDocumentDownload() {
     openPdfBlobInNewTab(blob)
   }
 
-  return { downloadDocument, viewDocumentInNewTab, downloadApplicationPdf, downloadAnalisisScorePdf }
+  return { downloadDocument, viewDocumentInNewTab, fetchApplicationDocument, downloadApplicationPdf, downloadAnalisisScorePdf }
 }
