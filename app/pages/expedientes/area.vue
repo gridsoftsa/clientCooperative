@@ -9,6 +9,7 @@ definePageMeta({
 })
 
 const archivalApi = useArchivalFileApi()
+const { hasPermission } = usePermissions()
 const { $api } = useNuxtApp()
 const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promise<T>
 const orgUnits = ref<Array<{ id: number, name: string }>>([])
@@ -17,7 +18,15 @@ const loading = ref(false)
 const tree = ref<ArchivalFileTreeNode | null>(null)
 const selectedFileId = ref<number | null>(null)
 
-function handleSelectFile(node: ArchivalFileTreeNode) {
+const canViewDocuments = computed(() =>
+  hasPermission('expedientes_ver')
+  || hasPermission('expedientes_documentos_descargar')
+  || hasPermission('expedientes_area_ver'),
+)
+const canDownloadDocuments = computed(() => hasPermission('expedientes_documentos_descargar'))
+const canOpenExpediente = computed(() => hasPermission('expedientes_ver'))
+
+function handleSelectDocument(node: ArchivalFileTreeNode) {
   if (node.archival_file_id) {
     selectedFileId.value = node.archival_file_id
   }
@@ -103,7 +112,10 @@ onMounted(async () => {
         <ArchivalFileTreeItem
           v-else-if="tree"
           :node="tree"
-          @click-file="handleSelectFile"
+          :can-view="canViewDocuments"
+          :can-download="canDownloadDocuments"
+          :can-open-file="canOpenExpediente"
+          @click-file="handleSelectDocument"
         />
         <div v-else class="py-10 text-center text-muted-foreground">
           Seleccione un área para consultar su documentación.

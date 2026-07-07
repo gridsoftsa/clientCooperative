@@ -5,7 +5,9 @@ const props = defineProps<{
   node: ArchivalFileTreeNode
   depth?: number
   canManageDocuments?: boolean
+  canView?: boolean
   canDownload?: boolean
+  canOpenFile?: boolean
   fileId?: number
 }>()
 
@@ -15,8 +17,13 @@ const emit = defineEmits<{
   clickFile: [node: ArchivalFileTreeNode]
 }>()
 
+const archivalApi = useArchivalFileApi()
+const router = useRouter()
+
 const depth = computed(() => props.depth ?? 0)
 const expanded = ref(depth.value < 2)
+
+const previewOpen = ref(false)
 
 const hasChildren = computed(() => (props.node.children?.length ?? 0) > 0)
 const isDocument = computed(() => props.node.type === 'document' || props.node.type === 'document_reference')
@@ -39,19 +46,42 @@ const iconName = computed(() => {
 
 const isFileNode = computed(() => props.node.type === 'file' || props.node.type === 'child_file')
 
+const documentFileId = computed(() => props.fileId ?? props.node.archival_file_id ?? null)
+const documentId = computed(() => props.node.archival_file_document_id ?? null)
+
+const downloadHref = computed(() => {
+  if (!props.canDownload || documentFileId.value === null || documentId.value === null) {
+    return null
+  }
+
+  return archivalApi.documentDownloadUrl(documentFileId.value, documentId.value)
+})
+
+const viewUrl = computed(() => {
+  if (!props.canView || documentFileId.value === null || documentId.value === null) {
+    return null
+  }
+
+  return archivalApi.documentViewUrl(documentFileId.value, documentId.value)
+})
+
 function handleNodeClick() {
   if (isFileNode.value && props.node.archival_file_id) {
     emit('clickFile', props.node)
   }
 }
 
-const downloadHref = computed(() => {
-  if (!props.canDownload || !props.fileId || !props.node.archival_file_document_id) {
-    return props.node.download_url
+function openPreview() {
+  if (viewUrl.value) {
+    previewOpen.value = true
   }
+}
 
-  return `/api/archival-files/${props.fileId}/documents/${props.node.archival_file_document_id}/download`
-})
+function openExpediente() {
+  if (props.node.archival_file_id) {
+    router.push(`/expedientes/${props.node.archival_file_id}`)
+  }
+}
 </script>
 
 <template>
@@ -66,7 +96,7 @@ const downloadHref = computed(() => {
         v-if="hasChildren"
         type="button"
         class="text-muted-foreground"
-        @click="expanded = !expanded"
+        @click.stop="expanded = !expanded"
       >
         <Icon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-4" />
       </button>
@@ -83,15 +113,35 @@ const downloadHref = computed(() => {
         {{ node.status_label }}
       </Badge>
 
-      <div v-if="isDocument" class="flex items-center gap-1">
+      <div v-if="isDocument" class="flex flex-wrap items-center justify-end gap-1">
+        <Button
+          v-if="canView && viewUrl"
+          variant="ghost"
+          size="sm"
+          class="h-7 px-2 text-xs"
+          type="button"
+          @click.stop="openPreview"
+        >
+          Ver
+        </Button>
         <a
-          v-if="downloadHref"
+          v-if="canDownload && downloadHref"
           :href="downloadHref"
-          class="text-xs text-primary hover:underline"
+          class="inline-flex h-7 items-center px-2 text-xs text-primary hover:underline"
           @click.stop
         >
           Descargar
         </a>
+        <Button
+          v-if="canOpenFile && node.archival_file_id"
+          variant="ghost"
+          size="sm"
+          class="h-7 px-2 text-xs"
+          type="button"
+          @click.stop="openExpediente"
+        >
+          Expediente
+        </Button>
 
         <template v-if="canManageDocuments">
           <Button
@@ -117,6 +167,14 @@ const downloadHref = computed(() => {
       </div>
     </div>
 
+    <ArchivalFileDocumentPreviewDialog
+      v-if="isDocument"
+      v-model:open="previewOpen"
+      :title="node.name"
+      :view-url="viewUrl"
+      :mime-type="node.mime_type"
+    />
+
     <div v-if="expanded && hasChildren">
       <ArchivalFileTreeItem
         v-for="child in node.children"
@@ -124,7 +182,9 @@ const downloadHref = computed(() => {
         :node="child"
         :depth="depth + 1"
         :can-manage-documents="canManageDocuments"
+        :can-view="canView"
         :can-download="canDownload"
+        :can-open-file="canOpenFile"
         :file-id="fileId"
         @reference="emit('reference', $event)"
         @replace-version="emit('replaceVersion', $event)"

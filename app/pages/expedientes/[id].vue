@@ -49,6 +49,11 @@ const canManageDocuments = computed(() =>
   && file.value?.status !== 'closed',
 )
 const canDownloadDocuments = computed(() => hasPermission('expedientes_documentos_descargar'))
+const canViewDocuments = computed(() =>
+  hasPermission('expedientes_ver')
+  || hasPermission('expedientes_documentos_descargar')
+  || hasPermission('expedientes_area_ver'),
+)
 const canClose = computed(() => hasPermission('expedientes_cerrar') && file.value?.status !== 'closed')
 const canConsolidate = computed(() =>
   hasPermission('expedientes_consolidar')
@@ -327,6 +332,7 @@ onMounted(() => loadAll())
               :node="tree"
               :file-id="file.id"
               :can-manage-documents="canManageDocuments"
+              :can-view="canViewDocuments"
               :can-download="canDownloadDocuments"
               @reference="openReferenceDialog"
               @replace-version="openVersionDialog"
