@@ -22,6 +22,7 @@ import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from 
 import { parseActivityTemplateList } from '~/types/credit-application'
 import { mergeApplicantFromApi, normalizeFinancialInfoAliases } from '~/utils/merge-applicant-search'
 import { messageFromFetchError } from '~/utils/http-error-message'
+import { runDocumentUpload } from '~/utils/radicacion-document-upload'
 import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
 import {
@@ -1024,7 +1025,11 @@ async function uploadAllDocuments(
       const fd = new FormData()
       fd.append('title', doc.title.trim())
       appendFileToFormData(fd, doc.file, 'adjunto')
-      await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
+      await runDocumentUpload(
+        `Deudor — adjunto: ${doc.title.trim()}`,
+        doc.file,
+        () => $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd }),
+      )
     }
 
     let labelByKey: Record<string, string> = {}
@@ -1062,9 +1067,13 @@ async function uploadAllDocuments(
         fd.append('title', titleForAuxiliaryDocumentUpload(label))
         appendFileToFormData(fd, file, 'auxiliar')
         fd.append('auxiliary_checklist', '1')
-        const res = await $api<{ data: { id: number } }>(
-          `/credit-applications/${applicationId}/documents`,
-          { method: 'POST', body: fd },
+        const res = await runDocumentUpload(
+          `Deudor — documento auxiliar: ${label}`,
+          file,
+          () => $api<{ data: { id: number } }>(
+            `/credit-applications/${applicationId}/documents`,
+            { method: 'POST', body: fd },
+          ),
         )
         docMap[key] = res.data.id
         didAuxiliarUpload = true
@@ -1111,9 +1120,13 @@ async function uploadAllDocuments(
           fdFng.append('title', titleForFngDocumentUpload(labelFng))
           appendFileToFormData(fdFng, file, 'fng')
           fdFng.append('fng_checklist', '1')
-          const resFng = await $api<{ data: { id: number } }>(
-            `/credit-applications/${applicationId}/documents`,
-            { method: 'POST', body: fdFng },
+          const resFng = await runDocumentUpload(
+            `Deudor — documento FNG: ${labelFng}`,
+            file,
+            () => $api<{ data: { id: number } }>(
+              `/credit-applications/${applicationId}/documents`,
+              { method: 'POST', body: fdFng },
+            ),
           )
           fngDocMap[key] = resFng.data.id
           didFngUpload = true
@@ -1147,7 +1160,11 @@ async function uploadAllDocuments(
       fd.append('title', doc.title.trim())
       appendFileToFormData(fd, doc.file, 'adjunto')
       fd.append('applicant_id', String(applicantId))
-      await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
+      await runDocumentUpload(
+        `Codeudor ${i + 1} — adjunto: ${doc.title.trim()}`,
+        doc.file,
+        () => $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd }),
+      )
     }
 
     let labelByKeyCo: Record<string, string> = {}
@@ -1186,9 +1203,13 @@ async function uploadAllDocuments(
         appendFileToFormData(fdAux, file, 'auxiliar-codeudor')
         fdAux.append('auxiliary_checklist', '1')
         fdAux.append('applicant_id', String(applicantId))
-        const resCo = await $api<{ data: { id: number } }>(
-          `/credit-applications/${applicationId}/documents`,
-          { method: 'POST', body: fdAux },
+        const resCo = await runDocumentUpload(
+          `Codeudor ${i + 1} — documento auxiliar: ${labelCo}`,
+          file,
+          () => $api<{ data: { id: number } }>(
+            `/credit-applications/${applicationId}/documents`,
+            { method: 'POST', body: fdAux },
+          ),
         )
         docMapCo[key] = resCo.data.id
         didAuxCo = true
