@@ -101,6 +101,7 @@ export const navMenu: NavMenu[] = [
         anyPermission: [
           'expedientes_ver',
           'expedientes_area_ver',
+          'expedientes_biblioteca_ver',
           'expedientes_tipos_configurar',
           'expedientes_reportes_ver',
           'expedientes_alertas_configurar',
@@ -111,6 +112,11 @@ export const navMenu: NavMenu[] = [
             title: 'Listado',
             link: '/expedientes',
             permission: 'expedientes_ver',
+          },
+          {
+            title: 'Biblioteca institucional',
+            link: '/biblioteca',
+            permission: 'expedientes_biblioteca_ver',
           },
           {
             title: 'Repositorio por área',

@@ -8,6 +8,7 @@ const props = defineProps<{
   canView?: boolean
   canDownload?: boolean
   canOpenFile?: boolean
+  canPublishToLibrary?: boolean
   fileId?: number
 }>()
 
@@ -15,6 +16,7 @@ const emit = defineEmits<{
   reference: [node: ArchivalFileTreeNode]
   replaceVersion: [node: ArchivalFileTreeNode]
   clickFile: [node: ArchivalFileTreeNode]
+  publishToLibrary: [node: ArchivalFileTreeNode]
 }>()
 
 const archivalApi = useArchivalFileApi()
@@ -164,6 +166,16 @@ function openExpediente() {
             Nueva versión
           </Button>
         </template>
+        <Button
+          v-if="canPublishToLibrary && isVersionableDocument"
+          variant="ghost"
+          size="sm"
+          class="h-7 px-2 text-xs"
+          type="button"
+          @click.stop="emit('publishToLibrary', node)"
+        >
+          Publicar
+        </Button>
       </div>
     </div>
 
@@ -185,10 +197,12 @@ function openExpediente() {
         :can-view="canView"
         :can-download="canDownload"
         :can-open-file="canOpenFile"
+        :can-publish-to-library="canPublishToLibrary"
         :file-id="fileId"
         @reference="emit('reference', $event)"
         @replace-version="emit('replaceVersion', $event)"
         @click-file="emit('clickFile', $event)"
+        @publish-to-library="emit('publishToLibrary', $event)"
       />
     </div>
   </div>

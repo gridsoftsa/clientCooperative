@@ -33,6 +33,7 @@ const dispositionReason = ref('')
 
 const referenceDialogOpen = ref(false)
 const versionDialogOpen = ref(false)
+const publishDialogOpen = ref(false)
 const transferDialogOpen = ref(false)
 const selectedTreeNode = ref<ArchivalFileTreeNode | null>(null)
 const transferAlertType = ref<string | null>(null)
@@ -54,6 +55,7 @@ const canViewDocuments = computed(() =>
   || hasPermission('expedientes_documentos_descargar')
   || hasPermission('expedientes_area_ver'),
 )
+const canPublishToLibrary = computed(() => hasPermission('expedientes_biblioteca_publicar'))
 const canClose = computed(() => hasPermission('expedientes_cerrar') && file.value?.status !== 'closed')
 const canConsolidate = computed(() =>
   hasPermission('expedientes_consolidar')
@@ -207,6 +209,11 @@ function openVersionDialog(node: ArchivalFileTreeNode) {
   versionDialogOpen.value = true
 }
 
+function openPublishDialog(node: ArchivalFileTreeNode) {
+  selectedTreeNode.value = node
+  publishDialogOpen.value = true
+}
+
 function openTransferDialog(alert?: ArchivalFileAlert) {
   transferAlertType.value = alert?.alert_type ?? null
   transferSuggestedPhase.value = inferPhaseFromAlert(alert?.alert_type) ?? null
@@ -334,8 +341,10 @@ onMounted(() => loadAll())
               :can-manage-documents="canManageDocuments"
               :can-view="canViewDocuments"
               :can-download="canDownloadDocuments"
+              :can-publish-to-library="canPublishToLibrary"
               @reference="openReferenceDialog"
               @replace-version="openVersionDialog"
+              @publish-to-library="openPublishDialog"
             />
           </CardContent>
         </Card>
@@ -485,6 +494,15 @@ onMounted(() => loadAll())
         :file-id="file.id"
         :document-node="selectedTreeNode"
         @replaced="loadAll"
+      />
+
+      <InstitutionalLibraryPublishDialog
+        v-if="file && selectedTreeNode?.archival_file_document_id"
+        v-model:open="publishDialogOpen"
+        :file-id="file.id"
+        :document-id="selectedTreeNode.archival_file_document_id"
+        :document-title="selectedTreeNode.name"
+        @published="loadAll"
       />
 
       <ArchivalFileTransferDialog
