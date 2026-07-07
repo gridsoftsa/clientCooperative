@@ -1,4 +1,4 @@
-export type DocumentPreviewKind = 'pdf' | 'image' | 'zip' | 'unsupported'
+export type DocumentPreviewKind = 'pdf' | 'image' | 'zip' | 'office' | 'unsupported'
 
 export function resolveDocumentPreviewKind(fileName: string, mime = ''): DocumentPreviewKind {
   const normalizedMime = mime.toLowerCase()
@@ -17,6 +17,13 @@ export function resolveDocumentPreviewKind(fileName: string, mime = ''): Documen
   }
   if (ext === 'zip' || normalizedMime.includes('zip')) {
     return 'zip'
+  }
+  if (
+    ['doc', 'docx'].includes(ext)
+    || normalizedMime.includes('wordprocessingml')
+    || normalizedMime === 'application/msword'
+  ) {
+    return 'office'
   }
   return 'unsupported'
 }

@@ -19,6 +19,7 @@ import {
 } from '~/constants/radicacion-form-catalog-fallbacks'
 /** Import explícito: Nuxt auto-importa como `RadicacionAuxiliaryDocumentsSection`, no como `AuxiliaryDocumentsSection`. */
 import AuxiliaryDocumentsSection from '~/components/radicacion/AuxiliaryDocumentsSection.vue'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -129,6 +130,15 @@ function canRemoveDocumentRow(doc: ApplicantDocumentForm): boolean {
 }
 
 const { $api, $csrf } = useNuxtApp()
+const {
+  open: inlinePreviewOpen,
+  loading: inlinePreviewLoading,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  previewLocalFile,
+  previewApplicationDocument,
+} = useDocumentInlinePreview()
 
 const emit = defineEmits<{
   'update:modelValue': [ApplicantForm]
@@ -736,6 +746,23 @@ function triggerFreeDocumentFileInput(index: number): void {
   }
   const el = document.getElementById(freeDocumentFileInputId(index)) as HTMLInputElement | null
   el?.click()
+}
+
+function canPreviewFreeDocument(doc: ApplicantDocumentForm): boolean {
+  return Boolean(doc.file || doc.id)
+}
+
+async function openFreeDocumentPreview(doc: ApplicantDocumentForm): Promise<void> {
+  if (doc.file instanceof File) {
+    previewLocalFile(doc.file)
+    return
+  }
+  const appId = props.creditApplicationId
+  if (!doc.id || !appId) {
+    toast.error('No hay documento para previsualizar.')
+    return
+  }
+  await previewApplicationDocument(appId, doc.id, doc.original_name || doc.title)
 }
 
 /** Misma razón que AuxiliaryDocumentsSection: evitar `<label>` envolviendo controles interactivos (iOS Safari). */
@@ -1730,6 +1757,17 @@ function formatFileSize(bytes: number): string {
                     </p>
                   </div>
                   <Button
+                    v-if="canPreviewFreeDocument(doc)"
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    class="h-9 gap-1.5"
+                    @click="void openFreeDocumentPreview(doc)"
+                  >
+                    <Icon name="i-lucide-eye" class="size-3.5" />
+                    Ver
+                  </Button>
+                  <Button
                     v-if="canPickDocumentFile(doc)"
                     type="button"
                     size="sm"
@@ -1761,6 +1799,14 @@ function formatFileSize(bytes: number): string {
         </template>
       </div>
     </section>
+
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :loading="inlinePreviewLoading"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>
 

@@ -5,6 +5,7 @@ import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue
 import InsurabilityDocumentsSection from '~/components/radicacion/InsurabilityDocumentsSection.vue'
 import FngDocumentsSection from '~/components/radicacion/FngDocumentsSection.vue'
 import ApproverEntityDocumentsSection from '~/components/radicacion/ApproverEntityDocumentsSection.vue'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/components/ui/collapsible'
 import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import RadicacionResumenFinancieroDeudorComparacion from '~/components/radicacion/RadicacionResumenFinancieroDeudorComparacion.vue'
@@ -141,7 +142,15 @@ const stepsCodeudor = [
 ]
 
 const { formatPesosConSimbolo } = usePesosFormat()
-const { viewDocumentInNewTab, downloadApplicationPdf } = useDocumentDownload()
+const { downloadApplicationPdf } = useDocumentDownload()
+const {
+  open: documentPreviewOpen,
+  loading: documentPreviewLoading,
+  title: documentPreviewTitle,
+  previewUrl: documentPreviewUrl,
+  previewKind: documentPreviewKind,
+  previewApplicationDocument,
+} = useDocumentInlinePreview()
 const downloadingPdf = ref(false)
 const downloadingId = ref<number | null>(null)
 const deactivating = ref(false)
@@ -203,7 +212,7 @@ const documentationReviewFlowActive = computed(
 
 const documentationAuxiliaryInteractionMode = computed((): 'full' | 'uploadOnly' | 'viewOnly' => {
   if (!documentationReviewFlowActive.value) {
-    return 'full'
+    return documentationUploadMode.value ? 'full' : 'viewOnly'
   }
   return documentationUploadMode.value ? 'uploadOnly' : 'viewOnly'
 })
@@ -1145,20 +1154,23 @@ async function onDeactivateConfirm(reason: string) {
 }
 
 async function handleViewDocument(doc: { id: number; title?: string; original_name?: string }) {
-  if (downloadingId.value) return
+  if (documentPreviewLoading.value || downloadingId.value) return
   const docId = Number(doc?.id)
   if (!Number.isFinite(docId) || docId < 1) {
     toast.error('Documento no válido. Recargue la ficha e intente de nuevo.')
     return
   }
+  if (!application.value?.id) {
+    toast.error('No hay solicitud cargada.')
+    return
+  }
   downloadingId.value = doc.id
   try {
-    await viewDocumentInNewTab(application.value.id, doc.id)
-  } catch (e) {
-    console.error('Error abriendo documento:', e)
-    const { toast } = await import('vue-sonner')
-    const msg = e instanceof Error && e.message ? e.message : 'No se pudo abrir el documento.'
-    toast.error(msg)
+    await previewApplicationDocument(
+      application.value.id,
+      docId,
+      doc.title || doc.original_name,
+    )
   } finally {
     downloadingId.value = null
   }
@@ -3682,7 +3694,7 @@ onMounted(() => {
                       >
                         {{ doc.title || doc.original_name || 'Documento' }}
                       </span>
-                      <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <Icon name="i-lucide-eye" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     </Button>
                     <p v-if="doc.review_comment" class="break-words text-xs text-amber-700 dark:text-amber-300">
                       Nota revisión: {{ doc.review_comment }}
@@ -3916,7 +3928,7 @@ onMounted(() => {
                           >
                             {{ doc.title || doc.original_name || 'Documento' }}
                           </span>
-                          <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <Icon name="i-lucide-eye" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         </Button>
                         <p v-if="doc.review_comment" class="break-words text-xs text-amber-700 dark:text-amber-300">
                           Nota revisión: {{ doc.review_comment }}
@@ -4110,6 +4122,14 @@ onMounted(() => {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+
+    <DocumentInlinePreviewDialog
+      v-model:open="documentPreviewOpen"
+      :title="documentPreviewTitle"
+      :loading="documentPreviewLoading"
+      :preview-url="documentPreviewUrl"
+      :preview-kind="documentPreviewKind"
+    />
   </div>
 </template>
 

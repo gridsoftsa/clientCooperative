@@ -11,6 +11,7 @@ import {
 } from '~/constants/documentation-insurability-checklist'
 import { messageFromFetchError } from '~/utils/http-error-message'
 import { creditApplicationDocumentIdEquals, parseFinancialChecklistDocumentIdMap } from '~/utils/financial-checklist-document-id-map'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -45,7 +46,15 @@ const emit = defineEmits<{
 
 const { $api } = useNuxtApp()
 const { hasPermission } = usePermissions()
-const { viewDocumentInNewTab } = useDocumentDownload()
+const {
+  open: inlinePreviewOpen,
+  loading: inlinePreviewLoading,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  previewLocalFile,
+  previewApplicationDocument,
+} = useDocumentInlinePreview()
 
 const loadingConfig = ref(false)
 const checklistRows = ref<DocumentationInsurabilityChecklistItem[]>([])
@@ -152,7 +161,7 @@ function uploadBlockedForKey(_key: string): boolean {
 
 function showChecklistEmptyReadOnlyState(key: string): boolean {
   if (props.interactionMode === 'viewOnly') {
-    return true
+    return !hasSatisfiedUploadForKey(key)
   }
   return props.interactionMode === 'uploadOnly' && !hasSatisfiedUploadForKey(key)
 }
@@ -265,17 +274,19 @@ function clearPending(key: string): void {
 }
 
 async function openInsurabilityDocumentInPreview(key: string): Promise<void> {
+  const pending = pendingFileFor(key)
+  if (pending) {
+    previewLocalFile(pending)
+    return
+  }
+
   const meta = docMetaForKey(key)
   const appId = props.creditApplicationId
   if (!meta?.id || !appId) {
-    toast.error('No hay documento para abrir.')
+    toast.error('No hay documento para previsualizar.')
     return
   }
-  try {
-    await viewDocumentInNewTab(appId, meta.id)
-  } catch (e: unknown) {
-    toast.error(messageFromFetchError(e, 'No se pudo abrir el archivo.'))
-  }
+  await previewApplicationDocument(appId, meta.id, meta.original_name)
 }
 
 watch(
@@ -374,14 +385,23 @@ watch(
                       : 'Se subirá al guardar la solicitud'
                   }}
                 </span>
-                <button
-                  v-if="!uploadBlockedForKey(row.key)"
-                  type="button"
-                  class="text-xs font-medium text-primary underline underline-offset-2"
-                  @click.stop.prevent="clearPending(row.key)"
-                >
-                  Quitar selección
-                </button>
+                <div class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+                  <button
+                    type="button"
+                    class="text-xs font-medium text-primary underline underline-offset-2"
+                    @click.stop.prevent="void openInsurabilityDocumentInPreview(row.key)"
+                  >
+                    Ver
+                  </button>
+                  <button
+                    v-if="!uploadBlockedForKey(row.key)"
+                    type="button"
+                    class="text-xs font-medium text-primary underline underline-offset-2"
+                    @click.stop.prevent="clearPending(row.key)"
+                  >
+                    Quitar selección
+                  </button>
+                </div>
               </div>
             </template>
             <template v-else-if="docMetaForKey(row.key)">
@@ -453,5 +473,13 @@ watch(
         </li>
       </ul>
     </ScrollArea>
+
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :loading="inlinePreviewLoading"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>

@@ -59,6 +59,16 @@ withDefaults(
         </div>
 
         <div
+          v-else-if="previewKind === 'office'"
+          class="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-6 text-center"
+        >
+          <Icon name="i-lucide-file-text" class="size-12 text-muted-foreground" />
+          <p class="text-sm text-muted-foreground">
+            Los archivos Word (DOC/DOCX) no se pueden previsualizar aquí. Descárgalo en tu equipo para revisarlo.
+          </p>
+        </div>
+
+        <div
           v-else-if="previewKind === 'zip'"
           class="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-6 text-center"
         >

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onUnmounted, watch } from 'vue'
+import { nextTick, watch } from 'vue'
 import { toast } from 'vue-sonner'
 import type { ApplicantForm, FinancialInfoForm } from '~/types/credit-application'
 import {
@@ -13,7 +13,6 @@ import {
 } from '~/constants/auxiliary-documents-checklist'
 import { messageFromFetchError } from '~/utils/http-error-message'
 import { creditApplicationDocumentIdEquals, parseFinancialChecklistDocumentIdMap } from '~/utils/financial-checklist-document-id-map'
-import { resolveDocumentPreviewKind, type DocumentPreviewKind } from '~/utils/document-preview'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = withDefaults(
@@ -59,7 +58,15 @@ const emit = defineEmits<{
 }>()
 
 const { $api } = useNuxtApp()
-const { fetchApplicationDocument } = useDocumentDownload()
+const {
+  open: inlinePreviewOpen,
+  loading: inlinePreviewLoading,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  previewLocalFile,
+  previewApplicationDocument,
+} = useDocumentInlinePreview()
 
 const loadingConfig = ref(false)
 const itemsByActivity = ref<Record<string, AuxiliaryChecklistItem[]>>({})
@@ -165,7 +172,7 @@ function uploadBlockedForKey(key: string): boolean {
 
 function showChecklistEmptyReadOnlyState(key: string): boolean {
   if (props.interactionMode === 'viewOnly') {
-    return true
+    return !hasSatisfiedUploadForKey(key)
   }
   return props.interactionMode === 'uploadOnly' && !hasSatisfiedUploadForKey(key)
 }
@@ -291,81 +298,26 @@ function safeInputId(key: string, index: number): string {
   return `aux_doc_${index}_${slug}`
 }
 
-const inlinePreviewOpen = ref(false)
-const inlinePreviewLoading = ref(false)
-const inlinePreviewTitle = ref('Vista previa')
-const inlinePreviewUrl = ref<string | null>(null)
-const inlinePreviewKind = ref<DocumentPreviewKind | null>(null)
-
-function revokeInlinePreviewUrl(): void {
-  if (inlinePreviewUrl.value) {
-    URL.revokeObjectURL(inlinePreviewUrl.value)
-    inlinePreviewUrl.value = null
-  }
-}
-
-function resetInlinePreview(): void {
-  revokeInlinePreviewUrl()
-  inlinePreviewLoading.value = false
-  inlinePreviewTitle.value = 'Vista previa'
-  inlinePreviewKind.value = null
-}
-
-watch(inlinePreviewOpen, (isOpen) => {
-  if (!isOpen) {
-    resetInlinePreview()
-  }
-})
-
 function canPreviewAuxiliaryDocument(key: string): boolean {
   return Boolean(pendingFileFor(key) || docMetaForKey(key))
 }
 
 async function openAuxiliaryDocumentInlinePreview(key: string): Promise<void> {
-  resetInlinePreview()
-  inlinePreviewOpen.value = true
-  inlinePreviewLoading.value = true
-
   const pending = pendingFileFor(key)
   if (pending) {
-    inlinePreviewTitle.value = pending.name
-    inlinePreviewKind.value = resolveDocumentPreviewKind(pending.name, pending.type)
-    if (inlinePreviewKind.value === 'pdf' || inlinePreviewKind.value === 'image') {
-      inlinePreviewUrl.value = URL.createObjectURL(pending)
-    }
-    inlinePreviewLoading.value = false
+    previewLocalFile(pending)
     return
   }
 
   const meta = docMetaForKey(key)
   const appId = props.creditApplicationId
   if (!meta?.id || !appId) {
-    inlinePreviewOpen.value = false
     toast.error('No hay documento para previsualizar.')
-    resetInlinePreview()
     return
   }
 
-  try {
-    const { blob, dispositionFilename } = await fetchApplicationDocument(appId, meta.id)
-    const fileName = meta.original_name || dispositionFilename || 'documento'
-    inlinePreviewTitle.value = fileName
-    inlinePreviewKind.value = resolveDocumentPreviewKind(fileName, blob.type)
-    if (inlinePreviewKind.value === 'pdf' || inlinePreviewKind.value === 'image') {
-      inlinePreviewUrl.value = URL.createObjectURL(blob)
-    }
-  } catch (e: unknown) {
-    inlinePreviewOpen.value = false
-    toast.error(messageFromFetchError(e, 'No se pudo cargar la vista previa.'))
-    resetInlinePreview()
-  } finally {
-    inlinePreviewLoading.value = false
-  }
+  await previewApplicationDocument(appId, meta.id, meta.original_name)
 }
-
-onUnmounted(() => {
-  revokeInlinePreviewUrl()
-})
 
 function triggerAuxiliaryFileInput(key: string, idx: number): void {
   if (uploadBlockedForKey(key)) {

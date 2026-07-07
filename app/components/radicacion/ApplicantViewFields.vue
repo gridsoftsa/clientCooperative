@@ -3,6 +3,7 @@ import {
   RADICACION_JOB_POSITION_OPTIONS_FALLBACK,
   RADICACION_OCCUPATION_OPTIONS_FALLBACK,
 } from '~/constants/radicacion-form-catalog-fallbacks'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = defineProps<{
   applicant: any
@@ -13,7 +14,14 @@ const props = defineProps<{
 }>()
 
 const { formatPesosConSimbolo } = usePesosFormat()
-const { viewDocumentInNewTab } = useDocumentDownload()
+const {
+  open: inlinePreviewOpen,
+  loading: inlinePreviewLoading,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  previewApplicationDocument,
+} = useDocumentInlinePreview()
 const downloadingId = ref<number | null>(null)
 
 function fullName(a: any): string {
@@ -26,7 +34,7 @@ function cityName(a: any): string {
 }
 
 async function handleViewDocument(doc: { id: number; title?: string; original_name?: string }) {
-  if (downloadingId.value) return
+  if (inlinePreviewLoading.value || downloadingId.value) return
   const docId = Number(doc?.id)
   if (!Number.isFinite(docId) || docId < 1) {
     const { toast } = await import('vue-sonner')
@@ -35,12 +43,11 @@ async function handleViewDocument(doc: { id: number; title?: string; original_na
   }
   downloadingId.value = doc.id
   try {
-    await viewDocumentInNewTab(props.applicationId, doc.id)
-  } catch (e) {
-    console.error('Error abriendo documento:', e)
-    const { toast } = await import('vue-sonner')
-    const msg = e instanceof Error && e.message ? e.message : 'No se pudo abrir el documento. Verifica tu sesión.'
-    toast.error(msg)
+    await previewApplicationDocument(
+      props.applicationId,
+      docId,
+      doc.title || doc.original_name,
+    )
   } finally {
     downloadingId.value = null
   }
@@ -445,12 +452,20 @@ onMounted(() => {
           >
             {{ doc.title || doc.original_name || 'Documento' }}
           </span>
-          <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <Icon name="i-lucide-eye" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </div>
       <p v-else class="text-sm text-muted-foreground">
         Ningún documento adjunto
       </p>
     </section>
+
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :loading="inlinePreviewLoading"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>
