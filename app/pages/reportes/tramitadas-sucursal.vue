@@ -38,6 +38,10 @@ interface TramitadasRow {
   by_period: Record<string, PeriodCellData>
   total_count: number
   total_amount_sum: string
+  transfers?: {
+    sent_count: number
+    received_count: number
+  }
 }
 
 interface TramitadasResponse {
@@ -54,6 +58,7 @@ interface TramitadasResponse {
       count: number
       amount_sum: string
     }
+    methodology_note?: string | null
     detail_rows?: Array<{
       code: string | null
       numero_radicado_externo: string | null
@@ -62,6 +67,8 @@ interface TramitadasResponse {
       amount_requested: string
       created_at_local: string | null
       sucursal: { id: number, name: string, code?: string | null } | null
+      sucursal_actual?: { id: number, name: string, code?: string | null } | null
+      was_transferred?: boolean
       adviser: { id: number, name: string, email?: string | null } | null
       debtor: { name?: string | null, document_number?: string | null } | null
     }>
@@ -311,7 +318,13 @@ onUnmounted(() => {
         Solicitudes tramitadas por sucursal
       </h2>
       <p class="text-sm text-muted-foreground">
-        Entre fechas: cantidad de radicaciones generadas y suma de los montos solicitados en cada una, agrupados por mes calendario y por sucursal en que quedó registrada la radicación. Elija una sucursal o todas.
+        Entre fechas: cantidad de radicaciones generadas y suma de montos, agrupados por mes y por la sucursal donde se radicó originalmente (no cambia si luego se traslada). Las columnas de traslado indican cuántas salieron o entraron por cambio de sucursal en el mismo rango.
+      </p>
+      <p
+        v-if="reportData?.methodology_note"
+        class="mt-2 text-xs text-muted-foreground"
+      >
+        {{ reportData.methodology_note }}
       </p>
     </div>
 
@@ -377,7 +390,7 @@ onUnmounted(() => {
               Limpiar fechas
             </Button>
             <div class="w-full space-y-1.5 lg:w-72 lg:shrink-0">
-              <Label for="report-sucursal">Sucursal de la radicación</Label>
+              <Label for="report-sucursal">Sucursal de radicación</Label>
               <Select
                 :model-value="sucursalId == null ? 'all' : String(sucursalId)"
                 :disabled="loadingSucursales"
@@ -477,6 +490,12 @@ onUnmounted(() => {
                     <TableHead class="min-w-[150px]">
                       Total
                     </TableHead>
+                    <TableHead class="min-w-[100px]">
+                      Trasl. enviadas
+                    </TableHead>
+                    <TableHead class="min-w-[100px]">
+                      Trasl. recibidas
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -512,6 +531,12 @@ onUnmounted(() => {
                         {{ formatCurrency(amountFromString(row.total_amount_sum)) }}
                       </div>
                     </TableCell>
+                    <TableCell class="align-top text-sm">
+                      {{ row.transfers?.sent_count ?? 0 }}
+                    </TableCell>
+                    <TableCell class="align-top text-sm">
+                      {{ row.transfers?.received_count ?? 0 }}
+                    </TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
@@ -527,7 +552,8 @@ onUnmounted(() => {
                     <TableHead>Estado</TableHead>
                     <TableHead>Deudor</TableHead>
                     <TableHead>Asesor</TableHead>
-                    <TableHead>Sucursal</TableHead>
+                    <TableHead>Sucursal radicación</TableHead>
+                    <TableHead>Sucursal actual</TableHead>
                     <TableHead>Fecha creación</TableHead>
                     <TableHead class="text-right">Monto</TableHead>
                   </TableRow>
@@ -553,11 +579,15 @@ onUnmounted(() => {
                       </div>
                     </TableCell>
                     <TableCell>{{ row.sucursal?.name || '—' }}</TableCell>
+                    <TableCell>
+                      <span v-if="row.was_transferred && row.sucursal_actual?.name">{{ row.sucursal_actual.name }}</span>
+                      <span v-else class="text-muted-foreground">—</span>
+                    </TableCell>
                     <TableCell>{{ row.created_at_local || '—' }}</TableCell>
                     <TableCell class="text-right">{{ formatCurrency(amountFromString(row.amount_requested)) }}</TableCell>
                   </TableRow>
                   <TableRow v-if="(reportData.detail_rows ?? []).length === 0">
-                    <TableCell colspan="8" class="text-center text-muted-foreground py-8">
+                    <TableCell colspan="9" class="text-center text-muted-foreground py-8">
                       No hay radicaciones para los filtros actuales.
                     </TableCell>
                   </TableRow>
