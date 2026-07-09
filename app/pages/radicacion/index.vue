@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TransferCreditApplicationSucursalDialog from '~/components/radicacion/TransferCreditApplicationSucursalDialog.vue'
 import {
   creditApplicationStatusFilterOptions as statusFilterOptions,
   getCreditApplicationStatusBadgeVariant as getStatusBadgeVariant,
@@ -15,7 +16,7 @@ definePageMeta({
 })
 
 const router = useRouter()
-const { $api } = useNuxtApp()
+const { $api, $csrf } = useNuxtApp()
 const { hasAnyPermission, hasRole, hasPermission } = usePermissions()
 /** Editar / continuar borrador: crear o editar (nueva solo exige crear) */
 const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
@@ -69,6 +70,15 @@ const isAnalista = computed(() => hasRole('analista'))
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
+const transferringId = ref<number | null>(null)
+const transferDialogOpen = ref(false)
+const pendingTransferApp = ref<{
+  id: number
+  status?: string
+  sucursal_id?: number | null
+  sucursal?: { id?: number; name?: string; code?: string | null } | null
+} | null>(null)
+const transferSucursales = ref<Array<{ id: number; name: string; code?: string | null }>>([])
 
 const applications = ref<any[]>([])
 const loading = ref(false)
@@ -229,6 +239,93 @@ async function onDeactivateConfirm(reason: string) {
   }
 }
 
+function sucursalLabelForApp(app: { sucursal?: { name?: string; code?: string | null } | null }): string | null {
+  const s = app.sucursal
+  if (!s?.name) {
+    return null
+  }
+  return s.code ? `${s.name} (${s.code})` : s.name
+}
+
+const pendingTransferCurrentSucursalLabel = computed(() => {
+  if (!pendingTransferApp.value) {
+    return null
+  }
+  return sucursalLabelForApp(pendingTransferApp.value)
+})
+
+const pendingTransferCurrentSucursalId = computed(() => {
+  if (!pendingTransferApp.value) {
+    return null
+  }
+  return pendingTransferApp.value.sucursal_id ?? pendingTransferApp.value.sucursal?.id ?? null
+})
+
+async function fetchTransferSucursales() {
+  const res = await $api<{ data: typeof transferSucursales.value }>('/catalogs/sucursales')
+  transferSucursales.value = res.data ?? []
+}
+
+async function openTransferDialog(app: {
+  id: number
+  status?: string
+  sucursal_id?: number | null
+  sucursal?: { id?: number; name?: string; code?: string | null } | null
+}) {
+  if (transferringId.value) {
+    return
+  }
+  if (isCreditApplicationTerminalImmutable(app.status)) {
+    toast.error('Las solicitudes en desembolso, rechazadas o canceladas no se pueden trasladar.')
+    return
+  }
+  try {
+    if (transferSucursales.value.length === 0) {
+      await fetchTransferSucursales()
+    }
+    const currentId = app.sucursal_id ?? app.sucursal?.id
+    const hasDestination = transferSucursales.value.some(s => currentId == null || s.id !== currentId)
+    if (!hasDestination) {
+      toast.error('No hay otras sucursales activas disponibles para el traslado.')
+      return
+    }
+    pendingTransferApp.value = app
+    transferDialogOpen.value = true
+  } catch {
+    toast.error('No se pudieron cargar las sucursales de destino.')
+  }
+}
+
+async function onTransferConfirm(payload: { sucursalId: number; reason: string }) {
+  const app = pendingTransferApp.value
+  if (!app || transferringId.value) {
+    return
+  }
+  transferringId.value = app.id
+  try {
+    await $csrf()
+    const res = await $api<{ message?: string }>(
+      `/credit-applications/${app.id}/transfer-sucursal`,
+      {
+        method: 'PATCH',
+        body: {
+          sucursal_id: payload.sucursalId,
+          reason: payload.reason,
+        },
+      },
+    )
+    transferDialogOpen.value = false
+    pendingTransferApp.value = null
+    toast.success(res.message ?? 'Solicitud trasladada a otra sucursal', { duration: 5000 })
+    await fetchApplications()
+  } catch (e: any) {
+    console.error('Error trasladando sucursal:', e)
+    toast.error(e?.data?.message ?? 'No se pudo trasladar la solicitud.')
+  } finally {
+    transferringId.value = null
+  }
+}
+
 async function handleDownloadPdf(app: { id: number; code?: string }) {
   if (downloadingPdfId.value) return
   downloadingPdfId.value = app.id
@@ -259,6 +356,12 @@ onUnmounted(() => {
 watch(deactivateDialogOpen, (v) => {
   if (!v)
     pendingDeactivateApp.value = null
+})
+
+watch(transferDialogOpen, (v) => {
+  if (!v) {
+    pendingTransferApp.value = null
+  }
 })
 </script>
 
@@ -549,6 +652,24 @@ watch(deactivateDialogOpen, (v) => {
                         {{ verRadicacionListPrefersDocumentActionsIcon(app) ? (isRevisionDocumentos ? 'Asegurabilidad' : 'Abrir solicitud') : 'Ver' }}
                       </Button>
                     </PermissionGate>
+                    <PermissionGate permission="radicacion_trasladar_sucursal">
+                      <Button
+                        v-if="!isCreditApplicationTerminalImmutable(app.status)"
+                        variant="outline"
+                        size="sm"
+                        class="gap-1.5"
+                        title="Trasladar a otra sucursal"
+                        :disabled="transferringId === app.id"
+                        @click="openTransferDialog(app)"
+                      >
+                        <Icon
+                          :name="transferringId === app.id ? 'i-lucide-loader-2' : 'i-lucide-building-2'"
+                          class="h-3.5 w-3.5 shrink-0"
+                          :class="{ 'animate-spin': transferringId === app.id }"
+                        />
+                        Trasladar
+                      </Button>
+                    </PermissionGate>
                     <PermissionGate permission="radicacion_desactivar">
                       <Button
                         v-if="!isCreditApplicationTerminalImmutable(app.status)"
@@ -604,6 +725,15 @@ watch(deactivateDialogOpen, (v) => {
       cancel-text="Cancelar"
       :loading="deactivatingId !== null"
       @confirm="onDeactivateConfirm"
+    />
+
+    <TransferCreditApplicationSucursalDialog
+      v-model:open="transferDialogOpen"
+      :current-sucursal-label="pendingTransferCurrentSucursalLabel"
+      :current-sucursal-id="pendingTransferCurrentSucursalId"
+      :sucursales="transferSucursales"
+      :loading="transferringId !== null"
+      @confirm="onTransferConfirm"
     />
   </div>
 </template>

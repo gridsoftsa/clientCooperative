@@ -6,6 +6,7 @@ import InsurabilityDocumentsSection from '~/components/radicacion/InsurabilityDo
 import FngDocumentsSection from '~/components/radicacion/FngDocumentsSection.vue'
 import ApproverEntityDocumentsSection from '~/components/radicacion/ApproverEntityDocumentsSection.vue'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
+import TransferCreditApplicationSucursalDialog from '~/components/radicacion/TransferCreditApplicationSucursalDialog.vue'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/components/ui/collapsible'
 import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import RadicacionResumenFinancieroDeudorComparacion from '~/components/radicacion/RadicacionResumenFinancieroDeudorComparacion.vue'
@@ -157,6 +158,9 @@ const deactivating = ref(false)
 const deactivateDialogOpen = ref(false)
 const cancelling = ref(false)
 const cancelRequestDialogOpen = ref(false)
+const transferringSucursal = ref(false)
+const transferSucursalDialogOpen = ref(false)
+const transferSucursales = ref<Array<{ id: number; name: string; code?: string | null }>>([])
 const deleteWithReason = useApiDeleteWithReason()
 const { labelForValue: creditDestinationLabel, fetchOptions: fetchCreditDestinationOptions } = useTemplateFlatCatalogOptions(
   'credit-destination',
@@ -465,6 +469,14 @@ const showCreditDirectorFinalConcept = computed(() => {
 })
 
 const isTerminalImmutable = computed(() => isCreditApplicationTerminalImmutable(application.value?.status))
+
+const currentSucursalLabel = computed(() => {
+  const s = application.value?.sucursal
+  if (!s?.name) {
+    return null
+  }
+  return s.code ? `${s.name} (${s.code})` : s.name
+})
 
 const cancellationActorDisplay = computed((): string => {
   const raw = application.value?.cancelled_by
@@ -1150,6 +1162,69 @@ async function onDeactivateConfirm(reason: string) {
     toast.error(e?.data?.message ?? 'No se pudo desactivar')
   } finally {
     deactivating.value = false
+  }
+}
+
+async function fetchTransferSucursales() {
+  try {
+    const res = await $api<{ data: typeof transferSucursales.value }>('/catalogs/sucursales')
+    transferSucursales.value = res.data ?? []
+  } catch (e) {
+    console.error('Error cargando sucursales para traslado:', e)
+    transferSucursales.value = []
+    throw e
+  }
+}
+
+async function openTransferSucursalDialog() {
+  if (!application.value?.id || transferringSucursal.value) {
+    return
+  }
+  if (isCreditApplicationTerminalImmutable(application.value?.status)) {
+    toast.error('Las solicitudes en desembolso, rechazadas o canceladas no se pueden trasladar.')
+    return
+  }
+  try {
+    if (transferSucursales.value.length === 0) {
+      await fetchTransferSucursales()
+    }
+    const currentId = application.value?.sucursal_id ?? application.value?.sucursal?.id
+    const hasDestination = transferSucursales.value.some(s => currentId == null || s.id !== currentId)
+    if (!hasDestination) {
+      toast.error('No hay otras sucursales activas disponibles para el traslado.')
+      return
+    }
+    transferSucursalDialogOpen.value = true
+  } catch {
+    toast.error('No se pudieron cargar las sucursales de destino.')
+  }
+}
+
+async function onTransferSucursalConfirm(payload: { sucursalId: number; reason: string }) {
+  if (!application.value?.id || transferringSucursal.value) {
+    return
+  }
+  transferringSucursal.value = true
+  try {
+    await $csrf()
+    const res = await $api<{ message?: string; data?: typeof application.value }>(
+      `/credit-applications/${application.value.id}/transfer-sucursal`,
+      {
+        method: 'PATCH',
+        body: {
+          sucursal_id: payload.sucursalId,
+          reason: payload.reason,
+        },
+      },
+    )
+    transferSucursalDialogOpen.value = false
+    toast.success(res.message ?? 'Solicitud trasladada a otra sucursal', { duration: 5000 })
+    await fetchApplication()
+  } catch (e: any) {
+    console.error('Error trasladando sucursal:', e)
+    toast.error(e?.data?.message ?? 'No se pudo trasladar la solicitud.')
+  } finally {
+    transferringSucursal.value = false
   }
 }
 
@@ -2661,6 +2736,17 @@ onMounted(() => {
             {{ cancelling ? 'Cancelando…' : 'Cancelar solicitud' }}
           </Button>
         </PermissionGate>
+        <PermissionGate permission="radicacion_trasladar_sucursal">
+          <Button
+            v-if="!isTerminalImmutable"
+            variant="outline"
+            :disabled="transferringSucursal"
+            @click="openTransferSucursalDialog"
+          >
+            <Icon :name="transferringSucursal ? 'i-lucide-loader-2' : 'i-lucide-building-2'" class="mr-2 h-4 w-4" :class="{ 'animate-spin': transferringSucursal }" />
+            {{ transferringSucursal ? 'Trasladando…' : 'Trasladar sucursal' }}
+          </Button>
+        </PermissionGate>
         <PermissionGate permission="radicacion_desactivar">
           <Button
             v-if="!isTerminalImmutable"
@@ -4000,6 +4086,15 @@ onMounted(() => {
       :min-length="10"
       :loading="cancelling"
       @confirm="onCancelRequestConfirm"
+    />
+
+    <TransferCreditApplicationSucursalDialog
+      v-model:open="transferSucursalDialogOpen"
+      :current-sucursal-label="currentSucursalLabel"
+      :current-sucursal-id="application?.sucursal_id ?? application?.sucursal?.id ?? null"
+      :sucursales="transferSucursales"
+      :loading="transferringSucursal"
+      @confirm="onTransferSucursalConfirm"
     />
 
     <AlertDialog v-model:open="creditDirectorDecisionDialogOpen">
