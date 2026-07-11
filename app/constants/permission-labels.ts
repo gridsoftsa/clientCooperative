@@ -110,6 +110,7 @@ const RADICACION_SUBGROUP_DEFINITIONS: Array<{ key: string; label: string; names
     label: 'Operación de solicitudes',
     names: new Set([
       'radicacion_ver',
+      'radicacion_ver_todas_sucursales',
       'radicacion_crear',
       'radicacion_editar',
       'radicacion_desactivar',
@@ -226,6 +227,7 @@ function capitalizeWords(str: string): string {
 const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   settings_ver: 'Ver configuración',
   radicacion_enviar_analisis: 'Enviar solicitud a análisis',
+  radicacion_ver_todas_sucursales: 'Ver radicaciones de todas las sucursales',
   radicacion_ver_resumen_financiero: 'Ver resumen financiero (deudor)',
   radicacion_analisis_ver: 'Ver análisis y SCORE',
   radicacion_analisis_guardar: 'Guardar análisis y SCORE',
