@@ -249,6 +249,8 @@ export type ArchivalFileEventType =
   | 'transferred'
   | 'disposition_final'
   | 'access_report_exported'
+  | 'document_published_to_library'
+  | 'document_unpublished_from_library'
 
 export interface ArchivalFileEvent {
   id: number

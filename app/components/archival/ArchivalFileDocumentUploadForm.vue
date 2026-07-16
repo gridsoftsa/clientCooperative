@@ -52,6 +52,8 @@ const metadataFieldSources = ref<Record<string, string>>({})
 const metadataConfidence = ref<Record<string, number>>({})
 const metadataFields = ref<ArchivalMetadataFieldRow[]>([])
 const metadataOcrPayload = ref<Record<string, unknown> | null>(null)
+const metadataAutocompleteSnapshot = ref<Record<string, unknown>>({})
+const metadataFieldSourcesSnapshot = ref<Record<string, string>>({})
 const ocrText = ref<string | null>(null)
 const ocrEngine = ref<string | null>(null)
 
@@ -69,6 +71,36 @@ function setUploadSource(value: unknown) {
   uploadSource.value = ARCHIVAL_MANUAL_UPLOAD_SOURCES.some(option => option.value === next)
     ? next as ArchivalManualUploadSource
     : 'manual'
+}
+
+function captureAutocompleteSnapshot() {
+  metadataAutocompleteSnapshot.value = { ...metadataValues.value }
+  metadataFieldSourcesSnapshot.value = { ...metadataFieldSources.value }
+}
+
+function metadataSuggestionQuery(): Record<string, string | number> {
+  const query: Record<string, string | number> = {}
+
+  if (props.file.entity_key) {
+    query.entity_key = props.file.entity_key
+  }
+
+  const nit = props.file.metadata_values?.nit
+    ?? props.file.metadata_values?.third_party_nit
+    ?? props.file.metadata_values?.document_number
+
+  if (nit != null && nit !== '') {
+    query.nit = String(nit)
+  }
+
+  return query
+}
+
+function appendMetadataSuggestionContext(fd: FormData) {
+  const context = metadataSuggestionQuery()
+  for (const [key, value] of Object.entries(context)) {
+    fd.append(key, String(value))
+  }
 }
 
 function parseSchemaFields(schema: Record<string, unknown> | null): ArchivalMetadataFieldRow[] {
@@ -124,6 +156,8 @@ async function loadMetadataSuggestions() {
   metadataFieldSources.value = {}
   metadataConfidence.value = {}
   metadataOcrPayload.value = null
+  metadataAutocompleteSnapshot.value = {}
+  metadataFieldSourcesSnapshot.value = {}
   ocrText.value = null
   ocrEngine.value = null
   metadataFields.value = []
@@ -136,18 +170,7 @@ async function loadMetadataSuggestions() {
   try {
     const query: Record<string, string | number> = {
       doc_document_type_id: docDocumentTypeId.value,
-    }
-
-    if (props.file.entity_key) {
-      query.entity_key = props.file.entity_key
-    }
-
-    const nit = props.file.metadata_values?.nit
-      ?? props.file.metadata_values?.third_party_nit
-      ?? props.file.metadata_values?.document_number
-
-    if (nit != null && nit !== '') {
-      query.nit = String(nit)
+      ...metadataSuggestionQuery(),
     }
 
     const suggestion = await archivalApi.suggestMetadata(query)
@@ -157,6 +180,9 @@ async function loadMetadataSuggestions() {
 
     if (selectedFile.value) {
       await runOcrExtraction()
+    }
+    else {
+      captureAutocompleteSnapshot()
     }
   }
   catch {
@@ -177,6 +203,7 @@ async function runOcrExtraction() {
     const fd = new FormData()
     fd.append('file', selectedFile.value)
     fd.append('doc_document_type_id', String(docDocumentTypeId.value))
+    appendMetadataSuggestionContext(fd)
 
     const ocr = await archivalApi.extractMetadataOcr(fd)
 
@@ -216,6 +243,8 @@ async function runOcrExtraction() {
     if (ocr.processed) {
       toast.message('Metadatos sugeridos por OCR. Valide o rechace antes de guardar.')
     }
+
+    captureAutocompleteSnapshot()
   }
   catch {
     toast.error('No se pudo procesar OCR del documento.')
@@ -248,6 +277,8 @@ function resetForm() {
   metadataFieldSources.value = {}
   metadataConfidence.value = {}
   metadataOcrPayload.value = null
+  metadataAutocompleteSnapshot.value = {}
+  metadataFieldSourcesSnapshot.value = {}
   ocrText.value = null
   ocrEngine.value = null
   metadataFields.value = []
@@ -296,6 +327,14 @@ async function handleSubmit() {
 
   if (Object.keys(metadataFieldSources.value).length > 0) {
     fd.append('metadata_field_sources', JSON.stringify(metadataFieldSources.value))
+  }
+
+  if (Object.keys(metadataAutocompleteSnapshot.value).length > 0) {
+    fd.append('metadata_autocomplete_snapshot', JSON.stringify(metadataAutocompleteSnapshot.value))
+  }
+
+  if (Object.keys(metadataFieldSourcesSnapshot.value).length > 0) {
+    fd.append('metadata_field_sources_snapshot', JSON.stringify(metadataFieldSourcesSnapshot.value))
   }
 
   if (metadataOcrPayload.value) {

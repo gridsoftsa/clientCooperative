@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ArchivalFileEvent } from '~/types/archival-file'
+import { archivalFileEventTypeLabel } from '~/constants/archival-file-events'
 
 const props = defineProps<{
   fileId: number
@@ -41,7 +42,7 @@ watch(() => props.fileId, () => loadEvents(), { immediate: true })
         class="rounded-md border px-3 py-2 text-sm"
       >
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <span class="font-medium">{{ event.event_type }}</span>
+          <span class="font-medium">{{ archivalFileEventTypeLabel(event.event_type) }}</span>
           <span v-if="event.created_at" class="text-xs text-muted-foreground">
             {{ new Date(event.created_at).toLocaleString('es-CO') }}
           </span>

@@ -13,4 +13,15 @@ export const ARCHIVAL_FILE_EVENT_TYPE_LABELS: Record<ArchivalFileEventType, stri
   transferred: 'Transferencia entre archivos',
   disposition_final: 'Disposición final',
   access_report_exported: 'Exportación tabla de acceso',
+  document_published_to_library: 'Publicación en biblioteca institucional',
+  document_unpublished_from_library: 'Retiro de biblioteca institucional',
+}
+
+export function archivalFileEventTypeLabel(eventType: string | null | undefined): string {
+  if (!eventType) {
+    return 'Evento'
+  }
+
+  return ARCHIVAL_FILE_EVENT_TYPE_LABELS[eventType as ArchivalFileEventType]
+    ?? eventType.replaceAll('_', ' ')
 }
