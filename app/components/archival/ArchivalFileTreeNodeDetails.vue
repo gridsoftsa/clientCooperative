@@ -59,6 +59,10 @@ const structuralEntries = computed(() => {
       })
     }
 
+    if (props.node.uploaded_by_name) {
+      entries.push({ label: 'Usuario', value: props.node.uploaded_by_name })
+    }
+
     if (props.node.folio_start != null || props.node.folio_end != null) {
       const start = props.node.folio_start ?? '—'
       const end = props.node.folio_end ?? '—'

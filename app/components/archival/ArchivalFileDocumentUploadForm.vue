@@ -13,6 +13,10 @@ import {
   validateArchivalMetadataFields,
   type ArchivalFileDocTypeOption,
 } from '~/utils/archival-file-upload'
+import {
+  ARCHIVAL_MANUAL_UPLOAD_SOURCES,
+  type ArchivalManualUploadSource,
+} from '~/constants/archival-document-sources'
 
 const props = defineProps<{
   file: ArchivalFile
@@ -41,6 +45,7 @@ const title = ref('')
 const docDocumentTypeId = ref<number | null>(null)
 const archivalFileNodeId = ref<number | null>(null)
 const isMasterDocument = ref(false)
+const uploadSource = ref<ArchivalManualUploadSource>('manual')
 
 const metadataValues = ref<Record<string, unknown>>({})
 const metadataFieldSources = ref<Record<string, string>>({})
@@ -58,6 +63,13 @@ const allowsMasterDocuments = computed(() => props.file.file_type?.allows_master
 const selectedDocTypeLabel = computed(() =>
   docTypeOptions.value.find((o: ArchivalFileDocTypeOption) => o.id === docDocumentTypeId.value)?.label ?? '',
 )
+
+function setUploadSource(value: unknown) {
+  const next = String(value ?? 'manual')
+  uploadSource.value = ARCHIVAL_MANUAL_UPLOAD_SOURCES.some(option => option.value === next)
+    ? next as ArchivalManualUploadSource
+    : 'manual'
+}
 
 function parseSchemaFields(schema: Record<string, unknown> | null): ArchivalMetadataFieldRow[] {
   if (!schema || !Array.isArray(schema.fields)) {
@@ -240,6 +252,7 @@ function resetForm() {
   ocrEngine.value = null
   metadataFields.value = []
   docDocumentTypeId.value = null
+  uploadSource.value = 'manual'
   preselectMissingDocType()
 }
 
@@ -263,6 +276,7 @@ async function handleSubmit() {
   const fd = new FormData()
   fd.append('file', selectedFile.value)
   fd.append('doc_document_type_id', String(docDocumentTypeId.value))
+  fd.append('source', uploadSource.value)
 
   if (title.value.trim()) {
     fd.append('title', title.value.trim())
@@ -338,6 +352,33 @@ onMounted(() => {
 
 <template>
   <form class="space-y-4" @submit.prevent="handleSubmit">
+    <div class="space-y-2">
+      <Label for="archival_upload_source">Origen del documento</Label>
+      <Select
+        :model-value="uploadSource"
+        :disabled="uploading || !!workflowTaskId"
+        @update:model-value="setUploadSource"
+      >
+        <SelectTrigger id="archival_upload_source">
+          <SelectValue placeholder="Seleccione origen" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem
+            v-for="option in ARCHIVAL_MANUAL_UPLOAD_SOURCES"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      <p class="text-xs text-muted-foreground">
+        {{
+          ARCHIVAL_MANUAL_UPLOAD_SOURCES.find(option => option.value === uploadSource)?.description
+        }}
+      </p>
+    </div>
+
     <div class="space-y-2">
       <Label for="archival_upload_doc_type">Tipo documental</Label>
       <Select

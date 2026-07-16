@@ -128,6 +128,14 @@ function openExpediente() {
       <Badge v-if="node.is_reference" variant="secondary" class="text-xs">
         Referencia
       </Badge>
+      <Badge
+        v-if="isDocument && node.source_label"
+        variant="outline"
+        class="text-xs"
+        :title="node.source ? `Origen: ${node.source}` : undefined"
+      >
+        {{ node.source_label }}
+      </Badge>
       <Badge v-if="node.status_label" variant="outline" class="text-xs">
         {{ node.status_label }}
       </Badge>

@@ -489,7 +489,7 @@ onMounted(() => loadAll())
             <CardHeader>
               <CardTitle>Adjuntar documento</CardTitle>
               <CardDescription>
-                Carga manual con autocompletado de metadatos reutilizables.
+                Carga manual con tipo documental obligatorio, origen (manual, escáner, correo o formulario web) y metadatos sugeridos.
               </CardDescription>
             </CardHeader>
             <CardContent>

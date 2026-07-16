@@ -104,8 +104,9 @@ export interface ArchivalFileTreeNode {
   doc_document_type_id?: number
   doc_document_type_name?: string
   version_number?: number
+  source?: string
   source_label?: string
-  mime_type?: string
+  uploaded_by_name?: string
   size_bytes?: number
   uploaded_at?: string
   folio_start?: number | null
