@@ -288,7 +288,7 @@ onMounted(() => loadCatalogs())
         </div>
       </div>
 
-      <div class="space-y-3 rounded-lg border bg-muted/20 p-4">
+      <div class="min-w-0 space-y-3 rounded-lg border bg-muted/20 p-4">
         <div>
           <p class="text-sm font-medium">
             Catálogo documental y TRD
@@ -298,8 +298,8 @@ onMounted(() => loadCatalogs())
           </p>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-2">
-          <div class="space-y-2">
+        <div class="grid min-w-0 gap-4 md:grid-cols-2">
+          <div class="min-w-0 space-y-2">
             <Label>Área productora</Label>
             <Select
               :model-value="form.org_unit_id || undefined"
@@ -321,7 +321,7 @@ onMounted(() => loadCatalogs())
             </Select>
           </div>
 
-          <div class="space-y-2">
+          <div class="min-w-0 space-y-2">
             <Label>Tabla TRD</Label>
             <Select
               :model-value="form.trd_table_id || undefined"
@@ -344,8 +344,8 @@ onMounted(() => loadCatalogs())
           </div>
         </div>
 
-        <div class="grid gap-4 md:grid-cols-3">
-          <div class="space-y-2">
+        <div class="grid min-w-0 gap-4 md:grid-cols-3">
+          <div class="min-w-0 space-y-2">
             <Label>Serie</Label>
             <Select
               :model-value="form.doc_series_id || undefined"
@@ -367,7 +367,7 @@ onMounted(() => loadCatalogs())
             </Select>
           </div>
 
-          <div class="space-y-2">
+          <div class="min-w-0 space-y-2">
             <Label>Subserie</Label>
             <Select
               :model-value="form.doc_subseries_id || undefined"
@@ -389,7 +389,7 @@ onMounted(() => loadCatalogs())
             </Select>
           </div>
 
-          <div class="space-y-2">
+          <div class="min-w-0 space-y-2">
             <Label>Tipo documental</Label>
             <Select
               :model-value="form.doc_document_type_id || undefined"

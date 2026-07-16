@@ -99,6 +99,14 @@ export interface ArchivalFileTreeNode {
   is_reference?: boolean
   download_url?: string | null
   metadata_values?: Record<string, unknown> | null
+  org_unit_id?: number
+  doc_document_type_id?: number
+  doc_document_type_name?: string
+  version_number?: number
+  source_label?: string
+  mime_type?: string
+  size_bytes?: number
+  uploaded_at?: string
 }
 
 export interface ArchivalFileRequiredDocumentsEvaluation {

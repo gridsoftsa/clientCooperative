@@ -14,6 +14,48 @@ const archivalApi = useArchivalFileApi()
 
 const types = ref<ArchivalFileType[]>([])
 const loading = ref(true)
+const deactivatingId = ref<number | null>(null)
+
+function fileTypePayload(type: ArchivalFileType, overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
+  return {
+    type_key: type.type_key,
+    name: type.name,
+    description: type.description ?? null,
+    model: type.model,
+    org_unit_id: type.org_unit_id ?? null,
+    doc_series_id: type.doc_series_id ?? null,
+    doc_subseries_id: type.doc_subseries_id ?? null,
+    doc_document_type_id: type.doc_document_type_id ?? null,
+    trd_table_id: type.trd_table_id ?? null,
+    archival_metadata_schema_id: type.archival_metadata_schema_id ?? null,
+    allows_master_documents: type.allows_master_documents,
+    is_active: type.is_active,
+    sort_order: type.sort_order,
+    ...overrides,
+  }
+}
+
+async function deactivateType(type: ArchivalFileType) {
+  if (deactivatingId.value != null) {
+    return
+  }
+
+  deactivatingId.value = type.id
+
+  try {
+    await archivalApi.saveFileType(fileTypePayload(type, { is_active: false }), type.id)
+    toast.success('Tipo de expediente desactivado.')
+    await load()
+  }
+  catch (error: unknown) {
+    const err = error as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    toast.error(first ?? err.data?.message ?? 'No se pudo desactivar el tipo.')
+  }
+  finally {
+    deactivatingId.value = null
+  }
+}
 
 async function load() {
   loading.value = true
@@ -108,9 +150,28 @@ onMounted(() => load())
                 </Badge>
               </TableCell>
               <TableCell class="text-right">
-                <Button variant="outline" size="sm" @click="router.push(`/expedientes/tipos/${type.id}`)">
-                  Configurar
-                </Button>
+                <div class="flex flex-wrap justify-end gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="h-8 gap-1.5 px-2 text-xs"
+                    @click="router.push(`/expedientes/tipos/${type.id}`)"
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    v-if="type.is_active"
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    class="h-8 gap-1.5 px-2 text-xs"
+                    :disabled="deactivatingId === type.id"
+                    @click="deactivateType(type)"
+                  >
+                    <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                    Desactivar
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           </TableBody>

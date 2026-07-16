@@ -4,6 +4,7 @@ import { toast } from 'vue-sonner'
 const props = defineProps<{
   orgUnitId: number
   archivalFileId: number
+  defaultDocTypeId?: number
 }>()
 
 const emit = defineEmits<{
@@ -16,6 +17,16 @@ const { hasPermission } = usePermissions()
 const uploading = ref(false)
 const fileInput = ref<File | null>(null)
 const docTypeId = ref('')
+
+watch(
+  () => props.defaultDocTypeId,
+  (value) => {
+    if (value) {
+      docTypeId.value = String(value)
+    }
+  },
+  { immediate: true },
+)
 const title = ref('')
 
 const canUpload = computed(() =>

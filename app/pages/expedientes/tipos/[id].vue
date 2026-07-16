@@ -22,7 +22,6 @@ const deleteDialogOpen = ref(false)
 const activeTab = ref('general')
 
 const fileType = ref<ArchivalFileType | null>(null)
-const workflowStageOptions = ref<Array<{ value: string, label: string }>>([])
 const requiredDraft = ref<RequiredDocumentDraft[]>([])
 
 function mapRequiredToDraft(items: ArchivalFileType['required_documents']): RequiredDocumentDraft[] {
@@ -39,16 +38,9 @@ async function load() {
   loading.value = true
 
   try {
-    const [type, stages] = await Promise.all([
-      archivalApi.fetchFileType(typeId.value),
-      archivalApi.fetchWorkflowStageOptions(),
-    ])
+    const type = await archivalApi.fetchFileType(typeId.value)
 
     fileType.value = type
-    workflowStageOptions.value = stages.map(stage => ({
-      value: stage.key,
-      label: stage.label,
-    }))
     requiredDraft.value = mapRequiredToDraft(type.required_documents)
   }
   catch {
@@ -60,8 +52,8 @@ async function load() {
   }
 }
 
-function onGeneralSaved(type: ArchivalFileType) {
-  fileType.value = type
+function onGeneralSaved() {
+  router.push('/expedientes/tipos')
 }
 
 async function saveRequiredDocuments() {
@@ -92,6 +84,7 @@ async function saveRequiredDocuments() {
     fileType.value = res.data
     requiredDraft.value = mapRequiredToDraft(res.data.required_documents)
     toast.success(res.message)
+    router.push('/expedientes/tipos')
   }
   catch (error: unknown) {
     const err = error as { data?: { message?: string, errors?: Record<string, string[]> } }
@@ -130,7 +123,7 @@ onMounted(() => load())
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl space-y-6">
+  <div class="mx-auto max-w-7xl space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="space-y-1">
         <Button variant="ghost" size="sm" class="-ml-2" @click="router.push('/expedientes/tipos')">
@@ -177,7 +170,7 @@ onMounted(() => load())
 
         <TabsContent value="general" class="mt-4">
           <Card>
-            <CardContent class="pt-6">
+            <CardContent class="min-w-0 pt-6">
               <ArchivalFileTypeForm :initial="fileType" @saved="onGeneralSaved" />
             </CardContent>
           </Card>
@@ -185,11 +178,10 @@ onMounted(() => load())
 
         <TabsContent value="required" class="mt-4 space-y-4">
           <Card>
-            <CardContent class="pt-6">
+            <CardContent class="min-w-0 pt-6">
               <ArchivalFileTypeRequiredDocumentsEditor
                 v-model="requiredDraft"
                 :org-unit-id="fileType.org_unit_id"
-                :workflow-stage-options="workflowStageOptions"
               />
             </CardContent>
           </Card>

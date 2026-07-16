@@ -15,20 +15,14 @@ const orgUnits = ref<Array<{ id: number, name: string }>>([])
 const orgUnitId = ref('')
 const loading = ref(false)
 const tree = ref<ArchivalFileTreeNode | null>(null)
-const selectedFileId = ref<number | null>(null)
-
-function handleSelectFile(node: ArchivalFileTreeNode) {
-  if (node.archival_file_id) {
-    selectedFileId.value = node.archival_file_id
-  }
-}
 
 async function loadOrgUnits() {
   try {
     const res = await api<{ data: Array<{ id: number, name: string }> }>('/organizational-structure/org-units')
     orgUnits.value = res.data ?? []
-    if (orgUnits.value[0])
+    if (orgUnits.value[0]) {
       orgUnitId.value = String(orgUnits.value[0].id)
+    }
   }
   catch {
     orgUnits.value = []
@@ -36,11 +30,11 @@ async function loadOrgUnits() {
 }
 
 async function loadRepository() {
-  if (!orgUnitId.value)
+  if (!orgUnitId.value) {
     return
+  }
 
   loading.value = true
-  selectedFileId.value = null
 
   try {
     tree.value = await archivalApi.fetchAreaRepository(Number(orgUnitId.value))
@@ -62,17 +56,19 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-6">
-    <div>
-      <h1 class="text-2xl font-semibold tracking-tight">
-        Repositorio por área
-      </h1>
-      <p class="text-sm text-muted-foreground">
-        Documentación organizada por TRD: área → serie → subserie → tipo documental.
-      </p>
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">
+          Repositorio por área
+        </h1>
+        <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
+          Navegue por carpetas TRD (área, serie, subserie, tipo documental) y consulte los documentos en paralelo.
+        </p>
+      </div>
     </div>
 
     <Card>
-      <CardHeader>
+      <CardHeader class="pb-4">
         <div class="flex flex-wrap items-end gap-3">
           <div class="space-y-2">
             <Label>Área productora</Label>
@@ -96,24 +92,11 @@ onMounted(async () => {
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
-        <div v-if="loading" class="py-10 text-center text-muted-foreground">
-          Cargando repositorio...
-        </div>
-        <ArchivalFileTreeItem
-          v-else-if="tree"
-          :node="tree"
-          @click-file="handleSelectFile"
-        />
-        <div v-else class="py-10 text-center text-muted-foreground">
-          Seleccione un área para consultar su documentación.
-        </div>
-
-        <ArchivalFileAreaDocumentUploadForm
-          v-if="selectedFileId && orgUnitId"
-          class="mt-6"
+      <CardContent class="p-0 sm:p-0">
+        <ArchivalFileAreaRepositoryBrowser
+          :tree="tree"
           :org-unit-id="Number(orgUnitId)"
-          :archival-file-id="selectedFileId"
+          :loading="loading"
           @uploaded="loadRepository"
         />
       </CardContent>

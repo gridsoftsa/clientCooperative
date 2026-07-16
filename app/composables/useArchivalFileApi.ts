@@ -140,7 +140,7 @@ export function useArchivalFileApi() {
   }
 
   async function fetchWorkflowStageOptions() {
-    const res = await api<{ data: Array<{ key: string, name: string, label: string }> }>(
+    const res = await api<{ data: Array<{ id: number, key: string, name: string, stages: Array<{ key: string, name: string }> }> }>(
       '/archival-files/types/meta/workflow-stages',
     )
 
