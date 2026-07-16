@@ -1,0 +1,122 @@
+<script setup lang="ts">
+import { toast } from 'vue-sonner'
+import type { InstitutionalLibraryCategoryValue } from '~/types/institutional-library'
+
+const props = defineProps<{
+  open: boolean
+  fileId: number
+  documentId: number
+  documentTitle: string
+  defaultCategory?: InstitutionalLibraryCategoryValue | null
+}>()
+
+const emit = defineEmits<{
+  'update:open': [value: boolean]
+  published: []
+}>()
+
+const libraryApi = useInstitutionalLibraryApi()
+
+const loading = ref(false)
+const categories = ref<Array<{ value: InstitutionalLibraryCategoryValue, label: string }>>([])
+
+const form = ref({
+  institutional_category: '' as InstitutionalLibraryCategoryValue | '',
+  effective_from: new Date().toISOString().slice(0, 10),
+  effective_to: '' as string,
+})
+
+watch(() => props.open, async (isOpen) => {
+  if (!isOpen) {
+    return
+  }
+
+  categories.value = await libraryApi.fetchCatalog()
+  form.value.institutional_category = props.defaultCategory ?? categories.value[0]?.value ?? ''
+  form.value.effective_from = new Date().toISOString().slice(0, 10)
+  form.value.effective_to = ''
+})
+
+async function submit() {
+  if (!form.value.institutional_category) {
+    toast.error('Seleccione una categoría.')
+    return
+  }
+
+  loading.value = true
+  try {
+    await libraryApi.publishDocument(props.documentId, {
+      archival_file_id: props.fileId,
+      institutional_category: form.value.institutional_category,
+      effective_from: form.value.effective_from,
+      effective_to: form.value.effective_to || null,
+    })
+    toast.success('Documento publicado en la biblioteca institucional.')
+    emit('update:open', false)
+    emit('published')
+  }
+  catch {
+    toast.error('No se pudo publicar el documento.')
+  }
+  finally {
+    loading.value = false
+  }
+}
+</script>
+
+<template>
+  <Dialog :open="open" @update:open="emit('update:open', $event)">
+    <DialogContent class="max-w-lg">
+      <DialogHeader>
+        <DialogTitle>Publicar en biblioteca institucional</DialogTitle>
+        <DialogDescription class="line-clamp-2">
+          {{ documentTitle }}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div class="space-y-4">
+        <div class="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+          Solo documentos de la serie TRD «Información documentada», vigentes y aprobados, aparecen en la biblioteca.
+        </div>
+
+        <div class="space-y-2">
+          <Label>Categoría</Label>
+          <Select v-model="form.institutional_category">
+            <SelectTrigger>
+              <SelectValue placeholder="Seleccione categoría" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="category in categories"
+                :key="category.value"
+                :value="category.value"
+              >
+                {{ category.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="space-y-2">
+            <Label>Vigente desde</Label>
+            <Input v-model="form.effective_from" type="date" />
+          </div>
+          <div class="space-y-2">
+            <Label>Vigente hasta (opcional)</Label>
+            <Input v-model="form.effective_to" type="date" />
+          </div>
+        </div>
+      </div>
+
+      <DialogFooter>
+        <Button variant="outline" type="button" @click="emit('update:open', false)">
+          Cancelar
+        </Button>
+        <Button type="button" :disabled="loading" @click="submit">
+          Publicar
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+</template>

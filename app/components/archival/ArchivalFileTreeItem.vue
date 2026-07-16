@@ -6,7 +6,10 @@ const props = defineProps<{
   node: ArchivalFileTreeNode
   depth?: number
   canManageDocuments?: boolean
+  canView?: boolean
   canDownload?: boolean
+  canOpenFile?: boolean
+  canPublishToLibrary?: boolean
   fileId?: number
   metadataFields?: ArchivalMetadataFieldRow[]
   fileMetadataValues?: Record<string, unknown> | null
@@ -16,11 +19,17 @@ const emit = defineEmits<{
   reference: [node: ArchivalFileTreeNode]
   replaceVersion: [node: ArchivalFileTreeNode]
   clickFile: [node: ArchivalFileTreeNode]
+  publishToLibrary: [node: ArchivalFileTreeNode]
 }>()
+
+const archivalApi = useArchivalFileApi()
+const router = useRouter()
 
 const depth = computed(() => props.depth ?? 0)
 const expanded = ref(depth.value < 2)
 const detailsExpanded = ref(false)
+
+const previewOpen = ref(false)
 
 const hasChildren = computed(() => (props.node.children?.length ?? 0) > 0)
 const isDocument = computed(() => props.node.type === 'document' || props.node.type === 'document_reference')
@@ -52,6 +61,25 @@ const canShowDetails = computed(() =>
   || (props.node.metadata_values != null && Object.keys(props.node.metadata_values).length > 0),
 )
 
+const documentFileId = computed(() => props.fileId ?? props.node.archival_file_id ?? null)
+const documentId = computed(() => props.node.archival_file_document_id ?? null)
+
+const downloadHref = computed(() => {
+  if (!props.canDownload || documentFileId.value === null || documentId.value === null) {
+    return props.node.download_url
+  }
+
+  return archivalApi.documentDownloadUrl(documentFileId.value, documentId.value)
+})
+
+const viewUrl = computed(() => {
+  if (!props.canView || documentFileId.value === null || documentId.value === null) {
+    return null
+  }
+
+  return archivalApi.documentViewUrl(documentFileId.value, documentId.value)
+})
+
 function handleNodeClick() {
   if (isFileNode.value && props.node.archival_file_id) {
     emit('clickFile', props.node)
@@ -62,13 +90,17 @@ function toggleDetails() {
   detailsExpanded.value = !detailsExpanded.value
 }
 
-const downloadHref = computed(() => {
-  if (!props.canDownload || !props.fileId || !props.node.archival_file_document_id) {
-    return props.node.download_url
+function openPreview() {
+  if (viewUrl.value) {
+    previewOpen.value = true
   }
+}
 
-  return `/api/archival-files/${props.fileId}/documents/${props.node.archival_file_document_id}/download`
-})
+function openExpediente() {
+  if (props.node.archival_file_id) {
+    router.push(`/expedientes/${props.node.archival_file_id}`)
+  }
+}
 </script>
 
 <template>
@@ -114,15 +146,35 @@ const downloadHref = computed(() => {
         <span class="hidden sm:inline">{{ detailsExpanded ? 'Ocultar' : 'Metadatos' }}</span>
       </Button>
 
-      <div v-if="isDocument" class="flex items-center gap-1">
+      <div v-if="isDocument" class="flex flex-wrap items-center justify-end gap-1">
+        <Button
+          v-if="canView && viewUrl"
+          variant="ghost"
+          size="sm"
+          class="h-7 px-2 text-xs"
+          type="button"
+          @click.stop="openPreview"
+        >
+          Ver
+        </Button>
         <a
-          v-if="downloadHref"
+          v-if="canDownload && downloadHref"
           :href="downloadHref"
-          class="text-xs text-primary hover:underline"
+          class="inline-flex h-7 items-center px-2 text-xs text-primary hover:underline"
           @click.stop
         >
           Descargar
         </a>
+        <Button
+          v-if="canOpenFile && node.archival_file_id"
+          variant="ghost"
+          size="sm"
+          class="h-7 px-2 text-xs"
+          type="button"
+          @click.stop="openExpediente"
+        >
+          Expediente
+        </Button>
 
         <template v-if="canManageDocuments">
           <Button
@@ -145,6 +197,16 @@ const downloadHref = computed(() => {
             Nueva versión
           </Button>
         </template>
+        <Button
+          v-if="canPublishToLibrary && isVersionableDocument"
+          variant="ghost"
+          size="sm"
+          class="h-7 px-2 text-xs"
+          type="button"
+          @click.stop="emit('publishToLibrary', node)"
+        >
+          Publicar
+        </Button>
       </div>
     </div>
 
@@ -160,6 +222,14 @@ const downloadHref = computed(() => {
       />
     </div>
 
+    <ArchivalFileDocumentPreviewDialog
+      v-if="isDocument"
+      v-model:open="previewOpen"
+      :title="node.name"
+      :view-url="viewUrl"
+      :mime-type="node.mime_type"
+    />
+
     <div v-if="expanded && hasChildren">
       <ArchivalFileTreeItem
         v-for="child in node.children"
@@ -167,13 +237,17 @@ const downloadHref = computed(() => {
         :node="child"
         :depth="depth + 1"
         :can-manage-documents="canManageDocuments"
+        :can-view="canView"
         :can-download="canDownload"
+        :can-open-file="canOpenFile"
+        :can-publish-to-library="canPublishToLibrary"
         :file-id="fileId"
         :metadata-fields="metadataFields"
         :file-metadata-values="fileMetadataValues"
         @reference="emit('reference', $event)"
         @replace-version="emit('replaceVersion', $event)"
         @click-file="emit('clickFile', $event)"
+        @publish-to-library="emit('publishToLibrary', $event)"
       />
     </div>
   </div>

@@ -361,6 +361,10 @@ export function useArchivalFileApi() {
     return `/api/archival-files/${fileId}/documents/${documentId}/download`
   }
 
+  function documentViewUrl(fileId: number, documentId: number) {
+    return `/api/archival-files/${fileId}/documents/${documentId}/view`
+  }
+
   return {
     fetchFiles,
     fetchFile,
@@ -404,5 +408,6 @@ export function useArchivalFileApi() {
     createDocumentReference,
     replaceDocumentVersion,
     documentDownloadUrl,
+    documentViewUrl,
   }
 }

@@ -98,6 +98,7 @@ export interface ArchivalFileTreeNode {
   is_master_file?: boolean
   is_reference?: boolean
   download_url?: string | null
+  mime_type?: string | null
   metadata_values?: Record<string, unknown> | null
   org_unit_id?: number
   doc_document_type_id?: number
