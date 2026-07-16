@@ -79,6 +79,88 @@ export function metadataFieldSourceLabel(source: string | undefined, confidence?
   return label
 }
 
+export function hasPendingOcrValidation(fieldSources: Record<string, string> | undefined): boolean {
+  if (!fieldSources) {
+    return false
+  }
+
+  return Object.values(fieldSources).some(source => source === 'ocr')
+}
+
+export function pendingOcrValidationCount(fieldSources: Record<string, string> | undefined): number {
+  if (!fieldSources) {
+    return 0
+  }
+
+  return Object.values(fieldSources).filter(source => source === 'ocr').length
+}
+
+export function ocrEngineIsUnavailable(engine: string | null | undefined): boolean {
+  if (!engine) {
+    return false
+  }
+
+  return engine === 'disabled'
+    || engine === 'unsupported'
+    || engine === 'tesseract_unavailable'
+    || engine === 'unavailable'
+}
+
+export function ocrEngineDisplayLabel(engine: string | null | undefined): string | null {
+  if (!engine) {
+    return null
+  }
+
+  switch (engine) {
+    case 'pdf_text':
+      return 'Texto PDF'
+    case 'tesseract':
+      return 'Tesseract'
+    case 'disabled':
+      return 'OCR deshabilitado'
+    case 'tesseract_unavailable':
+      return 'Tesseract no disponible'
+    case 'unsupported':
+      return 'Formato no compatible'
+    case 'unavailable':
+      return 'Archivo no disponible'
+    case 'no_ocr_fields':
+      return 'Sin campos OCR en el esquema'
+    default:
+      return engine
+  }
+}
+
+export function stripOcrSuggestions(
+  values: Record<string, unknown>,
+  fieldSources: Record<string, string>,
+  fieldConfidence: Record<string, number> = {},
+): {
+  values: Record<string, unknown>
+  fieldSources: Record<string, string>
+  fieldConfidence: Record<string, number>
+} {
+  const nextValues = { ...values }
+  const nextSources = { ...fieldSources }
+  const nextConfidence = { ...fieldConfidence }
+
+  for (const [code, source] of Object.entries(nextSources)) {
+    if (source !== 'ocr') {
+      continue
+    }
+
+    delete nextValues[code]
+    delete nextSources[code]
+    delete nextConfidence[code]
+  }
+
+  return {
+    values: nextValues,
+    fieldSources: nextSources,
+    fieldConfidence: nextConfidence,
+  }
+}
+
 export function isOcrSupportedUploadFile(file: File): boolean {
   const mime = file.type.toLowerCase()
   if (mime === 'application/pdf' || mime.startsWith('image/')) {

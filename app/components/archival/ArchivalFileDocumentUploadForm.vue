@@ -9,7 +9,12 @@ import type {
 import {
   flattenCatalogDocumentTypes,
   flattenFileFolderNodes,
+  hasPendingOcrValidation,
   isOcrSupportedUploadFile,
+  ocrEngineDisplayLabel,
+  ocrEngineIsUnavailable,
+  pendingOcrValidationCount,
+  stripOcrSuggestions,
   validateArchivalMetadataFields,
   type ArchivalFileDocTypeOption,
 } from '~/utils/archival-file-upload'
@@ -56,11 +61,20 @@ const metadataAutocompleteSnapshot = ref<Record<string, unknown>>({})
 const metadataFieldSourcesSnapshot = ref<Record<string, string>>({})
 const ocrText = ref<string | null>(null)
 const ocrEngine = ref<string | null>(null)
+const ocrNeedsReprocess = ref(false)
 
 const docTypeOptions = ref<ArchivalFileDocTypeOption[]>([])
 const folderOptions = computed(() => flattenFileFolderNodes(props.tree))
 
 const allowsMasterDocuments = computed(() => props.file.file_type?.allows_master_documents ?? false)
+
+const canRunOcr = computed(() =>
+  Boolean(selectedFile.value && docDocumentTypeId.value && isOcrSupportedUploadFile(selectedFile.value)),
+)
+
+const pendingOcrCount = computed(() => pendingOcrValidationCount(metadataFieldSources.value))
+
+const ocrEngineLabel = computed(() => ocrEngineDisplayLabel(ocrEngine.value))
 
 const selectedDocTypeLabel = computed(() =>
   docTypeOptions.value.find((o: ArchivalFileDocTypeOption) => o.id === docDocumentTypeId.value)?.label ?? '',
@@ -71,6 +85,25 @@ function setUploadSource(value: unknown) {
   uploadSource.value = ARCHIVAL_MANUAL_UPLOAD_SOURCES.some(option => option.value === next)
     ? next as ArchivalManualUploadSource
     : 'manual'
+}
+
+function clearOcrSuggestions() {
+  const stripped = stripOcrSuggestions(
+    metadataValues.value,
+    metadataFieldSources.value,
+    metadataConfidence.value,
+  )
+
+  metadataValues.value = stripped.values
+  metadataFieldSources.value = stripped.fieldSources
+  metadataConfidence.value = stripped.fieldConfidence
+  metadataOcrPayload.value = null
+  ocrText.value = null
+  ocrEngine.value = null
+}
+
+function markOcrReprocessNeeded() {
+  ocrNeedsReprocess.value = canRunOcr.value
 }
 
 function captureAutocompleteSnapshot() {
@@ -160,6 +193,7 @@ async function loadMetadataSuggestions() {
   metadataFieldSourcesSnapshot.value = {}
   ocrText.value = null
   ocrEngine.value = null
+  ocrNeedsReprocess.value = false
   metadataFields.value = []
 
   if (!docDocumentTypeId.value) {
@@ -178,12 +212,8 @@ async function loadMetadataSuggestions() {
     metadataValues.value = { ...(suggestion.suggestions ?? {}) }
     metadataFieldSources.value = { ...(suggestion.field_sources ?? {}) }
 
-    if (selectedFile.value) {
-      await runOcrExtraction()
-    }
-    else {
-      captureAutocompleteSnapshot()
-    }
+    captureAutocompleteSnapshot()
+    markOcrReprocessNeeded()
   }
   catch {
     toast.error('No se pudieron cargar los metadatos sugeridos.')
@@ -200,6 +230,8 @@ async function runOcrExtraction() {
 
   loadingOcr.value = true
   try {
+    clearOcrSuggestions()
+
     const fd = new FormData()
     fd.append('file', selectedFile.value)
     fd.append('doc_document_type_id', String(docDocumentTypeId.value))
@@ -243,7 +275,11 @@ async function runOcrExtraction() {
     if (ocr.processed) {
       toast.message('Metadatos sugeridos por OCR. Valide o rechace antes de guardar.')
     }
+    else if (ocrEngineIsUnavailable(ocr.engine)) {
+      toast.message(ocrEngineDisplayLabel(ocr.engine) ?? 'OCR no disponible.')
+    }
 
+    ocrNeedsReprocess.value = false
     captureAutocompleteSnapshot()
   }
   catch {
@@ -263,9 +299,8 @@ function onFileChange(event: Event) {
     title.value = file.name.replace(/\.[^.]+$/, '')
   }
 
-  if (file && docDocumentTypeId.value) {
-    void runOcrExtraction()
-  }
+  clearOcrSuggestions()
+  markOcrReprocessNeeded()
 }
 
 function resetForm() {
@@ -281,6 +316,7 @@ function resetForm() {
   metadataFieldSourcesSnapshot.value = {}
   ocrText.value = null
   ocrEngine.value = null
+  ocrNeedsReprocess.value = false
   metadataFields.value = []
   docDocumentTypeId.value = null
   uploadSource.value = 'manual'
@@ -301,6 +337,11 @@ async function handleSubmit() {
   const metadataError = validateArchivalMetadataFields(metadataFields.value, metadataValues.value)
   if (metadataError) {
     toast.error(metadataError)
+    return
+  }
+
+  if (hasPendingOcrValidation(metadataFieldSources.value)) {
+    toast.error('Valide o rechace las sugerencias OCR antes de adjuntar el documento.')
     return
   }
 
@@ -503,14 +544,52 @@ onMounted(() => {
       {{ loadingOcr ? 'Extrayendo metadatos por OCR…' : 'Cargando metadatos sugeridos…' }}
     </div>
 
+    <div
+      v-else-if="canRunOcr"
+      class="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-primary/30 bg-muted/15 p-3"
+    >
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        :disabled="uploading || loadingOcr"
+        @click="runOcrExtraction"
+      >
+        {{ ocrNeedsReprocess || !ocrEngine ? 'Ejecutar OCR' : 'Reprocesar OCR' }}
+      </Button>
+      <p class="text-xs text-muted-foreground">
+        <template v-if="ocrNeedsReprocess">
+          {{
+            selectedFile
+              ? 'Cambió el archivo o el tipo documental. Ejecute OCR para sugerir metadatos.'
+              : 'Seleccione un archivo compatible (PDF o imagen) y ejecute OCR.'
+          }}
+        </template>
+        <template v-else-if="ocrEngineLabel">
+          Motor OCR: {{ ocrEngineLabel }}.
+          <span v-if="metadataOcrPayload?.processed">Revise los campos marcados como «Sugerido OCR».</span>
+          <span v-else-if="ocrEngineIsUnavailable(ocrEngine)">
+            No se extrajo texto; complete los metadatos manualmente.
+          </span>
+          <span v-else>Sin coincidencias automáticas; complete los metadatos manualmente.</span>
+        </template>
+      </p>
+    </div>
+
     <p
-      v-else-if="ocrEngine && ocrEngine !== 'disabled' && ocrEngine !== 'unsupported'"
+      v-else-if="selectedFile && !isOcrSupportedUploadFile(selectedFile)"
       class="text-xs text-muted-foreground"
     >
-      Motor OCR: {{ ocrEngine }}.
-      <span v-if="metadataOcrPayload?.processed">Revise los campos marcados como «Sugerido OCR».</span>
-      <span v-else>Sin coincidencias automáticas; complete los metadatos manualmente.</span>
+      El formato del archivo no admite OCR. Complete los metadatos manualmente.
     </p>
+
+    <div
+      v-if="pendingOcrCount > 0 && !loadingSuggestions && !loadingOcr"
+      class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-100"
+    >
+      {{ pendingOcrCount }} campo(s) con sugerencia OCR pendiente de validación.
+      Acepte, edite o rechace cada sugerencia antes de adjuntar.
+    </div>
 
     <ArchivalFileDocumentMetadataFields
       v-if="metadataFields.length && !loadingSuggestions && !loadingOcr"
@@ -521,7 +600,7 @@ onMounted(() => {
       :disabled="uploading"
     />
 
-    <Button type="submit" class="w-full" :disabled="uploading || loadingCatalog">
+    <Button type="submit" class="w-full" :disabled="uploading || loadingCatalog || loadingOcr || pendingOcrCount > 0">
       {{ uploading ? 'Adjuntando…' : 'Adjuntar documento' }}
     </Button>
   </form>

@@ -56,6 +56,17 @@ function clearSuggestion(code: string) {
   sources.value = nextSources
 }
 
+function acceptSuggestion(code: string) {
+  if (sources.value[code] !== 'ocr') {
+    return
+  }
+
+  sources.value = {
+    ...sources.value,
+    [code]: 'manual',
+  }
+}
+
 function currencyDisplay(code: string): string {
   const raw = values.value[code]
   if (raw === null || raw === undefined || raw === '') {
@@ -88,6 +99,10 @@ function sourceBadgeVariant(source: string | undefined): 'secondary' | 'outline'
   return 'outline'
 }
 
+function isOcrPendingValidation(source: string | undefined): boolean {
+  return source === 'ocr'
+}
+
 defineExpose({
   activeFields,
 })
@@ -116,12 +131,30 @@ defineExpose({
         >
           {{ metadataFieldSourceLabel(sources[field.code], fieldConfidence?.[field.code]) }}
         </Badge>
+        <Badge
+          v-if="isOcrPendingValidation(sources[field.code])"
+          variant="outline"
+          class="border-amber-500/60 bg-amber-500/10 text-[10px] text-amber-800 dark:text-amber-200"
+        >
+          Pendiente validación
+        </Badge>
         <Badge v-if="field.is_variable" variant="outline" class="text-[10px]">
           Variable
         </Badge>
         <Badge v-else-if="field.is_reusable" variant="outline" class="text-[10px]">
           Reutilizable
         </Badge>
+        <Button
+          v-if="sources[field.code] === 'ocr'"
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="h-6 px-2 text-[10px]"
+          :disabled="disabled"
+          @click="acceptSuggestion(field.code)"
+        >
+          Aceptar sugerencia
+        </Button>
         <Button
           v-if="sources[field.code] === 'reused' || sources[field.code] === 'ocr'"
           type="button"
