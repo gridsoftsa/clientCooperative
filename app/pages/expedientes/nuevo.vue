@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type { ArchivalFileType } from '~/types/archival-file'
+import { mapArchivalFileMetadataFields } from '~/utils/archival-metadata-fields'
 
 definePageMeta({
   layout: 'default',
@@ -15,8 +17,11 @@ const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promi
 
 const loading = ref(true)
 const saving = ref(false)
+const loadingTypeSchema = ref(false)
 const types = ref<ArchivalFileType[]>([])
 const orgUnits = ref<Array<{ id: number, name: string }>>([])
+const selectedTypeDetail = ref<ArchivalFileType | null>(null)
+const metadataValues = ref<Record<string, unknown>>({})
 
 const form = reactive({
   archival_file_type_id: null as number | null,
@@ -28,6 +33,10 @@ const form = reactive({
 
 const selectedType = computed(() =>
   types.value.find(type => type.id === form.archival_file_type_id) ?? null,
+)
+
+const typeMetadataFields = computed<ArchivalMetadataFieldRow[]>(() =>
+  mapArchivalFileMetadataFields(selectedTypeDetail.value?.metadata_schema?.active_fields),
 )
 
 const typeSelectOptions = computed(() =>
@@ -44,12 +53,35 @@ const orgUnitSelectOptions = computed(() =>
   })),
 )
 
+async function loadTypeMetadataSchema(typeId: number | null) {
+  metadataValues.value = {}
+  selectedTypeDetail.value = null
+
+  if (!typeId) {
+    return
+  }
+
+  loadingTypeSchema.value = true
+
+  try {
+    selectedTypeDetail.value = await archivalApi.fetchFileType(typeId)
+  }
+  catch {
+    toast.error('No se pudo cargar el esquema de metadatos del tipo.')
+  }
+  finally {
+    loadingTypeSchema.value = false
+  }
+}
+
 watch(() => form.archival_file_type_id, (typeId) => {
   const type = types.value.find(item => item.id === typeId)
 
   if (type?.org_unit_id) {
     form.org_unit_id = type.org_unit_id
   }
+
+  void loadTypeMetadataSchema(typeId)
 })
 
 async function loadMeta() {
@@ -84,13 +116,19 @@ async function submit() {
   saving.value = true
 
   try {
-    const res = await archivalApi.createFile({
+    const payload: Record<string, unknown> = {
       archival_file_type_id: form.archival_file_type_id,
       title: form.title.trim(),
       org_unit_id: form.org_unit_id,
       entity_key: form.entity_key || undefined,
       entity_label: form.entity_label || undefined,
-    })
+    }
+
+    if (Object.keys(metadataValues.value).length > 0) {
+      payload.metadata_values = metadataValues.value
+    }
+
+    const res = await archivalApi.createFile(payload)
     toast.success(res.message)
     await router.push(`/expedientes/${res.data.id}`)
   }
@@ -112,7 +150,7 @@ onMounted(() => loadMeta())
         Nuevo expediente
       </h1>
       <p class="text-sm text-muted-foreground">
-        Creación manual de expediente electrónico.
+        Creación manual con metadatos del tipo de expediente cuando el esquema lo exige.
       </p>
     </div>
 
@@ -171,15 +209,24 @@ onMounted(() => loadMeta())
             :file-type-key="selectedType?.type_key ?? null"
           />
 
+          <ArchivalFileExpedienteMetadataCapture
+            v-model="metadataValues"
+            :fields="typeMetadataFields"
+            :schema-name="selectedTypeDetail?.metadata_schema?.name"
+            :schema-version="selectedTypeDetail?.metadata_schema?.version_number"
+            :loading="loadingTypeSchema"
+            :disabled="saving"
+          />
+
           <p class="text-xs text-muted-foreground">
-            Tras crear el expediente podrá cargar documentos y ver el checklist de obligatorios del tipo.
+            Tras crear el expediente podrá cargar documentos y completar metadatos pendientes antes del cierre.
           </p>
 
           <div class="flex justify-end gap-2">
             <Button variant="outline" @click="router.push('/expedientes')">
               Cancelar
             </Button>
-            <Button :disabled="saving" @click="submit">
+            <Button :disabled="saving || loadingTypeSchema" @click="submit">
               Crear expediente
             </Button>
           </div>

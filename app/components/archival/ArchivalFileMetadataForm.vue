@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type { ArchivalFile } from '~/types/archival-file'
+import { mapArchivalFileMetadataFields } from '~/utils/archival-metadata-fields'
 import { validateArchivalMetadataFields } from '~/utils/archival-file-upload'
 
 const props = defineProps<{
@@ -24,25 +25,9 @@ const canEdit = computed(() =>
   && props.file.status !== 'closed',
 )
 
-const metadataFields = computed<ArchivalMetadataFieldRow[]>(() => {
-  const fields = props.file.metadata_schema?.active_fields ?? []
-
-  return fields.map((field, index) => ({
-    code: field.code,
-    name: field.name,
-    data_type: field.data_type,
-    is_required: field.is_required,
-    sort_order: index,
-    is_active: true,
-    is_reusable: field.is_reusable,
-    is_variable: field.is_variable,
-    is_ocr_extractable: false,
-    is_autocompletable: field.is_autocompletable,
-    is_searchable: false,
-    is_reportable: false,
-    options: field.options ?? null,
-  }))
-})
+const metadataFields = computed<ArchivalMetadataFieldRow[]>(() =>
+  mapArchivalFileMetadataFields(props.file.metadata_schema?.active_fields),
+)
 
 function syncFromFile() {
   metadataValues.value = { ...(props.file.metadata_values ?? {}) }

@@ -34,7 +34,22 @@ export interface ArchivalFileType {
   doc_subseries?: { id: number, code: string, name: string, doc_series_id?: number } | null
   doc_document_type?: { id: number, code: string, name: string, doc_subseries_id?: number } | null
   trd_table?: { id: number, org_unit_id?: number, org_unit?: { id: number, name: string, code?: string } } | null
-  metadata_schema?: { id: number, name: string, version_number?: number } | null
+  metadata_schema?: {
+    id: number
+    name: string
+    version_number?: number
+    active_fields?: Array<{
+      code: string
+      name: string
+      data_type: string
+      is_required: boolean
+      is_reusable?: boolean
+      is_variable?: boolean
+      is_autocompletable?: boolean
+      options?: Array<{ value: string, label: string }>
+      sort_order?: number
+    }>
+  } | null
 }
 
 export interface ArchivalFileTypeRequiredDocument {
