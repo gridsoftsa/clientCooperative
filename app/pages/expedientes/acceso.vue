@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import {
+  ARCHIVAL_FILE_ACCESS_GRANT_PERMISSION_OPTIONS,
+  ARCHIVAL_FILE_ACCESS_GRANT_STATUS_LABELS,
+} from '~/constants/archival-access-grants'
 import type { ArchivalFileAccessGrant, ArchivalFileType } from '~/types/archival-file'
 
 definePageMeta({
@@ -30,14 +34,11 @@ const form = reactive({
   status: 'active',
 })
 
-const permissionOptions = [
-  { value: 'view', label: 'Ver' },
-  { value: 'download', label: 'Descargar' },
-  { value: 'edit', label: 'Editar' },
-  { value: 'attach', label: 'Anexar documentos' },
-  { value: 'close', label: 'Cerrar expediente' },
-  { value: 'transfer', label: 'Transferir' },
-]
+const permissionOptions = ARCHIVAL_FILE_ACCESS_GRANT_PERMISSION_OPTIONS
+
+function grantStatusLabel(status: string): string {
+  return ARCHIVAL_FILE_ACCESS_GRANT_STATUS_LABELS[status] ?? status
+}
 
 async function loadAll() {
   loading.value = true
@@ -178,7 +179,7 @@ onMounted(() => loadAll())
               <TableCell>{{ grant.grantable_label }}</TableCell>
               <TableCell>{{ grant.file_type ?? 'Todos' }}</TableCell>
               <TableCell>{{ grant.permission_label }}</TableCell>
-              <TableCell>{{ grant.status }}</TableCell>
+              <TableCell>{{ grantStatusLabel(grant.status) }}</TableCell>
               <TableCell class="text-right">
                 <Button variant="ghost" size="sm" @click="openEdit(grant)">
                   Editar

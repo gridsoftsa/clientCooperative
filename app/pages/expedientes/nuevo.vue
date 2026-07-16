@@ -26,6 +26,18 @@ const form = reactive({
   entity_label: '',
 })
 
+const selectedType = computed(() =>
+  types.value.find(type => String(type.id) === form.archival_file_type_id) ?? null,
+)
+
+watch(() => form.archival_file_type_id, (typeId) => {
+  const type = types.value.find(item => String(item.id) === typeId)
+
+  if (type?.org_unit_id) {
+    form.org_unit_id = String(type.org_unit_id)
+  }
+})
+
 async function loadMeta() {
   loading.value = true
 
@@ -120,18 +132,32 @@ onMounted(() => loadMeta())
                 </SelectItem>
               </SelectContent>
             </Select>
+            <p v-if="selectedType?.org_unit" class="text-xs text-muted-foreground">
+              Se sugiere según el tipo «{{ selectedType.name }}»: {{ selectedType.org_unit.name }}.
+              Puede cambiarla si el expediente corresponde a otra área.
+            </p>
+            <p v-else-if="selectedType && !selectedType.org_unit_id" class="text-xs text-amber-600 dark:text-amber-500">
+              El tipo «{{ selectedType.name }}» no tiene área productora configurada.
+              Selecciónela manualmente o configúrela en Tipos de expediente.
+            </p>
+            <p v-else class="text-xs text-muted-foreground">
+              Área que custodia el expediente. Al elegir el tipo se completará sola si el tipo tiene área productora.
+            </p>
           </div>
 
           <div class="grid gap-4 md:grid-cols-2">
             <div class="space-y-2">
               <Label>Identificador (cédula/NIT)</Label>
-              <Input v-model="form.entity_key" />
+              <Input v-model="form.entity_key" placeholder="Opcional" />
             </div>
             <div class="space-y-2">
               <Label>Nombre entidad</Label>
-              <Input v-model="form.entity_label" />
+              <Input v-model="form.entity_label" placeholder="Opcional" />
             </div>
           </div>
+          <p class="text-xs text-muted-foreground">
+            Tras crear el expediente podrá cargar documentos y ver el checklist de obligatorios del tipo.
+          </p>
 
           <div class="flex justify-end gap-2">
             <Button variant="outline" @click="router.push('/expedientes')">

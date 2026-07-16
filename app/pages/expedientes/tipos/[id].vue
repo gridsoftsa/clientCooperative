@@ -13,6 +13,8 @@ const route = useRoute()
 const router = useRouter()
 const archivalApi = useArchivalFileApi()
 const deleteWithReason = useApiDeleteWithReason()
+const { hasPermission } = usePermissions()
+const canManageAccess = computed(() => hasPermission('expedientes_acceso_gestionar'))
 
 const typeId = computed(() => Number(route.params.id))
 const loading = ref(true)
@@ -20,6 +22,7 @@ const savingRequired = ref(false)
 const deleting = ref(false)
 const deleteDialogOpen = ref(false)
 const activeTab = ref('general')
+const accessGrantsCount = ref(0)
 
 const fileType = ref<ArchivalFileType | null>(null)
 const requiredDraft = ref<RequiredDocumentDraft[]>([])
@@ -166,6 +169,12 @@ onMounted(() => load())
               {{ requiredDraft.length }}
             </Badge>
           </TabsTrigger>
+          <TabsTrigger v-if="canManageAccess" value="access">
+            Acceso
+            <Badge v-if="accessGrantsCount" variant="secondary" class="ml-2">
+              {{ accessGrantsCount }}
+            </Badge>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" class="mt-4">
@@ -191,6 +200,25 @@ onMounted(() => load())
               {{ savingRequired ? 'Guardando…' : 'Guardar obligatorios' }}
             </Button>
           </div>
+        </TabsContent>
+
+        <TabsContent v-if="canManageAccess" value="access" class="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Reglas de acceso por tipo</CardTitle>
+              <CardDescription>
+                Defina qué roles o usuarios pueden ver, descargar o gestionar expedientes de este tipo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="min-w-0">
+              <ArchivalFileTypeAccessGrantsPanel
+                v-if="fileType"
+                :file-type-id="fileType.id"
+                :file-type-name="fileType.name"
+                @update:count="accessGrantsCount = $event"
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </template>
