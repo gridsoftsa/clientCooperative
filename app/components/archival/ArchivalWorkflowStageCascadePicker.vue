@@ -1,7 +1,4 @@
 <script setup lang="ts">
-import Multiselect from '@vueform/multiselect'
-import { ARCHIVAL_MULTISELECT_CLASSES, onArchivalMultiselectOpen } from '~/composables/useArchivalMultiselect'
-
 export interface ArchivalWorkflowDefinitionOption {
   id: number
   key: string
@@ -131,54 +128,31 @@ watch(workflowStageKey, (value) => {
   >
     <div class="min-w-0" :class="inline ? '' : 'space-y-2'">
       <Label v-if="!inline">Workflow</Label>
-      <Multiselect
+      <ArchivalSingleMultiselect
         :id="fieldIds.workflow"
         v-model="selectedWorkflow"
-        mode="single"
-        :object="false"
         :options="workflowOptions"
-        value-prop="value"
-        label="label"
-        :searchable="true"
         :can-clear="false"
-        :append-to-body="true"
-        :close-on-scroll="true"
         :disabled="disabled"
         :placeholder="placeholders.workflow"
-        :classes="ARCHIVAL_MULTISELECT_CLASSES"
         no-options-text="Sin workflows"
         no-results-text="Sin coincidencias"
-        class="archival-single-multiselect"
-        @open="onArchivalMultiselectOpen"
       />
     </div>
     <div class="min-w-0" :class="inline ? '' : 'space-y-2'">
       <Label v-if="!inline">Etapa</Label>
-      <Multiselect
+      <ArchivalSingleMultiselect
         :id="fieldIds.stage"
         v-model="selectedStageKey"
-        mode="single"
-        :object="false"
         :options="stageOptions"
-        value-prop="value"
-        label="label"
-        :searchable="true"
-        :can-clear="true"
-        :append-to-body="true"
-        :close-on-scroll="true"
         :disabled="disabled || selectedWorkflow === WORKFLOW_GENERAL"
         :placeholder="placeholders.stage"
-        :classes="ARCHIVAL_MULTISELECT_CLASSES"
         no-options-text="Seleccione un workflow"
         no-results-text="Sin coincidencias"
-        class="archival-single-multiselect"
-        @open="onArchivalMultiselectOpen"
       />
     </div>
   </div>
 </template>
-
-<style src="@vueform/multiselect/themes/default.css"></style>
 
 <style scoped>
 .archival-single-multiselect :deep(.multiselect-single-label-text) {

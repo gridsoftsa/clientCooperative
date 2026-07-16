@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import Multiselect from '@vueform/multiselect'
 import type { CatalogTreeSeries } from '~/types/archival-trd'
-import { ARCHIVAL_MULTISELECT_CLASSES, onArchivalMultiselectOpen } from '~/composables/useArchivalMultiselect'
 
 const props = withDefaults(
   defineProps<{
@@ -124,77 +122,42 @@ watch(
   >
     <div class="min-w-0" :class="inline ? '' : 'space-y-2'">
       <Label v-if="!inline">Serie</Label>
-      <Multiselect
+      <ArchivalSingleMultiselect
         :id="fieldIds.series"
         v-model="seriesId"
-        mode="single"
-        :object="false"
         :options="seriesOptions"
-        value-prop="value"
-        label="label"
-        :searchable="true"
-        :can-clear="true"
-        :append-to-body="true"
-        :close-on-scroll="true"
         :disabled="disabled"
         :placeholder="placeholders.series"
-        :classes="ARCHIVAL_MULTISELECT_CLASSES"
         no-options-text="Sin series"
         no-results-text="Sin coincidencias"
-        class="archival-single-multiselect"
-        @open="onArchivalMultiselectOpen"
       />
     </div>
     <div class="min-w-0" :class="inline ? '' : 'space-y-2'">
       <Label v-if="!inline">Subserie</Label>
-      <Multiselect
+      <ArchivalSingleMultiselect
         :id="fieldIds.subseries"
         v-model="subseriesId"
-        mode="single"
-        :object="false"
         :options="subseriesOptions"
-        value-prop="value"
-        label="label"
-        :searchable="true"
-        :can-clear="true"
-        :append-to-body="true"
-        :close-on-scroll="true"
         :disabled="disabled || !seriesId"
         :placeholder="placeholders.subseries"
-        :classes="ARCHIVAL_MULTISELECT_CLASSES"
         no-options-text="Sin subseries"
         no-results-text="Sin coincidencias"
-        class="archival-single-multiselect"
-        @open="onArchivalMultiselectOpen"
       />
     </div>
     <div class="min-w-0" :class="inline ? '' : 'space-y-2'">
       <Label v-if="!inline">Tipo documental</Label>
-      <Multiselect
+      <ArchivalSingleMultiselect
         :id="fieldIds.type"
         v-model="docDocumentTypeId"
-        mode="single"
-        :object="false"
         :options="typeOptions"
-        value-prop="value"
-        label="label"
-        :searchable="true"
-        :can-clear="true"
-        :append-to-body="true"
-        :close-on-scroll="true"
         :disabled="disabled || !subseriesId"
         :placeholder="placeholders.type"
-        :classes="ARCHIVAL_MULTISELECT_CLASSES"
         no-options-text="Sin tipos documentales"
         no-results-text="Sin coincidencias"
-        class="archival-single-multiselect"
-        @open="onArchivalMultiselectOpen"
       />
     </div>
   </div>
 </template>
-
-<style src="@vueform/multiselect/themes/default.css"></style>
 
 <style scoped>
 .archival-single-multiselect :deep(.multiselect-single-label-text) {

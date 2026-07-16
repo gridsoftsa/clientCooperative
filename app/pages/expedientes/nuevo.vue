@@ -19,22 +19,36 @@ const types = ref<ArchivalFileType[]>([])
 const orgUnits = ref<Array<{ id: number, name: string }>>([])
 
 const form = reactive({
-  archival_file_type_id: '',
+  archival_file_type_id: null as number | null,
   title: '',
-  org_unit_id: '',
+  org_unit_id: null as number | null,
   entity_key: '',
   entity_label: '',
 })
 
 const selectedType = computed(() =>
-  types.value.find(type => String(type.id) === form.archival_file_type_id) ?? null,
+  types.value.find(type => type.id === form.archival_file_type_id) ?? null,
+)
+
+const typeSelectOptions = computed(() =>
+  types.value.map(type => ({
+    value: type.id,
+    label: type.name,
+  })),
+)
+
+const orgUnitSelectOptions = computed(() =>
+  orgUnits.value.map(unit => ({
+    value: unit.id,
+    label: unit.name,
+  })),
 )
 
 watch(() => form.archival_file_type_id, (typeId) => {
-  const type = types.value.find(item => String(item.id) === typeId)
+  const type = types.value.find(item => item.id === typeId)
 
   if (type?.org_unit_id) {
-    form.org_unit_id = String(type.org_unit_id)
+    form.org_unit_id = type.org_unit_id
   }
 })
 
@@ -52,13 +66,28 @@ async function loadMeta() {
 }
 
 async function submit() {
+  if (!form.archival_file_type_id) {
+    toast.error('Seleccione el tipo de expediente.')
+    return
+  }
+
+  if (!form.title.trim()) {
+    toast.error('Indique el título del expediente.')
+    return
+  }
+
+  if (!form.org_unit_id) {
+    toast.error('Seleccione el área responsable.')
+    return
+  }
+
   saving.value = true
 
   try {
     const res = await archivalApi.createFile({
-      archival_file_type_id: Number(form.archival_file_type_id),
-      title: form.title,
-      org_unit_id: Number(form.org_unit_id),
+      archival_file_type_id: form.archival_file_type_id,
+      title: form.title.trim(),
+      org_unit_id: form.org_unit_id,
       entity_key: form.entity_key || undefined,
       entity_label: form.entity_label || undefined,
     })
@@ -94,44 +123,34 @@ onMounted(() => loadMeta())
         </div>
         <template v-else>
           <div class="space-y-2">
-            <Label>Tipo de expediente</Label>
-            <Select v-model="form.archival_file_type_id">
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="type in types"
-                  :key="type.id"
-                  :value="String(type.id)"
-                >
-                  {{ type.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <Label for="archival_new_file_type">Tipo de expediente</Label>
+            <ArchivalSingleMultiselect
+              id="archival_new_file_type"
+              v-model="form.archival_file_type_id"
+              :options="typeSelectOptions"
+              placeholder="Seleccione tipo"
+              no-options-text="Sin tipos disponibles"
+            />
           </div>
 
           <div class="space-y-2">
-            <Label>Título</Label>
-            <Input v-model="form.title" placeholder="Ej. Expediente de crédito 2026-001" />
+            <Label for="archival_new_title">Título</Label>
+            <Input
+              id="archival_new_title"
+              v-model="form.title"
+              placeholder="Ej. Expediente de crédito 2026-001"
+            />
           </div>
 
           <div class="space-y-2">
-            <Label>Área responsable</Label>
-            <Select v-model="form.org_unit_id">
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione área" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="unit in orgUnits"
-                  :key="unit.id"
-                  :value="String(unit.id)"
-                >
-                  {{ unit.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <Label for="archival_new_org_unit">Área responsable</Label>
+            <ArchivalSingleMultiselect
+              id="archival_new_org_unit"
+              v-model="form.org_unit_id"
+              :options="orgUnitSelectOptions"
+              placeholder="Seleccione área"
+              no-options-text="Sin áreas disponibles"
+            />
             <p v-if="selectedType?.org_unit" class="text-xs text-muted-foreground">
               Se sugiere según el tipo «{{ selectedType.name }}»: {{ selectedType.org_unit.name }}.
               Puede cambiarla si el expediente corresponde a otra área.
@@ -145,16 +164,13 @@ onMounted(() => loadMeta())
             </p>
           </div>
 
-          <div class="grid gap-4 md:grid-cols-2">
-            <div class="space-y-2">
-              <Label>Identificador (cédula/NIT)</Label>
-              <Input v-model="form.entity_key" placeholder="Opcional" />
-            </div>
-            <div class="space-y-2">
-              <Label>Nombre entidad</Label>
-              <Input v-model="form.entity_label" placeholder="Opcional" />
-            </div>
-          </div>
+          <ArchivalFileEntitySubjectFields
+            v-model:entity-key="form.entity_key"
+            v-model:entity-label="form.entity_label"
+            :org-unit-id="form.org_unit_id"
+            :file-type-key="selectedType?.type_key ?? null"
+          />
+
           <p class="text-xs text-muted-foreground">
             Tras crear el expediente podrá cargar documentos y ver el checklist de obligatorios del tipo.
           </p>

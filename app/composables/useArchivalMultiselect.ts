@@ -20,8 +20,8 @@ function widenArchivalDropdown(multiselectEl: HTMLElement): void {
       }
 
       dropdown.style.setProperty('min-width', `${triggerWidth}px`)
-      dropdown.style.setProperty('width', 'max-content')
-      dropdown.style.setProperty('max-width', 'min(42rem, calc(100vw - 1.5rem))')
+      dropdown.style.setProperty('width', `${Math.max(triggerWidth, 280)}px`)
+      dropdown.style.setProperty('max-width', 'min(36rem, calc(100vw - 1.5rem))')
     })
   })
 }
