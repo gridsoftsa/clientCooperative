@@ -107,6 +107,9 @@ export interface ArchivalFileTreeNode {
   mime_type?: string
   size_bytes?: number
   uploaded_at?: string
+  folio_start?: number | null
+  folio_end?: number | null
+  workflow_stage_key?: string | null
 }
 
 export interface ArchivalFileRequiredDocumentsEvaluation {

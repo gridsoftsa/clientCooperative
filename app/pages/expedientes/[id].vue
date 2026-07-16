@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type {
   ArchivalFile,
   ArchivalFileAlert,
@@ -77,6 +78,26 @@ const canTransfer = computed(() =>
     || file.value?.status === 'historical_archive'),
 )
 const consolidating = ref(false)
+
+const expedienteMetadataFields = computed<ArchivalMetadataFieldRow[]>(() => {
+  const fields = file.value?.metadata_schema?.active_fields ?? []
+
+  return fields.map((field, index) => ({
+    code: field.code,
+    name: field.name,
+    data_type: field.data_type,
+    is_required: field.is_required,
+    sort_order: index,
+    is_active: true,
+    is_reusable: field.is_reusable,
+    is_variable: field.is_variable,
+    is_ocr_extractable: false,
+    is_autocompletable: field.is_autocompletable,
+    is_searchable: false,
+    is_reportable: false,
+    options: field.options ?? null,
+  }))
+})
 
 async function handleConsolidate() {
   if (!file.value)
@@ -308,7 +329,7 @@ onMounted(() => loadAll())
             <div>
               <CardTitle>Árbol documental</CardTitle>
               <CardDescription>
-                Carpetas, documentos, referencias y versiones del expediente.
+                Carpetas, documentos, referencias y versiones. Use «Metadatos» en cada nodo para ver detalle sin salir del árbol.
               </CardDescription>
             </div>
             <Button
@@ -328,6 +349,8 @@ onMounted(() => loadAll())
               :file-id="file.id"
               :can-manage-documents="canManageDocuments"
               :can-download="canDownloadDocuments"
+              :metadata-fields="expedienteMetadataFields"
+              :file-metadata-values="file.metadata_values"
               @reference="openReferenceDialog"
               @replace-version="openVersionDialog"
             />

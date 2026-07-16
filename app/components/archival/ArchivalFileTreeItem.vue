@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type { ArchivalFileTreeNode } from '~/types/archival-file'
 
 const props = defineProps<{
@@ -7,6 +8,8 @@ const props = defineProps<{
   canManageDocuments?: boolean
   canDownload?: boolean
   fileId?: number
+  metadataFields?: ArchivalMetadataFieldRow[]
+  fileMetadataValues?: Record<string, unknown> | null
 }>()
 
 const emit = defineEmits<{
@@ -17,10 +20,13 @@ const emit = defineEmits<{
 
 const depth = computed(() => props.depth ?? 0)
 const expanded = ref(depth.value < 2)
+const detailsExpanded = ref(false)
 
 const hasChildren = computed(() => (props.node.children?.length ?? 0) > 0)
 const isDocument = computed(() => props.node.type === 'document' || props.node.type === 'document_reference')
 const isVersionableDocument = computed(() => props.node.type === 'document')
+const isFolder = computed(() => props.node.type === 'folder')
+const isFileRoot = computed(() => props.node.type === 'file')
 
 const iconName = computed(() => {
   switch (props.node.type) {
@@ -39,10 +45,21 @@ const iconName = computed(() => {
 
 const isFileNode = computed(() => props.node.type === 'file' || props.node.type === 'child_file')
 
+const canShowDetails = computed(() =>
+  isDocument.value
+  || isFolder.value
+  || isFileRoot.value
+  || (props.node.metadata_values != null && Object.keys(props.node.metadata_values).length > 0),
+)
+
 function handleNodeClick() {
   if (isFileNode.value && props.node.archival_file_id) {
     emit('clickFile', props.node)
   }
+}
+
+function toggleDetails() {
+  detailsExpanded.value = !detailsExpanded.value
 }
 
 const downloadHref = computed(() => {
@@ -66,7 +83,7 @@ const downloadHref = computed(() => {
         v-if="hasChildren"
         type="button"
         class="text-muted-foreground"
-        @click="expanded = !expanded"
+        @click.stop="expanded = !expanded"
       >
         <Icon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-4" />
       </button>
@@ -82,6 +99,20 @@ const downloadHref = computed(() => {
       <Badge v-if="node.status_label" variant="outline" class="text-xs">
         {{ node.status_label }}
       </Badge>
+
+      <Button
+        v-if="canShowDetails"
+        variant="ghost"
+        size="sm"
+        type="button"
+        class="h-7 shrink-0 gap-1 px-2 text-xs text-muted-foreground"
+        :class="{ 'text-primary': detailsExpanded }"
+        :title="detailsExpanded ? 'Ocultar metadatos' : 'Ver metadatos'"
+        @click.stop="toggleDetails"
+      >
+        <Icon :name="detailsExpanded ? 'i-lucide-chevron-up' : 'i-lucide-info'" class="size-3.5" />
+        <span class="hidden sm:inline">{{ detailsExpanded ? 'Ocultar' : 'Metadatos' }}</span>
+      </Button>
 
       <div v-if="isDocument" class="flex items-center gap-1">
         <a
@@ -117,6 +148,18 @@ const downloadHref = computed(() => {
       </div>
     </div>
 
+    <div
+      v-if="detailsExpanded && canShowDetails"
+      class="mb-1 rounded-md border border-border/60 bg-muted/30 py-2 pr-3"
+      :style="{ marginLeft: `${depth * 16 + 32}px` }"
+    >
+      <ArchivalFileTreeNodeDetails
+        :node="node"
+        :metadata-fields="metadataFields"
+        :file-metadata-values="isFileRoot ? fileMetadataValues : undefined"
+      />
+    </div>
+
     <div v-if="expanded && hasChildren">
       <ArchivalFileTreeItem
         v-for="child in node.children"
@@ -126,6 +169,8 @@ const downloadHref = computed(() => {
         :can-manage-documents="canManageDocuments"
         :can-download="canDownload"
         :file-id="fileId"
+        :metadata-fields="metadataFields"
+        :file-metadata-values="fileMetadataValues"
         @reference="emit('reference', $event)"
         @replace-version="emit('replaceVersion', $event)"
         @click-file="emit('clickFile', $event)"
