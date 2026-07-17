@@ -22,6 +22,7 @@ const retentionRows = ref<Array<Record<string, unknown>>>([])
 const incompleteRows = ref<Array<Record<string, unknown>>>([])
 const loading = ref(true)
 const refreshing = ref(false)
+const exporting = ref(false)
 
 const canRefresh = computed(() => hasPermission('expedientes_reportes_ver'))
 
@@ -76,6 +77,21 @@ async function handleRefreshAlerts() {
   }
 }
 
+async function exportReports(format: 'xlsx' | 'pdf') {
+  exporting.value = true
+
+  try {
+    await archivalApi.exportReports(format)
+    toast.success(`Reporte exportado en formato ${format === 'pdf' ? 'PDF' : 'Excel'}.`)
+  }
+  catch (error) {
+    toast.error(error instanceof Error ? error.message : 'No se pudo exportar el reporte.')
+  }
+  finally {
+    exporting.value = false
+  }
+}
+
 onMounted(() => load())
 </script>
 
@@ -92,10 +108,29 @@ onMounted(() => load())
       </div>
       <div class="flex flex-wrap gap-2">
         <Button
+          variant="outline"
+          size="sm"
+          :disabled="exporting || loading"
+          @click="exportReports('xlsx')"
+        >
+          <Icon name="i-lucide-file-spreadsheet" class="mr-2 size-4" />
+          {{ exporting ? 'Exportando…' : 'Excel' }}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          :disabled="exporting || loading"
+          @click="exportReports('pdf')"
+        >
+          <Icon name="i-lucide-file-text" class="mr-2 size-4" />
+          PDF
+        </Button>
+        <Button
           v-if="canRefresh"
           variant="outline"
           :disabled="refreshing || loading"
           @click="handleRefreshAlerts"
+        >
         >
           {{ refreshing ? 'Actualizando…' : 'Actualizar alertas' }}
         </Button>

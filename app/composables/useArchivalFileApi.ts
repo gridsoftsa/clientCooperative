@@ -287,6 +287,17 @@ export function useArchivalFileApi() {
     return res.data
   }
 
+  async function exportReports(format: 'xlsx' | 'pdf') {
+    const { downloadReportFile } = useReportExport()
+    const date = new Date().toISOString().slice(0, 10)
+    const filename = `reporte-expedientes-${date}.${format}`
+    const mime = format === 'pdf'
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+    await downloadReportFile('/archival-files/reports/export', { format }, filename, mime)
+  }
+
   async function fetchFileAlerts(fileId: number) {
     const res = await api<{ data: ArchivalFileAlert[] }>(`/archival-files/${fileId}/alerts`)
 
@@ -398,6 +409,7 @@ export function useArchivalFileApi() {
     fetchRetentionReport,
     fetchIncompleteReport,
     fetchReportsSummary,
+    exportReports,
     fetchFileAlerts,
     fetchAlertsReport,
     refreshAlerts,
