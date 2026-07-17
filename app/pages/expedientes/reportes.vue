@@ -103,7 +103,7 @@ onMounted(() => load())
           Reportes de expedientes
         </h1>
         <p class="text-sm text-muted-foreground">
-          Indicadores documentales, alertas programadas y control de acceso.
+          Indicadores documentales, alertas programadas y retención archivística.
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -130,7 +130,6 @@ onMounted(() => load())
           variant="outline"
           :disabled="refreshing || loading"
           @click="handleRefreshAlerts"
-        >
         >
           {{ refreshing ? 'Actualizando…' : 'Actualizar alertas' }}
         </Button>

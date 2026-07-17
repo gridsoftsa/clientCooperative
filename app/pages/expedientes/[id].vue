@@ -565,6 +565,10 @@ onMounted(() => loadAll())
         :file-id="file.id"
         :tree="tree"
         :target-node="selectedTreeNode"
+        :entity-key="file.entity_key"
+        :entity-label="file.entity_label"
+        :org-unit-id="file.org_unit_id"
+        :required="required"
         @created="loadAll"
       />
 

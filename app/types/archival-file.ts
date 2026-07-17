@@ -150,6 +150,21 @@ export interface ArchivalFileDocumentVersionHistory {
   versions: ArchivalFileDocumentVersion[]
 }
 
+export interface ArchivalMasterDocumentSearchResult {
+  id: number
+  title: string
+  original_name?: string | null
+  version_number: number
+  document_type_name?: string | null
+  document_type_code?: string | null
+  file_id: number
+  file_number?: string | null
+  file_title?: string | null
+  file_type_name?: string | null
+  entity_key?: string | null
+  entity_label?: string | null
+}
+
 export interface ArchivalFileRequiredDocumentsEvaluation {
   complete: boolean
   missing: Array<{ doc_document_type_id: number, label: string, workflow_stage_key?: string | null }>

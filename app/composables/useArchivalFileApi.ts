@@ -9,6 +9,7 @@ import type {
   ArchivalFileRequiredDocumentsEvaluation,
   ArchivalFileTreeNode,
   ArchivalFileType,
+  ArchivalMasterDocumentSearchResult,
   ArchivalPhaseTarget,
 } from '~/types/archival-file'
 
@@ -344,6 +345,13 @@ export function useArchivalFileApi() {
     return res
   }
 
+  async function searchMasterDocuments(query: Record<string, string | number | boolean | null | undefined> = {}) {
+    return await api<{
+      data: ArchivalMasterDocumentSearchResult[]
+      meta: { current_page: number, last_page: number, per_page: number, total: number }
+    }>('/archival-files/master-documents/search', { query })
+  }
+
   async function replaceDocumentVersion(fileId: number, documentId: number, formData: FormData) {
     const res = await api<{ data: Record<string, unknown>, message: string }>(
       `/archival-files/${fileId}/documents/${documentId}/version`,
@@ -416,6 +424,7 @@ export function useArchivalFileApi() {
     fetchAlertsCatalog,
     updateAlertsSettings,
     createDocumentReference,
+    searchMasterDocuments,
     replaceDocumentVersion,
     fetchDocumentVersions,
     documentDownloadUrl,
