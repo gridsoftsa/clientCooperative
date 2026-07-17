@@ -10,6 +10,14 @@ import type {
   ArchivalPhaseTarget,
 } from '~/types/archival-file'
 import { ARCHIVAL_FILE_STATUS_LABELS } from '~/types/archival-file'
+import {
+  archivalFileStatusActions,
+  archivalFileStatusBadgeVariant,
+  archivalFileStatusBanner,
+  isArchivalFileEditable,
+  isArchivalFileOperational,
+  type ArchivalFileStatusActionOption,
+} from '~/utils/archival-file-status'
 
 definePageMeta({
   layout: 'default',
@@ -36,19 +44,19 @@ const referenceDialogOpen = ref(false)
 const versionDialogOpen = ref(false)
 const publishDialogOpen = ref(false)
 const transferDialogOpen = ref(false)
+const statusTransitionDialogOpen = ref(false)
+const selectedStatusAction = ref<ArchivalFileStatusActionOption | null>(null)
 const selectedTreeNode = ref<ArchivalFileTreeNode | null>(null)
 const transferAlertType = ref<string | null>(null)
 const transferSuggestedPhase = ref<ArchivalPhaseTarget | null>(null)
 
 const canAttachDocument = computed(() =>
   (hasPermission('expedientes_editar') || hasPermission('expedientes_documentos_adjuntar'))
-  && !file.value?.is_frozen
-  && file.value?.status !== 'closed',
+  && isArchivalFileOperational(file.value?.status, Boolean(file.value?.is_frozen)),
 )
 const canManageDocuments = computed(() =>
   (hasPermission('expedientes_editar') || hasPermission('expedientes_documentos_adjuntar'))
-  && !file.value?.is_frozen
-  && file.value?.status !== 'closed',
+  && isArchivalFileOperational(file.value?.status, Boolean(file.value?.is_frozen)),
 )
 const canDownloadDocuments = computed(() => hasPermission('expedientes_documentos_descargar'))
 const canViewDocuments = computed(() =>
@@ -57,7 +65,25 @@ const canViewDocuments = computed(() =>
   || hasPermission('expedientes_area_ver'),
 )
 const canPublishToLibrary = computed(() => hasPermission('expedientes_biblioteca_publicar'))
-const canClose = computed(() => hasPermission('expedientes_cerrar') && file.value?.status !== 'closed')
+const canClose = computed(() =>
+  hasPermission('expedientes_cerrar')
+  && isArchivalFileEditable(file.value?.status)
+  && !file.value?.is_frozen,
+)
+
+const statusBanner = computed(() =>
+  file.value ? archivalFileStatusBanner(file.value.status) : null,
+)
+
+const availableStatusActions = computed(() => {
+  if (!file.value) {
+    return []
+  }
+
+  return archivalFileStatusActions(file.value.status).filter(action =>
+    hasPermission(action.permission),
+  )
+})
 const canConsolidate = computed(() =>
   hasPermission('expedientes_consolidar')
   && file.value?.status === 'closed'
@@ -241,6 +267,11 @@ function openTransferDialog(alert?: ArchivalFileAlert) {
   transferDialogOpen.value = true
 }
 
+function openStatusTransitionDialog(action: ArchivalFileStatusActionOption) {
+  selectedStatusAction.value = action
+  statusTransitionDialogOpen.value = true
+}
+
 function inferPhaseFromAlert(alertType?: string | null): ArchivalPhaseTarget | null {
   switch (alertType) {
     case 'retention_management_overdue':
@@ -276,7 +307,7 @@ onMounted(() => loadAll())
             {{ file.title }}
           </h1>
           <div class="mt-2 flex flex-wrap gap-2">
-            <Badge variant="outline">
+            <Badge :variant="archivalFileStatusBadgeVariant(file.status)">
               {{ ARCHIVAL_FILE_STATUS_LABELS[file.status] }}
             </Badge>
             <Badge v-if="file.is_frozen" variant="secondary">
@@ -292,6 +323,14 @@ onMounted(() => loadAll())
         </div>
 
         <div class="flex flex-wrap gap-2">
+          <Button
+            v-for="action in availableStatusActions"
+            :key="action.target"
+            :variant="action.variant"
+            @click="openStatusTransitionDialog(action)"
+          >
+            {{ action.label }}
+          </Button>
           <Button
             v-if="canTransfer"
             variant="outline"
@@ -333,6 +372,23 @@ onMounted(() => loadAll())
             Cerrar expediente
           </Button>
         </div>
+      </div>
+
+      <div
+        v-if="statusBanner"
+        class="rounded-lg border px-4 py-3 text-sm"
+        :class="file.status === 'returned'
+          ? 'border-destructive/40 bg-destructive/10 text-destructive'
+          : file.status === 'in_review'
+            ? 'border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100'
+            : 'border-muted bg-muted/30 text-muted-foreground'"
+      >
+        <p class="font-medium">
+          {{ statusBanner.title }}
+        </p>
+        <p class="mt-1 text-xs opacity-90">
+          {{ statusBanner.description }}
+        </p>
       </div>
 
       <div class="grid gap-6 lg:grid-cols-3">
@@ -534,6 +590,13 @@ onMounted(() => loadAll())
         :alert-type="transferAlertType"
         :suggested-phase="transferSuggestedPhase"
         @transferred="loadAll"
+      />
+
+      <ArchivalFileStatusTransitionDialog
+        v-model:open="statusTransitionDialogOpen"
+        :file-id="file.id"
+        :action="selectedStatusAction"
+        @updated="loadAll"
       />
     </template>
   </div>

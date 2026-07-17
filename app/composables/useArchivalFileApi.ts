@@ -87,6 +87,18 @@ export function useArchivalFileApi() {
     return res
   }
 
+  async function updateFileStatus(
+    id: number,
+    payload: { target_status: string, reason?: string },
+  ) {
+    const res = await api<{ data: ArchivalFile, message: string }>(`/archival-files/${id}/status`, {
+      method: 'POST',
+      body: payload,
+    })
+
+    return res
+  }
+
   async function consolidateFile(id: number) {
     const res = await api<{ data: ArchivalFile, message: string }>(`/archival-files/${id}/consolidate`, {
       method: 'POST',
@@ -374,6 +386,7 @@ export function useArchivalFileApi() {
     fetchClosureReadiness,
     updateMetadata,
     closeFile,
+    updateFileStatus,
     consolidateFile,
     consolidatedDownloadUrl,
     uploadDocument,

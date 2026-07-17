@@ -4,6 +4,7 @@ import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadata
 import type { ArchivalFile } from '~/types/archival-file'
 import { mapArchivalFileMetadataFields } from '~/utils/archival-metadata-fields'
 import { validateArchivalMetadataFields } from '~/utils/archival-file-upload'
+import { isArchivalFileOperational } from '~/utils/archival-file-status'
 
 const props = defineProps<{
   file: ArchivalFile
@@ -21,8 +22,7 @@ const metadataValues = ref<Record<string, unknown>>({})
 
 const canEdit = computed(() =>
   hasPermission('expedientes_editar')
-  && !props.file.is_frozen
-  && props.file.status !== 'closed',
+  && isArchivalFileOperational(props.file.status, props.file.is_frozen),
 )
 
 const metadataFields = computed<ArchivalMetadataFieldRow[]>(() =>
