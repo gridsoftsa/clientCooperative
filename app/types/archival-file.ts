@@ -255,7 +255,10 @@ export type ArchivalFileEventType =
 export interface ArchivalFileEvent {
   id: number
   archival_file_id: number
+  file_number?: string | null
+  file_title?: string | null
   event_type: ArchivalFileEventType | string
+  event_type_label?: string | null
   description?: string | null
   metadata?: Record<string, unknown> | null
   created_at?: string | null
@@ -285,58 +288,7 @@ export interface ArchivalFileMetadataOcrResult {
   processed: boolean
 }
 
-export type ArchivalFileAccessPermission =
-  | 'view'
-  | 'create'
-  | 'edit'
-  | 'download'
-  | 'attach'
-  | 'close'
-  | 'transfer'
-  | 'void'
-
 export type ArchivalPhaseTarget = 'management' | 'central' | 'historical' | 'disposed'
-
-export interface ArchivalFileAccessGrant {
-  id: number
-  grantable_type: 'user' | 'role'
-  grantable_id: number
-  grantable_label?: string | null
-  archival_file_type_id?: number | null
-  file_type?: string | null
-  doc_series_id?: number | null
-  doc_subseries_id?: number | null
-  doc_document_type_id?: number | null
-  archival_file_id?: number | null
-  file_number?: string | null
-  file_title?: string | null
-  permission: ArchivalFileAccessPermission
-  permission_label?: string
-  status: 'active' | 'inactive' | string
-  effective_status?: 'active' | 'inactive' | 'expired' | 'scheduled' | string
-  is_effective?: boolean
-  scope_label?: string | null
-  doc_series_label?: string | null
-  doc_subseries_label?: string | null
-  doc_document_type_label?: string | null
-  starts_at?: string | null
-  ends_at?: string | null
-  authorized_by?: string | null
-  authorized_by_user_id?: number | null
-  created_at?: string | null
-  updated_at?: string | null
-}
-
-export const ARCHIVAL_FILE_ACCESS_PERMISSION_LABELS: Record<ArchivalFileAccessPermission, string> = {
-  view: 'Ver',
-  create: 'Crear',
-  edit: 'Editar',
-  download: 'Descargar',
-  attach: 'Anexar documentos',
-  close: 'Cerrar expediente',
-  transfer: 'Transferir',
-  void: 'Eliminar/anular',
-}
 
 export const ARCHIVAL_PHASE_TARGET_LABELS: Record<ArchivalPhaseTarget, string> = {
   management: 'Archivo de gestión',

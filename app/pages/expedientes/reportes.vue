@@ -17,7 +17,6 @@ const archivalApi = useArchivalFileApi()
 const { hasPermission } = usePermissions()
 
 const summary = ref<Record<string, number> | null>(null)
-const accessRows = ref<Array<Record<string, unknown>>>([])
 const alerts = ref<ArchivalFileAlert[]>([])
 const retentionRows = ref<Array<Record<string, unknown>>>([])
 const incompleteRows = ref<Array<Record<string, unknown>>>([])
@@ -38,15 +37,13 @@ async function load() {
   loading.value = true
 
   try {
-    const [summaryData, accessData, alertsData, retentionData, incompleteData] = await Promise.all([
+    const [summaryData, alertsData, retentionData, incompleteData] = await Promise.all([
       archivalApi.fetchReportsSummary(),
-      archivalApi.fetchAccessControlReport(),
       archivalApi.fetchAlertsReport({ per_page: 50 }),
       archivalApi.fetchRetentionReport({ per_page: 25, upcoming_only: 1 }),
       archivalApi.fetchIncompleteReport({ per_page: 25 }),
     ])
     summary.value = summaryData
-    accessRows.value = accessData
     alerts.value = alertsData.data
     retentionRows.value = retentionData.data
     incompleteRows.value = incompleteData.data
@@ -273,38 +270,6 @@ onMounted(() => load())
                     Ver
                   </Button>
                 </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Control de acceso documental</CardTitle>
-          <CardDescription>
-            Permisos por rol, usuario, serie o tipo documental.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div v-if="accessRows.length === 0" class="text-sm text-muted-foreground">
-            No hay permisos especiales registrados todavía.
-          </div>
-          <Table v-else>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Tipo expediente</TableHead>
-                <TableHead>Sujeto</TableHead>
-                <TableHead>Permiso</TableHead>
-                <TableHead>Estado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow v-for="row in accessRows" :key="String(row.id)">
-                <TableCell>{{ row.file_type }}</TableCell>
-                <TableCell>{{ row.grantable_label }}</TableCell>
-                <TableCell>{{ row.permission_label }}</TableCell>
-                <TableCell>{{ row.status }}</TableCell>
               </TableRow>
             </TableBody>
           </Table>

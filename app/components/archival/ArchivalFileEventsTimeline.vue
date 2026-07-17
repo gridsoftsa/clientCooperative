@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { ArchivalFileEvent } from '~/types/archival-file'
-import { archivalFileEventTypeLabel } from '~/constants/archival-file-events'
 
 const props = defineProps<{
   fileId: number
@@ -9,12 +8,19 @@ const props = defineProps<{
 const archivalApi = useArchivalFileApi()
 const loading = ref(true)
 const events = ref<ArchivalFileEvent[]>([])
+const meta = ref({ current_page: 1, last_page: 1, total: 0 })
 
-async function loadEvents() {
+async function loadEvents(page = 1) {
   loading.value = true
 
   try {
-    events.value = (await archivalApi.fetchEvents(props.fileId)).data
+    const response = await archivalApi.fetchEvents(props.fileId, page)
+    events.value = response.data
+    meta.value = {
+      current_page: response.meta.current_page,
+      last_page: response.meta.last_page,
+      total: response.meta.total,
+    }
   }
   catch {
     events.value = []
@@ -35,25 +41,39 @@ watch(() => props.fileId, () => loadEvents(), { immediate: true })
     <p v-else-if="events.length === 0" class="text-sm text-muted-foreground">
       Sin eventos registrados.
     </p>
-    <ul v-else class="space-y-3">
-      <li
-        v-for="event in events"
-        :key="event.id"
-        class="rounded-md border px-3 py-2 text-sm"
+    <template v-else>
+      <ul class="space-y-3">
+        <ArchivalFileEventListItem
+          v-for="event in events"
+          :key="event.id"
+          :event="event"
+        />
+      </ul>
+
+      <div
+        v-if="meta.last_page > 1"
+        class="flex items-center justify-between text-xs text-muted-foreground"
       >
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <span class="font-medium">{{ archivalFileEventTypeLabel(event.event_type) }}</span>
-          <span v-if="event.created_at" class="text-xs text-muted-foreground">
-            {{ new Date(event.created_at).toLocaleString('es-CO') }}
-          </span>
+        <span>{{ meta.total }} evento(s)</span>
+        <div class="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            :disabled="meta.current_page <= 1 || loading"
+            @click="loadEvents(meta.current_page - 1)"
+          >
+            Anterior
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            :disabled="meta.current_page >= meta.last_page || loading"
+            @click="loadEvents(meta.current_page + 1)"
+          >
+            Siguiente
+          </Button>
         </div>
-        <p v-if="event.description" class="mt-1 text-muted-foreground">
-          {{ event.description }}
-        </p>
-        <p v-if="event.created_by?.name" class="mt-1 text-xs text-muted-foreground">
-          Por: {{ event.created_by.name }}
-        </p>
-      </li>
-    </ul>
+      </div>
+    </template>
   </div>
 </template>

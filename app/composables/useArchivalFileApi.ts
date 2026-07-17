@@ -1,6 +1,5 @@
 import type {
   ArchivalFile,
-  ArchivalFileAccessGrant,
   ArchivalFileAlert,
   ArchivalFileAlertCatalog,
   ArchivalFileAlertSettingsPayload,
@@ -220,10 +219,43 @@ export function useArchivalFileApi() {
   }
 
   async function fetchEvents(fileId: number, page = 1) {
-    return await api<{
+    const res = await api<{
       data: import('~/types/archival-file').ArchivalFileEvent[]
-      meta: { current_page: number, last_page: number, per_page: number, total: number }
+      current_page?: number
+      last_page?: number
+      per_page?: number
+      total?: number
+      meta?: { current_page: number, last_page: number, per_page: number, total: number }
     }>(`/archival-files/${fileId}/events`, { query: { page } })
+
+    const meta = res.meta ?? {
+      current_page: res.current_page ?? 1,
+      last_page: res.last_page ?? 1,
+      per_page: res.per_page ?? 20,
+      total: res.total ?? res.data.length,
+    }
+
+    return { data: res.data, meta }
+  }
+
+  async function fetchGlobalEvents(query: Record<string, string | number> = {}) {
+    const res = await api<{
+      data: import('~/types/archival-file').ArchivalFileEvent[]
+      current_page?: number
+      last_page?: number
+      per_page?: number
+      total?: number
+      meta?: { current_page: number, last_page: number, per_page: number, total: number }
+    }>('/archival-files/events', { query })
+
+    const meta = res.meta ?? {
+      current_page: res.current_page ?? 1,
+      last_page: res.last_page ?? 1,
+      per_page: res.per_page ?? 25,
+      total: res.total ?? res.data.length,
+    }
+
+    return { data: res.data, meta }
   }
 
   async function uploadAreaDocument(formData: FormData) {
@@ -251,14 +283,6 @@ export function useArchivalFileApi() {
 
   async function fetchReportsSummary() {
     const res = await api<{ data: Record<string, number> }>('/archival-files/reports/summary')
-
-    return res.data
-  }
-
-  async function fetchAccessControlReport(fileTypeId?: number) {
-    const res = await api<{ data: Array<Record<string, unknown>> }>('/archival-files/reports/access-control', {
-      query: fileTypeId ? { archival_file_type_id: fileTypeId } : {},
-    })
 
     return res.data
   }
@@ -298,48 +322,6 @@ export function useArchivalFileApi() {
     )
 
     return res
-  }
-
-  async function fetchAccessGrantOptions() {
-    const res = await api<{
-      data: {
-        users: Array<{ id: number, name: string, email?: string }>
-        roles: Array<{ id: number, name: string }>
-        file_types: Array<{ id: number, name: string }>
-      }
-    }>('/archival-files/access-grants/options')
-
-    return res.data
-  }
-
-  async function fetchAccessGrants(query: Record<string, string | number> = {}) {
-    const res = await api<{ data: ArchivalFileAccessGrant[] }>('/archival-files/access-grants', { query })
-
-    return res.data
-  }
-
-  async function createAccessGrant(payload: Record<string, unknown>) {
-    const res = await api<{ data: ArchivalFileAccessGrant, message: string }>('/archival-files/access-grants', {
-      method: 'POST',
-      body: payload,
-    })
-
-    return res
-  }
-
-  async function updateAccessGrant(id: number, payload: Record<string, unknown>) {
-    const res = await api<{ data: ArchivalFileAccessGrant, message: string }>(`/archival-files/access-grants/${id}`, {
-      method: 'PUT',
-      body: payload,
-    })
-
-    return res
-  }
-
-  async function deleteAccessGrant(id: number) {
-    return await api<{ message: string }>(`/archival-files/access-grants/${id}`, {
-      method: 'DELETE',
-    })
   }
 
   async function createDocumentReference(fileId: number, payload: { referenced_document_id: number, archival_file_node_id?: number | null }) {
@@ -402,22 +384,17 @@ export function useArchivalFileApi() {
     fetchAreaRepository,
     fetchConsolidationMeta,
     fetchEvents,
+    fetchGlobalEvents,
     transferFile,
     uploadAreaDocument,
     fetchRetentionReport,
     fetchIncompleteReport,
     fetchReportsSummary,
-    fetchAccessControlReport,
     fetchFileAlerts,
     fetchAlertsReport,
     refreshAlerts,
     fetchAlertsCatalog,
     updateAlertsSettings,
-    fetchAccessGrants,
-    fetchAccessGrantOptions,
-    createAccessGrant,
-    updateAccessGrant,
-    deleteAccessGrant,
     createDocumentReference,
     replaceDocumentVersion,
     documentDownloadUrl,
