@@ -76,6 +76,7 @@ export interface ArchivalFile {
   entity_label?: string | null
   metadata_values?: Record<string, unknown> | null
   is_master_file: boolean
+  master_documents_count?: number
   is_frozen: boolean
   closed_at?: string | null
   file_type?: ArchivalFileType

@@ -136,6 +136,13 @@ onMounted(async () => {
 
       <div class="flex flex-wrap gap-2">
         <Button
+          variant="outline"
+          @click="router.push('/expedientes/maestros')"
+        >
+          <Icon name="i-lucide-files" class="mr-2 size-4" />
+          Documentos maestros
+        </Button>
+        <Button
           v-if="hasPermission('expedientes_area_ver')"
           variant="outline"
           @click="router.push('/expedientes/area')"

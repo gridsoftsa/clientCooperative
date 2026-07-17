@@ -113,6 +113,11 @@ export const navMenu: NavMenu[] = [
             permission: 'expedientes_ver',
           },
           {
+            title: 'Documentos maestros',
+            link: '/expedientes/maestros',
+            permission: 'expedientes_ver',
+          },
+          {
             title: 'Biblioteca institucional',
             link: '/biblioteca',
             permission: 'expedientes_biblioteca_ver',
