@@ -10,15 +10,20 @@ const props = defineProps<{
   node: ArchivalFileTreeNode
   metadataFields?: ArchivalMetadataFieldRow[]
   fileMetadataValues?: Record<string, unknown> | null
+  fileId?: number
+  canViewDocuments?: boolean
+  canDownloadDocuments?: boolean
 }>()
 
-const isDocument = computed(() =>
-  props.node.type === 'document' || props.node.type === 'document_reference',
-)
+const isDocument = computed(() => props.node.type === 'document')
+const isReference = computed(() => props.node.type === 'document_reference')
+const isDocumentLike = computed(() => isDocument.value || isReference.value)
 
 const isFolder = computed(() => props.node.type === 'folder')
-
 const isFileRoot = computed(() => props.node.type === 'file')
+
+const resolvedFileId = computed(() => props.fileId ?? props.node.archival_file_id ?? null)
+const documentId = computed(() => props.node.archival_file_document_id ?? null)
 
 const metadataEntries = computed(() => {
   if (isFileRoot.value) {
@@ -31,13 +36,21 @@ const metadataEntries = computed(() => {
 const structuralEntries = computed(() => {
   const entries: Array<{ label: string, value: string }> = []
 
-  if (isDocument.value) {
+  if (isDocumentLike.value) {
     if (props.node.doc_document_type_name) {
       entries.push({ label: 'Tipo documental', value: props.node.doc_document_type_name })
     }
 
-    if (props.node.version_number) {
-      entries.push({ label: 'Versión', value: `v${props.node.version_number}` })
+    if (isReference.value && props.node.referenced_version_number != null) {
+      const refTitle = props.node.referenced_title ? ` (${props.node.referenced_title})` : ''
+      entries.push({
+        label: 'Referencia fija',
+        value: `Versión ${props.node.referenced_version_number}${refTitle}`,
+      })
+    }
+    else if (props.node.version_number) {
+      const suffix = props.node.is_current_version === false ? ' (histórica)' : ' (vigente)'
+      entries.push({ label: 'Versión actual', value: `v${props.node.version_number}${suffix}` })
     }
 
     if (props.node.source_label) {
@@ -85,13 +98,21 @@ const structuralEntries = computed(() => {
   return entries
 })
 
+const showVersionHistory = computed(() =>
+  isDocument.value
+  && resolvedFileId.value != null
+  && documentId.value != null,
+)
+
 const hasContent = computed(() =>
-  structuralEntries.value.length > 0 || metadataEntries.value.length > 0,
+  structuralEntries.value.length > 0
+  || metadataEntries.value.length > 0
+  || showVersionHistory.value,
 )
 </script>
 
 <template>
-  <div v-if="hasContent" class="space-y-2 text-xs">
+  <div v-if="hasContent" class="space-y-3 text-xs">
     <dl v-if="structuralEntries.length" class="grid gap-1.5 sm:grid-cols-2">
       <div
         v-for="entry in structuralEntries"
@@ -126,6 +147,16 @@ const hasContent = computed(() =>
         </div>
       </dl>
     </div>
+
+    <ArchivalFileDocumentVersionHistory
+      v-if="showVersionHistory"
+      :file-id="resolvedFileId!"
+      :document-id="documentId!"
+      :document-title="node.name"
+      :can-view="canViewDocuments"
+      :can-download="canDownloadDocuments"
+      compact
+    />
   </div>
 
   <p v-else class="text-xs text-muted-foreground">

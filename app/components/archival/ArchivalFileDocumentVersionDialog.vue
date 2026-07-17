@@ -72,6 +72,7 @@ async function handleSubmit() {
         <DialogDescription>
           Reemplace la versión vigente de
           <span class="font-medium">{{ documentNode?.name ?? 'documento' }}</span>.
+          La versión anterior quedará en el historial como no vigente.
         </DialogDescription>
       </DialogHeader>
 

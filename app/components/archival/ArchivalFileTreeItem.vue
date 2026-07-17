@@ -126,7 +126,15 @@ function openExpediente() {
       <span class="min-w-0 flex-1 truncate text-sm">{{ node.name }}</span>
 
       <Badge v-if="node.is_reference" variant="secondary" class="text-xs">
-        Referencia
+        Ref. v{{ node.referenced_version_number ?? '?' }}
+      </Badge>
+      <Badge
+        v-if="isDocument && node.version_number"
+        :variant="node.is_current_version === false ? 'outline' : 'secondary'"
+        class="text-xs"
+      >
+        v{{ node.version_number }}
+        <span v-if="node.is_current_version !== false" class="sr-only"> vigente</span>
       </Badge>
       <Badge
         v-if="isDocument && node.source_label"
@@ -227,6 +235,9 @@ function openExpediente() {
         :node="node"
         :metadata-fields="metadataFields"
         :file-metadata-values="isFileRoot ? fileMetadataValues : undefined"
+        :file-id="fileId"
+        :can-view-documents="canView"
+        :can-download-documents="canDownload"
       />
     </div>
 

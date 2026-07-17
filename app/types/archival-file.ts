@@ -119,6 +119,10 @@ export interface ArchivalFileTreeNode {
   doc_document_type_id?: number
   doc_document_type_name?: string
   version_number?: number
+  is_current_version?: boolean
+  referenced_document_id?: number | null
+  referenced_version_number?: number | null
+  referenced_title?: string | null
   source?: string
   source_label?: string
   uploaded_by_name?: string
@@ -127,6 +131,23 @@ export interface ArchivalFileTreeNode {
   folio_start?: number | null
   folio_end?: number | null
   workflow_stage_key?: string | null
+}
+
+export interface ArchivalFileDocumentVersion {
+  id: number
+  version_number: number
+  is_current_version: boolean
+  original_name?: string | null
+  mime_type?: string | null
+  size_bytes?: number | null
+  uploaded_at?: string | null
+  uploaded_by?: { id: number, name: string } | null
+}
+
+export interface ArchivalFileDocumentVersionHistory {
+  master_document_id: number
+  title: string
+  versions: ArchivalFileDocumentVersion[]
 }
 
 export interface ArchivalFileRequiredDocumentsEvaluation {

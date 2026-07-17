@@ -342,6 +342,14 @@ export function useArchivalFileApi() {
     return res
   }
 
+  async function fetchDocumentVersions(fileId: number, documentId: number) {
+    const res = await api<{ data: import('~/types/archival-file').ArchivalFileDocumentVersionHistory }>(
+      `/archival-files/${fileId}/documents/${documentId}/versions`,
+    )
+
+    return res.data
+  }
+
   async function transferFile(id: number, payload: { target_phase: ArchivalPhaseTarget, reason?: string | null }) {
     const res = await api<{ data: ArchivalFile, message: string }>(`/archival-files/${id}/transfer`, {
       method: 'POST',
@@ -397,6 +405,7 @@ export function useArchivalFileApi() {
     updateAlertsSettings,
     createDocumentReference,
     replaceDocumentVersion,
+    fetchDocumentVersions,
     documentDownloadUrl,
     documentViewUrl,
   }
