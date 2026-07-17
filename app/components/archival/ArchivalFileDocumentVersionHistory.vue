@@ -13,11 +13,11 @@ const props = defineProps<{
 }>()
 
 const archivalApi = useArchivalFileApi()
+const { viewDocumentInNewTab } = useArchivalDocumentBlob()
 
 const loading = ref(false)
 const history = ref<ArchivalFileDocumentVersionHistory | null>(null)
-const previewOpen = ref(false)
-const previewVersion = ref<ArchivalFileDocumentVersion | null>(null)
+const viewingVersionId = ref<number | null>(null)
 
 const hasMultipleVersions = computed(() => (history.value?.versions.length ?? 0) > 1)
 
@@ -44,12 +44,8 @@ function formatWhen(iso: string | null | undefined): string {
   return new Date(iso).toLocaleString('es-CO')
 }
 
-function viewUrl(version: ArchivalFileDocumentVersion): string | null {
-  if (!props.canView) {
-    return null
-  }
-
-  return archivalApi.documentViewUrl(props.fileId, version.id)
+function canViewVersion(version: ArchivalFileDocumentVersion): boolean {
+  return props.canView === true
 }
 
 function downloadUrl(version: ArchivalFileDocumentVersion): string | null {
@@ -60,13 +56,22 @@ function downloadUrl(version: ArchivalFileDocumentVersion): string | null {
   return archivalApi.documentDownloadUrl(props.fileId, version.id)
 }
 
-function openPreview(version: ArchivalFileDocumentVersion) {
-  if (!viewUrl(version)) {
+async function openDocumentView(version: ArchivalFileDocumentVersion) {
+  if (!canViewVersion(version)) {
     return
   }
 
-  previewVersion.value = version
-  previewOpen.value = true
+  viewingVersionId.value = version.id
+
+  try {
+    await viewDocumentInNewTab(props.fileId, version.id)
+  }
+  catch {
+    toast.error('No se pudo abrir el documento.')
+  }
+  finally {
+    viewingVersionId.value = null
+  }
 }
 
 watch(
@@ -155,12 +160,13 @@ defineExpose({ reload: loadHistory })
 
             <div class="flex shrink-0 gap-1">
               <Button
-                v-if="viewUrl(version)"
+                v-if="canViewVersion(version)"
                 variant="ghost"
                 size="sm"
                 class="h-7 px-2 text-xs"
                 type="button"
-                @click="openPreview(version)"
+                :disabled="viewingVersionId === version.id"
+                @click="openDocumentView(version)"
               >
                 Ver
               </Button>
@@ -176,12 +182,5 @@ defineExpose({ reload: loadHistory })
         </div>
       </li>
     </ol>
-
-    <ArchivalFileDocumentPreviewDialog
-      v-model:open="previewOpen"
-      :title="`${documentTitle ?? history?.title ?? 'Documento'} (v${previewVersion?.version_number ?? ''})`"
-      :view-url="previewVersion ? viewUrl(previewVersion) : null"
-      :mime-type="previewVersion?.mime_type"
-    />
   </div>
 </template>

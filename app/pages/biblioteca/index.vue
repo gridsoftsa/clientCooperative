@@ -10,6 +10,7 @@ definePageMeta({
 
 const libraryApi = useInstitutionalLibraryApi()
 const archivalApi = useArchivalFileApi()
+const { viewDocumentInNewTab } = useArchivalDocumentBlob()
 const { hasPermission } = usePermissions()
 const { $api } = useNuxtApp()
 const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promise<T>
@@ -29,8 +30,8 @@ const orgUnits = ref<Array<{ id: number, name: string }>>([])
 
 const pagination = ref({ current_page: 1, last_page: 1, total: 0 })
 
-const previewOpen = ref(false)
 const detailOpen = ref(false)
+const previewing = ref(false)
 const selectedDocument = ref<InstitutionalLibraryDocument | null>(null)
 const documentDetail = ref<InstitutionalLibraryDocument | null>(null)
 
@@ -117,17 +118,23 @@ async function openDocument(document: InstitutionalLibraryDocument) {
   }
 }
 
-function openPreview(document: InstitutionalLibraryDocument) {
-  selectedDocument.value = document
-  previewOpen.value = true
-}
-
-function viewUrl(document: InstitutionalLibraryDocument | null) {
-  if (!document) {
-    return null
+async function openPreview(document: InstitutionalLibraryDocument) {
+  if (!document.archival_file_id) {
+    toast.error('No se pudo abrir el documento.')
+    return
   }
 
-  return archivalApi.documentViewUrl(document.archival_file_id, document.id)
+  previewing.value = true
+
+  try {
+    await viewDocumentInNewTab(document.archival_file_id, document.id)
+  }
+  catch (error) {
+    toast.error(error instanceof Error ? error.message : 'No se pudo abrir el documento.')
+  }
+  finally {
+    previewing.value = false
+  }
 }
 
 function downloadUrl(document: InstitutionalLibraryDocument | null) {
@@ -414,7 +421,7 @@ onMounted(async () => {
           </div>
 
           <div class="flex flex-wrap gap-2">
-            <Button type="button" @click="openPreview(documentDetail)">
+            <Button type="button" :disabled="previewing" @click="openPreview(documentDetail)">
               Visualizar
             </Button>
             <a
@@ -430,12 +437,5 @@ onMounted(async () => {
         </div>
       </DialogContent>
     </Dialog>
-
-    <ArchivalFileDocumentPreviewDialog
-      v-model:open="previewOpen"
-      :title="selectedDocument?.title ?? 'Documento'"
-      :view-url="viewUrl(selectedDocument)"
-      :mime-type="selectedDocument?.mime_type"
-    />
   </div>
 </template>

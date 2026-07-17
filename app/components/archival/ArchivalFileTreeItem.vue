@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type { ArchivalFileTreeNode } from '~/types/archival-file'
 
@@ -23,13 +24,13 @@ const emit = defineEmits<{
 }>()
 
 const archivalApi = useArchivalFileApi()
+const { viewDocumentInNewTab } = useArchivalDocumentBlob()
 const router = useRouter()
 
 const depth = computed(() => props.depth ?? 0)
 const expanded = ref(depth.value < 2)
 const detailsExpanded = ref(false)
-
-const previewOpen = ref(false)
+const viewing = ref(false)
 
 const hasChildren = computed(() => (props.node.children?.length ?? 0) > 0)
 const isDocument = computed(() => props.node.type === 'document' || props.node.type === 'document_reference')
@@ -72,13 +73,9 @@ const downloadHref = computed(() => {
   return archivalApi.documentDownloadUrl(documentFileId.value, documentId.value)
 })
 
-const viewUrl = computed(() => {
-  if (!props.canView || documentFileId.value === null || documentId.value === null) {
-    return null
-  }
-
-  return archivalApi.documentViewUrl(documentFileId.value, documentId.value)
-})
+const canViewDocument = computed(() =>
+  props.canView && documentFileId.value != null && documentId.value != null,
+)
 
 function handleNodeClick() {
   if (isFileNode.value && props.node.archival_file_id) {
@@ -90,9 +87,21 @@ function toggleDetails() {
   detailsExpanded.value = !detailsExpanded.value
 }
 
-function openPreview() {
-  if (viewUrl.value) {
-    previewOpen.value = true
+async function openDocumentView() {
+  if (!canViewDocument.value || documentFileId.value == null || documentId.value == null) {
+    return
+  }
+
+  viewing.value = true
+
+  try {
+    await viewDocumentInNewTab(documentFileId.value, documentId.value)
+  }
+  catch (error) {
+    toast.error(error instanceof Error ? error.message : 'No se pudo abrir el documento.')
+  }
+  finally {
+    viewing.value = false
   }
 }
 
@@ -164,12 +173,13 @@ function openExpediente() {
 
       <div v-if="isDocument" class="flex flex-wrap items-center justify-end gap-1">
         <Button
-          v-if="canView && viewUrl"
+          v-if="canViewDocument"
           variant="ghost"
           size="sm"
           class="h-7 px-2 text-xs"
           type="button"
-          @click.stop="openPreview"
+          :disabled="viewing"
+          @click.stop="openDocumentView"
         >
           Ver
         </Button>
@@ -240,14 +250,6 @@ function openExpediente() {
         :can-download-documents="canDownload"
       />
     </div>
-
-    <ArchivalFileDocumentPreviewDialog
-      v-if="isDocument"
-      v-model:open="previewOpen"
-      :title="node.name"
-      :view-url="viewUrl"
-      :mime-type="node.mime_type"
-    />
 
     <div v-if="expanded && hasChildren">
       <ArchivalFileTreeItem
