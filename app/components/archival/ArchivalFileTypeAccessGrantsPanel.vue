@@ -4,11 +4,19 @@ import {
   ARCHIVAL_FILE_ACCESS_GRANT_PERMISSION_OPTIONS,
   ARCHIVAL_FILE_ACCESS_GRANT_STATUS_LABELS,
 } from '~/constants/archival-access-grants'
+import type { ArchivalAccessGrantScopeState } from '~/components/archival/ArchivalFileAccessGrantScopeFields.vue'
 import type { ArchivalFileAccessGrant } from '~/types/archival-file'
+import {
+  archivalAccessGrantEffectiveBadgeVariant,
+  archivalAccessGrantEffectiveStatusLabel,
+  archivalAccessGrantScopeLabel,
+  archivalAccessGrantValidityLabel,
+} from '~/utils/archival-access-grant-display'
 
 const props = defineProps<{
   fileTypeId: number
   fileTypeName: string
+  orgUnitId?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +30,7 @@ const saving = ref(false)
 const grants = ref<ArchivalFileAccessGrant[]>([])
 const roles = ref<Array<{ id: number, name: string }>>([])
 const users = ref<Array<{ id: number, name: string, email?: string }>>([])
+const statusFilter = ref<'all' | 'active' | 'inactive'>('all')
 
 const dialogOpen = ref(false)
 const editingId = ref<number | null>(null)
@@ -31,6 +40,16 @@ const form = reactive({
   grantable_id: '',
   permission: 'view' as ArchivalFileAccessGrant['permission'],
   status: 'active' as 'active' | 'inactive',
+})
+
+const scopeForm = reactive<ArchivalAccessGrantScopeState>({
+  archival_file_type_id: '',
+  doc_series_id: '',
+  doc_subseries_id: '',
+  doc_document_type_id: '',
+  archival_file_id: '',
+  starts_at: '',
+  ends_at: '',
 })
 
 function grantStatusLabel(status: string): string {
@@ -43,12 +62,32 @@ function grantSubjectLabel(grant: ArchivalFileAccessGrant): string {
   return `${kind}: ${grant.grantable_label ?? `#${grant.grantable_id}`}`
 }
 
+function isoToDateInput(value?: string | null): string {
+  if (!value) {
+    return ''
+  }
+
+  return value.slice(0, 10)
+}
+
+function buildQuery(): Record<string, string | number> {
+  const query: Record<string, string | number> = {
+    archival_file_type_id: props.fileTypeId,
+  }
+
+  if (statusFilter.value !== 'all') {
+    query.status = statusFilter.value
+  }
+
+  return query
+}
+
 async function loadGrants() {
   loading.value = true
 
   try {
     const [grantsData, options] = await Promise.all([
-      archivalApi.fetchAccessGrants({ archival_file_type_id: props.fileTypeId }),
+      archivalApi.fetchAccessGrants(buildQuery()),
       archivalApi.fetchAccessGrantOptions(),
     ])
 
@@ -65,12 +104,23 @@ async function loadGrants() {
   }
 }
 
+function resetScopeForm() {
+  scopeForm.archival_file_type_id = String(props.fileTypeId)
+  scopeForm.doc_series_id = ''
+  scopeForm.doc_subseries_id = ''
+  scopeForm.doc_document_type_id = ''
+  scopeForm.archival_file_id = ''
+  scopeForm.starts_at = ''
+  scopeForm.ends_at = ''
+}
+
 function resetForm() {
   editingId.value = null
   form.grantable_type = 'role'
   form.grantable_id = ''
   form.permission = 'view'
   form.status = 'active'
+  resetScopeForm()
 }
 
 function openCreate() {
@@ -84,7 +134,30 @@ function openEdit(grant: ArchivalFileAccessGrant) {
   form.grantable_id = String(grant.grantable_id)
   form.permission = grant.permission
   form.status = grant.status === 'inactive' ? 'inactive' : 'active'
+  scopeForm.archival_file_type_id = String(props.fileTypeId)
+  scopeForm.doc_series_id = grant.doc_series_id ? String(grant.doc_series_id) : ''
+  scopeForm.doc_subseries_id = grant.doc_subseries_id ? String(grant.doc_subseries_id) : ''
+  scopeForm.doc_document_type_id = grant.doc_document_type_id ? String(grant.doc_document_type_id) : ''
+  scopeForm.archival_file_id = grant.archival_file_id ? String(grant.archival_file_id) : ''
+  scopeForm.starts_at = isoToDateInput(grant.starts_at)
+  scopeForm.ends_at = isoToDateInput(grant.ends_at)
   dialogOpen.value = true
+}
+
+function buildPayload(): Record<string, unknown> {
+  return {
+    grantable_type: form.grantable_type,
+    grantable_id: Number(form.grantable_id),
+    permission: form.permission,
+    status: form.status,
+    archival_file_type_id: props.fileTypeId,
+    doc_series_id: scopeForm.doc_series_id ? Number(scopeForm.doc_series_id) : null,
+    doc_subseries_id: scopeForm.doc_subseries_id ? Number(scopeForm.doc_subseries_id) : null,
+    doc_document_type_id: scopeForm.doc_document_type_id ? Number(scopeForm.doc_document_type_id) : null,
+    archival_file_id: scopeForm.archival_file_id ? Number(scopeForm.archival_file_id) : null,
+    starts_at: scopeForm.starts_at || null,
+    ends_at: scopeForm.ends_at || null,
+  }
 }
 
 async function handleSave() {
@@ -95,21 +168,13 @@ async function handleSave() {
 
   saving.value = true
 
-  const payload: Record<string, unknown> = {
-    grantable_type: form.grantable_type,
-    grantable_id: Number(form.grantable_id),
-    permission: form.permission,
-    status: form.status,
-    archival_file_type_id: props.fileTypeId,
-  }
-
   try {
     if (editingId.value) {
-      await archivalApi.updateAccessGrant(editingId.value, payload)
+      await archivalApi.updateAccessGrant(editingId.value, buildPayload())
       toast.success('Regla de acceso actualizada.')
     }
     else {
-      await archivalApi.createAccessGrant(payload)
+      await archivalApi.createAccessGrant(buildPayload())
       toast.success('Regla de acceso registrada.')
     }
 
@@ -136,7 +201,7 @@ async function handleDelete(id: number) {
 }
 
 watch(
-  () => props.fileTypeId,
+  () => [props.fileTypeId, statusFilter.value] as const,
   () => loadGrants(),
   { immediate: true },
 )
@@ -150,15 +215,32 @@ watch(
       </p>
       <p class="mt-1 text-amber-900/90 dark:text-amber-100/90">
         Si registra reglas activas aquí, solo los roles o usuarios listados podrán ejercer el permiso indicado
-        sobre expedientes de este tipo. Sin reglas activas, aplican los permisos generales del sistema
-        (<code class="text-xs">expedientes_ver</code>, etc.).
+        sobre expedientes de este tipo. Sin reglas activas vigentes, aplican los permisos generales del sistema.
       </p>
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <p class="text-sm text-muted-foreground">
-        Permisos documentales por rol o usuario para este tipo de expediente.
-      </p>
+      <div class="flex flex-wrap items-end gap-3">
+        <div class="space-y-2">
+          <Label>Estado del permiso</Label>
+          <Select v-model="statusFilter">
+            <SelectTrigger class="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                Todos
+              </SelectItem>
+              <SelectItem value="active">
+                Activos
+              </SelectItem>
+              <SelectItem value="inactive">
+                Inactivos
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
       <div class="flex flex-wrap gap-2">
         <NuxtLink to="/expedientes/acceso">
           <Button variant="outline" size="sm" type="button">
@@ -189,7 +271,9 @@ watch(
         <TableHeader>
           <TableRow>
             <TableHead>Sujeto</TableHead>
+            <TableHead>Alcance TRD</TableHead>
             <TableHead>Permiso</TableHead>
+            <TableHead>Vigencia</TableHead>
             <TableHead>Estado</TableHead>
             <TableHead class="text-right">
               Acciones
@@ -199,10 +283,16 @@ watch(
         <TableBody>
           <TableRow v-for="grant in grants" :key="grant.id">
             <TableCell>{{ grantSubjectLabel(grant) }}</TableCell>
+            <TableCell class="max-w-xs text-sm text-muted-foreground">
+              {{ archivalAccessGrantScopeLabel(grant) }}
+            </TableCell>
             <TableCell>{{ grant.permission_label ?? grant.permission }}</TableCell>
+            <TableCell class="text-xs text-muted-foreground">
+              {{ archivalAccessGrantValidityLabel(grant) }}
+            </TableCell>
             <TableCell>
-              <Badge :variant="grant.status === 'active' ? 'default' : 'secondary'">
-                {{ grantStatusLabel(grant.status) }}
+              <Badge :variant="archivalAccessGrantEffectiveBadgeVariant(grant)">
+                {{ archivalAccessGrantEffectiveStatusLabel(grant) }}
               </Badge>
             </TableCell>
             <TableCell class="text-right">
@@ -225,11 +315,11 @@ watch(
     </div>
 
     <Dialog v-model:open="dialogOpen">
-      <DialogContent>
+      <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{{ editingId ? 'Editar regla de acceso' : 'Nueva regla de acceso' }}</DialogTitle>
           <DialogDescription>
-            Aplica solo al tipo «{{ fileTypeName }}».
+            Aplica solo al tipo «{{ fileTypeName }}». Puede acotar por serie, subserie o tipo documental.
           </DialogDescription>
         </DialogHeader>
 
@@ -272,6 +362,15 @@ watch(
             </Select>
           </div>
 
+          <ArchivalFileAccessGrantScopeFields
+            :scope="scopeForm"
+            :file-types="[]"
+            :lock-file-type-id="fileTypeId"
+            :org-unit-id="orgUnitId"
+            :show-file-type-select="false"
+            show-file-picker
+          />
+
           <div class="space-y-2">
             <Label>Permiso documental</Label>
             <Select v-model="form.permission">
@@ -291,7 +390,7 @@ watch(
           </div>
 
           <div class="space-y-2">
-            <Label>Estado</Label>
+            <Label>Estado del permiso</Label>
             <Select v-model="form.status">
               <SelectTrigger>
                 <SelectValue />

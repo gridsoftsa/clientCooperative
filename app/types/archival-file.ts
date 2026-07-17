@@ -313,6 +313,12 @@ export interface ArchivalFileAccessGrant {
   permission: ArchivalFileAccessPermission
   permission_label?: string
   status: 'active' | 'inactive' | string
+  effective_status?: 'active' | 'inactive' | 'expired' | 'scheduled' | string
+  is_effective?: boolean
+  scope_label?: string | null
+  doc_series_label?: string | null
+  doc_subseries_label?: string | null
+  doc_document_type_label?: string | null
   starts_at?: string | null
   ends_at?: string | null
   authorized_by?: string | null

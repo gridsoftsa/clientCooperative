@@ -215,6 +215,7 @@ onMounted(() => load())
                 v-if="fileType"
                 :file-type-id="fileType.id"
                 :file-type-name="fileType.name"
+                :org-unit-id="fileType.org_unit_id"
                 @update:count="accessGrantsCount = $event"
               />
             </CardContent>
