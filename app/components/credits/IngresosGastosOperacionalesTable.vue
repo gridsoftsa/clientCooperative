@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * Ingresos y Gastos Operacionales (plantilla comercial).
- * Tabla: ARRIENDO, GASTOS SERVICIOS, GASTOS IMPREVISTOS, GASTOS EMPLEADOS,
+ * Tabla editable (misma caja de texto / money input que Productos):
+ * ARRIENDO, GASTOS SERVICIOS, GASTOS IMPREVISTOS, GASTOS EMPLEADOS,
  * TOTAL GASTOS DEL NEGOCIO, TOTAL INGRESOS NETOS NEGOCIO.
  */
 
@@ -10,10 +11,13 @@ const props = withDefaults(
     formData: Record<string, unknown>
     invalidFieldKeys?: string[]
     fieldDomIdPrefix?: string
+    /** Solo lectura (p. ej. modo solo documentos tras devolución). */
+    disabled?: boolean
   }>(),
   {
     invalidFieldKeys: () => [],
     fieldDomIdPrefix: '',
+    disabled: false,
   },
 )
 
@@ -33,6 +37,9 @@ const emit = defineEmits<{
 }>()
 
 function setField(key: string, value: unknown) {
+  if (props.disabled) {
+    return
+  }
   emit('update:field', { key, value })
 }
 
@@ -75,8 +82,8 @@ function formatMoney(value: number | null | undefined): string {
 </script>
 
 <template>
-  <div class="overflow-x-auto rounded-lg border border-border shadow-sm">
-    <table class="w-full min-w-[380px] table-fixed border-collapse text-sm">
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[380px] border-collapse text-sm">
       <colgroup>
         <col>
         <col style="width: 12rem">
@@ -85,7 +92,7 @@ function formatMoney(value: number | null | undefined): string {
         <tr>
           <th
             colspan="2"
-            class="border border-border bg-[#f4d03f] px-4 py-3 text-left font-bold uppercase tracking-wide text-black"
+            class="border border-black bg-[#f4d03f] px-3 py-2 text-left font-bold uppercase tracking-wide text-black"
           >
             Gastos operacionales
           </th>
@@ -95,37 +102,38 @@ function formatMoney(value: number | null | undefined): string {
         <tr
           v-for="row in gastosRows"
           :key="row.key"
-          class="bg-background transition-colors hover:bg-muted/20"
+          class="bg-white"
         >
-          <td class="border border-border px-4 py-2.5 font-medium text-foreground">
+          <td class="border border-black px-3 py-2 font-medium text-black">
             {{ row.label }}
           </td>
-          <td class="border border-border p-1.5">
+          <td class="border border-black p-1">
             <CreditsBaseMoneyInput
               :model-value="(props.formData[row.key] as number | null) ?? null"
-              placeholder="0"
+              placeholder="-"
               class="w-full"
               :input-id="domFieldId(row.key)"
-              :invalid="isInvalidKey(row.key)"
+              :invalid="isInvalidKey(row.key) && !disabled"
+              :disabled="disabled"
               @update:model-value="setField(row.key, $event)"
             />
           </td>
         </tr>
-        <tr class="bg-muted/50">
-          <td class="border border-border px-4 py-2.5 font-semibold text-foreground">
+        <tr class="bg-muted/40">
+          <td class="border border-black px-3 py-2 font-semibold text-black">
             Total gastos del negocio
           </td>
-          <td class="border border-border px-4 py-2.5 text-right tabular-nums font-semibold text-foreground">
+          <td class="border border-black px-3 py-2 text-right tabular-nums font-semibold text-black">
             {{ formatMoney(totalGastosNegocio) }}
           </td>
         </tr>
       </tbody>
       <tfoot>
         <tr class="bg-[#f4d03f]">
-          <td class="border border-border px-4 py-3 font-bold uppercase text-black">
+          <td class="border border-black px-3 py-2 font-bold uppercase text-black">
             Total ingresos netos negocio
           </td>
-          <td class="border border-border px-4 py-3 text-right tabular-nums font-bold text-black">
+          <td class="border border-black px-3 py-2 text-right tabular-nums font-bold text-black">
             {{ formatMoney(totalIngresosNetosNegocio) }}
           </td>
         </tr>

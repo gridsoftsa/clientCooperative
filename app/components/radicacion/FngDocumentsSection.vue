@@ -220,7 +220,8 @@ function pendingFileFor(key: string): File | undefined {
 function hasSatisfiedUploadForKey(key: string): boolean {
   const id = docIdsByKey.value[key]
   if (typeof id === 'number' && id >= 1) {
-    return true
+    // ID huérfano (archivo reemplazado/eliminado sin actualizar el mapa): tratar como vacío.
+    return Boolean(docMetaForKey(key))
   }
   if (pendingFileFor(key) instanceof File) {
     return true

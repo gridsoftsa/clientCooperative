@@ -684,6 +684,7 @@ const inputBaseClass =
             :form-data="formData"
             :invalid-field-keys="invalidFieldKeys"
             :field-dom-id-prefix="fieldDomIdPrefix"
+            :disabled="readOnlyForm"
             @update:field="({ key, value }) => (formData[key] = value)"
           />
         </div>
