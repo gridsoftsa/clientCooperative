@@ -38,6 +38,7 @@ const form = ref({
   extension: '',
   document_type: 'CC',
   document_number: '',
+  date_of_birth: '',
   is_active: true,
 })
 
@@ -164,6 +165,7 @@ async function handleSubmit() {
         extension: form.value.extension.trim() || undefined,
         document_type: docType || undefined,
         document_number: docNumber || undefined,
+        date_of_birth: form.value.date_of_birth || undefined,
         is_active: form.value.is_active,
       },
     })
@@ -241,6 +243,10 @@ onMounted(async () => {
                   <div class="staff-field-doc space-y-2">
                     <Label for="doc" class="leading-snug">Número de documento</Label>
                     <Input id="doc" v-model="form.document_number" inputmode="numeric" />
+                  </div>
+                  <div class="staff-field-doc space-y-2">
+                    <Label for="dob" class="leading-snug">Fecha de nacimiento</Label>
+                    <Input id="dob" v-model="form.date_of_birth" type="date" />
                   </div>
                 </div>
               </section>

@@ -46,6 +46,7 @@ export interface OrgStaffListItem {
   extension?: string | null
   document_type?: string | null
   document_number?: string | null
+  date_of_birth?: string | null
   user_id?: number | null
   is_active: boolean
   created_at?: string

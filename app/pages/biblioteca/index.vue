@@ -5,7 +5,7 @@ import type { InstitutionalLibraryCategory, InstitutionalLibraryDocument } from 
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permission: 'expedientes_biblioteca_ver',
+  permissions: 'expedientes_biblioteca_ver',
 })
 
 const libraryApi = useInstitutionalLibraryApi()

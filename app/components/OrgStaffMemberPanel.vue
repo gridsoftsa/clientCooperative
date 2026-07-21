@@ -63,6 +63,7 @@ const datosForm = ref({
   extension: '',
   document_type: 'CC',
   document_number: '',
+  date_of_birth: '',
   is_active: true,
 })
 
@@ -309,6 +310,7 @@ async function loadStaffRecord() {
     extension: s.extension ?? '',
     document_type: s.document_type ?? 'CC',
     document_number: s.document_number ?? '',
+    date_of_birth: s.date_of_birth ? String(s.date_of_birth).slice(0, 10) : '',
     is_active: Boolean(s.is_active),
   }
 }
@@ -554,6 +556,7 @@ async function handleSubmitDatos() {
         extension: datosForm.value.extension.trim() || null,
         document_type: docType || null,
         document_number: docNumber || null,
+        date_of_birth: datosForm.value.date_of_birth || null,
         is_active: datosForm.value.is_active,
       },
     })
@@ -695,6 +698,15 @@ watch(
                         id="doc_p"
                         v-model="datosForm.document_number"
                         inputmode="numeric"
+                        :readonly="readOnly"
+                      />
+                    </div>
+                    <div class="staff-field-doc space-y-2">
+                      <Label for="dob_p" class="leading-snug">Fecha de nacimiento</Label>
+                      <Input
+                        id="dob_p"
+                        v-model="datosForm.date_of_birth"
+                        type="date"
                         :readonly="readOnly"
                       />
                     </div>
