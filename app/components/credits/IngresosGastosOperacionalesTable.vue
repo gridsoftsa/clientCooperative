@@ -7,17 +7,17 @@
  */
 import { formatPesosConSimbolo, onKeydownPesosOnly, parsePesosInput } from '~/composables/usePesosFormat'
 
-export const GASTOS_OPERACIONALES_ROWS = [
+const GASTOS_OPERACIONALES_ROWS = [
   { key: 'arriendo', conceptoDefault: 'Arriendo' },
   { key: 'gastos_servicios', conceptoDefault: 'Gastos servicios' },
   { key: 'gastos_imprevistos', conceptoDefault: 'Gastos imprevistos' },
   { key: 'gastos_empleados', conceptoDefault: 'Gastos empleados' },
 ] as const
 
-export type GastoOperacionalKey = (typeof GASTOS_OPERACIONALES_ROWS)[number]['key']
+type GastoOperacionalKey = (typeof GASTOS_OPERACIONALES_ROWS)[number]['key']
 
 /** Clave en formData donde se guardan los conceptos editables. */
-export const GASTOS_OPERACIONALES_CONCEPTOS_KEY = 'gastos_operacionales_conceptos'
+const GASTOS_OPERACIONALES_CONCEPTOS_KEY = 'gastos_operacionales_conceptos'
 
 const props = withDefaults(
   defineProps<{
