@@ -227,6 +227,14 @@ function buildInitialFormData(): Record<string, unknown> {
       for (const k of ['arriendo', 'gastos_servicios', 'gastos_imprevistos', 'gastos_empleados']) {
         if (data[k] === undefined) data[k] = null
       }
+      if (data.gastos_operacionales_conceptos === undefined || data.gastos_operacionales_conceptos === null) {
+        data.gastos_operacionales_conceptos = {
+          arriendo: 'Arriendo',
+          gastos_servicios: 'Gastos servicios',
+          gastos_imprevistos: 'Gastos imprevistos',
+          gastos_empleados: 'Gastos empleados',
+        }
+      }
       continue
     }
     if (section.layout === 'semanasDiasTable') {
