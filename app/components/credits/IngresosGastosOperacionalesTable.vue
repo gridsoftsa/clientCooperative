@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
  * Ingresos y Gastos Operacionales (plantilla comercial).
- * Tabla editable (misma caja de texto / money input que Productos):
- * ARRIENDO, GASTOS SERVICIOS, GASTOS IMPREVISTOS, GASTOS EMPLEADOS,
- * TOTAL GASTOS DEL NEGOCIO, TOTAL INGRESOS NETOS NEGOCIO.
+ * Arriendo / gastos: cajas de texto editables (captura del asesor, NO parametrización).
+ * Totales: calculados.
  */
+import { formatPesosConSimbolo, onKeydownPesosOnly, parsePesosInput } from '~/composables/usePesosFormat'
 
 const props = withDefaults(
   defineProps<{
@@ -48,7 +48,41 @@ const gastosRows = [
   { key: 'gastos_servicios', label: 'Gastos servicios' },
   { key: 'gastos_imprevistos', label: 'Gastos imprevistos' },
   { key: 'gastos_empleados', label: 'Gastos empleados' },
-]
+] as const
+
+function moneyDisplay(key: string): string {
+  const raw = props.formData[key]
+  if (raw === null || raw === undefined || raw === '') {
+    return ''
+  }
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return ''
+  }
+  return formatPesosConSimbolo(n)
+}
+
+function onMoneyInput(key: string, event: Event) {
+  if (props.disabled) {
+    return
+  }
+  const el = event.target as HTMLInputElement
+  const parsed = parsePesosInput(el.value)
+  setField(key, parsed ?? null)
+}
+
+function onMoneyBlur(key: string, event: Event) {
+  if (props.disabled) {
+    return
+  }
+  const el = event.target as HTMLInputElement
+  const parsed = parsePesosInput(el.value)
+  setField(key, parsed ?? null)
+  // Re-sincroniza display formateado
+  nextTick(() => {
+    el.value = moneyDisplay(key)
+  })
+}
 
 const totalGastosNegocio = computed(() => {
   let sum = 0
@@ -83,6 +117,9 @@ function formatMoney(value: number | null | undefined): string {
 
 <template>
   <div class="overflow-x-auto">
+    <p class="mb-2 text-xs text-muted-foreground">
+      Capture aquí los gastos del negocio (cajas editables). No vienen de la parametrización de la plantilla.
+    </p>
     <table class="w-full min-w-[380px] border-collapse text-sm">
       <colgroup>
         <col>
@@ -108,15 +145,26 @@ function formatMoney(value: number | null | undefined): string {
             {{ row.label }}
           </td>
           <td class="border border-black p-1">
-            <CreditsBaseMoneyInput
-              :model-value="(props.formData[row.key] as number | null) ?? null"
+            <input
+              :id="domFieldId(row.key)"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              :value="moneyDisplay(row.key)"
               placeholder="-"
-              class="w-full"
-              :input-id="domFieldId(row.key)"
-              :invalid="isInvalidKey(row.key) && !disabled"
               :disabled="disabled"
-              @update:model-value="setField(row.key, $event)"
-            />
+              :aria-invalid="isInvalidKey(row.key) && !disabled"
+              :class="[
+                'h-9 w-full rounded border bg-transparent px-2 py-1 text-right text-sm tabular-nums',
+                disabled ? 'cursor-not-allowed opacity-50' : '',
+                isInvalidKey(row.key) && !disabled
+                  ? '!border-destructive ring-2 ring-destructive/50'
+                  : 'border-input',
+              ]"
+              @keydown="onKeydownPesosOnly"
+              @input="onMoneyInput(row.key, $event)"
+              @blur="onMoneyBlur(row.key, $event)"
+            >
           </td>
         </tr>
         <tr class="bg-muted/40">

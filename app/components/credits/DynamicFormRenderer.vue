@@ -321,14 +321,16 @@ const avesCantidadDiariaExceedsCubetas = computed(() =>
 )
 
 watch(
-  () => [props.schema, props.initialData],
+  () => props.schema,
   () => {
     const next = buildInitialFormData()
+    Object.keys(formData).forEach((k) => {
+      delete formData[k]
+    })
     Object.keys(next).forEach((k) => {
       formData[k] = next[k]
     })
   },
-  { deep: true },
 )
 
 function emitFormData() {

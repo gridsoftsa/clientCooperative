@@ -560,7 +560,22 @@ export const RADICACION_EDITABLE_CONFIG_KEYS: Record<string, string[]> = {
   'transporte-carga': ['cantidad_viajes_semana'],
   'cerdos-cria': ['precio_cerdo_destetado'],
   'cerdos-ceba': ['precio_kg_pie'],
+  /** Gastos del negocio: captura del asesor en radicación, no valores de plantilla. */
+  'plantilla-comercial': [
+    'arriendo',
+    'gastos_servicios',
+    'gastos_imprevistos',
+    'gastos_empleados',
+  ],
 }
+
+/** Claves de plantilla comercial que NUNCA deben venir de flat_data / parametrización. */
+export const PLANTILLA_COMERCIAL_RADICACION_ONLY_KEYS = [
+  'arriendo',
+  'gastos_servicios',
+  'gastos_imprevistos',
+  'gastos_empleados',
+] as const
 
 /** Devuelve las claves de campos que provienen de la configuración (valores estandarizados, etc.). */
 export function getConfigFieldKeys(templateKey: string): string[] {
