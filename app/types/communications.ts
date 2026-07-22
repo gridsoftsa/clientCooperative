@@ -29,6 +29,7 @@ export interface CommunicationAttachment {
   size_bytes?: number | null
   external_url?: string | null
   download_url?: string | null
+  view_url?: string | null
 }
 
 export interface CommunicationItem {
@@ -36,6 +37,7 @@ export interface CommunicationItem {
   type: CommunicationTypeValue
   type_label: string
   status: CommunicationStatusValue
+  status_label?: string
   title: string
   summary?: string | null
   body?: string | null

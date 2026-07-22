@@ -11,6 +11,9 @@ definePageMeta({
 const communicationsApi = useCommunicationsApi()
 const { hasPermission } = usePermissions()
 const { user } = useAuth()
+const route = useRoute()
+const { viewAttachmentInNewTab } = useCommunicationAttachmentView()
+const openingAttachmentId = ref<number | null>(null)
 
 const loading = ref(false)
 const search = ref('')
@@ -30,6 +33,13 @@ const dashboard = ref<{
 const canCreate = computed(() => hasPermission('comunicados_crear'))
 const userName = computed(() => user.value?.name?.split(' ')[0] ?? 'colaborador')
 
+const listModeOptions = [
+  { value: 'recent', label: 'Más recientes' },
+  { value: 'priority', label: 'Prioridad' },
+  { value: 'unread', label: 'No leídos' },
+  { value: 'read', label: 'Leídos' },
+] as const
+
 const typeTabs: Array<{ value: string, label: string }> = [
   { value: '', label: 'Todos' },
   { value: 'notice', label: 'Avisos' },
@@ -41,12 +51,35 @@ const typeTabs: Array<{ value: string, label: string }> = [
 
 function typeBadgeClass(type: CommunicationTypeValue) {
   switch (type) {
-    case 'notice': return 'bg-amber-50 text-amber-800 border-amber-200'
-    case 'news': return 'bg-sky-50 text-sky-800 border-sky-200'
-    case 'circular': return 'bg-violet-50 text-violet-800 border-violet-200'
-    case 'event': return 'bg-emerald-50 text-emerald-800 border-emerald-200'
-    case 'birthday': return 'bg-rose-50 text-rose-800 border-rose-200'
-    default: return ''
+    case 'notice':
+      return 'border-amber-300 bg-amber-100 text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100'
+    case 'news':
+      return 'border-sky-300 bg-sky-100 text-sky-950 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-100'
+    case 'circular':
+      return 'border-violet-300 bg-violet-100 text-violet-950 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-100'
+    case 'event':
+      return 'border-emerald-300 bg-emerald-100 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100'
+    case 'birthday':
+      return 'border-rose-300 bg-rose-100 text-rose-950 dark:border-rose-700 dark:bg-rose-950 dark:text-rose-100'
+    case 'announcement':
+      return 'border-teal-300 bg-teal-100 text-teal-950 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-100'
+    default:
+      return 'border-border bg-muted text-foreground'
+  }
+}
+
+function statusBadgeClass(status?: string) {
+  switch (status) {
+    case 'scheduled':
+      return 'border-blue-300 bg-blue-100 text-blue-950 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100'
+    case 'draft':
+      return 'border-slate-300 bg-slate-100 text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100'
+    case 'expired':
+      return 'border-orange-300 bg-orange-100 text-orange-950 dark:border-orange-700 dark:bg-orange-950 dark:text-orange-100'
+    case 'published':
+      return 'border-emerald-300 bg-emerald-100 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100'
+    default:
+      return 'border-border bg-muted text-foreground'
   }
 }
 
@@ -54,6 +87,9 @@ function relativeTime(value?: string | null) {
   if (!value) return ''
   const date = new Date(value)
   const diffMs = Date.now() - date.getTime()
+  if (diffMs < 0) {
+    return `Programado: ${date.toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+  }
   const hours = Math.floor(diffMs / 3600000)
   if (hours < 1) return 'Hace unos minutos'
   if (hours < 24) return `Hace ${hours} hora${hours === 1 ? '' : 's'}`
@@ -70,6 +106,42 @@ function formatEventDate(value?: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function cardClass(item: CommunicationItem) {
+  if (item.status === 'scheduled') {
+    return 'border-blue-300/60 bg-blue-500/5'
+  }
+  if (item.status === 'expired') {
+    return 'opacity-80 border-dashed'
+  }
+  if (item.status === 'published' && !item.is_read) {
+    return 'border-l-4 border-l-primary shadow-sm'
+  }
+  if (item.is_read) {
+    return 'opacity-75'
+  }
+  return ''
+}
+
+async function openAttachment(file: CommunicationItem['attachments'][number]) {
+  if (file.kind === 'link') {
+    if (file.external_url) {
+      window.open(file.external_url, '_blank', 'noopener,noreferrer')
+    }
+    return
+  }
+
+  openingAttachmentId.value = file.id
+  try {
+    await viewAttachmentInNewTab(file.id)
+  }
+  catch {
+    toast.error('No se pudo abrir el adjunto.')
+  }
+  finally {
+    openingAttachmentId.value = null
+  }
 }
 
 async function loadAll() {
@@ -107,7 +179,30 @@ function selectType(type: string) {
   loadAll()
 }
 
-onMounted(loadAll)
+function setListMode(mode: string) {
+  sort.value = mode
+  page.value = 1
+  loadAll()
+}
+
+function showUnreadOnly() {
+  setListMode('unread')
+}
+
+onMounted(() => {
+  if (route.query.unread === '1') {
+    sort.value = 'unread'
+  }
+  loadAll()
+})
+
+watch(() => route.query.unread, (value) => {
+  if (value === '1') {
+    sort.value = 'unread'
+  }
+  page.value = 1
+  loadAll()
+})
 </script>
 
 <template>
@@ -194,7 +289,7 @@ onMounted(loadAll)
           <div class="mt-2 text-3xl font-semibold">
             {{ dashboard?.stats.unread ?? 0 }}
           </div>
-          <NuxtLink class="mt-2 inline-block text-sm text-primary hover:underline" to="/comunicados?unread=1">
+          <NuxtLink class="mt-2 inline-block text-sm text-primary hover:underline" to="/comunicados?unread=1" @click.prevent="showUnreadOnly">
             ver más
           </NuxtLink>
         </CardContent>
@@ -216,19 +311,22 @@ onMounted(loadAll)
               {{ tab.label }}
             </Button>
           </div>
-          <Select v-model="sort" @update:model-value="page = 1; loadAll()">
-            <SelectTrigger class="w-44">
-              <SelectValue placeholder="Orden" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recent">
-                Más recientes
-              </SelectItem>
-              <SelectItem value="priority">
-                Prioridad
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <div class="flex flex-wrap items-center gap-2">
+            <Select :model-value="sort" @update:model-value="(value) => setListMode(String(value ?? 'recent'))">
+              <SelectTrigger class="w-44">
+                <SelectValue placeholder="Filtrar listado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="option in listModeOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div v-if="loading" class="py-16 text-center text-muted-foreground">
@@ -238,16 +336,46 @@ onMounted(loadAll)
           No hay comunicados para mostrar.
         </div>
         <div v-else class="space-y-4">
-          <Card v-for="item in feed" :key="item.id" class="overflow-hidden">
+          <Card
+            v-for="item in feed"
+            :key="item.id"
+            class="overflow-hidden transition-opacity"
+            :class="cardClass(item)"
+          >
             <CardContent class="space-y-4 p-5">
               <div class="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" :class="typeBadgeClass(item.type)">
                   {{ item.type_label }}
                 </Badge>
+                <Badge
+                  v-if="item.status && item.status !== 'published'"
+                  variant="outline"
+                  :class="statusBadgeClass(item.status)"
+                >
+                  {{ item.status_label || item.status }}
+                </Badge>
+                <Badge
+                  v-else-if="item.status === 'published' && item.is_read"
+                  variant="outline"
+                  class="border-border bg-muted text-muted-foreground"
+                >
+                  Visto
+                </Badge>
+                <Badge
+                  v-else-if="item.status === 'published' && !item.is_read"
+                  variant="outline"
+                  class="border-primary/40 bg-primary/15 text-primary dark:bg-primary/25 dark:text-primary-foreground"
+                >
+                  Nuevo
+                </Badge>
                 <span v-if="item.org_unit" class="text-sm text-muted-foreground">
                   {{ item.org_unit.name }}
                 </span>
-                <Badge v-if="item.is_featured" class="bg-emerald-50 text-emerald-700">
+                <Badge
+                  v-if="item.is_featured"
+                  variant="outline"
+                  class="border-emerald-300 bg-emerald-100 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100"
+                >
                   Destacado
                 </Badge>
                 <Badge v-if="item.requires_read_confirmation && !item.is_confirmed" variant="destructive">
@@ -256,7 +384,7 @@ onMounted(loadAll)
               </div>
 
               <div>
-                <h3 class="text-lg font-semibold">
+                <h3 class="text-lg font-semibold" :class="{ 'text-muted-foreground': item.is_read && item.status === 'published' }">
                   {{ item.title }}
                 </h3>
                 <p v-if="item.summary" class="mt-1 text-sm text-muted-foreground">
@@ -272,25 +400,29 @@ onMounted(loadAll)
               </div>
 
               <div v-if="item.attachments?.length" class="flex flex-wrap gap-2">
-                <a
+                <button
                   v-for="file in item.attachments"
                   :key="file.id"
-                  :href="file.kind === 'link' ? (file.external_url ?? '#') : (file.download_url ?? '#')"
-                  :target="file.kind === 'link' ? '_blank' : undefined"
-                  class="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-muted/50"
-                  rel="noopener noreferrer"
+                  type="button"
+                  class="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm hover:bg-muted/50 disabled:opacity-50"
+                  :disabled="openingAttachmentId === file.id"
+                  @click="openAttachment(file)"
                 >
                   <Icon :name="file.kind === 'link' ? 'i-lucide-link' : 'i-lucide-paperclip'" class="size-4" />
                   {{ file.title || file.original_name || 'Adjunto' }}
-                </a>
+                </button>
               </div>
 
               <div class="flex flex-wrap items-center justify-between gap-3 border-t pt-3">
                 <div class="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span>{{ relativeTime(item.published_at) }}</span>
-                  <span v-if="item.is_read" class="inline-flex items-center gap-1 text-emerald-600">
-                    <Icon name="i-lucide-check" class="size-3.5" />
+                  <span>{{ relativeTime(item.published_at || item.scheduled_at) }}</span>
+                  <span v-if="item.is_read" class="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <Icon name="i-lucide-check-check" class="size-3.5" />
                     Leído
+                  </span>
+                  <span v-else-if="item.status === 'published'" class="inline-flex items-center gap-1 text-primary">
+                    <Icon name="i-lucide-circle" class="size-2.5 fill-current" />
+                    Sin leer
                   </span>
                   <span v-else-if="item.confirmed_reads_count">
                     Leído por {{ item.confirmed_reads_count }} personas

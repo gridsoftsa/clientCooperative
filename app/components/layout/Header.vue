@@ -41,7 +41,8 @@ watch(() => route.path, (val) => {
       <Separator class="!bg-header-foreground/25" orientation="vertical" />
       <BaseBreadcrumbCustom :links="links" />
     </div>
-    <div class="ml-auto">
+    <div class="ml-auto flex items-center gap-1">
+      <LayoutNotificationsBell />
       <slot />
     </div>
   </header>

@@ -51,6 +51,7 @@ export function useCommunicationsApi() {
         org_units: Array<{ id: number, name: string }>
         org_offices: Array<{ id: number, name: string }>
         roles: Array<{ id: number, name: string }>
+        users: Array<{ id: number, name: string, email?: string | null }>
       }
     }>('/communications/meta/options')
     return res.data

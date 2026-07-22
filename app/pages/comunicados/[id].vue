@@ -14,6 +14,8 @@ const communicationsApi = useCommunicationsApi()
 const loading = ref(true)
 const confirming = ref(false)
 const item = ref<CommunicationItem | null>(null)
+const openingAttachmentId = ref<number | null>(null)
+const { viewAttachmentInNewTab } = useCommunicationAttachmentView()
 
 const id = computed(() => Number(route.params.id))
 
@@ -46,9 +48,46 @@ async function confirmRead() {
   }
 }
 
+async function openAttachment(file: NonNullable<CommunicationItem['attachments']>[number]) {
+  if (file.kind === 'link') {
+    if (file.external_url) {
+      window.open(file.external_url, '_blank', 'noopener,noreferrer')
+    }
+    return
+  }
+
+  openingAttachmentId.value = file.id
+  try {
+    await viewAttachmentInNewTab(file.id)
+  }
+  catch {
+    toast.error('No se pudo abrir el adjunto.')
+  }
+  finally {
+    openingAttachmentId.value = null
+  }
+}
+
 function formatDate(value?: string | null) {
   if (!value) return '—'
   return new Date(value).toLocaleString('es-CO')
+}
+
+function typeBadgeClass(type?: string) {
+  switch (type) {
+    case 'notice':
+      return 'border-amber-300 bg-amber-100 text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100'
+    case 'news':
+      return 'border-sky-300 bg-sky-100 text-sky-950 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-100'
+    case 'circular':
+      return 'border-violet-300 bg-violet-100 text-violet-950 dark:border-violet-700 dark:bg-violet-950 dark:text-violet-100'
+    case 'event':
+      return 'border-emerald-300 bg-emerald-100 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100'
+    case 'birthday':
+      return 'border-rose-300 bg-rose-100 text-rose-950 dark:border-rose-700 dark:bg-rose-950 dark:text-rose-100'
+    default:
+      return 'border-teal-300 bg-teal-100 text-teal-950 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-100'
+  }
 }
 
 onMounted(load)
@@ -70,10 +109,17 @@ onMounted(load)
     <template v-else-if="item">
       <div class="space-y-3">
         <div class="flex flex-wrap gap-2">
-          <Badge variant="outline">
+          <Badge
+            variant="outline"
+            :class="typeBadgeClass(item.type)"
+          >
             {{ item.type_label }}
           </Badge>
-          <Badge v-if="item.is_featured" class="bg-emerald-50 text-emerald-700">
+          <Badge
+            v-if="item.is_featured"
+            variant="outline"
+            class="border-emerald-300 bg-emerald-100 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100"
+          >
             Destacado
           </Badge>
           <Badge v-if="item.is_important" variant="secondary">
@@ -81,6 +127,13 @@ onMounted(load)
           </Badge>
           <Badge v-if="item.org_unit" variant="outline">
             {{ item.org_unit.name }}
+          </Badge>
+          <Badge
+            v-if="item.status && item.status !== 'published'"
+            variant="outline"
+            class="border-border bg-muted text-foreground"
+          >
+            {{ item.status_label || item.status }}
           </Badge>
         </div>
         <h1 class="text-3xl font-semibold tracking-tight">
@@ -125,17 +178,17 @@ onMounted(load)
           </CardTitle>
         </CardHeader>
         <CardContent class="space-y-2">
-          <a
+          <button
             v-for="file in item.attachments"
             :key="file.id"
-            :href="file.kind === 'link' ? (file.external_url ?? '#') : (file.download_url ?? '#')"
-            :target="file.kind === 'link' ? '_blank' : undefined"
-            class="flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted/50"
-            rel="noopener noreferrer"
+            type="button"
+            class="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm hover:bg-muted/50 disabled:opacity-50"
+            :disabled="openingAttachmentId === file.id"
+            @click="openAttachment(file)"
           >
-            <Icon :name="file.kind === 'link' ? 'i-lucide-link' : 'i-lucide-download'" class="size-4" />
+            <Icon :name="file.kind === 'link' ? 'i-lucide-link' : 'i-lucide-paperclip'" class="size-4" />
             {{ file.title || file.original_name || 'Adjunto' }}
-          </a>
+          </button>
         </CardContent>
       </Card>
 

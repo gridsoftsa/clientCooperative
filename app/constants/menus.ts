@@ -17,6 +17,11 @@ export const navMenu: NavMenu[] = [
         permission: 'comunicados_ver',
       },
       {
+        title: 'Notificaciones',
+        icon: 'i-lucide-bell',
+        link: '/notificaciones',
+      },
+      {
         title: 'Reportes',
         icon: 'i-lucide-chart-column',
         link: '/reportes',
