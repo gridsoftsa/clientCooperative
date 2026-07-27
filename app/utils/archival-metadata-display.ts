@@ -46,6 +46,11 @@ function formatMetadataPrimitive(value: unknown, dataType?: string): string {
   return String(value)
 }
 
+/** Formatea un valor de metadato (orden: dataType, value) para pantallas de ventanilla/archivo. */
+export function formatArchivalMetadataValue(dataType: string | undefined, value: unknown): string {
+  return formatMetadataPrimitive(value, dataType)
+}
+
 export function archivalMetadataDisplayEntries(
   values: Record<string, unknown> | null | undefined,
   fields?: ArchivalMetadataFieldRow[] | Array<{ code: string, name: string, data_type?: string }>,
