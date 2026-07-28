@@ -71,6 +71,10 @@ export interface OrgStaffListItem {
     org_office?: { id: number; name: string; code: string } | null
     org_unit?: { id: number; name: string; code: string } | null
     org_position?: { id: number; name: string; code: string } | null
+    acting_access?: {
+      role_names?: string[]
+      group_labels?: string[]
+    }
     org_delegation?: {
       id: number
       starts_on?: string | null
@@ -86,6 +90,21 @@ export interface OrgStaffListItem {
         first_last_name?: string | null
         second_last_name?: string | null
       } | null
+      access_grants?: Array<{
+        id: number
+        grant_type: string
+        role_id?: number | null
+        role_name?: string | null
+        org_work_group_member?: {
+          id: number
+          work_group?: { id: number; name: string; code: string; group_kind?: string | null } | null
+        } | null
+        org_work_group_role_assignment?: {
+          id: number
+          office_role?: string | null
+          work_group?: { id: number; name: string; code: string; group_kind?: string | null } | null
+        } | null
+      }>
     } | null
   }>
 }

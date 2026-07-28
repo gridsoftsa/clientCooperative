@@ -20,12 +20,31 @@ interface DelegationRow {
 const router = useRouter()
 const { $api } = useNuxtApp()
 const { hasAnyPermission } = usePermissions()
+const orgApi = useOrgStructureApi()
 
 const rows = ref<DelegationRow[]>([])
 const loading = ref(true)
+const openingReceiptId = ref<number | null>(null)
 
 function staffLabel(s: { first_name?: string; first_last_name?: string }): string {
   return [s.first_name, s.first_last_name].filter(Boolean).join(' ')
+}
+
+async function viewReceipt(id: number) {
+  if (openingReceiptId.value != null) {
+    return
+  }
+  openingReceiptId.value = id
+  try {
+    await orgApi.viewDelegationReceiptInNewTab(id)
+  }
+  catch (e: unknown) {
+    const err = e as { message?: string }
+    toast.error(err?.message || 'No se pudo abrir el comprobante PDF')
+  }
+  finally {
+    openingReceiptId.value = null
+  }
 }
 
 async function load() {
@@ -137,9 +156,25 @@ onMounted(() => {
                   </TableCell>
                   <TableCell class="text-right">
                     <div class="flex justify-end gap-1">
-                      <PermissionGate :any-permission="['estructura_org_editar', 'suplencias_delegaciones_editar']">
+                      <PermissionGate :any-permission="['estructura_org_ver', 'suplencias_delegaciones_ver']">
                         <Button
                           variant="outline"
+                          size="sm"
+                          class="h-8 gap-1.5 px-2 text-xs"
+                          :disabled="openingReceiptId === d.id"
+                          @click="viewReceipt(d.id)"
+                        >
+                          <Icon
+                            :name="openingReceiptId === d.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'"
+                            class="h-3.5 w-3.5"
+                            :class="openingReceiptId === d.id ? 'animate-spin' : ''"
+                          />
+                          PDF
+                        </Button>
+                      </PermissionGate>
+                      <PermissionGate :any-permission="['estructura_org_editar', 'suplencias_delegaciones_editar']">
+                        <Button
+                          variant="warning"
                           size="sm"
                           class="h-8 gap-1.5 px-2 text-xs"
                           @click="router.push(`/settings/organizational-structure/delegations/${d.id}/edit`)"

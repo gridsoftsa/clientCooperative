@@ -303,6 +303,99 @@ function staffPersonName(person: {
     .join(' ') || '—'
 }
 
+function parseAccessGrantsFromApi(raw: unknown): NonNullable<
+  NonNullable<NonNullable<OrgStaffListItem['active_temporary_charges']>[number]['org_delegation']>['access_grants']
+> {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw.flatMap((item) => {
+    if (item === null || typeof item !== 'object') {
+      return []
+    }
+    const g = item as Record<string, unknown>
+    const member = (g.org_work_group_member ?? g.orgWorkGroupMember ?? g.work_group_member ?? g.workGroupMember) as Record<string, unknown> | undefined
+    const officer = (g.org_work_group_role_assignment ?? g.orgWorkGroupRoleAssignment ?? g.work_group_role_assignment ?? g.workGroupRoleAssignment) as Record<string, unknown> | undefined
+    const memberGroup = (member?.work_group ?? member?.workGroup) as Record<string, unknown> | undefined
+    const officerGroup = (officer?.work_group ?? officer?.workGroup) as Record<string, unknown> | undefined
+
+    return [{
+      id: Number(g.id),
+      grant_type: String(g.grant_type ?? g.grantType ?? ''),
+      role_id: g.role_id != null || g.roleId != null ? Number(g.role_id ?? g.roleId) : null,
+      role_name: g.role_name != null || g.roleName != null ? String(g.role_name ?? g.roleName) : null,
+      org_work_group_member: member && member.id != null
+        ? {
+            id: Number(member.id),
+            work_group: memberGroup && memberGroup.id != null
+              ? {
+                  id: Number(memberGroup.id),
+                  name: String(memberGroup.name ?? ''),
+                  code: String(memberGroup.code ?? ''),
+                  group_kind: memberGroup.group_kind != null || memberGroup.groupKind != null
+                    ? String(memberGroup.group_kind ?? memberGroup.groupKind)
+                    : null,
+                }
+              : null,
+          }
+        : null,
+      org_work_group_role_assignment: officer && officer.id != null
+        ? {
+            id: Number(officer.id),
+            office_role: officer.office_role != null || officer.officeRole != null
+              ? String(officer.office_role ?? officer.officeRole)
+              : null,
+            work_group: officerGroup && officerGroup.id != null
+              ? {
+                  id: Number(officerGroup.id),
+                  name: String(officerGroup.name ?? ''),
+                  code: String(officerGroup.code ?? ''),
+                  group_kind: officerGroup.group_kind != null || officerGroup.groupKind != null
+                    ? String(officerGroup.group_kind ?? officerGroup.groupKind)
+                    : null,
+                }
+              : null,
+          }
+        : null,
+    }]
+  })
+}
+
+function backupGrantedRoleNames(
+  charge: NonNullable<OrgStaffListItem['active_temporary_charges']>[number],
+): string[] {
+  const fromSummary = charge.acting_access?.role_names ?? []
+  if (fromSummary.length > 0) {
+    return fromSummary
+  }
+  return (charge.org_delegation?.access_grants ?? [])
+    .filter(g => g.grant_type === 'role' && g.role_name)
+    .map(g => g.role_name!)
+}
+
+function backupGrantedGroupLabels(
+  charge: NonNullable<OrgStaffListItem['active_temporary_charges']>[number],
+): string[] {
+  const fromSummary = charge.acting_access?.group_labels ?? []
+  if (fromSummary.length > 0) {
+    return fromSummary
+  }
+  const names = new Set<string>()
+  for (const g of charge.org_delegation?.access_grants ?? []) {
+    const memberName = g.org_work_group_member?.work_group?.name
+    if (memberName) {
+      names.add(memberName)
+    }
+    const officerName = g.org_work_group_role_assignment?.work_group?.name
+    if (officerName) {
+      const role = g.org_work_group_role_assignment?.office_role
+      names.add(role ? `${officerName} (${role.replaceAll('_', ' ')})` : officerName)
+    }
+  }
+  return [...names]
+}
+
 function parseActiveTemporaryChargesFromApi(raw: unknown): NonNullable<OrgStaffListItem['active_temporary_charges']> {
   if (!Array.isArray(raw)) {
     return []
@@ -329,6 +422,18 @@ function parseActiveTemporaryChargesFromApi(raw: unknown): NonNullable<OrgStaffL
       org_delegation_id: a.org_delegation_id != null || a.orgDelegationId != null
         ? Number(a.org_delegation_id ?? a.orgDelegationId)
         : null,
+      acting_access: (() => {
+        const rawAccess = (a.acting_access ?? a.actingAccess) as Record<string, unknown> | undefined
+        if (!rawAccess || typeof rawAccess !== 'object') {
+          return undefined
+        }
+        const roleNames = rawAccess.role_names ?? rawAccess.roleNames
+        const groupLabels = rawAccess.group_labels ?? rawAccess.groupLabels
+        return {
+          role_names: Array.isArray(roleNames) ? roleNames.map(String) : [],
+          group_labels: Array.isArray(groupLabels) ? groupLabels.map(String) : [],
+        }
+      })(),
       org_delegation: delegationRaw && delegationRaw.id != null
         ? {
             id: Number(delegationRaw.id),
@@ -363,6 +468,9 @@ function parseActiveTemporaryChargesFromApi(raw: unknown): NonNullable<OrgStaffL
                   second_last_name: assignor.second_last_name != null ? String(assignor.second_last_name) : null,
                 }
               : null,
+            access_grants: parseAccessGrantsFromApi(
+              delegationRaw.access_grants ?? delegationRaw.accessGrants,
+            ),
           }
         : null,
     }]
@@ -615,16 +723,149 @@ async function loadAll() {
   }
 }
 
+type DatosRequiredField = 'first_name' | 'first_last_name' | 'user_id' | 'document_pair'
+type UbicacionRequiredField = 'org_office_id' | 'org_unit_id' | 'org_position_id' | 'effective_from'
+
+const datosSubmitAttempted = ref(false)
+const ubicacionSubmitAttempted = ref(false)
+
+const datosRequiredFieldIds: Record<Exclude<DatosRequiredField, 'document_pair'>, string> = {
+  first_name: 'fn_p',
+  first_last_name: 'fl_p',
+  user_id: 'usr_panel',
+}
+
+const ubicacionRequiredFieldIds: Record<UbicacionRequiredField, string> = {
+  org_office_id: 'of_p',
+  org_unit_id: 'un_p',
+  org_position_id: 'pos_p',
+  effective_from: 'eff_p',
+}
+
+function isDatosFieldMissing(field: DatosRequiredField): boolean {
+  if (field === 'first_name') {
+    return !datosForm.value.first_name.trim()
+  }
+  if (field === 'first_last_name') {
+    return !datosForm.value.first_last_name.trim()
+  }
+  if (field === 'user_id') {
+    return datosForm.value.user_id == null
+  }
+  const docNumber = datosForm.value.document_number.trim()
+  const docType = datosForm.value.document_type.trim()
+  return (docNumber !== '' && docType === '') || (docType !== '' && docNumber === '')
+}
+
+function firstMissingDatosField(): DatosRequiredField | null {
+  const order: DatosRequiredField[] = ['first_name', 'first_last_name', 'user_id', 'document_pair']
+  return order.find(field => isDatosFieldMissing(field)) ?? null
+}
+
+function isUbicacionFieldMissing(field: UbicacionRequiredField): boolean {
+  if (field === 'effective_from') {
+    return !ubicacionForm.value.effective_from.trim()
+  }
+  return ubicacionForm.value[field] == null
+}
+
+function firstMissingUbicacionField(): UbicacionRequiredField | null {
+  const order: UbicacionRequiredField[] = ['org_office_id', 'org_unit_id', 'org_position_id', 'effective_from']
+  return order.find(field => isUbicacionFieldMissing(field)) ?? null
+}
+
+function focusByElementId(id: string): void {
+  const root = document.getElementById(id)
+  if (!root) {
+    return
+  }
+  if (root instanceof HTMLInputElement || root instanceof HTMLTextAreaElement || root instanceof HTMLSelectElement) {
+    root.focus()
+    root.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
+  const focusable = root.querySelector('input,button,[tabindex]:not([tabindex="-1"])') as HTMLElement | null
+  focusable?.focus()
+  root.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+function fieldErrorClass(missing: boolean): string {
+  return missing ? 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/40' : ''
+}
+
+function multiselectErrorClass(missing: boolean): string {
+  return missing ? 'multiselect-roles multiselect-danger' : 'multiselect-roles'
+}
+
+function datosFieldErrorClass(field: Exclude<DatosRequiredField, 'document_pair'>): string {
+  return fieldErrorClass(datosSubmitAttempted.value && isDatosFieldMissing(field))
+}
+
+function datosMultiselectErrorClass(field: 'user_id' | 'document_type'): string {
+  if (field === 'user_id') {
+    return multiselectErrorClass(datosSubmitAttempted.value && isDatosFieldMissing('user_id'))
+  }
+  return multiselectErrorClass(datosSubmitAttempted.value && isDatosFieldMissing('document_pair') && !datosForm.value.document_type.trim())
+}
+
+function documentNumberErrorClass(): string {
+  return fieldErrorClass(
+    datosSubmitAttempted.value
+    && isDatosFieldMissing('document_pair')
+    && !datosForm.value.document_number.trim(),
+  )
+}
+
+function ubicacionMultiselectErrorClass(field: Exclude<UbicacionRequiredField, 'effective_from'>): string {
+  return multiselectErrorClass(ubicacionSubmitAttempted.value && isUbicacionFieldMissing(field))
+}
+
+function ubicacionFieldErrorClass(field: 'effective_from'): string {
+  return fieldErrorClass(ubicacionSubmitAttempted.value && isUbicacionFieldMissing(field))
+}
+
+watch(datosForm, () => {
+  if (!datosSubmitAttempted.value) {
+    return
+  }
+  if (!firstMissingDatosField()) {
+    datosSubmitAttempted.value = false
+  }
+}, { deep: true })
+
+watch(ubicacionForm, () => {
+  if (!ubicacionSubmitAttempted.value) {
+    return
+  }
+  if (!firstMissingUbicacionField()) {
+    ubicacionSubmitAttempted.value = false
+  }
+}, { deep: true })
+
 async function handleSubmitDatos() {
   if (props.readOnly) {
     return
   }
-  const docNumber = datosForm.value.document_number.trim()
-  const docType = datosForm.value.document_type.trim()
-  if ((docNumber && !docType) || (docType && !docNumber)) {
-    toast.error('Indique tipo y número de documento')
+
+  datosSubmitAttempted.value = true
+  const firstMissing = firstMissingDatosField()
+  if (firstMissing) {
+    const messages: Record<DatosRequiredField, string> = {
+      first_name: 'El primer nombre es obligatorio',
+      first_last_name: 'El primer apellido es obligatorio',
+      user_id: 'El vínculo con el usuario del sistema es obligatorio',
+      document_pair: 'Indique tipo y número de documento',
+    }
+    toast.error(messages[firstMissing])
+    await nextTick()
+    if (firstMissing === 'document_pair') {
+      focusByElementId(datosForm.value.document_type.trim() ? 'doc_p' : 'doc_type_p')
+    } else {
+      focusByElementId(datosRequiredFieldIds[firstMissing])
+    }
     return
   }
+
   savingDatos.value = true
   try {
     await $api(`/organizational-structure/org-staff/${props.staffId}`, {
@@ -638,8 +879,8 @@ async function handleSubmitDatos() {
         email: datosForm.value.email.trim() || null,
         phone: datosForm.value.phone.trim() || null,
         extension: datosForm.value.extension.trim() || null,
-        document_type: docType || null,
-        document_number: docNumber || null,
+        document_type: datosForm.value.document_type.trim() || null,
+        document_number: datosForm.value.document_number.trim() || null,
         date_of_birth: datosForm.value.date_of_birth || null,
         is_active: datosForm.value.is_active,
       },
@@ -647,7 +888,7 @@ async function handleSubmitDatos() {
     toast.success('Datos actualizados')
     router.push('/settings/organizational-structure/staff')
   } catch (e: any) {
-    toast.error(e?.data?.message || 'Error al guardar')
+    toast.error(e?.data?.message || e?.data?.errors?.user_id?.[0] || 'Error al guardar')
   } finally {
     savingDatos.value = false
   }
@@ -657,15 +898,22 @@ async function submitAssignment() {
   if (props.readOnly) {
     return
   }
-  if (
-    ubicacionForm.value.org_office_id == null
-    || ubicacionForm.value.org_unit_id == null
-    || ubicacionForm.value.org_position_id == null
-    || !ubicacionForm.value.effective_from
-  ) {
-    toast.error('Indique agencia, área, cargo y fecha de vigencia')
+
+  ubicacionSubmitAttempted.value = true
+  const firstMissing = firstMissingUbicacionField()
+  if (firstMissing) {
+    const messages: Record<UbicacionRequiredField, string> = {
+      org_office_id: 'La agencia principal es obligatoria',
+      org_unit_id: 'El área principal es obligatoria',
+      org_position_id: 'El cargo principal es obligatorio',
+      effective_from: 'La vigencia desde es obligatoria',
+    }
+    toast.error(messages[firstMissing])
+    await nextTick()
+    focusByElementId(ubicacionRequiredFieldIds[firstMissing])
     return
   }
+
   savingUbicacion.value = true
   try {
     await $api(`/organizational-structure/org-staff/${props.staffId}/assignments`, {
@@ -773,7 +1021,7 @@ watch(
                         placeholder="Seleccione…"
                         no-options-text="Sin opciones"
                         no-results-text="Sin coincidencias"
-                        class="multiselect-roles"
+                        :class="datosMultiselectErrorClass('document_type')"
                       />
                     </div>
                     <div class="staff-field-doc space-y-2">
@@ -783,6 +1031,7 @@ watch(
                         v-model="datosForm.document_number"
                         inputmode="numeric"
                         :readonly="readOnly"
+                        :class="documentNumberErrorClass()"
                       />
                     </div>
                     <div class="staff-field-doc space-y-2">
@@ -806,7 +1055,13 @@ watch(
                   <div class="flex flex-wrap gap-x-8 gap-y-5">
                     <div class="staff-field space-y-2">
                       <Label for="fn_p" class="leading-snug">Primer nombre <span v-if="!readOnly">*</span></Label>
-                      <Input id="fn_p" v-model="datosForm.first_name" :readonly="readOnly" :required="!readOnly" />
+                      <Input
+                        id="fn_p"
+                        v-model="datosForm.first_name"
+                        :readonly="readOnly"
+                        :required="!readOnly"
+                        :class="datosFieldErrorClass('first_name')"
+                      />
                     </div>
                     <div class="staff-field space-y-2">
                       <Label for="sn_p" class="leading-snug">Segundo nombre</Label>
@@ -814,7 +1069,13 @@ watch(
                     </div>
                     <div class="staff-field space-y-2">
                       <Label for="fl_p" class="leading-snug">Primer apellido <span v-if="!readOnly">*</span></Label>
-                      <Input id="fl_p" v-model="datosForm.first_last_name" :readonly="readOnly" :required="!readOnly" />
+                      <Input
+                        id="fl_p"
+                        v-model="datosForm.first_last_name"
+                        :readonly="readOnly"
+                        :required="!readOnly"
+                        :class="datosFieldErrorClass('first_last_name')"
+                      />
                     </div>
                     <div class="staff-field space-y-2">
                       <Label for="sl_p" class="leading-snug">Segundo apellido</Label>
@@ -850,14 +1111,14 @@ watch(
                   <section class="space-y-4">
                     <div class="space-y-1">
                       <p class="text-sm font-medium text-foreground">
-                        Vínculo con usuario del sistema
+                        Vínculo con usuario del sistema *
                       </p>
                       <p class="text-sm text-muted-foreground leading-relaxed">
-                        Opcional: asocie una cuenta existente sin funcionario vinculado o cree una nueva.
+                        Obligatorio: asocie una cuenta existente sin funcionario vinculado o cree una nueva.
                       </p>
                     </div>
                     <div class="space-y-2">
-                      <Label for="usr_panel" class="leading-snug">Usuario</Label>
+                      <Label for="usr_panel" class="leading-snug">Usuario *</Label>
                       <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                         <div class="staff-field-user min-w-0">
                           <Multiselect
@@ -869,11 +1130,11 @@ watch(
                             value-prop="value"
                             label="label"
                             :searchable="true"
-                            :can-clear="true"
-                            placeholder="Sin vínculo — busque usuario…"
+                            :can-clear="false"
+                            placeholder="Seleccione usuario…"
                             no-options-text="No hay usuarios sin funcionario vinculado"
                             no-results-text="Sin coincidencias"
-                            class="multiselect-roles"
+                            :class="datosMultiselectErrorClass('user_id')"
                           />
                         </div>
                         <PermissionGate permission="usuarios_crear">
@@ -888,6 +1149,12 @@ watch(
                           </Button>
                         </PermissionGate>
                       </div>
+                      <p
+                        v-if="datosSubmitAttempted && isDatosFieldMissing('user_id')"
+                        class="text-sm text-destructive"
+                      >
+                        Seleccione o cree un usuario del sistema.
+                      </p>
                     </div>
                   </section>
                 </template>
@@ -911,7 +1178,7 @@ watch(
                   v-else-if="!readOnly"
                   class="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground leading-relaxed"
                 >
-                  No tiene permiso para listar usuarios; puede guardar el funcionario sin vínculo y asociarlo después, si corresponde.
+                  No tiene permiso para listar usuarios; el vínculo con usuario del sistema es obligatorio para guardar.
                 </p>
               </CardContent>
             </Card>
@@ -1002,7 +1269,7 @@ watch(
                 Backup vigente
               </CardTitle>
               <CardDescription class="leading-relaxed">
-                Encargos temporales activos: este funcionario cubre el cargo del titular durante la vigencia.
+                Encargos temporales activos: cargo del titular, roles adicionales y acceso a los mismos grupos/comités durante la vigencia.
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-4 pb-6">
@@ -1037,6 +1304,26 @@ watch(
                   <span class="font-medium text-foreground">Motivo:</span>
                   {{ charge.org_delegation.reason }}
                 </p>
+                <div class="rounded-md border border-dashed bg-muted/30 p-3 space-y-2">
+                  <p class="text-sm text-muted-foreground">
+                    <span class="font-medium text-foreground">Roles adicionales (mismo rol del titular):</span>
+                    <template v-if="backupGrantedRoleNames(charge).length > 0">
+                      {{ backupGrantedRoleNames(charge).join(', ') }}
+                    </template>
+                    <template v-else>
+                      Sin roles adicionales otorgados (el titular no tiene roles distintos a los del Backup, o aún no hay usuario vinculado).
+                    </template>
+                  </p>
+                  <p class="text-sm text-muted-foreground">
+                    <span class="font-medium text-foreground">Grupos y comités ingresados:</span>
+                    <template v-if="backupGrantedGroupLabels(charge).length > 0">
+                      {{ backupGrantedGroupLabels(charge).join('; ') }}
+                    </template>
+                    <template v-else>
+                      El titular no pertenece a grupos ni comités, o no hay ingresos adicionales por este Backup.
+                    </template>
+                  </p>
+                </div>
                 <div
                   v-if="charge.org_delegation_id"
                   class="pt-1"
@@ -1090,7 +1377,7 @@ watch(
                             placeholder="Seleccione…"
                             no-options-text="No hay agencias configuradas"
                             no-results-text="Sin coincidencias"
-                            class="multiselect-roles"
+                            :class="ubicacionMultiselectErrorClass('org_office_id')"
                           />
                         </div>
 
@@ -1110,7 +1397,7 @@ watch(
                             placeholder="Seleccione área…"
                             no-options-text="No hay áreas en esta agencia"
                             no-results-text="Sin coincidencias"
-                            class="multiselect-roles"
+                            :class="ubicacionMultiselectErrorClass('org_unit_id')"
                           />
                         </div>
 
@@ -1130,7 +1417,7 @@ watch(
                             placeholder="Seleccione cargo…"
                             no-options-text="No hay cargos en esta área"
                             no-results-text="Sin coincidencias"
-                            class="multiselect-roles"
+                            :class="ubicacionMultiselectErrorClass('org_position_id')"
                           />
                         </div>
                       </div>
@@ -1210,7 +1497,13 @@ watch(
                       <div class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3 md:gap-x-6 md:gap-y-5">
                         <div class="space-y-3">
                           <Label for="eff_p" class="leading-snug">Vigencia desde *</Label>
-                          <Input id="eff_p" v-model="ubicacionForm.effective_from" type="date" required />
+                          <Input
+                            id="eff_p"
+                            v-model="ubicacionForm.effective_from"
+                            type="date"
+                            required
+                            :class="ubicacionFieldErrorClass('effective_from')"
+                          />
                         </div>
                         <div class="space-y-3">
                           <Label for="eff_to_p" class="leading-snug">Vigente hasta (opcional)</Label>
@@ -1313,5 +1606,11 @@ watch(
   min-height: 2.25rem;
   width: 100%;
   min-width: 0;
+}
+
+.multiselect-roles.multiselect-danger {
+  --ms-border-color: var(--destructive);
+  --ms-border-color-active: var(--destructive);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 25%, transparent);
 }
 </style>

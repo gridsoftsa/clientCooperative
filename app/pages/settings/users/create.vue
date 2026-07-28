@@ -377,18 +377,25 @@ watch(selectedRole, (role) => {
                   />
                 </div>
 
-                <div class="space-y-3 md:col-span-2">
+                <div class="space-y-3">
                   <Label for="sucursal" class="leading-snug">Sucursal (pertenencia) *</Label>
-                  <Select v-model="form.sucursal_id">
-                    <SelectTrigger id="sucursal">
-                      <SelectValue placeholder="Seleccionar sucursal" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="s in sucursales" :key="s.id" :value="s.id">
-                        {{ s.name }}{{ s.is_main ? ' (Principal)' : '' }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div class="w-full min-w-0 max-w-md">
+                    <Multiselect
+                      id="sucursal"
+                      v-model="form.sucursal_id"
+                      mode="single"
+                      :object="false"
+                      :options="sucursalSelectOptions"
+                      value-prop="value"
+                      label="label"
+                      :searchable="true"
+                      :can-clear="false"
+                      placeholder="Seleccionar sucursal"
+                      no-options-text="No hay sucursales configuradas"
+                      no-results-text="Sin coincidencias"
+                      class="multiselect-roles"
+                    />
+                  </div>
                 </div>
 
                 <div v-if="!fromStaffFlow" class="space-y-3 md:col-span-2">
@@ -560,10 +567,41 @@ watch(selectedRole, (role) => {
   --ms-radius: 0.375rem;
   --ms-border-color: var(--border);
   --ms-bg: var(--background);
+  --ms-placeholder-color: var(--muted-foreground);
   --ms-py: 0.5rem;
   --ms-dropdown-radius: 0.375rem;
   min-height: 2.75rem;
   width: 100%;
   min-width: 0;
+  color: var(--foreground);
+}
+
+:global(html.dark) .multiselect-roles,
+:global(.dark) .multiselect-roles {
+  --ms-bg: color-mix(in srgb, var(--input) 30%, transparent);
+  --ms-border-color: var(--border);
+  --ms-placeholder-color: color-mix(in srgb, var(--foreground) 58%, var(--muted-foreground));
+  --ms-caret-color: var(--muted-foreground);
+  --ms-clear-color: var(--muted-foreground);
+}
+
+.multiselect-roles :deep(.multiselect-single-label-text),
+.multiselect-roles :deep(.multiselect-multiple-label),
+.multiselect-roles :deep(.multiselect-search),
+.multiselect-roles :deep(.multiselect-tags-search) {
+  color: var(--foreground) !important;
+}
+
+.multiselect-roles :deep(.multiselect-placeholder) {
+  color: var(--muted-foreground) !important;
+  opacity: 1 !important;
+}
+
+:global(html.dark) .multiselect-roles :deep(.multiselect-search),
+:global(.dark) .multiselect-roles :deep(.multiselect-search),
+:global(html.dark) .multiselect-roles :deep(.multiselect-tags-search),
+:global(.dark) .multiselect-roles :deep(.multiselect-tags-search) {
+  background: transparent !important;
+  color: var(--foreground) !important;
 }
 </style>

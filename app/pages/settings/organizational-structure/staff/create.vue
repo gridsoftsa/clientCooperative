@@ -140,22 +140,32 @@ function applyReturnedUserFromQuery() {
 }
 
 async function handleSubmit() {
-  if (!form.value.first_name.trim() || !form.value.first_last_name.trim()) {
-    toast.error('Primer nombre y primer apellido son obligatorios')
+  submitAttempted.value = true
+  const firstMissing = firstMissingField()
+  if (firstMissing) {
+    const messages: Record<RequiredField, string> = {
+      first_name: 'El primer nombre es obligatorio',
+      first_last_name: 'El primer apellido es obligatorio',
+      user_id: 'El vínculo con el usuario del sistema es obligatorio',
+      document_pair: 'Indique tipo y número de documento',
+    }
+    toast.error(messages[firstMissing])
+    await nextTick()
+    if (firstMissing === 'document_pair') {
+      focusByElementId(form.value.document_type.trim() ? 'doc' : 'doc_type')
+    }
+    else {
+      focusByElementId(requiredFieldIds[firstMissing])
+    }
     return
   }
-  const docNumber = form.value.document_number.trim()
-  const docType = form.value.document_type.trim()
-  if ((docNumber && !docType) || (docType && !docNumber)) {
-    toast.error('Indique tipo y número de documento')
-    return
-  }
+
   saving.value = true
   try {
     const res = await $api<{ data: { id: number } }>('/organizational-structure/org-staff', {
       method: 'POST',
       body: {
-        user_id: form.value.user_id ?? undefined,
+        user_id: form.value.user_id,
         first_name: form.value.first_name.trim(),
         second_name: form.value.second_name.trim() || undefined,
         first_last_name: form.value.first_last_name.trim(),
@@ -163,8 +173,8 @@ async function handleSubmit() {
         email: form.value.email.trim() || undefined,
         phone: form.value.phone.trim() || undefined,
         extension: form.value.extension.trim() || undefined,
-        document_type: docType || undefined,
-        document_number: docNumber || undefined,
+        document_type: form.value.document_type.trim() || undefined,
+        document_number: form.value.document_number.trim() || undefined,
         date_of_birth: form.value.date_of_birth || undefined,
         is_active: form.value.is_active,
       },
@@ -175,12 +185,95 @@ async function handleSubmit() {
       path: `/settings/organizational-structure/staff/${id}/edit`,
       query: { tab: 'ubicacion' },
     })
-  } catch (e: any) {
-    toast.error(e?.data?.message || 'Error al crear')
-  } finally {
+  }
+  catch (e: any) {
+    toast.error(e?.data?.message || e?.data?.errors?.user_id?.[0] || 'Error al crear')
+  }
+  finally {
     saving.value = false
   }
 }
+
+type RequiredField = 'first_name' | 'first_last_name' | 'user_id' | 'document_pair'
+
+const submitAttempted = ref(false)
+
+const requiredFieldIds: Record<Exclude<RequiredField, 'document_pair'>, string> = {
+  first_name: 'fn',
+  first_last_name: 'fl',
+  user_id: 'usr',
+}
+
+function isFieldMissing(field: RequiredField): boolean {
+  if (field === 'first_name') {
+    return !form.value.first_name.trim()
+  }
+  if (field === 'first_last_name') {
+    return !form.value.first_last_name.trim()
+  }
+  if (field === 'user_id') {
+    return form.value.user_id == null
+  }
+  const docNumber = form.value.document_number.trim()
+  const docType = form.value.document_type.trim()
+  return (docNumber !== '' && docType === '') || (docType !== '' && docNumber === '')
+}
+
+function firstMissingField(): RequiredField | null {
+  const order: RequiredField[] = ['first_name', 'first_last_name', 'user_id', 'document_pair']
+  return order.find(field => isFieldMissing(field)) ?? null
+}
+
+function focusByElementId(id: string): void {
+  const root = document.getElementById(id)
+  if (!root) {
+    return
+  }
+  if (root instanceof HTMLInputElement || root instanceof HTMLTextAreaElement || root instanceof HTMLSelectElement) {
+    root.focus()
+    root.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
+  const focusable = root.querySelector('input,button,[tabindex]:not([tabindex="-1"])') as HTMLElement | null
+  focusable?.focus()
+  root.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+function fieldErrorClass(missing: boolean): string {
+  return missing ? 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/40' : ''
+}
+
+function multiselectErrorClass(missing: boolean): string {
+  return missing ? 'multiselect-roles multiselect-danger' : 'multiselect-roles'
+}
+
+function formFieldErrorClass(field: Exclude<RequiredField, 'document_pair'>): string {
+  return fieldErrorClass(submitAttempted.value && isFieldMissing(field))
+}
+
+function formMultiselectErrorClass(field: 'user_id' | 'document_type'): string {
+  if (field === 'user_id') {
+    return multiselectErrorClass(submitAttempted.value && isFieldMissing('user_id'))
+  }
+  return multiselectErrorClass(submitAttempted.value && isFieldMissing('document_pair') && !form.value.document_type.trim())
+}
+
+function documentNumberErrorClass(): string {
+  return fieldErrorClass(
+    submitAttempted.value
+    && isFieldMissing('document_pair')
+    && !form.value.document_number.trim(),
+  )
+}
+
+watch(form, () => {
+  if (!submitAttempted.value) {
+    return
+  }
+  if (!firstMissingField()) {
+    submitAttempted.value = false
+  }
+}, { deep: true })
 
 onMounted(async () => {
   restoreDraftFromStorage()
@@ -213,7 +306,7 @@ onMounted(async () => {
             <CardHeader class="gap-2">
               <CardTitle class="leading-snug">Datos del funcionario</CardTitle>
               <CardDescription class="leading-relaxed">
-                Nombre completo obligatorio conforme registros institucionales; contacto y usuario son opcionales.
+                Nombre completo y vínculo con usuario del sistema son obligatorios.
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-8">
@@ -237,12 +330,12 @@ onMounted(async () => {
                       placeholder="Seleccione…"
                       no-options-text="Sin opciones"
                       no-results-text="Sin coincidencias"
-                      class="multiselect-roles"
+                      :class="formMultiselectErrorClass('document_type')"
                     />
                   </div>
                   <div class="staff-field-doc space-y-2">
                     <Label for="doc" class="leading-snug">Número de documento</Label>
-                    <Input id="doc" v-model="form.document_number" inputmode="numeric" />
+                    <Input id="doc" v-model="form.document_number" inputmode="numeric" :class="documentNumberErrorClass()" />
                   </div>
                   <div class="staff-field-doc space-y-2">
                     <Label for="dob" class="leading-snug">Fecha de nacimiento</Label>
@@ -260,7 +353,7 @@ onMounted(async () => {
                 <div class="flex flex-wrap gap-x-8 gap-y-5">
                   <div class="staff-field space-y-2">
                     <Label for="fn" class="leading-snug">Primer nombre *</Label>
-                    <Input id="fn" v-model="form.first_name" required autocomplete="given-name" />
+                    <Input id="fn" v-model="form.first_name" required autocomplete="given-name" :class="formFieldErrorClass('first_name')" />
                   </div>
                   <div class="staff-field space-y-2">
                     <Label for="sn" class="leading-snug">Segundo nombre</Label>
@@ -268,7 +361,7 @@ onMounted(async () => {
                   </div>
                   <div class="staff-field space-y-2">
                     <Label for="fl" class="leading-snug">Primer apellido *</Label>
-                    <Input id="fl" v-model="form.first_last_name" required autocomplete="family-name" />
+                    <Input id="fl" v-model="form.first_last_name" required autocomplete="family-name" :class="formFieldErrorClass('first_last_name')" />
                   </div>
                   <div class="staff-field space-y-2">
                     <Label for="sl" class="leading-snug">Segundo apellido</Label>
@@ -309,14 +402,14 @@ onMounted(async () => {
                 <section class="space-y-4">
                   <div class="space-y-1">
                     <p class="text-sm font-medium text-foreground">
-                      Vínculo con usuario del sistema
+                      Vínculo con usuario del sistema *
                     </p>
                     <p class="text-sm text-muted-foreground leading-relaxed">
-                      Opcional: asocie una cuenta existente sin funcionario vinculado.
+                      Obligatorio: asocie una cuenta existente sin funcionario vinculado o cree una nueva.
                     </p>
                   </div>
                   <div class="space-y-2">
-                    <Label for="usr" class="leading-snug">Usuario</Label>
+                    <Label for="usr" class="leading-snug">Usuario *</Label>
                     <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                       <div class="staff-field-user min-w-0">
                         <Multiselect
@@ -328,11 +421,11 @@ onMounted(async () => {
                           value-prop="value"
                           label="label"
                           :searchable="true"
-                          :can-clear="true"
-                          placeholder="Sin vínculo — busque usuario…"
+                          :can-clear="false"
+                          placeholder="Seleccione usuario…"
                           no-options-text="No hay usuarios sin funcionario vinculado"
                           no-results-text="Sin coincidencias"
-                          class="multiselect-roles"
+                          :class="formMultiselectErrorClass('user_id')"
                         />
                       </div>
                       <PermissionGate permission="usuarios_crear">
@@ -347,6 +440,12 @@ onMounted(async () => {
                         </Button>
                       </PermissionGate>
                     </div>
+                    <p
+                      v-if="submitAttempted && isFieldMissing('user_id')"
+                      class="text-sm text-destructive"
+                    >
+                      Seleccione o cree un usuario del sistema.
+                    </p>
                   </div>
                 </section>
               </template>
@@ -450,5 +549,11 @@ onMounted(async () => {
   min-height: 2.25rem;
   width: 100%;
   min-width: 0;
+}
+
+.multiselect-roles.multiselect-danger {
+  --ms-border-color: var(--destructive);
+  --ms-border-color-active: var(--destructive);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 25%, transparent);
 }
 </style>

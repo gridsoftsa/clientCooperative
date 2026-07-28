@@ -293,17 +293,107 @@ onMounted(async () => {
   }
 })
 
+type RequiredField =
+  | 'org_unit'
+  | 'assignor'
+  | 'delegate_unit'
+  | 'delegate'
+  | 'starts_on'
+  | 'ends_on'
+
+const submitAttempted = ref(false)
+
+const requiredFieldIds: Record<RequiredField, string> = {
+  org_unit: 'del_unit',
+  assignor: 'del_assignor',
+  delegate_unit: 'del_delegate_unit',
+  delegate: 'del_delegate',
+  starts_on: 'sd1',
+  ends_on: 'sd2',
+}
+
+const requiredMessages: Record<RequiredField, string> = {
+  org_unit: 'Seleccione el área del titular',
+  assignor: 'Seleccione el titular',
+  delegate_unit: 'Seleccione el área del Backup',
+  delegate: 'Seleccione el Backup',
+  starts_on: 'La fecha de inicio es obligatoria',
+  ends_on: 'La fecha de fin es obligatoria',
+}
+
+function isFieldMissing(field: RequiredField): boolean {
+  if (field === 'org_unit') {
+    return selectedOrgUnitId.value == null
+  }
+  if (field === 'assignor') {
+    return form.value.assignor_staff_id == null
+  }
+  if (field === 'delegate_unit') {
+    return usingOtherAreas.value && delegateOrgUnitId.value == null
+  }
+  if (field === 'delegate') {
+    return form.value.delegate_staff_id == null
+  }
+  if (field === 'starts_on') {
+    return !form.value.starts_on
+  }
+  return !form.value.ends_on
+}
+
+function firstMissingField(): RequiredField | null {
+  const order: RequiredField[] = [
+    'org_unit',
+    'assignor',
+    'delegate_unit',
+    'delegate',
+    'starts_on',
+    'ends_on',
+  ]
+  return order.find(field => isFieldMissing(field)) ?? null
+}
+
+function focusByElementId(id: string): void {
+  const root = document.getElementById(id)
+  if (!root) {
+    return
+  }
+  if (root instanceof HTMLInputElement || root instanceof HTMLTextAreaElement || root instanceof HTMLSelectElement) {
+    root.focus()
+    root.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
+  const focusable = root.querySelector('input,button,[tabindex]:not([tabindex="-1"])') as HTMLElement | null
+  focusable?.focus()
+  root.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+function fieldErrorClass(missing: boolean): string {
+  return missing ? 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/40' : ''
+}
+
+function multiselectErrorClass(missing: boolean): string {
+  return missing
+    ? 'delegation-single-multiselect multiselect-danger'
+    : 'delegation-single-multiselect'
+}
+
+function formFieldErrorClass(field: 'starts_on' | 'ends_on'): string {
+  return fieldErrorClass(submitAttempted.value && isFieldMissing(field))
+}
+
+function formMultiselectErrorClass(
+  field: 'org_unit' | 'assignor' | 'delegate_unit' | 'delegate',
+): string {
+  return multiselectErrorClass(submitAttempted.value && isFieldMissing(field))
+}
+
 async function handleSubmit() {
-  if (selectedOrgUnitId.value == null) {
-    toast.error('Seleccione el área del Backup')
-    return
-  }
-  if (usingOtherAreas.value && delegateOrgUnitId.value == null) {
-    toast.error('Seleccione el área del Backup')
-    return
-  }
-  if (form.value.assignor_staff_id == null || form.value.delegate_staff_id == null || !form.value.starts_on || !form.value.ends_on) {
-    toast.error('Titular, Backup y fechas son obligatorios')
+  submitAttempted.value = true
+  const firstMissing = firstMissingField()
+  if (firstMissing) {
+    toast.error(requiredMessages[firstMissing])
+    await nextTick()
+    focusByElementId(requiredFieldIds[firstMissing])
     return
   }
 
@@ -341,198 +431,231 @@ async function handleSubmit() {
 
 <template>
   <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4 max-w-2xl">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-2xl font-bold tracking-tight">
-          Nuevo Backup
-        </h2>
-        <Button variant="outline" @click="router.push('/settings/organizational-structure/delegations')">
+    <div class="w-full flex flex-col gap-4">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="space-y-1 max-w-3xl">
+          <h2 class="text-2xl font-bold tracking-tight">
+            Nuevo Backup
+          </h2>
+          <p class="text-sm text-muted-foreground leading-relaxed">
+            Elija el área y, si lo desea, limite por cargo; luego seleccione titular y Backup.
+            Si el área tiene un solo cargo o funcionario, el Backup se elige de otra área.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          class="shrink-0"
+          @click="router.push('/settings/organizational-structure/delegations')"
+        >
+          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>
       </div>
-      <p class="text-sm text-muted-foreground leading-relaxed">
-        Elija el área y, si lo desea, limite por cargo; luego seleccione titular y Backup.
-        Si el área tiene un solo cargo o funcionario, el Backup se elige de otra área.
-      </p>
-      <form class="grid gap-6" @submit.prevent="handleSubmit">
+
+      <form class="w-full space-y-6" @submit.prevent="handleSubmit">
         <Card>
-          <CardHeader>
-            <CardTitle>Contexto organizacional</CardTitle>
-            <CardDescription>
+          <CardHeader class="gap-2">
+            <CardTitle class="leading-snug">
+              Contexto organizacional
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
               Área obligatoria; el filtro por cargo reduce la lista de funcionarios y muestra cuántos hay por cargo.
             </CardDescription>
           </CardHeader>
-          <CardContent class="space-y-5">
-            <div class="space-y-2">
-              <Label for="del_unit">Área *</Label>
-              <div v-if="loadingUnits" class="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin shrink-0" />
-                Cargando áreas…
+          <CardContent>
+            <div class="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-x-8">
+              <div id="del_unit" class="space-y-2">
+                <Label for="del_unit_ms">Área *</Label>
+                <div v-if="loadingUnits" class="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin shrink-0" />
+                  Cargando áreas…
+                </div>
+                <Multiselect
+                  v-else
+                  id="del_unit_ms"
+                  v-model="selectedOrgUnitId"
+                  mode="single"
+                  :object="false"
+                  :options="unitSelectOptions"
+                  value-prop="value"
+                  label="label"
+                  :searchable="true"
+                  :can-clear="false"
+                  placeholder="Seleccione un área"
+                  no-options-text="Sin áreas disponibles"
+                  no-results-text="Sin coincidencias"
+                  :class="formMultiselectErrorClass('org_unit')"
+                />
               </div>
-              <Multiselect
-                v-else
-                id="del_unit"
-                v-model="selectedOrgUnitId"
-                mode="single"
-                :object="false"
-                :options="unitSelectOptions"
-                value-prop="value"
-                label="label"
-                :searchable="true"
-                :can-clear="false"
-                placeholder="Seleccione un área"
-                no-options-text="Sin áreas disponibles"
-                no-results-text="Sin coincidencias"
-                class="delegation-single-multiselect"
-              />
-            </div>
-            <div class="space-y-2">
-              <Label for="del_pos_filter">Cargo (opcional, filtra titular)</Label>
-              <Multiselect
-                id="del_pos_filter"
-                v-model="positionFilterSelectValue"
-                mode="single"
-                :object="false"
-                :options="positionSelectOptions"
-                value-prop="value"
-                label="label"
-                :searchable="true"
-                :can-clear="false"
-                :disabled="selectedOrgUnitId == null || loadingPositions"
-                placeholder="Todos los cargos del área"
-                no-options-text="Sin cargos en el área"
-                no-results-text="Sin coincidencias"
-                class="delegation-single-multiselect"
-              />
+              <div class="space-y-2">
+                <Label for="del_pos_filter">Cargo (opcional, filtra titular)</Label>
+                <Multiselect
+                  id="del_pos_filter"
+                  v-model="positionFilterSelectValue"
+                  mode="single"
+                  :object="false"
+                  :options="positionSelectOptions"
+                  value-prop="value"
+                  label="label"
+                  :searchable="true"
+                  :can-clear="false"
+                  :disabled="selectedOrgUnitId == null || loadingPositions"
+                  placeholder="Todos los cargos del área"
+                  no-options-text="Sin cargos en el área"
+                  no-results-text="Sin coincidencias"
+                  class="delegation-single-multiselect"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Titular y Backup</CardTitle>
-            <CardDescription>
+          <CardHeader class="gap-2">
+            <CardTitle class="leading-snug">
+              Titular y Backup
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
               Nombre · documento · cargo (código) · área · correo cuando aplique.
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-5">
-            <div class="space-y-2">
-              <Label>Titular *</Label>
-              <p v-if="selectedOrgUnitId == null" class="text-sm text-muted-foreground py-1">
-                Seleccione un área primero.
-              </p>
-              <div v-else-if="loadingStaff" class="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin shrink-0" />
-                Cargando funcionarios…
+            <div class="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-x-8">
+              <div id="del_assignor" class="space-y-2 md:col-span-2 md:max-w-xl">
+                <Label for="del_assignor_ms">Titular *</Label>
+                <p v-if="selectedOrgUnitId == null" class="text-sm text-muted-foreground py-1">
+                  Seleccione un área primero.
+                </p>
+                <div v-else-if="loadingStaff" class="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                  <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin shrink-0" />
+                  Cargando funcionarios…
+                </div>
+                <Multiselect
+                  v-else
+                  id="del_assignor_ms"
+                  v-model="form.assignor_staff_id"
+                  mode="single"
+                  :object="false"
+                  :options="assignorSelectOptions"
+                  value-prop="value"
+                  label="label"
+                  :searchable="true"
+                  :can-clear="false"
+                  :disabled="assignorSelectOptions.length === 0"
+                  placeholder="Seleccione titular"
+                  no-options-text="Sin funcionarios en el contexto"
+                  no-results-text="Sin coincidencias"
+                  :class="formMultiselectErrorClass('assignor')"
+                />
               </div>
-              <Multiselect
-                v-else
-                v-model="form.assignor_staff_id"
-                mode="single"
-                :object="false"
-                :options="assignorSelectOptions"
-                value-prop="value"
-                label="label"
-                :searchable="true"
-                :can-clear="false"
-                :disabled="assignorSelectOptions.length === 0"
-                placeholder="Seleccione titular"
-                no-options-text="Sin funcionarios en el contexto"
-                no-results-text="Sin coincidencias"
-                class="delegation-single-multiselect"
-              />
-            </div>
 
-            <div
-              v-if="selectedOrgUnitId != null && !loadingStaff && !mustUseOtherAreas"
-              class="rounded-lg border p-3"
-            >
-              <Checkbox v-model="loadOtherAreas">
-                ¿Desea cargar otras áreas y funcionarios?
-              </Checkbox>
-              <p class="mt-2 text-sm text-muted-foreground leading-relaxed">
-                Marque esta opción si el Backup no pertenece al área del titular.
-              </p>
-            </div>
-
-            <p
-              v-if="selectedOrgUnitId != null && !loadingStaff && mustUseOtherAreas"
-              class="text-sm text-muted-foreground leading-relaxed rounded-lg border border-dashed p-3"
-            >
-              Este área (o filtro de cargo) tiene un solo funcionario. Seleccione otra área para el Backup.
-            </p>
-
-            <div v-if="usingOtherAreas" class="space-y-2">
-              <Label for="del_delegate_unit">Área del Backup *</Label>
-              <Multiselect
-                id="del_delegate_unit"
-                v-model="delegateOrgUnitId"
-                mode="single"
-                :object="false"
-                :options="otherUnitSelectOptions"
-                value-prop="value"
-                label="label"
-                :searchable="true"
-                :can-clear="false"
-                :disabled="selectedOrgUnitId == null || otherUnitSelectOptions.length === 0"
-                placeholder="Seleccione un área"
-                no-options-text="No hay otras áreas disponibles"
-                no-results-text="Sin coincidencias"
-                class="delegation-single-multiselect"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <Label>Backup *</Label>
-              <p v-if="selectedOrgUnitId == null" class="text-sm text-muted-foreground py-1">
-                Seleccione un área primero.
-              </p>
-              <p
-                v-else-if="usingOtherAreas && delegateOrgUnitId == null"
-                class="text-sm text-muted-foreground py-1"
-              >
-                Seleccione el área del Backup.
-              </p>
               <div
-                v-else-if="loadingStaff || (usingOtherAreas && loadingDelegateStaff)"
-                class="flex items-center gap-2 text-sm text-muted-foreground py-2"
+                v-if="selectedOrgUnitId != null && !loadingStaff && !mustUseOtherAreas"
+                class="rounded-lg border p-3 md:col-span-2"
               >
-                <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin shrink-0" />
-                Cargando funcionarios…
+                <Checkbox v-model="loadOtherAreas">
+                  ¿Desea cargar otras áreas y funcionarios?
+                </Checkbox>
+                <p class="mt-2 text-sm text-muted-foreground leading-relaxed">
+                  Marque esta opción si el Backup no pertenece al área del titular.
+                </p>
               </div>
-              <Multiselect
-                v-else
-                v-model="form.delegate_staff_id"
-                mode="single"
-                :object="false"
-                :options="delegateSelectOptions"
-                value-prop="value"
-                label="label"
-                :searchable="true"
-                :can-clear="false"
-                :disabled="delegateSelectOptions.length === 0"
-                placeholder="Seleccione Backup"
-                no-options-text="Sin funcionarios en el contexto"
-                no-results-text="Sin coincidencias"
-                class="delegation-single-multiselect"
-              />
-            </div>
-            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+              <p
+                v-if="selectedOrgUnitId != null && !loadingStaff && mustUseOtherAreas"
+                class="text-sm text-muted-foreground leading-relaxed rounded-lg border border-dashed p-3 md:col-span-2"
+              >
+                Este área (o filtro de cargo) tiene un solo funcionario. Seleccione otra área para el Backup.
+              </p>
+
+              <div v-if="usingOtherAreas" id="del_delegate_unit" class="space-y-2 md:col-span-2 md:max-w-xl">
+                <Label for="del_delegate_unit_ms">Área del Backup *</Label>
+                <Multiselect
+                  id="del_delegate_unit_ms"
+                  v-model="delegateOrgUnitId"
+                  mode="single"
+                  :object="false"
+                  :options="otherUnitSelectOptions"
+                  value-prop="value"
+                  label="label"
+                  :searchable="true"
+                  :can-clear="false"
+                  :disabled="selectedOrgUnitId == null || otherUnitSelectOptions.length === 0"
+                  placeholder="Seleccione un área"
+                  no-options-text="No hay otras áreas disponibles"
+                  no-results-text="Sin coincidencias"
+                  :class="formMultiselectErrorClass('delegate_unit')"
+                />
+              </div>
+
+              <div id="del_delegate" class="space-y-2 md:col-span-2 md:max-w-xl">
+                <Label for="del_delegate_ms">Backup *</Label>
+                <p v-if="selectedOrgUnitId == null" class="text-sm text-muted-foreground py-1">
+                  Seleccione un área primero.
+                </p>
+                <p
+                  v-else-if="usingOtherAreas && delegateOrgUnitId == null"
+                  class="text-sm text-muted-foreground py-1"
+                >
+                  Seleccione el área del Backup.
+                </p>
+                <div
+                  v-else-if="loadingStaff || (usingOtherAreas && loadingDelegateStaff)"
+                  class="flex items-center gap-2 text-sm text-muted-foreground py-2"
+                >
+                  <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin shrink-0" />
+                  Cargando funcionarios…
+                </div>
+                <Multiselect
+                  v-else
+                  id="del_delegate_ms"
+                  v-model="form.delegate_staff_id"
+                  mode="single"
+                  :object="false"
+                  :options="delegateSelectOptions"
+                  value-prop="value"
+                  label="label"
+                  :searchable="true"
+                  :can-clear="false"
+                  :disabled="delegateSelectOptions.length === 0"
+                  placeholder="Seleccione Backup"
+                  no-options-text="Sin funcionarios en el contexto"
+                  no-results-text="Sin coincidencias"
+                  :class="formMultiselectErrorClass('delegate')"
+                />
+              </div>
+
               <div class="space-y-2">
                 <Label for="sd1">Inicio *</Label>
-                <Input id="sd1" v-model="form.starts_on" type="date" required />
+                <Input
+                  id="sd1"
+                  v-model="form.starts_on"
+                  type="date"
+                  required
+                  class="max-w-xs"
+                  :class="formFieldErrorClass('starts_on')"
+                />
               </div>
               <div class="space-y-2">
                 <Label for="sd2">Fin *</Label>
-                <Input id="sd2" v-model="form.ends_on" type="date" required />
+                <Input
+                  id="sd2"
+                  v-model="form.ends_on"
+                  type="date"
+                  required
+                  class="max-w-xs"
+                  :class="formFieldErrorClass('ends_on')"
+                />
               </div>
-            </div>
-            <div class="space-y-2">
-              <Label for="sd3">Motivo (opcional)</Label>
-              <Textarea id="sd3" v-model="form.reason" rows="3" class="resize-y min-h-[4rem]" />
+
+              <div class="space-y-2 md:col-span-2 md:max-w-2xl">
+                <Label for="sd3">Motivo (opcional)</Label>
+                <Textarea id="sd3" v-model="form.reason" rows="3" class="resize-y min-h-[4rem]" />
+              </div>
             </div>
           </CardContent>
         </Card>
+
         <div class="flex justify-end gap-3">
           <Button type="button" variant="outline" @click="router.back()">
             Cancelar
@@ -563,5 +686,11 @@ async function handleSubmit() {
 .delegation-single-multiselect :deep(.multiselect-option) {
   white-space: normal;
   line-height: 1.35;
+}
+
+.delegation-single-multiselect.multiselect-danger {
+  --ms-border-color: var(--destructive);
+  --ms-border-color-active: var(--destructive);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 25%, transparent);
 }
 </style>

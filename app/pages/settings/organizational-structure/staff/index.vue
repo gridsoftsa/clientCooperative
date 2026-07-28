@@ -191,7 +191,7 @@ onMounted(() => {
                     </Button>
                     <PermissionGate permission="estructura_org_editar">
                       <Button
-                        variant="outline"
+                        variant="warning"
                         size="sm"
                         class="h-8 gap-1.5 px-2 text-xs"
                         @click="router.push(`/settings/organizational-structure/staff/${s.id}/edit`)"
