@@ -18,7 +18,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'credits': 'Créditos',
   'display': 'Pantalla',
   'directory': 'Directorio',
-  'delegations': 'Suplencias y delegaciones',
+  'delegations': 'Backup',
   'edit': 'Editar',
   'editar': 'Editar',
   'email': 'Correo',

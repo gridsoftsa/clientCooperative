@@ -86,10 +86,10 @@ watch(
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <CardTitle class="text-lg">
-            Comprobante de delegación
+            Comprobante de Backup
           </CardTitle>
           <CardDescription>
-            Documento PDF de respaldo con titular, suplente, vigencia y código de verificación.
+            Documento PDF de respaldo con titular, Backup, vigencia y código de verificación.
           </CardDescription>
         </div>
         <Button
@@ -124,7 +124,7 @@ watch(
         </div>
         <div class="rounded-md border bg-background p-3">
           <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Suplente
+            Backup
           </p>
           <p class="mt-1 font-medium">
             {{ staffName(delegation.delegate_staff) }}

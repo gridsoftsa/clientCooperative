@@ -202,5 +202,19 @@ html.dark .org-inst-processes-ms :deep(.multiselect-org-inst-processes),
 .dark .org-inst-processes-ms :deep(.multiselect-org-inst-processes) {
   --ms-bg: color-mix(in srgb, var(--input) 30%, transparent);
   --ms-border-color: var(--border);
+  --ms-placeholder-color: color-mix(in srgb, var(--foreground) 58%, var(--muted-foreground));
+  --ms-tag-bg: var(--accent);
+  --ms-tag-color: var(--accent-foreground);
+}
+
+html.dark .org-inst-processes-ms :deep(.multiselect-placeholder),
+.dark .org-inst-processes-ms :deep(.multiselect-placeholder) {
+  color: color-mix(in srgb, var(--foreground) 58%, var(--muted-foreground)) !important;
+}
+
+html.dark .org-inst-processes-ms :deep(.multiselect-tags-search),
+.dark .org-inst-processes-ms :deep(.multiselect-tags-search) {
+  background: transparent !important;
+  color: var(--foreground) !important;
 }
 </style>

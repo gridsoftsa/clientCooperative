@@ -262,6 +262,7 @@ function parseCurrentAssignmentFromApi(raw: unknown): OrgStaffListItem['current_
   return {
     effective_from,
     effective_to,
+    change_kind: a.change_kind != null ? String(a.change_kind) : null,
     org_office: {
       id: Number(office.id),
       name: String(office.name ?? ''),
@@ -288,6 +289,86 @@ function parseCurrentAssignmentFromApi(raw: unknown): OrgStaffListItem['current_
   }
 }
 
+function staffPersonName(person: {
+  first_name?: string | null
+  second_name?: string | null
+  first_last_name?: string | null
+  second_last_name?: string | null
+} | null | undefined): string {
+  if (!person) {
+    return '—'
+  }
+  return [person.first_name, person.second_name, person.first_last_name, person.second_last_name]
+    .filter(Boolean)
+    .join(' ') || '—'
+}
+
+function parseActiveTemporaryChargesFromApi(raw: unknown): NonNullable<OrgStaffListItem['active_temporary_charges']> {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw.flatMap((item) => {
+    if (item === null || typeof item !== 'object') {
+      return []
+    }
+    const a = item as Record<string, unknown>
+    const base = parseCurrentAssignmentFromApi(a)
+    if (!base) {
+      return []
+    }
+    const delegationRaw = (a.org_delegation ?? a.orgDelegation) as Record<string, unknown> | undefined
+    const assignor = (delegationRaw?.assignor_staff ?? delegationRaw?.assignorStaff) as Record<string, unknown> | undefined
+    const assignorPos = (delegationRaw?.assignor_org_position ?? delegationRaw?.assignorOrgPosition) as Record<string, unknown> | undefined
+    const delUnit = (delegationRaw?.org_unit ?? delegationRaw?.orgUnit) as Record<string, unknown> | undefined
+
+    return [{
+      id: Number(a.id),
+      ...base,
+      notes: a.notes != null ? String(a.notes) : null,
+      org_delegation_id: a.org_delegation_id != null || a.orgDelegationId != null
+        ? Number(a.org_delegation_id ?? a.orgDelegationId)
+        : null,
+      org_delegation: delegationRaw && delegationRaw.id != null
+        ? {
+            id: Number(delegationRaw.id),
+            starts_on: delegationRaw.starts_on != null || delegationRaw.startsOn != null
+              ? String(delegationRaw.starts_on ?? delegationRaw.startsOn).slice(0, 10)
+              : null,
+            ends_on: delegationRaw.ends_on != null || delegationRaw.endsOn != null
+              ? String(delegationRaw.ends_on ?? delegationRaw.endsOn).slice(0, 10)
+              : null,
+            reason: delegationRaw.reason != null ? String(delegationRaw.reason) : null,
+            is_active: Boolean(delegationRaw.is_active ?? delegationRaw.isActive ?? true),
+            org_unit: delUnit && delUnit.id != null
+              ? {
+                  id: Number(delUnit.id),
+                  name: String(delUnit.name ?? ''),
+                  code: String(delUnit.code ?? ''),
+                }
+              : null,
+            assignor_org_position: assignorPos && assignorPos.id != null
+              ? {
+                  id: Number(assignorPos.id),
+                  name: String(assignorPos.name ?? ''),
+                  code: String(assignorPos.code ?? ''),
+                }
+              : null,
+            assignor_staff: assignor && assignor.id != null
+              ? {
+                  id: Number(assignor.id),
+                  first_name: String(assignor.first_name ?? ''),
+                  second_name: assignor.second_name != null ? String(assignor.second_name) : null,
+                  first_last_name: String(assignor.first_last_name ?? ''),
+                  second_last_name: assignor.second_last_name != null ? String(assignor.second_last_name) : null,
+                }
+              : null,
+          }
+        : null,
+    }]
+  })
+}
+
 async function loadStaffRecord() {
   const res = await $api<{ data: Record<string, unknown> }>(
     `/organizational-structure/org-staff/${props.staffId}`,
@@ -296,6 +377,9 @@ async function loadStaffRecord() {
   const merged: OrgStaffListItem = {
     ...(raw as unknown as OrgStaffListItem),
     current_assignment: parseCurrentAssignmentFromApi(raw.current_assignment ?? raw.currentAssignment),
+    active_temporary_charges: parseActiveTemporaryChargesFromApi(
+      raw.active_temporary_charges ?? raw.activeTemporaryCharges,
+    ),
   }
   summary.value = merged
   const s = merged
@@ -906,6 +990,68 @@ watch(
           <Card v-else-if="readOnly" class="border-dashed">
             <CardContent class="py-8 text-center text-muted-foreground leading-relaxed">
               Sin asignación vigente registrada.
+            </CardContent>
+          </Card>
+
+          <Card
+            v-if="(summary?.active_temporary_charges?.length ?? 0) > 0"
+            class="border-primary/30 bg-primary/5"
+          >
+            <CardHeader class="gap-2">
+              <CardTitle class="leading-snug">
+                Backup vigente
+              </CardTitle>
+              <CardDescription class="leading-relaxed">
+                Encargos temporales activos: este funcionario cubre el cargo del titular durante la vigencia.
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-4 pb-6">
+              <div
+                v-for="charge in summary?.active_temporary_charges ?? []"
+                :key="charge.id"
+                class="rounded-lg border bg-background p-4 space-y-2 text-sm leading-relaxed"
+              >
+                <p class="font-medium text-foreground">
+                  {{ charge.org_office?.name ?? '—' }}
+                  → {{ charge.org_unit?.name ?? '—' }}
+                  → {{ charge.org_position?.name ?? '—' }}
+                </p>
+                <p class="text-muted-foreground">
+                  <span class="font-medium text-foreground">Titular:</span>
+                  {{ staffPersonName(charge.org_delegation?.assignor_staff) }}
+                  <template v-if="charge.org_delegation?.assignor_org_position">
+                    · {{ charge.org_delegation.assignor_org_position.code
+                      ? `${charge.org_delegation.assignor_org_position.code} — `
+                      : '' }}{{ charge.org_delegation.assignor_org_position.name }}
+                  </template>
+                </p>
+                <p class="text-muted-foreground">
+                  <span class="font-medium text-foreground">Vigencia del Backup:</span>
+                  desde {{ assignmentVigenciaLabel(charge.org_delegation?.starts_on ?? charge.effective_from) }}
+                  · hasta {{ assignmentVigenciaLabel(charge.org_delegation?.ends_on ?? charge.effective_to) }}
+                </p>
+                <p
+                  v-if="charge.org_delegation?.reason?.trim()"
+                  class="text-muted-foreground"
+                >
+                  <span class="font-medium text-foreground">Motivo:</span>
+                  {{ charge.org_delegation.reason }}
+                </p>
+                <div
+                  v-if="charge.org_delegation_id"
+                  class="pt-1"
+                >
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    class="h-8"
+                    @click="router.push(`/settings/organizational-structure/delegations/${charge.org_delegation_id}/edit`)"
+                  >
+                    Ver Backup
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
 

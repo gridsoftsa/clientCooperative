@@ -36,7 +36,7 @@ async function load() {
     })
     rows.value = res.data
   } catch {
-    toast.error('No se pudieron cargar las suplencias')
+    toast.error('No se pudieron cargar los registros de Backup')
     rows.value = []
   } finally {
     loading.value = false
@@ -48,12 +48,12 @@ async function removeRow(id: number) {
     toast.error('Sin permiso')
     return
   }
-  if (!confirm('¿Eliminar esta delegación? (queda en historial)')) {
+  if (!confirm('¿Eliminar este Backup? (queda en historial)')) {
     return
   }
   try {
     await $api(`/organizational-structure/org-delegations/${id}`, { method: 'DELETE' })
-    toast.success('Delegación eliminada')
+    toast.success('Backup eliminado')
     await load()
   } catch (e: any) {
     toast.error(e?.data?.message || 'Error')
@@ -70,7 +70,7 @@ onMounted(() => {
     <div class="w-full flex flex-col gap-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-2xl font-bold tracking-tight">
-          Suplencias y delegaciones
+          Backup
         </h2>
         <div class="flex flex-wrap gap-2">
           <Button variant="outline" @click="router.push('/settings/organizational-structure')">
@@ -80,7 +80,7 @@ onMounted(() => {
           <PermissionGate :any-permission="['estructura_org_editar', 'suplencias_delegaciones_crear']">
             <Button @click="router.push('/settings/organizational-structure/delegations/create')">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-              Nueva delegación
+              Nuevo Backup
             </Button>
           </PermissionGate>
         </div>
@@ -88,9 +88,9 @@ onMounted(() => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Listado de delegaciones</CardTitle>
+          <CardTitle>Listado de Backup</CardTitle>
           <CardDescription class="leading-relaxed">
-            Encargos temporales por vacaciones, incapacidad u otras ausencias (titular y suplente con vigencia).
+            Encargos temporales por vacaciones, incapacidad u otras ausencias (titular y Backup con vigencia).
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
@@ -98,14 +98,14 @@ onMounted(() => {
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
           <div v-else-if="rows.length === 0" class="py-12 text-center text-muted-foreground leading-relaxed">
-            No hay delegaciones registradas.
+            No hay registros de Backup.
           </div>
           <div v-else class="border rounded-lg overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Titular</TableHead>
-                  <TableHead>Suplente</TableHead>
+                  <TableHead>Backup</TableHead>
                   <TableHead>Área</TableHead>
                   <TableHead>Desde</TableHead>
                   <TableHead>Hasta</TableHead>

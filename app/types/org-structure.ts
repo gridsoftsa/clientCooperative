@@ -55,11 +55,39 @@ export interface OrgStaffListItem {
   current_assignment?: {
     effective_from?: string | null
     effective_to?: string | null
+    change_kind?: string | null
     org_office?: { id: number; name: string; code: string } | null
     org_unit?: { id: number; name: string; code: string } | null
     org_position?: { id: number; name: string; code: string } | null
     immediate_supervisor_staff?: { id: number; first_name: string; first_last_name: string } | null
   } | null
+  active_temporary_charges?: Array<{
+    id: number
+    effective_from?: string | null
+    effective_to?: string | null
+    change_kind?: string | null
+    notes?: string | null
+    org_delegation_id?: number | null
+    org_office?: { id: number; name: string; code: string } | null
+    org_unit?: { id: number; name: string; code: string } | null
+    org_position?: { id: number; name: string; code: string } | null
+    org_delegation?: {
+      id: number
+      starts_on?: string | null
+      ends_on?: string | null
+      reason?: string | null
+      is_active?: boolean
+      org_unit?: { id: number; name: string; code: string } | null
+      assignor_org_position?: { id: number; name: string; code: string } | null
+      assignor_staff?: {
+        id: number
+        first_name?: string | null
+        second_name?: string | null
+        first_last_name?: string | null
+        second_last_name?: string | null
+      } | null
+    } | null
+  }>
 }
 
 export interface OrgDelegationDetail {

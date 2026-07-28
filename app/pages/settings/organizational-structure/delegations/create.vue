@@ -20,10 +20,13 @@ const orgApi = useOrgStructureApi()
 const units = ref<OrgUnitRow[]>([])
 const positions = ref<OrgPositionRow[]>([])
 const staffInUnit = ref<OrgStaffListItem[]>([])
+const staffInDelegateUnit = ref<OrgStaffListItem[]>([])
 
 const selectedOrgUnitId = ref<number | null>(null)
-/** When set, only staff with this cargo in the selected area appear in titular/suplente. */
+/** When set, only staff with this cargo in the selected area appear in titular. */
 const positionFilterId = ref<number | null>(null)
+const loadOtherAreas = ref(false)
+const delegateOrgUnitId = ref<number | null>(null)
 
 const form = ref({
   assignor_staff_id: null as number | null,
@@ -37,14 +40,26 @@ const saving = ref(false)
 const loadingUnits = ref(true)
 const loadingPositions = ref(false)
 const loadingStaff = ref(false)
+const loadingDelegateStaff = ref(false)
 
 const unitSelectOptions = computed(() =>
-  units.value.map((unit) => ({
+  units.value.map(unit => ({
     value: unit.id,
     label: unit.org_office
       ? `${unit.code} — ${unit.name} · ${unit.org_office.name}`
       : `${unit.code} — ${unit.name}`,
   })),
+)
+
+const otherUnitSelectOptions = computed(() =>
+  units.value
+    .filter(unit => unit.id !== selectedOrgUnitId.value)
+    .map(unit => ({
+      value: unit.id,
+      label: unit.org_office
+        ? `${unit.code} — ${unit.name} · ${unit.org_office.name}`
+        : `${unit.code} — ${unit.name}`,
+    })),
 )
 
 function staffCountForPosition(positionId: number): number {
@@ -93,11 +108,44 @@ const filteredStaff = computed(() => {
   )
 })
 
-const staffSelectOptions = computed(() =>
+/** Un solo funcionario (o ninguno): no hay Backup interno posible. */
+const mustUseOtherAreas = computed(() => {
+  if (selectedOrgUnitId.value == null || loadingStaff.value) {
+    return false
+  }
+
+  return filteredStaff.value.length <= 1
+})
+
+const usingOtherAreas = computed(() => mustUseOtherAreas.value || loadOtherAreas.value)
+
+const assignorSelectOptions = computed(() =>
   filteredStaff.value.map(staff => ({
     value: staff.id,
     label: orgStaffOptionLabel(staff),
   })),
+)
+
+const sameAreaDelegateOptions = computed(() =>
+  filteredStaff.value
+    .filter(staff => staff.id !== form.value.assignor_staff_id)
+    .map(staff => ({
+      value: staff.id,
+      label: orgStaffOptionLabel(staff),
+    })),
+)
+
+const otherAreaDelegateOptions = computed(() =>
+  staffInDelegateUnit.value
+    .filter(staff => staff.id !== form.value.assignor_staff_id)
+    .map(staff => ({
+      value: staff.id,
+      label: orgStaffOptionLabel(staff),
+    })),
+)
+
+const delegateSelectOptions = computed(() =>
+  usingOtherAreas.value ? otherAreaDelegateOptions.value : sameAreaDelegateOptions.value,
 )
 
 async function reloadStaff() {
@@ -113,11 +161,44 @@ async function reloadStaff() {
       activeOnly: true,
       orgUnitIds: [unitId],
     })
-  } catch {
+  }
+  catch {
     toast.error('No se pudo cargar funcionarios del área')
     staffInUnit.value = []
-  } finally {
+  }
+  finally {
     loadingStaff.value = false
+  }
+}
+
+async function reloadDelegateStaff() {
+  const unitId = delegateOrgUnitId.value
+  if (unitId == null) {
+    staffInDelegateUnit.value = []
+    return
+  }
+
+  loadingDelegateStaff.value = true
+  try {
+    staffInDelegateUnit.value = await orgApi.fetchStaff({
+      activeOnly: true,
+      orgUnitIds: [unitId],
+    })
+  }
+  catch {
+    toast.error('No se pudo cargar funcionarios del área del Backup')
+    staffInDelegateUnit.value = []
+  }
+  finally {
+    loadingDelegateStaff.value = false
+  }
+}
+
+function resetDelegateSelection() {
+  form.value.delegate_staff_id = null
+  if (!usingOtherAreas.value) {
+    delegateOrgUnitId.value = null
+    staffInDelegateUnit.value = []
   }
 }
 
@@ -125,8 +206,11 @@ watch(selectedOrgUnitId, async (unitId) => {
   positionFilterId.value = null
   form.value.assignor_staff_id = null
   form.value.delegate_staff_id = null
+  loadOtherAreas.value = false
+  delegateOrgUnitId.value = null
   positions.value = []
   staffInUnit.value = []
+  staffInDelegateUnit.value = []
 
   if (unitId == null) {
     return
@@ -139,38 +223,87 @@ watch(selectedOrgUnitId, async (unitId) => {
       reloadStaff(),
     ])
     positions.value = loadedPositions
-  } catch {
+  }
+  catch {
     toast.error('No se pudieron cargar cargos del área')
     positions.value = []
-  } finally {
+  }
+  finally {
     loadingPositions.value = false
   }
 })
 
 watch(positionFilterId, () => {
   form.value.assignor_staff_id = null
+  resetDelegateSelection()
+})
+
+watch(mustUseOtherAreas, (required) => {
+  if (required) {
+    loadOtherAreas.value = true
+    return
+  }
+
+  loadOtherAreas.value = false
+  delegateOrgUnitId.value = null
+  staffInDelegateUnit.value = []
   form.value.delegate_staff_id = null
+})
+
+watch(loadOtherAreas, (enabled) => {
+  if (mustUseOtherAreas.value) {
+    return
+  }
+  form.value.delegate_staff_id = null
+  if (!enabled) {
+    delegateOrgUnitId.value = null
+    staffInDelegateUnit.value = []
+  }
+})
+
+watch(delegateOrgUnitId, async () => {
+  form.value.delegate_staff_id = null
+  if (!usingOtherAreas.value) {
+    staffInDelegateUnit.value = []
+    return
+  }
+  await reloadDelegateStaff()
+})
+
+watch(() => form.value.assignor_staff_id, () => {
+  if (
+    form.value.delegate_staff_id != null
+    && form.value.delegate_staff_id === form.value.assignor_staff_id
+  ) {
+    form.value.delegate_staff_id = null
+  }
 })
 
 onMounted(async () => {
   loadingUnits.value = true
   try {
     units.value = await orgApi.fetchUnits({ activeOnly: true })
-  } catch {
+  }
+  catch {
     toast.error('No se pudieron cargar áreas')
     units.value = []
-  } finally {
+  }
+  finally {
     loadingUnits.value = false
   }
 })
 
 async function handleSubmit() {
   if (selectedOrgUnitId.value == null) {
-    toast.error('Seleccione el área de la delegación')
+    toast.error('Seleccione el área del Backup')
+    return
+  }
+  if (usingOtherAreas.value && delegateOrgUnitId.value == null) {
+    toast.error('Seleccione el área del Backup')
     return
   }
   if (form.value.assignor_staff_id == null || form.value.delegate_staff_id == null || !form.value.starts_on || !form.value.ends_on) {
-    toast.error('Titular, suplente y fechas son obligatorios')
+    toast.error('Titular, Backup y fechas son obligatorios')
     return
   }
 
@@ -187,17 +320,20 @@ async function handleSubmit() {
         reason: form.value.reason.trim() || undefined,
       },
     })
-    toast.success('Delegación creada')
+    toast.success('Backup creado')
     try {
       await orgApi.viewDelegationReceiptInNewTab(res.data.id)
-    } catch {
-      toast.error('Delegación guardada, pero no se pudo abrir el comprobante PDF')
+    }
+    catch {
+      toast.error('Backup guardado, pero no se pudo abrir el comprobante PDF')
     }
     await router.push(`/settings/organizational-structure/delegations/${res.data.id}/edit`)
-  } catch (e: unknown) {
+  }
+  catch (e: unknown) {
     const err = e as { data?: { message?: string } }
     toast.error(err?.data?.message || 'Error al crear')
-  } finally {
+  }
+  finally {
     saving.value = false
   }
 }
@@ -208,14 +344,15 @@ async function handleSubmit() {
     <div class="w-full flex flex-col gap-4 max-w-2xl">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-2xl font-bold tracking-tight">
-          Nueva delegación
+          Nuevo Backup
         </h2>
         <Button variant="outline" @click="router.push('/settings/organizational-structure/delegations')">
           Volver
         </Button>
       </div>
       <p class="text-sm text-muted-foreground leading-relaxed">
-        Elija el área y, si lo desea, limite por cargo; luego seleccione titular y suplente. En funcionarios se muestra nombre, documento y cargo para distinguir varias personas en el mismo cargo.
+        Elija el área y, si lo desea, limite por cargo; luego seleccione titular y Backup.
+        Si el área tiene un solo cargo o funcionario, el Backup se elige de otra área.
       </p>
       <form class="grid gap-6" @submit.prevent="handleSubmit">
         <Card>
@@ -250,7 +387,7 @@ async function handleSubmit() {
               />
             </div>
             <div class="space-y-2">
-              <Label for="del_pos_filter">Cargo (opcional, filtra titular y suplente)</Label>
+              <Label for="del_pos_filter">Cargo (opcional, filtra titular)</Label>
               <Multiselect
                 id="del_pos_filter"
                 v-model="positionFilterSelectValue"
@@ -273,7 +410,7 @@ async function handleSubmit() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Titular y suplente</CardTitle>
+            <CardTitle>Titular y Backup</CardTitle>
             <CardDescription>
               Nombre · documento · cargo (código) · área · correo cuando aplique.
             </CardDescription>
@@ -293,24 +430,73 @@ async function handleSubmit() {
                 v-model="form.assignor_staff_id"
                 mode="single"
                 :object="false"
-                :options="staffSelectOptions"
+                :options="assignorSelectOptions"
                 value-prop="value"
                 label="label"
                 :searchable="true"
                 :can-clear="false"
-                :disabled="staffSelectOptions.length === 0"
+                :disabled="assignorSelectOptions.length === 0"
                 placeholder="Seleccione titular"
                 no-options-text="Sin funcionarios en el contexto"
                 no-results-text="Sin coincidencias"
                 class="delegation-single-multiselect"
               />
             </div>
+
+            <div
+              v-if="selectedOrgUnitId != null && !loadingStaff && !mustUseOtherAreas"
+              class="rounded-lg border p-3"
+            >
+              <Checkbox v-model="loadOtherAreas">
+                ¿Desea cargar otras áreas y funcionarios?
+              </Checkbox>
+              <p class="mt-2 text-sm text-muted-foreground leading-relaxed">
+                Marque esta opción si el Backup no pertenece al área del titular.
+              </p>
+            </div>
+
+            <p
+              v-if="selectedOrgUnitId != null && !loadingStaff && mustUseOtherAreas"
+              class="text-sm text-muted-foreground leading-relaxed rounded-lg border border-dashed p-3"
+            >
+              Este área (o filtro de cargo) tiene un solo funcionario. Seleccione otra área para el Backup.
+            </p>
+
+            <div v-if="usingOtherAreas" class="space-y-2">
+              <Label for="del_delegate_unit">Área del Backup *</Label>
+              <Multiselect
+                id="del_delegate_unit"
+                v-model="delegateOrgUnitId"
+                mode="single"
+                :object="false"
+                :options="otherUnitSelectOptions"
+                value-prop="value"
+                label="label"
+                :searchable="true"
+                :can-clear="false"
+                :disabled="selectedOrgUnitId == null || otherUnitSelectOptions.length === 0"
+                placeholder="Seleccione un área"
+                no-options-text="No hay otras áreas disponibles"
+                no-results-text="Sin coincidencias"
+                class="delegation-single-multiselect"
+              />
+            </div>
+
             <div class="space-y-2">
-              <Label>Suplente *</Label>
+              <Label>Backup *</Label>
               <p v-if="selectedOrgUnitId == null" class="text-sm text-muted-foreground py-1">
                 Seleccione un área primero.
               </p>
-              <div v-else-if="loadingStaff" class="flex items-center gap-2 text-sm text-muted-foreground py-2">
+              <p
+                v-else-if="usingOtherAreas && delegateOrgUnitId == null"
+                class="text-sm text-muted-foreground py-1"
+              >
+                Seleccione el área del Backup.
+              </p>
+              <div
+                v-else-if="loadingStaff || (usingOtherAreas && loadingDelegateStaff)"
+                class="flex items-center gap-2 text-sm text-muted-foreground py-2"
+              >
                 <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin shrink-0" />
                 Cargando funcionarios…
               </div>
@@ -319,13 +505,13 @@ async function handleSubmit() {
                 v-model="form.delegate_staff_id"
                 mode="single"
                 :object="false"
-                :options="staffSelectOptions"
+                :options="delegateSelectOptions"
                 value-prop="value"
                 label="label"
                 :searchable="true"
                 :can-clear="false"
-                :disabled="staffSelectOptions.length === 0"
-                placeholder="Seleccione suplente"
+                :disabled="delegateSelectOptions.length === 0"
+                placeholder="Seleccione Backup"
                 no-options-text="Sin funcionarios en el contexto"
                 no-results-text="Sin coincidencias"
                 class="delegation-single-multiselect"

@@ -228,7 +228,7 @@ export const navMenu: NavMenu[] = [
             anyPermission: ['grupos_trabajo_ver', 'estructura_org_ver'],
           },
           {
-            title: 'Suplencias y delegaciones',
+            title: 'Backup',
             link: '/settings/organizational-structure/delegations',
             anyPermission: ['suplencias_delegaciones_ver', 'estructura_org_ver'],
           },

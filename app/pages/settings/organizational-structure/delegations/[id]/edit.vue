@@ -37,7 +37,7 @@ async function load() {
       is_active: Boolean(res.data.is_active),
     }
   } catch {
-    toast.error('No se encontró la delegación')
+    toast.error('No se encontró el Backup')
     router.push('/settings/organizational-structure/delegations')
   } finally {
     loading.value = false
@@ -57,7 +57,7 @@ async function handleSubmit() {
       },
     })
     delegation.value = res.data
-    toast.success('Delegación actualizada. Puede generar el comprobante actualizado.')
+    toast.success('Backup actualizado. Puede generar el comprobante actualizado.')
   } catch (e: unknown) {
     const err = e as { data?: { message?: string } }
     toast.error(err?.data?.message || 'Error al guardar')
@@ -79,7 +79,7 @@ onMounted(() => {
     <div v-else class="w-full flex flex-col gap-4 max-w-2xl">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-2xl font-bold tracking-tight">
-          Editar delegación
+          Editar Backup
         </h2>
         <Button variant="outline" @click="router.push('/settings/organizational-structure/delegations')">
           Volver
@@ -117,9 +117,9 @@ onMounted(() => {
             </div>
             <OrgStructureActiveMultiselect
               :model-value="form.is_active"
-              gender="feminine"
+              gender="masculine"
               input-id="del_act_ms"
-              label="Delegación activa"
+              helper-text="Indica si este Backup permanece vigente."
               @update:model-value="(v: boolean) => { form.is_active = v }"
             />
           </CardContent>

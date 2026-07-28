@@ -34,6 +34,14 @@ function displayDocument(s: OrgStaffListItem): string {
   return s.document_number
 }
 
+function locationLabel(assignment: NonNullable<OrgStaffListItem['current_assignment']>): string {
+  return [
+    assignment.org_office?.name,
+    assignment.org_unit?.name,
+    assignment.org_position?.name,
+  ].filter(Boolean).join(' · ')
+}
+
 async function fetchStaff() {
   loading.value = true
   try {
@@ -147,10 +155,24 @@ onMounted(() => {
                 <TableCell>{{ displayDocument(s) }}</TableCell>
                 <TableCell>{{ s.user?.email ?? '—' }}</TableCell>
                 <TableCell class="text-sm text-muted-foreground max-w-xs">
-                  <template v-if="s.current_assignment?.org_office">
-                    {{ s.current_assignment.org_office?.name }} · {{ s.current_assignment.org_unit?.name }} · {{ s.current_assignment.org_position?.name }}
-                  </template>
-                  <span v-else class="text-amber-600 dark:text-amber-400">Sin asignación vigente</span>
+                  <div class="space-y-1">
+                    <template v-if="s.current_assignment?.org_office || s.current_assignment?.org_unit">
+                      <p>{{ locationLabel(s.current_assignment) }}</p>
+                    </template>
+                    <p
+                      v-else
+                      class="text-amber-600 dark:text-amber-400"
+                    >
+                      Sin asignación vigente
+                    </p>
+                    <p
+                      v-for="charge in (s.active_temporary_charges ?? [])"
+                      :key="charge.id"
+                      class="text-xs text-primary"
+                    >
+                      Backup: {{ locationLabel(charge) }}
+                    </p>
+                  </div>
                 </TableCell>
                 <TableCell>
                   <Badge :variant="s.is_active ? 'default' : 'secondary'">

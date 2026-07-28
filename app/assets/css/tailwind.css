@@ -258,10 +258,82 @@ html.light {
   color-scheme: light;
 }
 
+/* @vueform/multiselect: tokens de tema (light/dark) para todos los selects del paquete */
+.multiselect {
+  --ms-bg: var(--background);
+  --ms-border-color: var(--border);
+  --ms-placeholder-color: var(--muted-foreground);
+  --ms-clear-color: var(--muted-foreground);
+  --ms-clear-color-hover: var(--foreground);
+  --ms-caret-color: var(--muted-foreground);
+  --ms-spinner-color: var(--primary);
+  --ms-dropdown-bg: var(--popover);
+  --ms-dropdown-border-color: var(--border);
+  --ms-option-bg-pointed: var(--muted);
+  --ms-option-color-pointed: var(--foreground);
+  --ms-option-bg-selected: var(--accent);
+  --ms-option-color-selected: var(--accent-foreground);
+  --ms-tag-bg: var(--accent);
+  --ms-tag-color: var(--accent-foreground);
+  --ms-empty-color: var(--muted-foreground);
+  --ms-group-label-bg: var(--muted);
+  --ms-group-label-color: var(--muted-foreground);
+  color: var(--foreground);
+}
+
+html.dark .multiselect,
+.dark .multiselect {
+  --ms-bg: color-mix(in srgb, var(--input) 30%, transparent);
+  --ms-bg-disabled: color-mix(in srgb, var(--input) 18%, var(--muted));
+  --ms-border-color: var(--border);
+  --ms-placeholder-color: color-mix(in srgb, var(--foreground) 58%, var(--muted-foreground));
+  --ms-clear-color: var(--muted-foreground);
+  --ms-clear-color-hover: var(--foreground);
+  --ms-caret-color: var(--muted-foreground);
+  --ms-spinner-color: var(--primary);
+  --ms-dropdown-bg: var(--popover);
+  --ms-dropdown-border-color: var(--border);
+  --ms-option-bg-pointed: var(--muted);
+  --ms-option-color-pointed: var(--foreground);
+  --ms-option-bg-selected: var(--accent);
+  --ms-option-color-selected: var(--accent-foreground);
+  --ms-tag-bg: var(--accent);
+  --ms-tag-color: var(--accent-foreground);
+  --ms-empty-color: var(--muted-foreground);
+  color: var(--foreground);
+}
+
+html.dark .multiselect .multiselect-single-label-text,
+html.dark .multiselect .multiselect-multiple-label,
+.dark .multiselect .multiselect-single-label-text,
+.dark .multiselect .multiselect-multiple-label {
+  color: var(--foreground) !important;
+}
+
+html.dark .multiselect .multiselect-placeholder,
+.dark .multiselect .multiselect-placeholder {
+  color: color-mix(in srgb, var(--foreground) 58%, var(--muted-foreground)) !important;
+  opacity: 1 !important;
+}
+
+html.dark .multiselect .multiselect-search,
+html.dark .multiselect .multiselect-tags-search,
+.dark .multiselect .multiselect-search,
+.dark .multiselect .multiselect-tags-search {
+  background: transparent !important;
+  color: var(--foreground) !important;
+}
+
+html.dark .multiselect.is-disabled,
+.dark .multiselect.is-disabled {
+  background: color-mix(in srgb, var(--input) 18%, var(--muted)) !important;
+  border-color: var(--border) !important;
+}
+
 /* @vueform/multiselect: modo oscuro (trigger y dropdown pueden estar en body) */
 html.dark .multiselect-municipality,
 .dark .multiselect-municipality {
-  --ms-bg: var(--background);
+  --ms-bg: color-mix(in srgb, var(--input) 30%, transparent);
   --ms-border-color: var(--border);
   --ms-placeholder-color: var(--muted-foreground);
   --ms-clear-color: var(--muted-foreground);

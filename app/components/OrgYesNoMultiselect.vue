@@ -91,6 +91,7 @@ watch(selected, (v) => {
   width: 100%;
   min-width: 0;
   text-align: left;
+  color: var(--foreground);
 }
 
 .org-yesno-ms :deep(.multiselect-single-label),
@@ -100,5 +101,11 @@ watch(selected, (v) => {
 
 .org-yesno-ms :deep(.multiselect-tags-search) {
   justify-content: flex-start !important;
+}
+
+html.dark .org-yesno-ms :deep(.multiselect-org-yesno),
+.dark .org-yesno-ms :deep(.multiselect-org-yesno) {
+  --ms-bg: color-mix(in srgb, var(--input) 30%, transparent);
+  --ms-border-color: var(--border);
 }
 </style>
