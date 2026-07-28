@@ -18,6 +18,7 @@ export interface OrgUnitRow {
   parent?: { id: number; name: string; code: string } | null
   manager_staff?: { id: number; first_name: string; first_last_name: string } | null
   institutional_processes?: OrgInstitutionalProcess[]
+  related_units?: Array<{ id: number, name: string, code: string, org_office_id?: number }>
 }
 
 export interface OrgPositionRow {

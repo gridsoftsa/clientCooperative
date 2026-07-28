@@ -14,8 +14,17 @@ const props = withDefaults(
     label: string
     helperText?: string
     disabled?: boolean
+    placeholder?: string
+    noOptionsText?: string
+    noResultsText?: string
   }>(),
-  { helperText: '', disabled: false },
+  {
+    helperText: '',
+    disabled: false,
+    placeholder: 'Busque y seleccione áreas',
+    noOptionsText: 'Sin áreas disponibles',
+    noResultsText: 'Sin coincidencias',
+  },
 )
 
 const emit = defineEmits<{
@@ -38,10 +47,43 @@ function sameIds(a: number[], b: number[]): boolean {
   return sa.every((v, i) => v === sb[i])
 }
 
+function areasMultipleLabel(values: unknown): string {
+  const ids = (Array.isArray(values) ? values : [])
+    .map((v) => {
+      if (typeof v === 'number') {
+        return v
+      }
+      if (v && typeof v === 'object' && 'value' in v) {
+        return Number((v as { value: unknown }).value)
+      }
+
+      return Number(v)
+    })
+    .filter(id => Number.isFinite(id))
+
+  if (ids.length === 0) {
+    return props.placeholder
+  }
+
+  const labels = ids.map((id) => {
+    const opt = multiselectOptions.value.find(o => o.value === id)
+
+    return opt?.label ?? String(id)
+  })
+
+  if (labels.length === 1) {
+    return labels[0]!
+  }
+
+  return `${labels.length} áreas seleccionadas: ${labels.join(', ')}`
+}
+
 watch(
   () => props.modelValue,
   (v) => {
-    selected.value = [...v]
+    if (!sameIds(selected.value, v)) {
+      selected.value = [...v]
+    }
   },
   { deep: true },
 )
@@ -52,7 +94,7 @@ watch(
     if (props.disabled) {
       return
     }
-    if (! sameIds(v, props.modelValue)) {
+    if (!sameIds(v, props.modelValue)) {
       emit('update:modelValue', [...v])
     }
   },
@@ -69,21 +111,32 @@ watch(
       </p>
     </div>
     <div class="org-inst-processes-ms w-full">
-      <Multiselect
-        :id="inputId"
-        v-model="selected"
-        mode="multiple"
-        :object="false"
-        :options="multiselectOptions"
-        value-prop="value"
-        label="label"
-        :searchable="true"
-        :close-on-select="false"
-        :disabled="disabled"
-        placeholder="Seleccione uno o más procesos"
-        no-options-text="Sin procesos en catálogo"
-        class="multiselect-org-inst-processes w-full max-w-xl"
-      />
+      <ClientOnly>
+        <Multiselect
+          :id="inputId"
+          v-model="selected"
+          mode="tags"
+          :object="false"
+          :options="multiselectOptions"
+          value-prop="value"
+          label="label"
+          :searchable="true"
+          :close-on-select="false"
+          :can-clear="true"
+          :hide-selected="false"
+          :disabled="disabled"
+          :placeholder="placeholder"
+          :no-options-text="noOptionsText"
+          :no-results-text="noResultsText"
+          :multiple-label="areasMultipleLabel"
+          class="multiselect-org-inst-processes org-areas-ms-tags w-full max-w-xl"
+        />
+        <template #fallback>
+          <div class="flex h-11 w-full max-w-xl items-center rounded-md border bg-muted/30 px-3 text-sm text-muted-foreground">
+            Cargando áreas…
+          </div>
+        </template>
+      </ClientOnly>
     </div>
   </div>
 </template>
@@ -98,7 +151,11 @@ watch(
 .org-inst-processes-ms :deep(.multiselect-wrapper) {
   margin-left: 0 !important;
   margin-right: 0 !important;
-  justify-content: flex-end !important;
+  justify-content: flex-start !important;
+  flex-wrap: wrap;
+  min-height: 2.75rem;
+  gap: 0.25rem;
+  padding-block: 0.25rem;
 }
 
 .org-inst-processes-ms :deep(.multiselect-org-inst-processes) {
@@ -107,21 +164,43 @@ watch(
   --ms-radius: 0.375rem;
   --ms-border-color: var(--border);
   --ms-bg: var(--background);
-  --ms-py: 0.5rem;
+  --ms-py: 0.25rem;
+  --ms-px: 0.75rem;
+  --ms-tag-bg: var(--accent);
+  --ms-tag-color: var(--accent-foreground);
   --ms-dropdown-radius: 0.375rem;
-  --ms-max-height: 12rem;
+  --ms-max-height: 14rem;
+  --ms-placeholder-color: var(--muted-foreground);
   min-height: 2.75rem;
+  height: auto;
   width: 100%;
   min-width: 0;
   text-align: left;
+  color: var(--foreground);
 }
 
-.org-inst-processes-ms :deep(.multiselect-single-label),
 .org-inst-processes-ms :deep(.multiselect-placeholder) {
   text-align: left;
+  color: var(--muted-foreground) !important;
+}
+
+.org-inst-processes-ms :deep(.multiselect-tag) {
+  max-width: 100%;
+}
+
+.org-inst-processes-ms :deep(.multiselect-tag-wrapper) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .org-inst-processes-ms :deep(.multiselect-tags-search) {
   justify-content: flex-start !important;
+}
+
+html.dark .org-inst-processes-ms :deep(.multiselect-org-inst-processes),
+.dark .org-inst-processes-ms :deep(.multiselect-org-inst-processes) {
+  --ms-bg: color-mix(in srgb, var(--input) 30%, transparent);
+  --ms-border-color: var(--border);
 }
 </style>

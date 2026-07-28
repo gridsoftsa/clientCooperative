@@ -19,8 +19,8 @@ const orgApi = useOrgStructureApi()
 
 const offices = ref<OrgOffice[]>([])
 const unitsInOffice = ref<OrgUnitRow[]>([])
-const staffOptions = ref<Array<{ id: number; label: string }>>([])
-const processes = ref<Array<{ id: number; label: string }>>([])
+const staffOptions = ref<Array<{ id: number, label: string }>>([])
+const allUnits = ref<OrgUnitRow[]>([])
 const loading = ref(true)
 
 const form = ref({
@@ -35,7 +35,7 @@ const form = ref({
   is_active: true,
   valid_from: '',
   valid_to: '',
-  institutional_process_ids: [] as number[],
+  related_org_unit_ids: [] as number[],
 })
 
 const saving = ref(false)
@@ -48,10 +48,21 @@ const parentsFiltered = computed(() =>
   unitsInOffice.value.filter(u => u.id !== unitId.value),
 )
 
+const areaOptions = computed(() =>
+  allUnits.value
+    .filter(u => u.id !== unitId.value)
+    .map((u) => {
+      const officeName = u.org_office?.name
+      return {
+        id: u.id,
+        label: officeName ? `${u.name} · ${officeName}` : `${u.name} (${u.code})`,
+      }
+    }),
+)
+
 async function loadCatalogs() {
   offices.value = await orgApi.fetchOffices({ activeOnly: false })
-  const plist = await orgApi.fetchInstitutionalProcesses()
-  processes.value = plist.map(p => ({ id: p.id, label: p.label }))
+  allUnits.value = await orgApi.fetchUnits({ activeOnly: false })
   const staff = await orgApi.fetchStaff({ activeOnly: false })
   staffOptions.value = staff.map((s) => {
     const n = [s.first_name, s.second_name, s.first_last_name, s.second_last_name].filter(Boolean).join(' ')
@@ -89,13 +100,15 @@ async function loadUnit() {
       is_active: Boolean(u.is_active),
       valid_from: toDateInputValue(u.valid_from),
       valid_to: toDateInputValue(u.valid_to),
-      institutional_process_ids: (u.institutional_processes ?? []).map(x => x.id),
+      related_org_unit_ids: (u.related_units ?? []).map(x => x.id),
     }
     await refreshUnitsForOffice(u.org_office_id)
-  } catch {
+  }
+  catch {
     toast.error('No se encontró el área')
     router.push('/settings/organizational-structure/units')
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 }
@@ -121,14 +134,16 @@ async function handleSubmit() {
         is_active: form.value.is_active,
         valid_from: form.value.valid_from.trim(),
         valid_to: form.value.valid_to.trim() || null,
-        institutional_process_ids: form.value.institutional_process_ids,
+        related_org_unit_ids: form.value.related_org_unit_ids,
       },
     })
     toast.success('Área actualizada')
     router.push('/settings/organizational-structure/units')
-  } catch (e: any) {
+  }
+  catch (e: any) {
     toast.error(e?.data?.message || 'Error al guardar')
-  } finally {
+  }
+  finally {
     saving.value = false
   }
 }
@@ -147,7 +162,7 @@ onMounted(() => {
             Editar área
           </h2>
           <p class="text-muted-foreground leading-relaxed">
-            Actualice datos de la dependencia, responsable y procesos institucionales asociados.
+            Actualice datos de la dependencia, responsable y áreas asociadas.
           </p>
         </div>
         <Button variant="outline" class="shrink-0" @click="router.back()">
@@ -239,9 +254,9 @@ onMounted(() => {
 
           <Card>
             <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Responsable, TRD y procesos</CardTitle>
+              <CardTitle class="leading-snug">Responsable, TRD y áreas</CardTitle>
               <CardDescription class="leading-relaxed">
-                Mantenga al día el vínculo con procesos y la figura responsable ante documentación.
+                Mantenga al día el vínculo con áreas y la figura responsable ante documentación.
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-6">
@@ -289,11 +304,14 @@ onMounted(() => {
 
               <div class="rounded-lg border p-4">
                 <OrgInstitutionalProcessesMultiselect
-                  v-model="form.institutional_process_ids"
-                  :options="processes"
-                  input-id="unit_edit_inst_proc_ms"
-                  label="Procesos institucionales"
-                  helper-text="Opcional: seleccione los procesos en los que participa esta dependencia."
+                  v-model="form.related_org_unit_ids"
+                  :options="areaOptions"
+                  input-id="unit_edit_related_areas_ms"
+                  label="Áreas asociadas"
+                  helper-text="Opcional: seleccione otras áreas ya creadas en la estructura organizacional."
+                  placeholder="Busque y seleccione áreas creadas"
+                  no-options-text="No hay otras áreas creadas"
+                  no-results-text="Sin coincidencias"
                 />
               </div>
 

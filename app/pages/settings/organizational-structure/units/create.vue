@@ -17,8 +17,8 @@ const orgApi = useOrgStructureApi()
 
 const offices = ref<OrgOffice[]>([])
 const unitsInOffice = ref<OrgUnitRow[]>([])
-const staffOptions = ref<Array<{ id: number; label: string }>>([])
-const processes = ref<Array<{ id: number; label: string }>>([])
+const staffOptions = ref<Array<{ id: number, label: string }>>([])
+const allUnits = ref<OrgUnitRow[]>([])
 
 const form = ref({
   org_office_id: null as number | null,
@@ -32,7 +32,7 @@ const form = ref({
   is_active: true,
   valid_from: todayIsoDateString(),
   valid_to: '',
-  institutional_process_ids: [] as number[],
+  related_org_unit_ids: [] as number[],
 })
 
 const saving = ref(false)
@@ -41,17 +41,27 @@ function onUnitActiveChange(value: boolean) {
   form.value.is_active = value
 }
 
+const areaOptions = computed(() =>
+  allUnits.value.map((u) => {
+    const officeName = u.org_office?.name
+    return {
+      id: u.id,
+      label: officeName ? `${u.name} · ${officeName}` : `${u.name} (${u.code})`,
+    }
+  }),
+)
+
 async function loadCatalogs() {
   try {
     offices.value = await orgApi.fetchOffices({ activeOnly: true })
-    const plist = await orgApi.fetchInstitutionalProcesses()
-    processes.value = plist.map(p => ({ id: p.id, label: p.label }))
+    allUnits.value = await orgApi.fetchUnits({ activeOnly: true })
     const staff = await orgApi.fetchStaff({ activeOnly: true })
     staffOptions.value = staff.map((s) => {
       const n = [s.first_name, s.second_name, s.first_last_name, s.second_last_name].filter(Boolean).join(' ')
       return { id: s.id, label: `${n}${s.document_number ? ` · ${s.document_number}` : ''}` }
     })
-  } catch {
+  }
+  catch {
     toast.error('Error al cargar catálogos')
   }
 }
@@ -64,7 +74,8 @@ watch(() => form.value.org_office_id, async (id: number | null) => {
   }
   try {
     unitsInOffice.value = await orgApi.fetchUnits({ activeOnly: true, orgOfficeId: id })
-  } catch {
+  }
+  catch {
     unitsInOffice.value = []
   }
 })
@@ -90,15 +101,17 @@ async function handleSubmit() {
         is_active: form.value.is_active,
         valid_from: form.value.valid_from.trim(),
         valid_to: form.value.valid_to.trim() || null,
-        institutional_process_ids:
-          form.value.institutional_process_ids.length > 0 ? form.value.institutional_process_ids : undefined,
+        related_org_unit_ids:
+          form.value.related_org_unit_ids.length > 0 ? form.value.related_org_unit_ids : undefined,
       },
     })
     toast.success('Área creada')
     router.push('/settings/organizational-structure/units')
-  } catch (e: any) {
+  }
+  catch (e: any) {
     toast.error(e?.data?.message || 'Error al crear')
-  } finally {
+  }
+  finally {
     saving.value = false
   }
 }
@@ -205,9 +218,9 @@ onMounted(() => {
 
           <Card>
             <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Responsable, TRD y procesos</CardTitle>
+              <CardTitle class="leading-snug">Responsable, TRD y áreas</CardTitle>
               <CardDescription class="leading-relaxed">
-                Vincule el área al catálogo de procesos institucionales y al responsable de documentación.
+                Vincule el área al catálogo de áreas y al responsable de documentación.
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-6">
@@ -255,11 +268,14 @@ onMounted(() => {
 
               <div class="rounded-lg border p-4">
                 <OrgInstitutionalProcessesMultiselect
-                  v-model="form.institutional_process_ids"
-                  :options="processes"
-                  input-id="unit_create_inst_proc_ms"
-                  label="Procesos institucionales asociados"
-                  helper-text="Opcional: seleccione los procesos en los que participa esta dependencia."
+                  v-model="form.related_org_unit_ids"
+                  :options="areaOptions"
+                  input-id="unit_create_related_areas_ms"
+                  label="Áreas asociadas"
+                  helper-text="Opcional: seleccione otras áreas ya creadas en la estructura organizacional."
+                  placeholder="Busque y seleccione áreas creadas"
+                  no-options-text="No hay áreas creadas aún"
+                  no-results-text="Sin coincidencias"
                 />
               </div>
 
