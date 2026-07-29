@@ -12,6 +12,7 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const catalogApi = useArchivalCatalogApi()
+const { $api } = useNuxtApp()
 
 const seriesId = computed(() => Number(route.params.seriesId))
 const subseriesId = computed(() => Number(route.params.subseriesId))
@@ -20,6 +21,9 @@ const series = ref<DocSeriesRow | null>(null)
 const subseries = ref<DocSubseriesRow | null>(null)
 const rows = ref<DocDocumentTypeRow[]>([])
 const loading = ref(false)
+const deactivatingRow = ref<DocDocumentTypeRow | null>(null)
+const deactivateDialogOpen = ref(false)
+const savingDeactivate = ref(false)
 
 async function load() {
   if (
@@ -53,6 +57,42 @@ async function load() {
     rows.value = []
   } finally {
     loading.value = false
+  }
+}
+
+function openDeactivateDialog(row: DocDocumentTypeRow) {
+  deactivatingRow.value = row
+  deactivateDialogOpen.value = true
+}
+
+function cancelDeactivateDialog() {
+  deactivateDialogOpen.value = false
+  deactivatingRow.value = null
+}
+
+async function confirmDeactivate() {
+  const row = deactivatingRow.value
+  if (!row) {
+    return
+  }
+
+  savingDeactivate.value = true
+  try {
+    await $api(`/archival/catalog/document-types/${row.id}`, {
+      method: 'PUT',
+      body: { is_active: false },
+    })
+    toast.success('Tipo documental inactivado')
+    await load()
+  }
+  catch (e: unknown) {
+    const err = e as { data?: { errors?: Record<string, string[]>; message?: string } }
+    const first = err.data?.errors?.is_active?.[0]
+    toast.error(first ?? err.data?.message ?? 'No se pudo inactivar el tipo documental')
+  }
+  finally {
+    savingDeactivate.value = false
+    cancelDeactivateDialog()
   }
 }
 
@@ -100,6 +140,7 @@ onMounted(load)
           </CardTitle>
           <CardDescription class="leading-relaxed">
             Tercer nivel del cuadro de clasificación; unidad mínima para reglas de retención en TRD.
+            La inactivación no elimina el registro; deja de usarse en radicación y nuevas asociaciones TRD.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -109,7 +150,7 @@ onMounted(load)
           <div v-else-if="rows.length === 0" class="py-8 text-center text-muted-foreground leading-relaxed">
             No hay tipos documentales en esta subserie.
           </div>
-          <div v-else class="border rounded-lg overflow-hidden">
+          <div v-else class="overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -117,7 +158,9 @@ onMounted(load)
                   <TableHead>Nombre</TableHead>
                   <TableHead>Soporte</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead class="w-[100px]" />
+                  <TableHead class="text-right">
+                    Acciones
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -134,16 +177,30 @@ onMounted(load)
                       {{ r.is_active ? 'Activo' : 'Inactivo' }}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    <PermissionGate permission="trd_catalogo_editar">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        @click="router.push(`/settings/archival/catalog/series/${seriesId}/subseries/${subseriesId}/document-types/${r.id}/edit`)"
-                      >
-                        Editar
-                      </Button>
-                    </PermissionGate>
+                  <TableCell class="text-right !whitespace-normal">
+                    <div class="flex flex-wrap justify-end gap-1">
+                      <PermissionGate permission="trd_catalogo_editar">
+                        <Button
+                          variant="warning"
+                          size="sm"
+                          class="h-8 gap-1.5 px-2 text-xs"
+                          @click="router.push(`/settings/archival/catalog/series/${seriesId}/subseries/${subseriesId}/document-types/${r.id}/edit`)"
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          v-if="r.is_active"
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          class="h-8 gap-1.5 px-2 text-xs"
+                          @click="openDeactivateDialog(r)"
+                        >
+                          <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                          Inactivar
+                        </Button>
+                      </PermissionGate>
+                    </div>
                   </TableCell>
                 </TableRow>
               </TableBody>
@@ -152,5 +209,33 @@ onMounted(load)
         </CardContent>
       </Card>
     </div>
+
+    <AlertDialog v-model:open="deactivateDialogOpen">
+      <AlertDialogContent class="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Inactivar tipo documental</AlertDialogTitle>
+          <AlertDialogDescription>
+            <template v-if="deactivatingRow">
+              ¿Confirma inactivar <strong>{{ deactivatingRow.name }}</strong>
+              (<span class="font-mono">{{ deactivatingRow.code }}</span>)?
+              El registro se conserva en el catálogo pero quedará inactivo.
+              Si está vinculado a una versión de TRD o tiene reglas de retención, la operación no se permitirá.
+            </template>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter class="flex-col gap-2 sm:flex-row sm:justify-end">
+          <AlertDialogCancel :disabled="savingDeactivate" @click="cancelDeactivateDialog">
+            Cancelar
+          </AlertDialogCancel>
+          <Button
+            variant="destructive"
+            :disabled="savingDeactivate"
+            @click="confirmDeactivate"
+          >
+            Inactivar
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </SettingsLayout>
 </template>

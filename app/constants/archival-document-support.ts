@@ -31,3 +31,11 @@ export function formatAllowedSupportLabels(raw: string | null | undefined): stri
 
   return labels.length > 0 ? labels.join(', ') : '—'
 }
+
+export function labelForDocumentSupportValue(value: string): string {
+  if (value === 'paper' || value === 'digital') {
+    return LABEL_BY_VALUE[value]
+  }
+
+  return value
+}

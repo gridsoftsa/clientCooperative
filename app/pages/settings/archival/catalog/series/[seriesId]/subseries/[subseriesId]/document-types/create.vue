@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import Multiselect from '@vueform/multiselect'
 import { toast } from 'vue-sonner'
 import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
 import {
-  DOCUMENT_SUPPORT_OPTIONS,
   serializeAllowedSupport,
 } from '~/constants/archival-document-support'
 import { buildCatalogCode, catalogCodeSuffix } from '~/utils/archival-catalog-code'
@@ -154,22 +152,10 @@ onMounted(loadSubseries)
             <p class="text-xs text-muted-foreground">
               Puede seleccionar Papel, Digital o ambos.
             </p>
-            <div class="catalog-document-support-ms w-full">
-              <Multiselect
-                id="support"
-                v-model="allowedSupportSelected"
-                mode="tags"
-                :object="false"
-                :options="[...DOCUMENT_SUPPORT_OPTIONS]"
-                value-prop="value"
-                label="label"
-                :searchable="false"
-                :close-on-select="false"
-                placeholder="Seleccione soporte…"
-                no-options-text="Sin opciones"
-                class="multiselect-document-support w-full"
-              />
-            </div>
+            <ArchivalDocumentAllowedSupportField
+              id="support"
+              v-model="allowedSupportSelected"
+            />
           </div>
           <div class="space-y-2">
             <Label for="desc">Descripción</Label>
@@ -192,18 +178,3 @@ onMounted(loadSubseries)
     </div>
   </SettingsLayout>
 </template>
-
-<style src="@vueform/multiselect/themes/default.css"></style>
-<style scoped>
-.catalog-document-support-ms :deep(.multiselect-document-support) {
-  --ms-font-size: 0.875rem;
-  --ms-line-height: 1.375rem;
-  --ms-radius: 0.375rem;
-  --ms-border-color: hsl(var(--input));
-  --ms-bg: hsl(var(--background));
-  --ms-py: 0.5rem;
-  --ms-px: 0.75rem;
-  min-height: 3rem;
-  width: 100%;
-}
-</style>

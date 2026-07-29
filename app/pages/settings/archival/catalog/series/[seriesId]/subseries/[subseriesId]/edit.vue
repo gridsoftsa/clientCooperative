@@ -20,10 +20,15 @@ const subseriesId = computed(() => Number(route.params.subseriesId))
 
 const series = ref<DocSeriesRow | null>(null)
 const form = ref({ code: '', name: '', description: '', is_active: true })
+const initialIsActive = ref(true)
+const activeDocumentTypesCount = ref(0)
 const loading = ref(true)
 const saving = ref(false)
+const cascadeDialogOpen = ref(false)
 
 const seriesCodePrefix = computed(() => series.value?.code ?? '')
+
+const isDeactivating = computed(() => initialIsActive.value && form.value.is_active === false)
 
 async function load() {
   loading.value = true
@@ -41,15 +46,19 @@ async function load() {
       description: row.description ?? '',
       is_active: row.is_active,
     }
-  } catch {
+    initialIsActive.value = row.is_active
+    activeDocumentTypesCount.value = row.active_document_types_count ?? 0
+  }
+  catch {
     toast.error('Subserie no encontrada')
     await router.push(catalogApi.subseriesListPath(seriesId.value))
-  } finally {
+  }
+  finally {
     loading.value = false
   }
 }
 
-async function submit() {
+async function persist(cascadeDeactivateChildren: boolean) {
   saving.value = true
   try {
     const code = catalogCodeSuffix(seriesCodePrefix.value, form.value.code)
@@ -60,15 +69,41 @@ async function submit() {
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
         is_active: form.value.is_active,
+        ...(isDeactivating.value && cascadeDeactivateChildren
+          ? { cascade_deactivate_active_children: true }
+          : {}),
       },
     })
     toast.success('Subserie actualizada')
     await router.push(catalogApi.subseriesListPath(seriesId.value))
-  } catch (e: any) {
-    toast.error(e?.data?.message || 'No se pudo guardar')
-  } finally {
-    saving.value = false
   }
+  catch (e: unknown) {
+    const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors?.is_active?.[0]
+    toast.error(first ?? err.data?.message ?? 'No se pudo guardar')
+  }
+  finally {
+    saving.value = false
+    cascadeDialogOpen.value = false
+  }
+}
+
+function submit() {
+  if (isDeactivating.value && activeDocumentTypesCount.value > 0) {
+    cascadeDialogOpen.value = true
+    return
+  }
+
+  void persist(false)
+}
+
+function confirmCascadeDeactivation() {
+  void persist(true)
+}
+
+function cancelCascadeDialog() {
+  cascadeDialogOpen.value = false
+  form.value.is_active = true
 }
 
 onMounted(load)
@@ -117,6 +152,13 @@ onMounted(load)
             <Switch id="active" v-model="form.is_active" />
             <Label for="active" class="font-normal">{{ form.is_active ? 'Activa' : 'Inactiva' }}</Label>
           </div>
+          <p
+            v-if="activeDocumentTypesCount > 0 && form.is_active"
+            class="text-xs text-muted-foreground"
+          >
+            {{ activeDocumentTypesCount }} tipo(s) documental(es) activo(s) en esta subserie.
+            Al inactivarla se le preguntará si desea inactivarlos también.
+          </p>
           <div class="flex justify-end gap-2">
             <Button :disabled="saving" @click="submit">
               Guardar
@@ -125,5 +167,27 @@ onMounted(load)
         </CardContent>
       </Card>
     </div>
+
+    <AlertDialog v-model:open="cascadeDialogOpen">
+      <AlertDialogContent class="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Inactivar subserie</AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta subserie tiene
+            <strong>{{ activeDocumentTypesCount }}</strong>
+            tipo(s) documental(es) activo(s).
+            ¿Desea inactivarlos también antes de inactivar la subserie?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter class="flex-col gap-2 sm:flex-row sm:justify-end">
+          <AlertDialogCancel :disabled="saving" @click="cancelCascadeDialog">
+            Cancelar
+          </AlertDialogCancel>
+          <Button :disabled="saving" @click="confirmCascadeDeactivation">
+            Inactivar tipos y subserie
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </SettingsLayout>
 </template>

@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import Multiselect from '@vueform/multiselect'
 import { toast } from 'vue-sonner'
 import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
 import {
-  DOCUMENT_SUPPORT_OPTIONS,
   parseAllowedSupport,
   serializeAllowedSupport,
 } from '~/constants/archival-document-support'
@@ -34,6 +32,7 @@ const form = ref({
   description: '',
   is_active: true,
 })
+const initialIsActive = ref(true)
 const loading = ref(true)
 const saving = ref(false)
 
@@ -59,6 +58,7 @@ async function load() {
       description: row.description ?? '',
       is_active: row.is_active,
     }
+    initialIsActive.value = row.is_active
   } catch {
     toast.error('Tipo no encontrado')
     await router.push(catalogApi.documentTypesListPath(seriesId.value, subseriesId.value))
@@ -83,8 +83,13 @@ async function submit() {
     })
     toast.success('Tipo documental actualizado')
     await router.push(catalogApi.documentTypesListPath(seriesId.value, subseriesId.value))
-  } catch (e: any) {
-    toast.error(e?.data?.message || 'No se pudo guardar')
+  } catch (e: unknown) {
+    const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors?.is_active?.[0]
+    toast.error(first ?? err.data?.message ?? 'No se pudo guardar')
+    if (first && initialIsActive.value) {
+      form.value.is_active = true
+    }
   } finally {
     saving.value = false
   }
@@ -129,21 +134,13 @@ onMounted(load)
           </div>
           <div class="space-y-2">
             <Label for="support">Soporte permitido</Label>
-            <div class="catalog-document-support-ms w-full">
-              <Multiselect
-                id="support"
-                v-model="allowedSupportSelected"
-                mode="tags"
-                :object="false"
-                :options="[...DOCUMENT_SUPPORT_OPTIONS]"
-                value-prop="value"
-                label="label"
-                :searchable="false"
-                :close-on-select="false"
-                placeholder="Seleccione soporte…"
-                class="multiselect-document-support w-full"
-              />
-            </div>
+            <p class="text-xs text-muted-foreground">
+              Puede seleccionar Papel, Digital o ambos.
+            </p>
+            <ArchivalDocumentAllowedSupportField
+              id="support"
+              v-model="allowedSupportSelected"
+            />
           </div>
           <div class="space-y-2">
             <Label>Descripción</Label>
@@ -153,6 +150,10 @@ onMounted(load)
             <Switch id="active" v-model="form.is_active" />
             <Label for="active" class="font-normal">{{ form.is_active ? 'Activo' : 'Inactivo' }}</Label>
           </div>
+          <p v-if="!form.is_active" class="text-xs text-muted-foreground leading-relaxed">
+            Al inactivar, el tipo se conserva en el catálogo pero no podrá usarse en nuevas operaciones.
+            Si está en TRD o tiene reglas de retención, el sistema rechazará la inactivación.
+          </p>
           <Button :disabled="saving" @click="submit">
             Guardar
           </Button>
@@ -161,12 +162,3 @@ onMounted(load)
     </div>
   </SettingsLayout>
 </template>
-
-<style src="@vueform/multiselect/themes/default.css"></style>
-<style scoped>
-.catalog-document-support-ms :deep(.multiselect-document-support) {
-  --ms-font-size: 0.875rem;
-  min-height: 3rem;
-  width: 100%;
-}
-</style>

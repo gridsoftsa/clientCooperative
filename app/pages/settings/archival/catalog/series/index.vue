@@ -211,7 +211,7 @@ onMounted(async () => {
               </Button>
             </PermissionGate>
           </div>
-          <div v-else class="border rounded-lg overflow-hidden">
+          <div v-else class="overflow-x-auto rounded-lg border">
             <p v-if="selectedUnit" class="text-sm text-muted-foreground px-4 py-2 border-b bg-muted/30">
               Área: <span class="font-medium text-foreground">{{ selectedUnit.name }}</span>
               <span class="font-mono">({{ selectedUnit.code }})</span>
@@ -226,7 +226,9 @@ onMounted(async () => {
                     Subseries
                   </TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead class="w-[200px]" />
+                  <TableHead class="text-right">
+                    Acciones
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -243,19 +245,21 @@ onMounted(async () => {
                       {{ r.is_active ? 'Activa' : 'Inactiva' }}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    <div class="flex gap-1">
+                  <TableCell class="text-right !whitespace-normal">
+                    <div class="flex flex-wrap justify-end gap-1">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
                         @click="router.push(catalogApi.subseriesListPath(r.id))"
                       >
                         Subseries
                       </Button>
                       <PermissionGate permission="trd_catalogo_editar">
                         <Button
-                          variant="ghost"
+                          variant="warning"
                           size="sm"
+                          class="h-8 gap-1.5 px-2 text-xs"
                           @click="router.push(`/settings/archival/catalog/series/${r.id}/edit`)"
                         >
                           Editar

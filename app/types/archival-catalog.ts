@@ -6,6 +6,7 @@ export interface DocSeriesRow {
   description?: string | null
   is_active: boolean
   subseries_count?: number
+  active_subseries_count?: number
   org_unit?: { id: number; name: string; code: string }
 }
 
@@ -17,6 +18,7 @@ export interface DocSubseriesRow {
   description?: string | null
   is_active: boolean
   document_types_count?: number
+  active_document_types_count?: number
   series?: Pick<DocSeriesRow, 'id' | 'code' | 'name'>
 }
 

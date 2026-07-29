@@ -105,9 +105,9 @@ const canAccess = computed(() => {
 </script>
 
 <template>
-  <template v-if="canAccess">
+  <span v-if="canAccess" class="contents">
     <slot />
-  </template>
+  </span>
   <template v-else-if="fallback">
     <slot name="fallback" />
   </template>

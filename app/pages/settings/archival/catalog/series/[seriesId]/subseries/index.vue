@@ -14,9 +14,23 @@ const catalogApi = useArchivalCatalogApi()
 
 const seriesId = computed(() => Number(route.params.seriesId))
 
+const seriesListPath = computed(() => {
+  const orgUnitId = series.value?.org_unit_id
+  if (orgUnitId != null) {
+    return `/settings/archival/catalog/series?org_unit_id=${orgUnitId}`
+  }
+
+  return '/settings/archival/catalog/series'
+})
+
 const series = ref<DocSeriesRow | null>(null)
 const rows = ref<DocSubseriesRow[]>([])
 const loading = ref(false)
+const deactivatingRow = ref<DocSubseriesRow | null>(null)
+const cascadeDialogOpen = ref(false)
+const savingDeactivate = ref(false)
+
+const { $api } = useNuxtApp()
 
 async function load() {
   if (!Number.isFinite(seriesId.value) || seriesId.value <= 0) {
@@ -43,6 +57,52 @@ async function load() {
 }
 
 onMounted(load)
+
+function openDeactivateDialog(row: DocSubseriesRow) {
+  deactivatingRow.value = row
+  const activeTypes = row.active_document_types_count ?? 0
+  if (activeTypes > 0) {
+    cascadeDialogOpen.value = true
+    return
+  }
+
+  void deactivateSubseries(row, false)
+}
+
+function cancelDeactivateDialog() {
+  cascadeDialogOpen.value = false
+  deactivatingRow.value = null
+}
+
+async function deactivateSubseries(row: DocSubseriesRow, cascade: boolean) {
+  savingDeactivate.value = true
+  try {
+    await $api(`/archival/catalog/subseries/${row.id}`, {
+      method: 'PUT',
+      body: {
+        is_active: false,
+        ...(cascade ? { cascade_deactivate_active_children: true } : {}),
+      },
+    })
+    toast.success('Subserie inactivada')
+    await load()
+  }
+  catch (e: unknown) {
+    const err = e as { data?: { errors?: Record<string, string[]> } }
+    const first = err.data?.errors?.is_active?.[0]
+    toast.error(first ?? 'No se pudo inactivar la subserie')
+  }
+  finally {
+    savingDeactivate.value = false
+    cancelDeactivateDialog()
+  }
+}
+
+function confirmCascadeDeactivate() {
+  if (deactivatingRow.value) {
+    void deactivateSubseries(deactivatingRow.value, true)
+  }
+}
 </script>
 
 <template>
@@ -54,7 +114,7 @@ onMounted(load)
             variant="ghost"
             size="sm"
             class="h-8 w-fit -ml-2 px-2"
-            @click="router.push('/settings/archival/catalog/series')"
+            @click="router.push(seriesListPath)"
           >
             <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
             Series
@@ -98,7 +158,7 @@ onMounted(load)
           <div v-else-if="rows.length === 0" class="py-8 text-center text-muted-foreground leading-relaxed">
             No hay subseries en esta serie.
           </div>
-          <div v-else class="border rounded-lg overflow-hidden">
+          <div v-else class="overflow-x-auto rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -108,7 +168,9 @@ onMounted(load)
                     Tipos doc.
                   </TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead class="w-[200px]" />
+                  <TableHead class="text-right">
+                    Acciones
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -125,22 +187,35 @@ onMounted(load)
                       {{ r.is_active ? 'Activa' : 'Inactiva' }}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                    <div class="flex gap-1">
+                  <TableCell class="text-right !whitespace-normal">
+                    <div class="flex flex-wrap justify-end gap-1">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
                         @click="router.push(catalogApi.documentTypesListPath(seriesId, r.id))"
                       >
-                        Tipos
+                        Tipos documentales
                       </Button>
                       <PermissionGate permission="trd_catalogo_editar">
                         <Button
-                          variant="ghost"
+                          variant="warning"
                           size="sm"
+                          class="h-8 gap-1.5 px-2 text-xs"
                           @click="router.push(`/settings/archival/catalog/series/${seriesId}/subseries/${r.id}/edit`)"
                         >
                           Editar
+                        </Button>
+                        <Button
+                          v-if="r.is_active"
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          class="h-8 gap-1.5 px-2 text-xs"
+                          @click="openDeactivateDialog(r)"
+                        >
+                          <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                          Inactivar
                         </Button>
                       </PermissionGate>
                     </div>
@@ -152,5 +227,29 @@ onMounted(load)
         </CardContent>
       </Card>
     </div>
+
+    <AlertDialog v-model:open="cascadeDialogOpen">
+      <AlertDialogContent class="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Inactivar subserie</AlertDialogTitle>
+          <AlertDialogDescription>
+            <template v-if="deactivatingRow">
+              La subserie <strong>{{ deactivatingRow.name }}</strong> tiene
+              <strong>{{ deactivatingRow.active_document_types_count ?? 0 }}</strong>
+              tipo(s) documental(es) activo(s).
+              ¿Desea inactivarlos también antes de inactivar la subserie?
+            </template>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter class="flex-col gap-2 sm:flex-row sm:justify-end">
+          <AlertDialogCancel :disabled="savingDeactivate" @click="cancelDeactivateDialog">
+            Cancelar
+          </AlertDialogCancel>
+          <Button :disabled="savingDeactivate" @click="confirmCascadeDeactivate">
+            Inactivar tipos y subserie
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </SettingsLayout>
 </template>
