@@ -8,6 +8,9 @@ import type { OrgUnitRow, OrgPositionRow } from '~/composables/useOrgStructureAp
 import type { PaginatedUsers, User } from '~/types/user'
 import {
   hasStaffPersonalInfoForUserPrefill,
+  isOrgStaffEmailValid,
+  orgStaffContactEmailErrorMessage,
+  orgStaffContactPhoneErrorMessage,
   staffEditDraftKey,
   staffEditReturnPath,
   userCreatePrefillFromStaff,
@@ -723,7 +726,7 @@ async function loadAll() {
   }
 }
 
-type DatosRequiredField = 'first_name' | 'first_last_name' | 'user_id' | 'document_pair'
+type DatosRequiredField = 'first_name' | 'first_last_name' | 'email' | 'phone' | 'user_id' | 'document_pair'
 type UbicacionRequiredField = 'org_office_id' | 'org_unit_id' | 'org_position_id' | 'effective_from'
 
 const datosSubmitAttempted = ref(false)
@@ -732,6 +735,8 @@ const ubicacionSubmitAttempted = ref(false)
 const datosRequiredFieldIds: Record<Exclude<DatosRequiredField, 'document_pair'>, string> = {
   first_name: 'fn_p',
   first_last_name: 'fl_p',
+  email: 'em_p',
+  phone: 'ph_p',
   user_id: 'usr_panel',
 }
 
@@ -749,6 +754,12 @@ function isDatosFieldMissing(field: DatosRequiredField): boolean {
   if (field === 'first_last_name') {
     return !datosForm.value.first_last_name.trim()
   }
+  if (field === 'email') {
+    return !isOrgStaffEmailValid(datosForm.value.email)
+  }
+  if (field === 'phone') {
+    return !datosForm.value.phone.trim()
+  }
   if (field === 'user_id') {
     return datosForm.value.user_id == null
   }
@@ -758,7 +769,7 @@ function isDatosFieldMissing(field: DatosRequiredField): boolean {
 }
 
 function firstMissingDatosField(): DatosRequiredField | null {
-  const order: DatosRequiredField[] = ['first_name', 'first_last_name', 'user_id', 'document_pair']
+  const order: DatosRequiredField[] = ['first_name', 'first_last_name', 'email', 'phone', 'user_id', 'document_pair']
   return order.find(field => isDatosFieldMissing(field)) ?? null
 }
 
@@ -797,7 +808,15 @@ function multiselectErrorClass(missing: boolean): string {
   return missing ? 'multiselect-roles multiselect-danger' : 'multiselect-roles'
 }
 
-function datosFieldErrorClass(field: Exclude<DatosRequiredField, 'document_pair'>): string {
+function datosContactEmailErrorClass(): string {
+  return fieldErrorClass(datosSubmitAttempted.value && isDatosFieldMissing('email'))
+}
+
+function datosContactPhoneErrorClass(): string {
+  return fieldErrorClass(datosSubmitAttempted.value && isDatosFieldMissing('phone'))
+}
+
+function datosFieldErrorClass(field: Exclude<DatosRequiredField, 'document_pair' | 'email' | 'phone'>): string {
   return fieldErrorClass(datosSubmitAttempted.value && isDatosFieldMissing(field))
 }
 
@@ -853,6 +872,8 @@ async function handleSubmitDatos() {
     const messages: Record<DatosRequiredField, string> = {
       first_name: 'El primer nombre es obligatorio',
       first_last_name: 'El primer apellido es obligatorio',
+      email: orgStaffContactEmailErrorMessage(datosForm.value.email),
+      phone: orgStaffContactPhoneErrorMessage(),
       user_id: 'El vínculo con el usuario del sistema es obligatorio',
       document_pair: 'Indique tipo y número de documento',
     }
@@ -876,8 +897,8 @@ async function handleSubmitDatos() {
         second_name: datosForm.value.second_name.trim() || null,
         first_last_name: datosForm.value.first_last_name.trim(),
         second_last_name: datosForm.value.second_last_name.trim() || null,
-        email: datosForm.value.email.trim() || null,
-        phone: datosForm.value.phone.trim() || null,
+        email: datosForm.value.email.trim(),
+        phone: datosForm.value.phone.trim(),
         extension: datosForm.value.extension.trim() || null,
         document_type: datosForm.value.document_type.trim() || null,
         document_number: datosForm.value.document_number.trim() || null,
@@ -888,7 +909,11 @@ async function handleSubmitDatos() {
     toast.success('Datos actualizados')
     router.push('/settings/organizational-structure/staff')
   } catch (e: any) {
-    toast.error(e?.data?.message || e?.data?.errors?.user_id?.[0] || 'Error al guardar')
+    const err = e?.data?.errors
+    const first = err
+      ? Object.values(err as Record<string, string[]>)[0]?.[0]
+      : null
+    toast.error(first ?? e?.data?.message ?? e?.data?.errors?.user_id?.[0] ?? 'Error al guardar')
   } finally {
     savingDatos.value = false
   }
@@ -1092,12 +1117,38 @@ watch(
                   </p>
                   <div class="flex flex-wrap gap-x-8 gap-y-5">
                     <div class="staff-field-email space-y-2">
-                      <Label for="em_p" class="leading-snug">Correo</Label>
-                      <Input id="em_p" v-model="datosForm.email" type="email" :readonly="readOnly" />
+                      <Label for="em_p" class="leading-snug">Correo <span v-if="!readOnly">*</span></Label>
+                      <Input
+                        id="em_p"
+                        v-model="datosForm.email"
+                        type="email"
+                        autocomplete="email"
+                        :readonly="readOnly"
+                        :class="datosContactEmailErrorClass()"
+                      />
+                      <p
+                        v-if="!readOnly && datosSubmitAttempted && isDatosFieldMissing('email')"
+                        class="text-sm text-destructive"
+                      >
+                        {{ orgStaffContactEmailErrorMessage(datosForm.email) }}
+                      </p>
                     </div>
                     <div class="staff-field-phone space-y-2">
-                      <Label for="ph_p" class="leading-snug">Teléfono</Label>
-                      <Input id="ph_p" v-model="datosForm.phone" type="tel" :readonly="readOnly" />
+                      <Label for="ph_p" class="leading-snug">Teléfono <span v-if="!readOnly">*</span></Label>
+                      <Input
+                        id="ph_p"
+                        v-model="datosForm.phone"
+                        type="tel"
+                        autocomplete="tel"
+                        :readonly="readOnly"
+                        :class="datosContactPhoneErrorClass()"
+                      />
+                      <p
+                        v-if="!readOnly && datosSubmitAttempted && isDatosFieldMissing('phone')"
+                        class="text-sm text-destructive"
+                      >
+                        {{ orgStaffContactPhoneErrorMessage() }}
+                      </p>
                     </div>
                     <div class="staff-field-extension space-y-2">
                       <Label for="ex_p" class="leading-snug">Extensión</Label>

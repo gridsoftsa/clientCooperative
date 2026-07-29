@@ -4,32 +4,66 @@ export const ARCHIVAL_MULTISELECT_CLASSES = {
   dropdown: 'multiselect-dropdown archival-single-multiselect-dropdown',
 } as const
 
-type MultiselectOpenInstance = ComponentPublicInstance & { $el: HTMLElement }
+type MultiselectOpenInstance = ComponentPublicInstance & {
+  $el: HTMLElement
+  updatePopper?: () => void
+}
 
-function widenArchivalDropdown(multiselectEl: HTMLElement): void {
-  const applyWidth = (): void => {
-    const triggerWidth = Math.max(multiselectEl.offsetWidth, 280)
-    const dropdownId = multiselectEl.id ? `${multiselectEl.id}-dropdown` : null
-    const dropdown = dropdownId
-      ? document.getElementById(dropdownId)
-      : document.querySelector<HTMLElement>('.archival-single-multiselect-dropdown:not(.is-hidden)')
-
-    if (!dropdown) {
-      return
+function findArchivalDropdownForTrigger(multiselectEl: HTMLElement): HTMLElement | null {
+  const dropdownId = multiselectEl.id ? `${multiselectEl.id}-dropdown` : null
+  if (dropdownId) {
+    const byId = document.getElementById(dropdownId)
+    if (byId) {
+      return byId
     }
+  }
 
-    dropdown.style.setProperty('min-width', `${triggerWidth}px`, 'important')
-    dropdown.style.setProperty('width', `${triggerWidth}px`, 'important')
-    dropdown.style.setProperty('max-width', 'min(36rem, calc(100vw - 1.5rem))', 'important')
+  const openDropdowns = document.querySelectorAll<HTMLElement>(
+    '.multiselect-dropdown.archival-single-multiselect-dropdown:not(.is-hidden)',
+  )
+
+  if (openDropdowns.length === 1) {
+    return openDropdowns[0] ?? null
+  }
+
+  return null
+}
+
+function syncArchivalDropdownWidth(multiselectEl: HTMLElement): void {
+  const dropdown = findArchivalDropdownForTrigger(multiselectEl)
+  if (!dropdown) {
+    return
+  }
+
+  const triggerWidth = Math.max(
+    multiselectEl.getBoundingClientRect().width,
+    multiselectEl.offsetWidth,
+    280,
+  )
+
+  dropdown.style.setProperty('min-width', `${triggerWidth}px`, 'important')
+  dropdown.style.setProperty('width', `${triggerWidth}px`, 'important')
+  dropdown.style.setProperty('max-width', 'min(36rem, calc(100vw - 1.5rem))', 'important')
+}
+
+function scheduleArchivalDropdownSync(
+  multiselectEl: HTMLElement,
+  instance: MultiselectOpenInstance,
+): void {
+  const run = (): void => {
+    syncArchivalDropdownWidth(multiselectEl)
+    instance.updatePopper?.()
   }
 
   nextTick(() => {
     requestAnimationFrame(() => {
-      applyWidth()
-      // El dropdown a veces monta un frame después del evento open.
-      requestAnimationFrame(applyWidth)
+      run()
+      requestAnimationFrame(run)
     })
   })
+
+  window.setTimeout(run, 0)
+  window.setTimeout(run, 48)
 }
 
 export function onArchivalMultiselectOpen(instance: MultiselectOpenInstance): void {
@@ -37,5 +71,5 @@ export function onArchivalMultiselectOpen(instance: MultiselectOpenInstance): vo
     return
   }
 
-  widenArchivalDropdown(instance.$el)
+  scheduleArchivalDropdownSync(instance.$el, instance)
 }

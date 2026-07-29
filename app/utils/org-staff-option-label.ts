@@ -61,3 +61,19 @@ export function orgStaffMultiselectOption(staff: OrgStaffListItem): OrgStaffMult
     subtitle,
   }
 }
+
+/** Opción para jefe de área: nombre + cargo vigente en el listado y en la etiqueta cerrada. */
+export function orgStaffUnitManagerMultiselectOption(staff: OrgStaffListItem): OrgStaffMultiselectOption {
+  const name = orgStaffDisplayName(staff)
+  const position = staff.current_assignment?.org_position
+  const cargo = position
+    ? (position.code ? `${position.name} (${position.code})` : position.name)
+    : 'Sin cargo vigente en el área'
+
+  return {
+    value: staff.id,
+    label: `${name} — ${cargo}`,
+    title: name,
+    subtitle: cargo,
+  }
+}

@@ -19,9 +19,13 @@ const orgApi = useOrgStructureApi()
 
 const offices = ref<OrgOffice[]>([])
 const unitsInOffice = ref<OrgUnitRow[]>([])
-const staffOptions = ref<Array<{ id: number, label: string }>>([])
 const allUnits = ref<OrgUnitRow[]>([])
 const loading = ref(true)
+const managerStaffSelectRef = ref<{
+  ensureManagerInList: (manager: { id: number, first_name: string, first_last_name: string } | null | undefined) => void
+  containsStaff: (staffId: number) => boolean
+} | null>(null)
+const pendingManagerStaff = ref<{ id: number, first_name: string, first_last_name: string } | null>(null)
 
 const form = ref({
   org_office_id: null as number | null,
@@ -63,11 +67,16 @@ const areaOptions = computed(() =>
 async function loadCatalogs() {
   offices.value = await orgApi.fetchOffices({ activeOnly: false })
   allUnits.value = await orgApi.fetchUnits({ activeOnly: false })
-  const staff = await orgApi.fetchStaff({ activeOnly: false })
-  staffOptions.value = staff.map((s) => {
-    const n = [s.first_name, s.second_name, s.first_last_name, s.second_last_name].filter(Boolean).join(' ')
-    return { id: s.id, label: `${n}${s.document_number ? ` · ${s.document_number}` : ''}` }
-  })
+}
+
+function onManagerStaffReady() {
+  managerStaffSelectRef.value?.ensureManagerInList(pendingManagerStaff.value ?? undefined)
+  if (
+    form.value.manager_staff_id != null
+    && !managerStaffSelectRef.value?.containsStaff(form.value.manager_staff_id)
+  ) {
+    form.value.manager_staff_id = null
+  }
 }
 
 async function refreshUnitsForOffice(id: number) {
@@ -88,6 +97,7 @@ async function loadUnit() {
     await loadCatalogs()
     const res = await $api<{ data: OrgUnitRow }>(`/organizational-structure/org-units/${unitId.value}`)
     const u = res.data
+    pendingManagerStaff.value = u.manager_staff ?? null
     form.value = {
       org_office_id: u.org_office_id,
       parent_id: u.parent_id,
@@ -103,6 +113,8 @@ async function loadUnit() {
       related_org_unit_ids: (u.related_units ?? []).map(x => x.id),
     }
     await refreshUnitsForOffice(u.org_office_id)
+    await nextTick()
+    onManagerStaffReady()
   }
   catch {
     toast.error('No se encontró el área')
@@ -272,26 +284,13 @@ onMounted(() => {
 
               <div class="space-y-3">
                 <Label for="mgr_e" class="leading-snug">Jefe del área (opcional)</Label>
-                <Select
-                  :model-value="form.manager_staff_id == null ? 'none' : String(form.manager_staff_id)"
-                  @update:model-value="(v) => { form.manager_staff_id = v === 'none' ? null : Number(v) }"
-                >
-                  <SelectTrigger id="mgr_e">
-                    <SelectValue placeholder="Sin asignar" />
-                  </SelectTrigger>
-                  <SelectContent class="max-h-60">
-                    <SelectItem value="none">
-                      (Sin asignar)
-                    </SelectItem>
-                    <SelectItem
-                      v-for="s in staffOptions"
-                      :key="s.id"
-                      :value="String(s.id)"
-                    >
-                      {{ s.label }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <OrgUnitManagerStaffMultiselect
+                  ref="managerStaffSelectRef"
+                  v-model="form.manager_staff_id"
+                  :org-unit-id="unitId"
+                  input-id="mgr_e_ms"
+                  @ready="onManagerStaffReady"
+                />
               </div>
 
               <div class="space-y-3">

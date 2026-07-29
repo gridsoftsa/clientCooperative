@@ -521,12 +521,19 @@ html.dark .archival-single-multiselect .multiselect-search,
   color: var(--foreground) !important;
 }
 
-/* Dropdown teletransportado: mismo ancho que el campo; texto legible */
+/* Dropdown teletransportado: ancho lo fija Popper (sameWidth) + sync en @open */
 .multiselect-dropdown.archival-single-multiselect-dropdown {
-  min-width: 16rem !important;
-  width: 16rem !important;
+  min-width: 12rem !important;
   max-width: min(36rem, calc(100vw - 1.5rem)) !important;
   box-sizing: border-box !important;
+}
+
+.multiselect-dropdown.archival-single-multiselect-dropdown .multiselect-option:has(.archival-ms-option) {
+  overflow: visible;
+  text-overflow: unset;
+  white-space: normal;
+  height: auto;
+  align-items: flex-start;
 }
 
 .multiselect-dropdown.archival-single-multiselect-dropdown .multiselect-option {

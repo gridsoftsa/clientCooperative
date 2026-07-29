@@ -85,3 +85,25 @@ export function hasStaffPersonalInfoForUserPrefill(staff: StaffCreateDraft): boo
     || staff.phone.trim(),
   )
 }
+
+export function isOrgStaffEmailValid(email: string): boolean {
+  const trimmed = email.trim()
+
+  if (!trimmed) {
+    return false
+  }
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)
+}
+
+export function orgStaffContactEmailErrorMessage(email: string): string {
+  if (!email.trim()) {
+    return 'El correo electrónico es obligatorio'
+  }
+
+  return 'Ingrese un correo electrónico válido'
+}
+
+export function orgStaffContactPhoneErrorMessage(): string {
+  return 'El teléfono es obligatorio'
+}

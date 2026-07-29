@@ -17,7 +17,6 @@ const orgApi = useOrgStructureApi()
 
 const offices = ref<OrgOffice[]>([])
 const unitsInOffice = ref<OrgUnitRow[]>([])
-const staffOptions = ref<Array<{ id: number, label: string }>>([])
 const allUnits = ref<OrgUnitRow[]>([])
 
 const form = ref({
@@ -55,11 +54,6 @@ async function loadCatalogs() {
   try {
     offices.value = await orgApi.fetchOffices({ activeOnly: true })
     allUnits.value = await orgApi.fetchUnits({ activeOnly: true })
-    const staff = await orgApi.fetchStaff({ activeOnly: true })
-    staffOptions.value = staff.map((s) => {
-      const n = [s.first_name, s.second_name, s.first_last_name, s.second_last_name].filter(Boolean).join(' ')
-      return { id: s.id, label: `${n}${s.document_number ? ` · ${s.document_number}` : ''}` }
-    })
   }
   catch {
     toast.error('Error al cargar catálogos')
@@ -235,27 +229,13 @@ onMounted(() => {
               </div>
 
               <div class="space-y-3">
-                <Label for="mgr" class="leading-snug">Responsable / jefe del área (opcional)</Label>
-                <Select
-                  :model-value="form.manager_staff_id == null ? 'none' : String(form.manager_staff_id)"
-                  @update:model-value="(v) => { form.manager_staff_id = v === 'none' ? null : Number(v) }"
-                >
-                  <SelectTrigger id="mgr">
-                    <SelectValue placeholder="Sin asignar" />
-                  </SelectTrigger>
-                  <SelectContent class="max-h-60">
-                    <SelectItem value="none">
-                      (Sin asignar)
-                    </SelectItem>
-                    <SelectItem
-                      v-for="s in staffOptions"
-                      :key="s.id"
-                      :value="String(s.id)"
-                    >
-                      {{ s.label }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label for="mgr_create_ms" class="leading-snug">Responsable / jefe del área (opcional)</Label>
+                <OrgUnitManagerStaffMultiselect
+                  v-model="form.manager_staff_id"
+                  :org-unit-id="null"
+                  input-id="mgr_create_ms"
+                  helper-text="El jefe se asigna al editar el área, con funcionarios que tengan ubicación vigente en esa dependencia."
+                />
               </div>
 
               <div class="space-y-3">

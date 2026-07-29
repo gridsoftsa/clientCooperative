@@ -7,6 +7,9 @@ import {
   STAFF_CREATE_RETURN_PATH,
   USER_CREATE_PREFILL_FROM_STAFF_KEY,
   hasStaffPersonalInfoForUserPrefill,
+  isOrgStaffEmailValid,
+  orgStaffContactEmailErrorMessage,
+  orgStaffContactPhoneErrorMessage,
   userCreatePrefillFromStaff,
 } from '~/utils/staff-user-create-bridge'
 
@@ -146,6 +149,8 @@ async function handleSubmit() {
     const messages: Record<RequiredField, string> = {
       first_name: 'El primer nombre es obligatorio',
       first_last_name: 'El primer apellido es obligatorio',
+      email: orgStaffContactEmailErrorMessage(form.value.email),
+      phone: orgStaffContactPhoneErrorMessage(),
       user_id: 'El vínculo con el usuario del sistema es obligatorio',
       document_pair: 'Indique tipo y número de documento',
     }
@@ -170,8 +175,8 @@ async function handleSubmit() {
         second_name: form.value.second_name.trim() || undefined,
         first_last_name: form.value.first_last_name.trim(),
         second_last_name: form.value.second_last_name.trim() || undefined,
-        email: form.value.email.trim() || undefined,
-        phone: form.value.phone.trim() || undefined,
+        email: form.value.email.trim(),
+        phone: form.value.phone.trim(),
         extension: form.value.extension.trim() || undefined,
         document_type: form.value.document_type.trim() || undefined,
         document_number: form.value.document_number.trim() || undefined,
@@ -187,20 +192,26 @@ async function handleSubmit() {
     })
   }
   catch (e: any) {
-    toast.error(e?.data?.message || e?.data?.errors?.user_id?.[0] || 'Error al crear')
+    const err = e?.data?.errors
+    const first = err
+      ? Object.values(err as Record<string, string[]>)[0]?.[0]
+      : null
+    toast.error(first ?? e?.data?.message ?? e?.data?.errors?.user_id?.[0] ?? 'Error al crear')
   }
   finally {
     saving.value = false
   }
 }
 
-type RequiredField = 'first_name' | 'first_last_name' | 'user_id' | 'document_pair'
+type RequiredField = 'first_name' | 'first_last_name' | 'email' | 'phone' | 'user_id' | 'document_pair'
 
 const submitAttempted = ref(false)
 
 const requiredFieldIds: Record<Exclude<RequiredField, 'document_pair'>, string> = {
   first_name: 'fn',
   first_last_name: 'fl',
+  email: 'em',
+  phone: 'ph',
   user_id: 'usr',
 }
 
@@ -211,6 +222,12 @@ function isFieldMissing(field: RequiredField): boolean {
   if (field === 'first_last_name') {
     return !form.value.first_last_name.trim()
   }
+  if (field === 'email') {
+    return !isOrgStaffEmailValid(form.value.email)
+  }
+  if (field === 'phone') {
+    return !form.value.phone.trim()
+  }
   if (field === 'user_id') {
     return form.value.user_id == null
   }
@@ -220,7 +237,7 @@ function isFieldMissing(field: RequiredField): boolean {
 }
 
 function firstMissingField(): RequiredField | null {
-  const order: RequiredField[] = ['first_name', 'first_last_name', 'user_id', 'document_pair']
+  const order: RequiredField[] = ['first_name', 'first_last_name', 'email', 'phone', 'user_id', 'document_pair']
   return order.find(field => isFieldMissing(field)) ?? null
 }
 
@@ -247,7 +264,15 @@ function multiselectErrorClass(missing: boolean): string {
   return missing ? 'multiselect-roles multiselect-danger' : 'multiselect-roles'
 }
 
-function formFieldErrorClass(field: Exclude<RequiredField, 'document_pair'>): string {
+function contactEmailErrorClass(): string {
+  return fieldErrorClass(submitAttempted.value && isFieldMissing('email'))
+}
+
+function contactPhoneErrorClass(): string {
+  return fieldErrorClass(submitAttempted.value && isFieldMissing('phone'))
+}
+
+function formFieldErrorClass(field: Exclude<RequiredField, 'document_pair' | 'email' | 'phone'>): string {
   return fieldErrorClass(submitAttempted.value && isFieldMissing(field))
 }
 
@@ -306,7 +331,7 @@ onMounted(async () => {
             <CardHeader class="gap-2">
               <CardTitle class="leading-snug">Datos del funcionario</CardTitle>
               <CardDescription class="leading-relaxed">
-                Nombre completo y vínculo con usuario del sistema son obligatorios.
+                Nombre completo, correo, teléfono y vínculo con usuario del sistema son obligatorios.
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-8">
@@ -378,17 +403,36 @@ onMounted(async () => {
                 </p>
                 <div class="flex flex-wrap gap-x-8 gap-y-5">
                   <div class="staff-field-email space-y-2">
-                    <Label for="em" class="leading-snug">Correo</Label>
+                    <Label for="em" class="leading-snug">Correo *</Label>
                     <Input
                       id="em"
                       v-model="form.email"
                       type="email"
                       autocomplete="email"
+                      :class="contactEmailErrorClass()"
                     />
+                    <p
+                      v-if="submitAttempted && isFieldMissing('email')"
+                      class="text-sm text-destructive"
+                    >
+                      {{ orgStaffContactEmailErrorMessage(form.email) }}
+                    </p>
                   </div>
                   <div class="staff-field-phone space-y-2">
-                    <Label for="ph" class="leading-snug">Teléfono</Label>
-                    <Input id="ph" v-model="form.phone" type="tel" autocomplete="tel" />
+                    <Label for="ph" class="leading-snug">Teléfono *</Label>
+                    <Input
+                      id="ph"
+                      v-model="form.phone"
+                      type="tel"
+                      autocomplete="tel"
+                      :class="contactPhoneErrorClass()"
+                    />
+                    <p
+                      v-if="submitAttempted && isFieldMissing('phone')"
+                      class="text-sm text-destructive"
+                    >
+                      {{ orgStaffContactPhoneErrorMessage() }}
+                    </p>
                   </div>
                   <div class="staff-field-extension space-y-2">
                     <Label for="ex" class="leading-snug">Extensión</Label>
