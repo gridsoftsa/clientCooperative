@@ -3,6 +3,15 @@ export interface ArchivalReportPayload {
   rows: Array<Record<string, unknown>>
 }
 
+/** Laravel `boolean` rule accepts 0/1 in query strings, not literal "true"/"false". */
+function queryFlag(value: boolean | undefined): 0 | 1 | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  return value ? 1 : 0
+}
+
 export function useArchivalReportsApi() {
   const { $api } = useNuxtApp()
   const { downloadReportFile } = useReportExport()
@@ -11,7 +20,14 @@ export function useArchivalReportsApi() {
     level?: 'series' | 'subseries' | 'document_type'
     active_only?: boolean
   }): Promise<ArchivalReportPayload> {
-    const res = await $api<{ data: ArchivalReportPayload }>('/archival/reports/catalog', { query })
+    const { active_only, ...rest } = query
+    const flag = queryFlag(active_only)
+    const res = await $api<{ data: ArchivalReportPayload }>('/archival/reports/catalog', {
+      query: {
+        ...rest,
+        ...(flag !== undefined ? { active_only: flag } : {}),
+      },
+    })
     return res.data
   }
 
@@ -30,8 +46,29 @@ export function useArchivalReportsApi() {
     version_status?: string | null
     active_catalog_only?: boolean
   }): Promise<ArchivalReportPayload> {
-    const res = await $api<{ data: ArchivalReportPayload }>('/archival/reports/catalog-usage', { query })
+    const { active_catalog_only, ...rest } = query
+    const flag = queryFlag(active_catalog_only)
+    const res = await $api<{ data: ArchivalReportPayload }>('/archival/reports/catalog-usage', {
+      query: {
+        ...rest,
+        ...(flag !== undefined ? { active_catalog_only: flag } : {}),
+      },
+    })
     return res.data
+  }
+
+  function withQueryFlags(
+    query: Record<string, string | number | boolean | null | undefined>,
+  ): Record<string, string | number | null | undefined> {
+    const out: Record<string, string | number | null | undefined> = { ...query }
+    if (typeof out.active_only === 'boolean') {
+      out.active_only = queryFlag(out.active_only)
+    }
+    if (typeof out.active_catalog_only === 'boolean') {
+      out.active_catalog_only = queryFlag(out.active_catalog_only)
+    }
+
+    return out
   }
 
   function exportCatalog(
@@ -43,7 +80,7 @@ export function useArchivalReportsApi() {
       ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       : 'application/pdf'
 
-    return downloadReportFile('/archival/reports/catalog/export', { ...query, format }, filename, mime)
+    return downloadReportFile('/archival/reports/catalog/export', { ...withQueryFlags(query), format }, filename, mime)
   }
 
   function exportTrdVersions(
@@ -67,7 +104,7 @@ export function useArchivalReportsApi() {
       ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       : 'application/pdf'
 
-    return downloadReportFile('/archival/reports/catalog-usage/export', { ...query, format }, filename, mime)
+    return downloadReportFile('/archival/reports/catalog-usage/export', { ...withQueryFlags(query), format }, filename, mime)
   }
 
   return {
