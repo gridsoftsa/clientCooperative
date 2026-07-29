@@ -46,7 +46,7 @@ const typeTabs: Array<{ value: string, label: string }> = [
   { value: 'news', label: 'Noticias' },
   { value: 'circular', label: 'Circulares' },
   { value: 'event', label: 'Eventos' },
-  { value: 'birthday', label: 'Cumpleaños' },
+  { value: 'announcement', label: 'Comunicados' },
 ]
 
 function typeBadgeClass(type: CommunicationTypeValue) {
@@ -179,6 +179,12 @@ function selectType(type: string) {
   loadAll()
 }
 
+function scrollToBirthdaysToday() {
+  if (import.meta.client) {
+    document.getElementById('cumpleanos-hoy')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+}
+
 function setListMode(mode: string) {
   sort.value = mode
   page.value = 1
@@ -213,7 +219,7 @@ watch(() => route.query.unread, (value) => {
           Comunicados
         </h1>
         <p class="mt-1 text-sm text-muted-foreground">
-          Canal interno de avisos, noticias, circulares y eventos.
+          Canal interno de avisos, noticias, circulares y eventos. Los cumpleaños del día salen de la fecha de nacimiento del funcionario en estructura organizacional.
         </p>
       </div>
       <div class="flex w-full max-w-xl flex-col gap-2 sm:flex-row">
@@ -263,8 +269,8 @@ watch(() => route.query.unread, (value) => {
           <div class="mt-2 text-3xl font-semibold">
             {{ dashboard?.stats.birthdays_today ?? 0 }}
           </div>
-          <button class="mt-2 text-sm text-primary hover:underline" type="button" @click="selectType('birthday')">
-            ver más
+          <button class="mt-2 text-sm text-primary hover:underline" type="button" @click="scrollToBirthdaysToday">
+            ver lista
           </button>
         </CardContent>
       </Card>
@@ -481,11 +487,14 @@ watch(() => route.query.unread, (value) => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="cumpleanos-hoy">
           <CardHeader>
             <CardTitle class="text-base">
               Cumpleaños de hoy
             </CardTitle>
+            <CardDescription>
+              Personas con fecha de nacimiento hoy en la estructura organizacional (no es un tipo de publicación).
+            </CardDescription>
           </CardHeader>
           <CardContent class="space-y-3">
             <div
@@ -506,7 +515,7 @@ watch(() => route.query.unread, (value) => {
               </div>
             </div>
             <p v-if="!(dashboard?.birthdays_today?.length)" class="text-sm text-muted-foreground">
-              No hay cumpleaños hoy.
+              No hay cumpleaños hoy. Registre la fecha de nacimiento del funcionario en estructura organizacional para que aparezca aquí.
             </p>
           </CardContent>
         </Card>

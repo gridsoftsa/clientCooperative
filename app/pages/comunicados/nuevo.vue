@@ -259,6 +259,7 @@ onMounted(loadOptions)
       </h1>
       <p class="text-sm text-muted-foreground">
         Cree un aviso, noticia, circular, evento o comunicado interno.
+        Los cumpleaños no se publican aquí: se muestran automáticamente en el tablero según la fecha de nacimiento del funcionario.
       </p>
     </div>
 
@@ -274,6 +275,9 @@ onMounted(loadOptions)
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
               <Label>Tipo</Label>
+              <p class="text-xs text-muted-foreground">
+                Aviso, noticia, circular, evento o comunicado. «Cumpleaños» no aplica: sale del perfil del funcionario.
+              </p>
               <ClientOnly>
                 <Multiselect
                   v-model="form.type"
