@@ -1,5 +1,7 @@
 name: Deploy QA (GD)
 
+permissions: {}
+
 # Despliega en gd-ing-lida solo cuando hay push a la rama GD.
 # Secretos requeridos en el repo (Settings → Secrets → Actions):
 #   QA_SSH_HOST       → 2.24.77.147
