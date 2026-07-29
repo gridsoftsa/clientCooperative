@@ -25,13 +25,31 @@ const fileType = ref<ArchivalFileType | null>(null)
 const requiredDraft = ref<RequiredDocumentDraft[]>([])
 
 function mapRequiredToDraft(items: ArchivalFileType['required_documents']): RequiredDocumentDraft[] {
-  return (items ?? []).map((item, index) => ({
-    doc_document_type_id: item.doc_document_type_id,
-    label: item.label ?? '',
-    workflow_stage_key: item.workflow_stage_key ?? '',
-    is_required: item.is_required,
-    sort_order: item.sort_order ?? index,
-  }))
+  return (items ?? []).map((item, index) => {
+    const docType = item.doc_document_type
+    const subseries = docType?.subseries
+    const docTypeId = item.doc_document_type_id ?? docType?.id ?? null
+
+    const catalogHierarchyHint =
+      subseries?.doc_series_id && docType?.doc_subseries_id
+        ? {
+            doc_series_id: subseries.doc_series_id,
+            doc_subseries_id: docType.doc_subseries_id,
+            doc_type: docType
+              ? { id: docType.id, code: docType.code, name: docType.name }
+              : undefined,
+          }
+        : null
+
+    return {
+      doc_document_type_id: docTypeId,
+      label: item.label ?? '',
+      workflow_stage_key: item.workflow_stage_key ?? '',
+      is_required: item.is_required,
+      sort_order: item.sort_order ?? index,
+      catalogHierarchyHint,
+    }
+  })
 }
 
 async function load() {
@@ -141,13 +159,18 @@ onMounted(() => load())
         </p>
       </div>
 
-      <Button
-        v-if="fileType && !fileType.is_system"
-        variant="destructive"
-        @click="deleteDialogOpen = true"
-      >
-        Eliminar tipo
-      </Button>
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" class="shrink-0" @click="router.push('/expedientes/tipos')">
+          Volver al listado
+        </Button>
+        <Button
+          v-if="fileType && !fileType.is_system"
+          variant="destructive"
+          @click="deleteDialogOpen = true"
+        >
+          Eliminar tipo
+        </Button>
+      </div>
     </div>
 
     <div v-if="loading" class="py-12 text-center text-muted-foreground">
@@ -171,7 +194,11 @@ onMounted(() => load())
         <TabsContent value="general" class="mt-4">
           <Card>
             <CardContent class="min-w-0 pt-6">
-              <ArchivalFileTypeForm :initial="fileType" @saved="onGeneralSaved" />
+              <ArchivalFileTypeForm
+                :initial="fileType"
+                @saved="onGeneralSaved"
+                @cancel="router.push('/expedientes/tipos')"
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -186,7 +213,10 @@ onMounted(() => load())
             </CardContent>
           </Card>
 
-          <div class="flex justify-end">
+          <div class="flex justify-end gap-2">
+            <Button type="button" variant="outline" @click="router.push('/expedientes/tipos')">
+              Cancelar
+            </Button>
             <Button :disabled="savingRequired" @click="saveRequiredDocuments">
               {{ savingRequired ? 'Guardando…' : 'Guardar obligatorios' }}
             </Button>

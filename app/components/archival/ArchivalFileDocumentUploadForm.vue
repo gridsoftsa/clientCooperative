@@ -15,13 +15,19 @@ import {
   ocrEngineIsUnavailable,
   pendingOcrValidationCount,
   stripOcrSuggestions,
-  validateArchivalMetadataFields,
   type ArchivalFileDocTypeOption,
 } from '~/utils/archival-file-upload'
 import {
   ARCHIVAL_MANUAL_UPLOAD_SOURCES,
   type ArchivalManualUploadSource,
 } from '~/constants/archival-document-sources'
+import {
+  archivalInputWarningClass,
+  archivalMetadataFieldDomId,
+  archivalSelectTriggerWarningClass,
+  findFirstMissingRequiredMetadataField,
+  focusArchivalFieldById,
+} from '~/utils/archival-form-validation'
 
 const props = defineProps<{
   file: ArchivalFile
@@ -44,6 +50,8 @@ const uploading = ref(false)
 const loadingCatalog = ref(false)
 const loadingSuggestions = ref(false)
 const loadingOcr = ref(false)
+const submitAttempted = ref(false)
+const highlightedMetadataFieldCode = ref<string | null>(null)
 
 const selectedFile = ref<File | null>(null)
 const title = ref('')
@@ -65,6 +73,69 @@ const ocrNeedsReprocess = ref(false)
 
 const docTypeOptions = ref<ArchivalFileDocTypeOption[]>([])
 const folderOptions = computed(() => flattenFileFolderNodes(props.tree))
+
+const attachNonRequired = ref(false)
+
+type MissingRequiredUploadChoice = {
+  docDocumentTypeId: number
+  requiredLabel: string
+  catalogLabel: string
+  workflowStageKey?: string | null
+}
+
+function catalogLabelForDocType(
+  docTypeId: number,
+  code?: string | null,
+  name?: string | null,
+): string {
+  const fromCatalog = docTypeOptions.value.find(option => option.id === docTypeId)
+  if (fromCatalog) {
+    return fromCatalog.label
+  }
+
+  if (code && name) {
+    return `${code} — ${name}`
+  }
+
+  if (name) {
+    return name
+  }
+
+  return 'Tipo documental del catálogo'
+}
+
+const missingRequiredChoices = computed((): MissingRequiredUploadChoice[] => {
+  const missing = props.required?.missing ?? []
+  if (missing.length === 0) {
+    return []
+  }
+
+  const grouped = new Map<number, { labels: string[], code?: string | null, name?: string | null, stage?: string | null }>()
+
+  for (const item of missing) {
+    const entry = grouped.get(item.doc_document_type_id) ?? {
+      labels: [],
+      code: item.document_type_code,
+      name: item.document_type_name,
+      stage: item.workflow_stage_key,
+    }
+    entry.labels.push(item.label)
+    grouped.set(item.doc_document_type_id, entry)
+  }
+
+  return Array.from(grouped.entries()).map(([docDocumentTypeId, entry]) => ({
+    docDocumentTypeId,
+    requiredLabel: entry.labels.join(' · '),
+    catalogLabel: catalogLabelForDocType(docDocumentTypeId, entry.code, entry.name),
+    workflowStageKey: entry.stage,
+  }))
+})
+
+const showRequiredDocumentPicker = computed(() => missingRequiredChoices.value.length > 0 && !attachNonRequired.value)
+
+const selectedRequiredChoice = computed(() =>
+  missingRequiredChoices.value.find(choice => choice.docDocumentTypeId === docDocumentTypeId.value) ?? null,
+)
 
 const allowsMasterDocuments = computed(() => props.file.file_type?.allows_master_documents ?? false)
 
@@ -178,9 +249,13 @@ async function loadCatalog() {
 }
 
 function preselectMissingDocType() {
-  const firstMissing = props.required?.missing?.[0]?.doc_document_type_id
-  if (firstMissing && !docDocumentTypeId.value) {
-    docDocumentTypeId.value = firstMissing
+  if (attachNonRequired.value) {
+    return
+  }
+
+  const first = missingRequiredChoices.value[0]
+  if (first && !docDocumentTypeId.value) {
+    docDocumentTypeId.value = first.docDocumentTypeId
   }
 }
 
@@ -320,23 +395,37 @@ function resetForm() {
   metadataFields.value = []
   docDocumentTypeId.value = null
   uploadSource.value = 'manual'
+  attachNonRequired.value = false
   preselectMissingDocType()
 }
 
 async function handleSubmit() {
+  submitAttempted.value = true
+  highlightedMetadataFieldCode.value = null
+
   if (!selectedFile.value) {
     toast.error('Seleccione un archivo.')
+    await nextTick()
+    focusArchivalFieldById('archival_upload_file')
     return
   }
 
   if (!docDocumentTypeId.value) {
     toast.error('Seleccione el tipo documental.')
+    await nextTick()
+    focusArchivalFieldById(
+      showRequiredDocumentPicker.value ? 'archival_upload_required_doc' : 'archival_upload_doc_type',
+    )
     return
   }
 
-  const metadataError = validateArchivalMetadataFields(metadataFields.value, metadataValues.value)
-  if (metadataError) {
-    toast.error(metadataError)
+  const missingMetadata = findFirstMissingRequiredMetadataField(metadataFields.value, metadataValues.value)
+  if (missingMetadata) {
+    highlightedMetadataFieldCode.value = missingMetadata.code
+    toast.error(`Complete el metadato obligatorio: ${missingMetadata.name}`)
+    await nextTick()
+    const idx = metadataFields.value.findIndex(f => f.code === missingMetadata.code)
+    focusArchivalFieldById(archivalMetadataFieldDomId(missingMetadata, idx >= 0 ? idx : 0))
     return
   }
 
@@ -417,6 +506,15 @@ watch(
   () => preselectMissingDocType(),
 )
 
+watch(attachNonRequired, (isOther) => {
+  if (isOther) {
+    docDocumentTypeId.value = null
+  }
+  else {
+    preselectMissingDocType()
+  }
+})
+
 onMounted(() => {
   if (props.presetNodeId) {
     archivalFileNodeId.value = props.presetNodeId
@@ -459,14 +557,93 @@ onMounted(() => {
       </p>
     </div>
 
-    <div class="space-y-2">
-      <Label for="archival_upload_doc_type">Tipo documental</Label>
+    <div
+      v-if="missingRequiredChoices.length"
+      class="space-y-2 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-3"
+    >
+      <p class="text-sm font-medium text-amber-950 dark:text-amber-50">
+        Documentos obligatorios pendientes
+      </p>
+      <ul class="space-y-1.5 text-sm">
+        <li
+          v-for="choice in missingRequiredChoices"
+          :key="`pending-${choice.docDocumentTypeId}`"
+          class="text-amber-950/90 dark:text-amber-50/90"
+        >
+          <span class="font-medium">{{ choice.requiredLabel }}</span>
+          <span class="text-xs text-muted-foreground"> — {{ choice.catalogLabel }}</span>
+        </li>
+      </ul>
+    </div>
+
+    <div v-if="showRequiredDocumentPicker" class="space-y-2">
+      <Label for="archival_upload_required_doc">Documento obligatorio a adjuntar</Label>
       <Select
         :model-value="docDocumentTypeId != null ? String(docDocumentTypeId) : undefined"
         :disabled="uploading || loadingCatalog"
         @update:model-value="docDocumentTypeId = $event ? Number($event) : null"
       >
-        <SelectTrigger id="archival_upload_doc_type">
+        <SelectTrigger
+          id="archival_upload_required_doc"
+          :class="archivalSelectTriggerWarningClass(submitAttempted && !docDocumentTypeId)"
+        >
+          <SelectValue :placeholder="loadingCatalog ? 'Cargando…' : 'Seleccione el documento pendiente'" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem
+            v-for="choice in missingRequiredChoices"
+            :key="`req-${choice.docDocumentTypeId}`"
+            :value="String(choice.docDocumentTypeId)"
+          >
+            {{ choice.requiredLabel }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+      <p v-if="selectedRequiredChoice" class="text-xs text-muted-foreground">
+        Tipo documental en catálogo (TRD):
+        <span class="text-foreground">{{ selectedRequiredChoice.catalogLabel }}</span>
+      </p>
+      <p
+        v-if="selectedRequiredChoice?.workflowStageKey"
+        class="text-xs text-muted-foreground"
+      >
+        Etapa de workflow asociada:
+        <span class="font-mono text-foreground">{{ selectedRequiredChoice.workflowStageKey }}</span>
+      </p>
+      <Button
+        type="button"
+        variant="link"
+        class="h-auto px-0 text-xs"
+        :disabled="uploading"
+        @click="attachNonRequired = true"
+      >
+        Adjuntar otro documento (no obligatorio pendiente)
+      </Button>
+    </div>
+
+    <div v-else class="space-y-2">
+      <div v-if="missingRequiredChoices.length" class="flex flex-wrap items-center justify-between gap-2">
+        <Label for="archival_upload_doc_type">Tipo documental</Label>
+        <Button
+          type="button"
+          variant="link"
+          class="h-auto px-0 text-xs"
+          :disabled="uploading"
+          @click="attachNonRequired = false"
+        >
+          Volver a obligatorios pendientes
+        </Button>
+      </div>
+      <Label v-else for="archival_upload_doc_type">Tipo documental</Label>
+      <Select
+        :model-value="docDocumentTypeId != null ? String(docDocumentTypeId) : undefined"
+        :disabled="uploading || loadingCatalog"
+        @update:model-value="docDocumentTypeId = $event ? Number($event) : null"
+      >
+        <SelectTrigger
+          id="archival_upload_doc_type"
+          :class="archivalSelectTriggerWarningClass(submitAttempted && !docDocumentTypeId)"
+        >
           <SelectValue :placeholder="loadingCatalog ? 'Cargando catálogo…' : 'Seleccione tipo documental'" />
         </SelectTrigger>
         <SelectContent>
@@ -512,6 +689,7 @@ onMounted(() => {
         id="archival_upload_file"
         type="file"
         :disabled="uploading"
+        :class="archivalInputWarningClass(submitAttempted && !selectedFile)"
         @change="onFileChange"
       />
       <p v-if="selectedFile" class="text-xs text-muted-foreground">
@@ -598,6 +776,7 @@ onMounted(() => {
       :field-confidence="metadataConfidence"
       :fields="metadataFields"
       :disabled="uploading"
+      :highlighted-field-code="highlightedMetadataFieldCode"
     />
 
     <Button type="submit" class="w-full" :disabled="uploading || loadingCatalog || loadingOcr || pendingOcrCount > 0">

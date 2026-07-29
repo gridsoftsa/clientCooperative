@@ -23,7 +23,7 @@ function onCreated(type: ArchivalFileType) {
           Nuevo tipo de expediente
         </h1>
         <p class="text-sm text-muted-foreground">
-          Defina la clave, el catálogo documental de referencia y la tabla TRD asociada.
+          Defina el nombre, el catálogo documental de referencia y la tabla TRD asociada. La clave técnica se asigna sola al guardar.
         </p>
       </div>
       <Button variant="outline" @click="router.push('/expedientes/tipos')">

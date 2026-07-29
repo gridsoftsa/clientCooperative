@@ -59,7 +59,18 @@ export interface ArchivalFileTypeRequiredDocument {
   workflow_stage_key?: string | null
   is_required: boolean
   sort_order: number
-  doc_document_type?: { id: number, code: string, name: string }
+  doc_document_type?: {
+    id: number
+    code: string
+    name: string
+    doc_subseries_id?: number
+    subseries?: {
+      id: number
+      code: string
+      name: string
+      doc_series_id: number
+    } | null
+  } | null
 }
 
 export interface ArchivalFile {
@@ -168,8 +179,19 @@ export interface ArchivalMasterDocumentSearchResult {
 
 export interface ArchivalFileRequiredDocumentsEvaluation {
   complete: boolean
-  missing: Array<{ doc_document_type_id: number, label: string, workflow_stage_key?: string | null }>
-  fulfilled: Array<{ doc_document_type_id: number, label: string }>
+  missing: Array<{
+    doc_document_type_id: number
+    label: string
+    workflow_stage_key?: string | null
+    document_type_code?: string | null
+    document_type_name?: string | null
+  }>
+  fulfilled: Array<{
+    doc_document_type_id: number
+    label: string
+    document_type_code?: string | null
+    document_type_name?: string | null
+  }>
 }
 
 export interface ArchivalFileClosureBlockingItem {

@@ -1,4 +1,5 @@
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
+import { findFirstMissingRequiredMetadataField } from '~/utils/archival-form-validation'
 import type { CatalogTreeSeries } from '~/types/archival-trd'
 import type { ArchivalFileTreeNode } from '~/types/archival-file'
 
@@ -195,16 +196,10 @@ export function validateArchivalMetadataFields(
   fields: ArchivalMetadataFieldRow[],
   values: Record<string, unknown>,
 ): string | null {
-  for (const field of fields) {
-    if (!field.is_required) {
-      continue
-    }
-
-    const value = values[field.code]
-    if (value === null || value === undefined || value === '') {
-      return `Complete el metadato obligatorio: ${field.name}`
-    }
+  const missing = findFirstMissingRequiredMetadataField(fields, values)
+  if (missing === null) {
+    return null
   }
 
-  return null
+  return `Complete el metadato obligatorio: ${missing.name}`
 }

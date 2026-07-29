@@ -6,7 +6,7 @@ defineOptions({
   inheritAttrs: false,
 })
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     id?: string
     disabled?: boolean
@@ -18,6 +18,8 @@ withDefaults(
     options?: Array<Record<string, unknown>>
     valueProp?: string
     label?: string
+    /** Normaliza el valor a número (catálogo TRD, ids de entidad). */
+    coerceNumber?: boolean
   }>(),
   {
     searchable: true,
@@ -26,16 +28,38 @@ withDefaults(
     label: 'label',
     noOptionsText: 'Sin opciones',
     noResultsText: 'Sin coincidencias',
+    coerceNumber: false,
   },
 )
 
 const model = defineModel<string | number | null>({ default: null })
+
+function coerceValue(value: string | number | null | undefined): string | number | null {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+
+  if (!props.coerceNumber) {
+    return value
+  }
+
+  const numeric = Number(value)
+
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+const innerModel = computed({
+  get: () => model.value,
+  set: (value: string | number | null | undefined) => {
+    model.value = coerceValue(value)
+  },
+})
 </script>
 
 <template>
   <Multiselect
     :id="id"
-    v-model="model"
+    v-model="innerModel"
     mode="single"
     :object="false"
     v-bind="$attrs"
@@ -44,8 +68,9 @@ const model = defineModel<string | number | null>({ default: null })
     :label="label"
     :searchable="searchable"
     :can-clear="canClear"
+    :close-on-select="true"
     :append-to-body="true"
-    :close-on-scroll="true"
+    :close-on-scroll="false"
     :disabled="disabled"
     :classes="ARCHIVAL_MULTISELECT_CLASSES"
     :placeholder="placeholder"
@@ -61,3 +86,11 @@ const model = defineModel<string | number | null>({ default: null })
 </template>
 
 <style src="@vueform/multiselect/themes/default.css"></style>
+
+<style scoped>
+.archival-single-multiselect.multiselect-warning {
+  --ms-border-color: rgb(245 158 11);
+  --ms-border-color-active: rgb(245 158 11);
+  box-shadow: 0 0 0 3px rgb(245 158 11 / 0.3);
+}
+</style>

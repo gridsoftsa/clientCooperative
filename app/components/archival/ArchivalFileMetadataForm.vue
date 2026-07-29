@@ -3,8 +3,12 @@ import { toast } from 'vue-sonner'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type { ArchivalFile } from '~/types/archival-file'
 import { mapArchivalFileMetadataFields } from '~/utils/archival-metadata-fields'
-import { validateArchivalMetadataFields } from '~/utils/archival-file-upload'
 import { isArchivalFileOperational } from '~/utils/archival-file-status'
+import {
+  archivalMetadataFieldDomId,
+  findFirstMissingRequiredMetadataField,
+  focusArchivalFieldById,
+} from '~/utils/archival-form-validation'
 
 const props = defineProps<{
   file: ArchivalFile
@@ -18,6 +22,8 @@ const archivalApi = useArchivalFileApi()
 const { hasPermission } = usePermissions()
 
 const saving = ref(false)
+const submitAttempted = ref(false)
+const highlightedMetadataFieldCode = ref<string | null>(null)
 const metadataValues = ref<Record<string, unknown>>({})
 
 const canEdit = computed(() =>
@@ -34,9 +40,16 @@ function syncFromFile() {
 }
 
 async function handleSave() {
-  const validationError = validateArchivalMetadataFields(metadataFields.value, metadataValues.value)
-  if (validationError) {
-    toast.error(validationError)
+  submitAttempted.value = true
+  highlightedMetadataFieldCode.value = null
+
+  const missingMetadata = findFirstMissingRequiredMetadataField(metadataFields.value, metadataValues.value)
+  if (missingMetadata) {
+    highlightedMetadataFieldCode.value = missingMetadata.code
+    toast.error(`Complete el metadato obligatorio: ${missingMetadata.name}`)
+    await nextTick()
+    const idx = metadataFields.value.findIndex(f => f.code === missingMetadata.code)
+    focusArchivalFieldById(archivalMetadataFieldDomId(missingMetadata, idx >= 0 ? idx : 0))
     return
   }
 
@@ -69,6 +82,7 @@ watch(() => props.file, () => syncFromFile(), { immediate: true, deep: true })
         v-model="metadataValues"
         :fields="metadataFields"
         :disabled="!canEdit || saving"
+        :highlighted-field-code="highlightedMetadataFieldCode"
       />
 
       <Button

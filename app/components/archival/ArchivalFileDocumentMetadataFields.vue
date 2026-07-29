@@ -2,6 +2,7 @@
 import { onDigitsOnlyInput } from '~/utils/digits-only-input'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import { metadataFieldSourceLabel } from '~/utils/archival-file-upload'
+import { archivalInputWarningClass, archivalSelectTriggerWarningClass } from '~/utils/archival-form-validation'
 
 const { formatPesosConSimbolo: formatCurrency, parsePesosInput: parseCurrency } = usePesosFormat()
 
@@ -11,6 +12,8 @@ const props = defineProps<{
   fieldSources?: Record<string, string>
   fieldConfidence?: Record<string, number>
   disabled?: boolean
+  /** Resalta el campo obligatorio faltante tras intento de guardar */
+  highlightedFieldCode?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -103,6 +106,18 @@ function isOcrPendingValidation(source: string | undefined): boolean {
   return source === 'ocr'
 }
 
+function isFieldHighlighted(field: ArchivalMetadataFieldRow): boolean {
+  return props.highlightedFieldCode != null && props.highlightedFieldCode === field.code
+}
+
+function fieldInputClass(field: ArchivalMetadataFieldRow): string {
+  return archivalInputWarningClass(isFieldHighlighted(field))
+}
+
+function fieldSelectClass(field: ArchivalMetadataFieldRow): string {
+  return archivalSelectTriggerWarningClass(isFieldHighlighted(field))
+}
+
 defineExpose({
   activeFields,
 })
@@ -173,6 +188,7 @@ defineExpose({
         :id="fieldId(field, idx)"
         :model-value="String(values[field.code] ?? '')"
         :disabled="disabled"
+        :class="fieldInputClass(field)"
         rows="2"
         @update:model-value="updateField(field.code, $event)"
       />
@@ -182,6 +198,7 @@ defineExpose({
         :type="field.data_type === 'number' ? 'number' : 'text'"
         :model-value="values[field.code] != null ? String(values[field.code]) : ''"
         :disabled="disabled"
+        :class="fieldInputClass(field)"
         @update:model-value="updateField(field.code, field.data_type === 'number' ? Number($event) : $event)"
       />
       <Input
@@ -190,6 +207,7 @@ defineExpose({
         type="date"
         :model-value="String(values[field.code] ?? '')"
         :disabled="disabled"
+        :class="fieldInputClass(field)"
         @update:model-value="updateField(field.code, $event)"
       />
       <div v-else-if="field.data_type === 'boolean'" class="flex items-center gap-2">
@@ -207,6 +225,7 @@ defineExpose({
         type="email"
         :model-value="String(values[field.code] ?? '')"
         :disabled="disabled"
+        :class="fieldInputClass(field)"
         placeholder="correo@ejemplo.com"
         @update:model-value="updateField(field.code, $event)"
       />
@@ -216,6 +235,7 @@ defineExpose({
         inputmode="decimal"
         :model-value="currencyDisplay(field.code)"
         :disabled="disabled"
+        :class="fieldInputClass(field)"
         placeholder="$ 0"
         @update:model-value="updateCurrencyField(field.code, $event)"
       />
@@ -225,6 +245,7 @@ defineExpose({
         inputmode="numeric"
         :model-value="String(values[field.code] ?? '')"
         :disabled="disabled"
+        :class="fieldInputClass(field)"
         :placeholder="field.data_type === 'nit' ? 'Solo números (NIT)' : 'Solo números'"
         @input="onDigitsOnlyInput($event, v => updateDigitsField(field.code, v))"
       />
@@ -234,7 +255,7 @@ defineExpose({
         :disabled="disabled"
         @update:model-value="updateField(field.code, $event)"
       >
-        <SelectTrigger :id="fieldId(field, idx)">
+        <SelectTrigger :id="fieldId(field, idx)" :class="fieldSelectClass(field)">
           <SelectValue placeholder="Seleccione…" />
         </SelectTrigger>
         <SelectContent>

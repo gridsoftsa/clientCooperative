@@ -6,6 +6,10 @@ import {
   ARCHIVAL_METADATA_SCHEMA_STATUS_LABELS,
 } from '~/constants/archival-metadata'
 import type { ArchivalMetadataFieldRow, ArchivalMetadataSchemaRow } from '~/composables/useArchivalMetadataApi'
+import {
+  isValidArchivalMetadataFieldCode,
+  suggestArchivalMetadataFieldCode,
+} from '~/utils/archival-metadata-field-code'
 
 definePageMeta({
   layout: 'default',
@@ -26,6 +30,7 @@ const saving = ref(false)
 const metaForm = ref({ name: '', description: '' })
 const showFieldForm = ref(false)
 const editingFieldId = ref<number | null>(null)
+const fieldCodeTouched = ref(false)
 const fieldForm = ref({
   code: '',
   name: '',
@@ -47,6 +52,7 @@ const canEdit = computed(() => isDraft.value && hasPermission('trd_metadatos_edi
 
 function resetFieldForm() {
   editingFieldId.value = null
+  fieldCodeTouched.value = false
   fieldForm.value = {
     code: '',
     name: '',
@@ -128,6 +134,7 @@ function editField(f: ArchivalMetadataFieldRow) {
     return
   }
   editingFieldId.value = f.id ?? null
+  fieldCodeTouched.value = true
   fieldForm.value = {
     code: f.code,
     name: f.name,
@@ -150,8 +157,25 @@ async function saveField() {
   if (!schema.value || !canEdit.value) {
     return
   }
+
+  const code = fieldForm.value.code.trim()
+  if (!code) {
+    toast.error('Indique el código del campo.')
+    return
+  }
+  if (!isValidArchivalMetadataFieldCode(code)) {
+    toast.error('El código debe iniciar con letra y usar solo minúsculas, números y guiones bajos.')
+    return
+  }
+  if (!fieldForm.value.name.trim()) {
+    toast.error('Indique el nombre visible del campo.')
+    return
+  }
+
   const body = {
     ...fieldForm.value,
+    code,
+    name: fieldForm.value.name.trim(),
     options: fieldForm.value.data_type === 'select' ? fieldForm.value.options : null,
   }
   try {
@@ -172,6 +196,21 @@ async function saveField() {
 function addSelectOption() {
   fieldForm.value.options.push({ value: '', label: '' })
 }
+
+function onFieldCodeInput() {
+  fieldCodeTouched.value = true
+}
+
+watch(
+  () => fieldForm.value.name,
+  (name) => {
+    if (editingFieldId.value != null || fieldCodeTouched.value) {
+      return
+    }
+
+    fieldForm.value.code = suggestArchivalMetadataFieldCode(name)
+  },
+)
 </script>
 
 <template>
@@ -279,8 +318,17 @@ function addSelectOption() {
         <CardContent class="space-y-3 max-w-xl">
           <div class="grid gap-3 sm:grid-cols-2">
             <div class="space-y-2">
-              <Label>Código (snake_case) *</Label>
-              <Input v-model="fieldForm.code" :disabled="!!editingFieldId" placeholder="ej. numero_folio" />
+              <Label for="metadata_field_code">Código *</Label>
+              <Input
+                id="metadata_field_code"
+                v-model="fieldForm.code"
+                class="font-mono"
+                placeholder="Se genera al escribir el nombre"
+                @input="onFieldCodeInput"
+              />
+              <p v-if="!editingFieldId" class="text-xs text-muted-foreground leading-relaxed">
+                Se sugiere automáticamente desde el nombre visible; puede editarlo antes de guardar.
+              </p>
             </div>
             <div class="space-y-2">
               <Label>Nombre visible *</Label>

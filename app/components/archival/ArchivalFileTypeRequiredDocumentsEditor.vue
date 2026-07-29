@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { useMediaQuery } from '@vueuse/core'
 import type { ArchivalWorkflowDefinitionOption } from '~/components/archival/ArchivalWorkflowStageCascadePicker.vue'
 import type { CatalogTreeSeries } from '~/types/archival-trd'
 
@@ -9,6 +10,11 @@ export interface RequiredDocumentDraft {
   workflow_stage_key: string
   is_required: boolean
   sort_order: number
+  catalogHierarchyHint?: {
+    doc_series_id: number
+    doc_subseries_id: number
+    doc_type?: { id: number, code: string, name: string }
+  } | null
 }
 
 const props = defineProps<{
@@ -24,6 +30,7 @@ const loadingCatalog = ref(false)
 const loadingWorkflows = ref(false)
 const catalogTree = ref<CatalogTreeSeries[]>([])
 const workflowDefinitions = ref<ArchivalWorkflowDefinitionOption[]>([])
+const isWideRequiredRow = useMediaQuery('(min-width: 1280px)')
 
 function emptyRow(sortOrder: number): RequiredDocumentDraft {
   return {
@@ -54,7 +61,7 @@ async function loadCatalogTree() {
   loadingCatalog.value = true
 
   try {
-    catalogTree.value = await trdApi.fetchCatalogTree(props.orgUnitId)
+    catalogTree.value = await trdApi.fetchCatalogTree(props.orgUnitId, false)
   }
   catch {
     catalogTree.value = []
@@ -160,7 +167,7 @@ onMounted(() => loadWorkflowDefinitions())
           <div class="divide-y">
             <div
               v-for="(row, index) in model"
-              :key="index"
+              :key="`required-doc-${index}-${row.doc_document_type_id ?? 'new'}`"
               class="min-w-0 px-3 py-3"
             >
               <!-- Escritorio: una fila por documento -->
@@ -173,9 +180,11 @@ onMounted(() => loadWorkflowDefinitions())
                 </span>
 
                 <ArchivalTrdCascadePicker
+                  v-if="isWideRequiredRow"
                   v-model="row.doc_document_type_id"
                   inline
                   :catalog-tree="catalogTree"
+                  :catalog-hierarchy-hint="row.catalogHierarchyHint"
                   :exclude-ids="excludedDocTypeIds(index)"
                   :disabled="loadingCatalog"
                 />
@@ -236,8 +245,10 @@ onMounted(() => loadWorkflowDefinitions())
                     Catálogo TRD
                   </p>
                   <ArchivalTrdCascadePicker
+                    v-if="!isWideRequiredRow"
                     v-model="row.doc_document_type_id"
                     :catalog-tree="catalogTree"
+                    :catalog-hierarchy-hint="row.catalogHierarchyHint"
                     :exclude-ids="excludedDocTypeIds(index)"
                     :disabled="loadingCatalog"
                   />

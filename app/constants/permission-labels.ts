@@ -31,6 +31,8 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
   ventanilla: 'Ventanilla única',
   settings: 'Configuración',
   estructura: 'Estructura organizacional',
+  grupos: 'Grupos de trabajo',
+  suplencias: 'Backup',
   trd: 'Gestión archivística / TRD',
 }
 
@@ -42,6 +44,8 @@ export const PERMISSION_CATEGORY_SECTION_TITLES: Record<string, string> = {
   ventanilla: 'Ventanilla única y radicación de documentos',
   solicitantes: 'Solicitantes (Deudores/Codeudores)',
   estructura: 'Estructura organizacional',
+  grupos: 'Grupos de trabajo',
+  suplencias: 'Backup',
   trd: 'Gestión archivística y tablas de retención (TRD)',
 }
 
@@ -66,6 +70,8 @@ export const PERMISSION_CATEGORY_ORDER: string[] = [
   'empresa',
   'sucursales',
   'estructura',
+  'grupos',
+  'suplencias',
   'trd',
   'usuarios',
   'roles',
@@ -185,6 +191,14 @@ function capitalizeWords(str: string): string {
  * Ej: plantillas_ver → "Ver Configuración de plantillas"
  * Ej: usuarios_crear → "Crear Usuarios"
  */
+/** Prefijos `modulo_submodulo` + acción CRUD al final (ej. grupos_trabajo_ver). */
+const PERMISSION_PREFIX_LABELS: Record<string, string> = {
+  grupos_trabajo: 'grupos de trabajo',
+  suplencias_delegaciones: 'delegaciones de backup',
+}
+
+const CRUD_ACTION_SUFFIX = /^(ver|crear|editar|eliminar)$/
+
 /** Etiquetas fijas cuando el nombre en varias partes no basta (ej. enviar a análisis) */
 const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   settings_ver: 'Ver configuración',
@@ -235,12 +249,25 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   trd_metadatos_ver: 'Ver esquemas de metadatos (TRD)',
   trd_metadatos_editar: 'Editar esquemas de metadatos (TRD)',
   trd_auditoria_ver: 'Consultar auditoría catálogo y TRD',
+  estructura_org_importar_ver: 'Ver importación de estructura organizacional',
+  estructura_org_importar_ejecutar: 'Ejecutar importación de estructura organizacional',
 }
 
 export function getPermissionLabel(name: string): string {
   const override = PERMISSION_LABEL_OVERRIDES[name]
   if (override) {
     return override
+  }
+
+  const crudParts = name.split('_')
+  const lastPart = crudParts[crudParts.length - 1] ?? ''
+  if (CRUD_ACTION_SUFFIX.test(lastPart) && crudParts.length >= 3) {
+    const prefix = crudParts.slice(0, -1).join('_')
+    const prefixLabel = PERMISSION_PREFIX_LABELS[prefix]
+    if (prefixLabel) {
+      const actionLabel = ACTION_LABELS[lastPart] ?? capitalizeWords(lastPart)
+      return `${actionLabel} ${prefixLabel}`
+    }
   }
 
   /** Prefijo de tres segmentos: `estructura_org_ver`, `estructura_org_editar`, etc. */

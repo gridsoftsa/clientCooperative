@@ -7,6 +7,7 @@ defineProps<{
   schemaVersion?: number | null
   loading?: boolean
   disabled?: boolean
+  highlightedFieldCode?: string | null
 }>()
 
 const metadataValues = defineModel<Record<string, unknown>>({ required: true })
@@ -38,6 +39,7 @@ const metadataValues = defineModel<Record<string, unknown>>({ required: true })
       v-model="metadataValues"
       :fields="fields"
       :disabled="disabled"
+      :highlighted-field-code="highlightedFieldCode"
     />
   </div>
 </template>

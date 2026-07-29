@@ -14,6 +14,8 @@ const props = defineProps<{
   fileId?: number
   metadataFields?: ArchivalMetadataFieldRow[]
   fileMetadataValues?: Record<string, unknown> | null
+  /** Columna lateral estrecha: menos badges y acciones compactas */
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +30,7 @@ const { viewDocumentInNewTab } = useArchivalDocumentBlob()
 const router = useRouter()
 
 const depth = computed(() => props.depth ?? 0)
+const indentPx = computed(() => (props.compact ? 12 : 16) * depth.value + (props.compact ? 6 : 8))
 const expanded = ref(depth.value < 2)
 const detailsExpanded = ref(false)
 const viewing = ref(false)
@@ -113,11 +116,11 @@ function openExpediente() {
 </script>
 
 <template>
-  <div>
+  <div class="min-w-0">
     <div
-      class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-muted/60"
+      class="flex min-w-0 items-center gap-1 rounded-md px-1 py-1 hover:bg-muted/60 sm:gap-2 sm:px-2 sm:py-1.5"
       :class="{ 'cursor-pointer': isFileNode }"
-      :style="{ paddingLeft: `${depth * 16 + 8}px` }"
+      :style="{ paddingLeft: `${indentPx}px` }"
       @click="handleNodeClick"
     >
       <button
@@ -132,28 +135,28 @@ function openExpediente() {
 
       <Icon :name="iconName" class="size-4 shrink-0 text-muted-foreground" />
 
-      <span class="min-w-0 flex-1 truncate text-sm">{{ node.name }}</span>
+      <span class="min-w-0 flex-1 truncate text-xs sm:text-sm">{{ node.name }}</span>
 
-      <Badge v-if="node.is_reference" variant="secondary" class="text-xs">
+      <Badge v-if="node.is_reference && !compact" variant="secondary" class="text-xs">
         Ref. v{{ node.referenced_version_number ?? '?' }}
       </Badge>
       <Badge
         v-if="isDocument && node.version_number"
         :variant="node.is_current_version === false ? 'outline' : 'secondary'"
-        class="text-xs"
+        class="shrink-0 text-[10px] sm:text-xs"
       >
         v{{ node.version_number }}
         <span v-if="node.is_current_version !== false" class="sr-only"> vigente</span>
       </Badge>
       <Badge
-        v-if="isDocument && node.source_label"
+        v-if="!compact && isDocument && node.source_label"
         variant="outline"
         class="text-xs"
         :title="node.source ? `Origen: ${node.source}` : undefined"
       >
         {{ node.source_label }}
       </Badge>
-      <Badge v-if="node.status_label" variant="outline" class="text-xs">
+      <Badge v-if="!compact && node.status_label" variant="outline" class="text-xs">
         {{ node.status_label }}
       </Badge>
 
@@ -162,47 +165,59 @@ function openExpediente() {
         variant="ghost"
         size="sm"
         type="button"
-        class="h-7 shrink-0 gap-1 px-2 text-xs text-muted-foreground"
+        class="h-7 shrink-0 gap-1 px-1.5 text-xs text-muted-foreground sm:px-2"
         :class="{ 'text-primary': detailsExpanded }"
         :title="detailsExpanded ? 'Ocultar metadatos' : 'Ver metadatos'"
         @click.stop="toggleDetails"
       >
         <Icon :name="detailsExpanded ? 'i-lucide-chevron-up' : 'i-lucide-info'" class="size-3.5" />
-        <span class="hidden sm:inline">{{ detailsExpanded ? 'Ocultar' : 'Metadatos' }}</span>
+        <span v-if="!compact" class="hidden sm:inline">{{ detailsExpanded ? 'Ocultar' : 'Metadatos' }}</span>
       </Button>
 
-      <div v-if="isDocument" class="flex flex-wrap items-center justify-end gap-1">
+      <div v-if="isDocument" class="flex shrink-0 flex-wrap items-center justify-end gap-0.5">
         <Button
           v-if="canViewDocument"
           variant="ghost"
           size="sm"
-          class="h-7 px-2 text-xs"
+          class="h-7 px-1.5 text-xs sm:px-2"
           type="button"
           :disabled="viewing"
+          :title="compact ? 'Ver documento' : undefined"
           @click.stop="openDocumentView"
         >
-          Ver
+          <Icon v-if="compact" name="i-lucide-eye" class="size-3.5" />
+          <template v-else>
+            Ver
+          </template>
         </Button>
         <a
           v-if="canDownload && downloadHref"
           :href="downloadHref"
-          class="inline-flex h-7 items-center px-2 text-xs text-primary hover:underline"
+          class="inline-flex h-7 items-center px-1.5 text-xs text-primary hover:underline sm:px-2"
+          :title="compact ? 'Descargar' : undefined"
           @click.stop
         >
-          Descargar
+          <Icon v-if="compact" name="i-lucide-download" class="size-3.5" />
+          <template v-else>
+            Descargar
+          </template>
         </a>
         <Button
           v-if="canOpenFile && node.archival_file_id"
           variant="ghost"
           size="sm"
-          class="h-7 px-2 text-xs"
+          class="h-7 px-1.5 text-xs sm:px-2"
           type="button"
+          :title="compact ? 'Abrir expediente' : undefined"
           @click.stop="openExpediente"
         >
-          Expediente
+          <Icon v-if="compact" name="i-lucide-briefcase" class="size-3.5" />
+          <template v-else>
+            Expediente
+          </template>
         </Button>
 
-        <template v-if="canManageDocuments">
+        <template v-if="canManageDocuments && !compact">
           <Button
             variant="ghost"
             size="sm"
@@ -238,8 +253,8 @@ function openExpediente() {
 
     <div
       v-if="detailsExpanded && canShowDetails"
-      class="mb-1 rounded-md border border-border/60 bg-muted/30 py-2 pr-3"
-      :style="{ marginLeft: `${depth * 16 + 32}px` }"
+      class="mb-1 min-w-0 rounded-md border border-border/60 bg-muted/30 py-2 pr-2 sm:pr-3"
+      :style="{ marginLeft: `${indentPx + (compact ? 20 : 24)}px` }"
     >
       <ArchivalFileTreeNodeDetails
         :node="node"
@@ -265,6 +280,7 @@ function openExpediente() {
         :file-id="fileId"
         :metadata-fields="metadataFields"
         :file-metadata-values="fileMetadataValues"
+        :compact="compact"
         @reference="emit('reference', $event)"
         @replace-version="emit('replaceVersion', $event)"
         @click-file="emit('clickFile', $event)"

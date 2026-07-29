@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import { ARCHIVAL_FILE_MODEL_LABELS } from '~/constants/archival-file'
+import { suggestArchivalFileTypeKey } from '~/utils/archival-file-type-key'
 import type { ArchivalMetadataSchemaRow } from '~/composables/useArchivalMetadataApi'
 import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
 import type { DocDocumentTypeRow, DocSeriesRow, DocSubseriesRow } from '~/types/archival-catalog'
 import type { ArchivalFileModel, ArchivalFileType } from '~/types/archival-file'
 import type { TrdTableRow } from '~/types/archival-trd'
+import {
+  archivalInputWarningClass,
+  focusArchivalFieldById,
+} from '~/utils/archival-form-validation'
 
 const props = defineProps<{
   initial?: ArchivalFileType | null
@@ -14,6 +19,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   saved: [type: ArchivalFileType]
+  cancel: []
 }>()
 
 const archivalApi = useArchivalFileApi()
@@ -24,6 +30,9 @@ const orgApi = useOrgStructureApi()
 
 const loading = ref(true)
 const saving = ref(false)
+const submitAttempted = ref(false)
+/** Evita que los watchers de cascada borren subserie/tipo tras `applyInitial` (cola de watchers post-async). */
+const suppressCascadeWatch = ref(false)
 
 const orgUnits = ref<OrgUnitRow[]>([])
 const trdTables = ref<TrdTableRow[]>([])
@@ -50,6 +59,14 @@ const form = reactive({
 
 const isSystem = computed(() => props.initial?.is_system === true)
 
+const effectiveTypeKey = computed(() => {
+  if (props.isCreate) {
+    return suggestArchivalFileTypeKey(form.name)
+  }
+
+  return form.type_key.trim()
+})
+
 const filteredTrdTables = computed(() => {
   if (!form.org_unit_id) {
     return trdTables.value
@@ -59,7 +76,7 @@ const filteredTrdTables = computed(() => {
 })
 
 const filteredMetadataSchemas = computed(() => {
-  const typeKey = form.type_key.trim()
+  const typeKey = effectiveTypeKey.value
 
   return metadataSchemas.value.filter((schema) => {
     if (schema.status !== 'active') {
@@ -73,6 +90,87 @@ const filteredMetadataSchemas = computed(() => {
     return !schema.file_type_key || schema.file_type_key === typeKey
   })
 })
+
+const orgUnitSelectOptions = computed(() =>
+  orgUnits.value.map(unit => ({
+    value: String(unit.id),
+    label: unit.name,
+  })),
+)
+
+const trdTableSelectOptions = computed(() =>
+  filteredTrdTables.value.map(table => ({
+    value: String(table.id),
+    label: table.org_unit?.name ?? `Tabla #${table.id}`,
+  })),
+)
+
+const seriesSelectOptions = computed(() =>
+  seriesList.value.map(series => ({
+    value: String(series.id),
+    label: `${series.code} — ${series.name}`,
+  })),
+)
+
+function ensureSubseriesInList(list: DocSubseriesRow[]): DocSubseriesRow[] {
+  const initialSub = props.initial?.doc_subseries
+  const selectedId = nullableId(form.doc_subseries_id)
+
+  if (
+    initialSub
+    && selectedId === initialSub.id
+    && !list.some(row => row.id === initialSub.id)
+  ) {
+    return [
+      ...list,
+      {
+        id: initialSub.id,
+        doc_series_id: initialSub.doc_series_id ?? nullableId(form.doc_series_id) ?? 0,
+        code: initialSub.code,
+        name: initialSub.name,
+      } as DocSubseriesRow,
+    ]
+  }
+
+  return list
+}
+
+function ensureDocumentTypesInList(list: DocDocumentTypeRow[]): DocDocumentTypeRow[] {
+  const initialType = props.initial?.doc_document_type
+  const selectedId = nullableId(form.doc_document_type_id)
+
+  if (
+    initialType
+    && selectedId === initialType.id
+    && !list.some(row => row.id === initialType.id)
+  ) {
+    return [
+      ...list,
+      {
+        id: initialType.id,
+        doc_subseries_id: initialType.doc_subseries_id ?? nullableId(form.doc_subseries_id) ?? 0,
+        code: initialType.code,
+        name: initialType.name,
+      } as DocDocumentTypeRow,
+    ]
+  }
+
+  return list
+}
+
+const subseriesSelectOptions = computed(() =>
+  ensureSubseriesInList(subseriesList.value).map(sub => ({
+    value: String(sub.id),
+    label: `${sub.code} — ${sub.name}`,
+  })),
+)
+
+const documentTypeSelectOptions = computed(() =>
+  ensureDocumentTypesInList(documentTypes.value).map(docType => ({
+    value: String(docType.id),
+    label: `${docType.code} — ${docType.name}`,
+  })),
+)
 
 function nullableId(value: string): number | null {
   return value ? Number(value) : null
@@ -109,6 +207,20 @@ async function loadDocumentTypes() {
   documentTypes.value = subseriesId ? await catalogApi.fetchDocumentTypes(subseriesId) : []
 }
 
+async function hydrateCatalogCascade() {
+  suppressCascadeWatch.value = true
+
+  try {
+    await loadSeries()
+    await loadSubseries()
+    await loadDocumentTypes()
+  }
+  finally {
+    await nextTick()
+    suppressCascadeWatch.value = false
+  }
+}
+
 async function loadCatalogs() {
   loading.value = true
 
@@ -124,9 +236,7 @@ async function loadCatalogs() {
     metadataSchemas.value = schemas
 
     applyInitial(props.initial)
-    await loadSeries()
-    await loadSubseries()
-    await loadDocumentTypes()
+    await hydrateCatalogCascade()
   }
   catch {
     toast.error('No se pudieron cargar los catálogos.')
@@ -137,8 +247,7 @@ async function loadCatalogs() {
 }
 
 function buildPayload(): Record<string, unknown> {
-  return {
-    type_key: form.type_key.trim(),
+  const payload: Record<string, unknown> = {
     name: form.name.trim(),
     description: form.description.trim() || null,
     model: form.model,
@@ -152,11 +261,28 @@ function buildPayload(): Record<string, unknown> {
     is_active: form.is_active,
     sort_order: Number(form.sort_order) || 0,
   }
+
+  if (!props.isCreate) {
+    payload.type_key = form.type_key.trim()
+  }
+
+  return payload
 }
 
 async function submit() {
-  if (!form.type_key.trim() || !form.name.trim()) {
-    toast.error('Complete la clave y el nombre del tipo.')
+  submitAttempted.value = true
+
+  if (!form.name.trim()) {
+    toast.error('Complete el nombre del tipo.')
+    await nextTick()
+    focusArchivalFieldById('file_type_name')
+    return
+  }
+
+  if (!props.isCreate && !form.type_key.trim()) {
+    toast.error('Complete la clave técnica del tipo.')
+    await nextTick()
+    focusArchivalFieldById('file_type_key')
     return
   }
 
@@ -178,8 +304,15 @@ async function submit() {
 }
 
 watch(() => form.org_unit_id, async () => {
-  if (loading.value) {
+  if (loading.value || suppressCascadeWatch.value) {
     return
+  }
+
+  if (
+    form.trd_table_id
+    && !filteredTrdTables.value.some(table => String(table.id) === form.trd_table_id)
+  ) {
+    form.trd_table_id = ''
   }
 
   form.doc_series_id = ''
@@ -191,7 +324,7 @@ watch(() => form.org_unit_id, async () => {
 })
 
 watch(() => form.doc_series_id, async () => {
-  if (loading.value) {
+  if (loading.value || suppressCascadeWatch.value) {
     return
   }
 
@@ -202,7 +335,7 @@ watch(() => form.doc_series_id, async () => {
 })
 
 watch(() => form.doc_subseries_id, async () => {
-  if (loading.value) {
+  if (loading.value || suppressCascadeWatch.value) {
     return
   }
 
@@ -210,10 +343,13 @@ watch(() => form.doc_subseries_id, async () => {
   await loadDocumentTypes()
 })
 
-watch(() => props.initial, (value) => {
-  if (!loading.value) {
-    applyInitial(value)
+watch(() => props.initial, async (value) => {
+  if (loading.value) {
+    return
   }
+
+  applyInitial(value)
+  await hydrateCatalogCascade()
 })
 
 onMounted(() => loadCatalogs())
@@ -227,7 +363,15 @@ onMounted(() => loadCatalogs())
 
     <template v-else>
       <div class="grid gap-4 md:grid-cols-2">
-        <div class="space-y-2">
+        <div v-if="isCreate" class="space-y-2 md:col-span-2">
+          <p class="text-sm text-muted-foreground leading-relaxed">
+            La <span class="font-medium text-foreground">clave técnica</span> se generará automáticamente al crear
+            (por ejemplo, a partir del nombre:
+            <span class="font-mono text-xs">{{ effectiveTypeKey || 'expediente_contrato_file' }}</span>).
+          </p>
+        </div>
+
+        <div v-else class="space-y-2">
           <Label for="file_type_key">Clave técnica</Label>
           <Input
             id="file_type_key"
@@ -235,15 +379,21 @@ onMounted(() => loadCatalogs())
             :disabled="isSystem || saving"
             placeholder="credit_file"
             class="font-mono"
+            :class="archivalInputWarningClass(submitAttempted && !form.type_key.trim())"
           />
           <p v-if="isSystem" class="text-xs text-muted-foreground">
             La clave de tipos del sistema no se puede modificar.
           </p>
         </div>
 
-        <div class="space-y-2">
-          <Label for="file_type_name">Nombre</Label>
-          <Input id="file_type_name" v-model="form.name" :disabled="saving" />
+        <div class="space-y-2" :class="{ 'md:col-span-2': isCreate }">
+          <Label for="file_type_name">Nombre *</Label>
+          <Input
+            id="file_type_name"
+            v-model="form.name"
+            :disabled="saving"
+            :class="archivalInputWarningClass(submitAttempted && !form.name.trim())"
+          />
         </div>
       </div>
 
@@ -294,121 +444,76 @@ onMounted(() => loadCatalogs())
             Catálogo documental y TRD
           </p>
           <p class="text-xs text-muted-foreground">
-            Serie, subserie y tipo documental de referencia para expedientes de este tipo.
+            Serie, subserie y tipo documental de referencia. Use la búsqueda en cada lista cuando hay muchas opciones.
           </p>
         </div>
 
         <div class="grid min-w-0 gap-4 md:grid-cols-2">
           <div class="min-w-0 space-y-2">
-            <Label>Área productora</Label>
-            <Select
-              :model-value="form.org_unit_id || undefined"
+            <Label for="file_type_org_unit">Área productora</Label>
+            <ArchivalCatalogSearchSelect
+              id="file_type_org_unit"
+              :model-value="form.org_unit_id || null"
+              :options="orgUnitSelectOptions"
+              placeholder="Buscar área…"
+              no-options-text="Sin áreas disponibles"
               :disabled="saving"
-              @update:model-value="form.org_unit_id = $event ? String($event) : ''"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione área" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="unit in orgUnits"
-                  :key="unit.id"
-                  :value="String(unit.id)"
-                >
-                  {{ unit.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              @update:model-value="form.org_unit_id = $event ?? ''"
+            />
           </div>
 
           <div class="min-w-0 space-y-2">
-            <Label>Tabla TRD</Label>
-            <Select
-              :model-value="form.trd_table_id || undefined"
+            <Label for="file_type_trd_table">Tabla TRD</Label>
+            <ArchivalCatalogSearchSelect
+              id="file_type_trd_table"
+              :model-value="form.trd_table_id || null"
+              :options="trdTableSelectOptions"
+              placeholder="Buscar tabla TRD…"
+              no-options-text="Sin tablas para el área"
               :disabled="saving"
-              @update:model-value="form.trd_table_id = $event ? String($event) : ''"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Opcional" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="table in filteredTrdTables"
-                  :key="table.id"
-                  :value="String(table.id)"
-                >
-                  {{ table.org_unit?.name ?? `Tabla #${table.id}` }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              @update:model-value="form.trd_table_id = $event ?? ''"
+            />
           </div>
         </div>
 
         <div class="grid min-w-0 gap-4 md:grid-cols-3">
           <div class="min-w-0 space-y-2">
-            <Label>Serie</Label>
-            <Select
-              :model-value="form.doc_series_id || undefined"
+            <Label for="file_type_series">Serie</Label>
+            <ArchivalCatalogSearchSelect
+              id="file_type_series"
+              :model-value="form.doc_series_id || null"
+              :options="seriesSelectOptions"
+              placeholder="Buscar serie…"
+              no-options-text="Seleccione un área primero"
               :disabled="saving || !form.org_unit_id"
-              @update:model-value="form.doc_series_id = $event ? String($event) : ''"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione serie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="series in seriesList"
-                  :key="series.id"
-                  :value="String(series.id)"
-                >
-                  {{ series.code }} — {{ series.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              @update:model-value="form.doc_series_id = $event ?? ''"
+            />
           </div>
 
           <div class="min-w-0 space-y-2">
-            <Label>Subserie</Label>
-            <Select
-              :model-value="form.doc_subseries_id || undefined"
+            <Label for="file_type_subseries">Subserie</Label>
+            <ArchivalCatalogSearchSelect
+              id="file_type_subseries"
+              :model-value="form.doc_subseries_id || null"
+              :options="subseriesSelectOptions"
+              placeholder="Buscar subserie…"
+              no-options-text="Seleccione una serie primero"
               :disabled="saving || !form.doc_series_id"
-              @update:model-value="form.doc_subseries_id = $event ? String($event) : ''"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione subserie" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="sub in subseriesList"
-                  :key="sub.id"
-                  :value="String(sub.id)"
-                >
-                  {{ sub.code }} — {{ sub.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              @update:model-value="form.doc_subseries_id = $event ?? ''"
+            />
           </div>
 
           <div class="min-w-0 space-y-2">
-            <Label>Tipo documental</Label>
-            <Select
-              :model-value="form.doc_document_type_id || undefined"
+            <Label for="file_type_doc_type">Tipo documental</Label>
+            <ArchivalCatalogSearchSelect
+              id="file_type_doc_type"
+              :model-value="form.doc_document_type_id || null"
+              :options="documentTypeSelectOptions"
+              placeholder="Buscar tipo documental…"
+              no-options-text="Seleccione una subserie primero"
               :disabled="saving || !form.doc_subseries_id"
-              @update:model-value="form.doc_document_type_id = $event ? String($event) : ''"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="docType in documentTypes"
-                  :key="docType.id"
-                  :value="String(docType.id)"
-                >
-                  {{ docType.code }} — {{ docType.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+              @update:model-value="form.doc_document_type_id = $event ?? ''"
+            />
           </div>
         </div>
       </div>
@@ -436,7 +541,16 @@ onMounted(() => loadCatalogs())
         </Select>
       </div>
 
-      <div class="flex justify-end">
+      <div class="flex flex-wrap justify-end gap-2">
+        <Button
+          v-if="!isCreate"
+          type="button"
+          variant="outline"
+          :disabled="saving"
+          @click="emit('cancel')"
+        >
+          Cancelar
+        </Button>
         <Button type="submit" :disabled="saving">
           {{ saving ? 'Guardando…' : (isCreate ? 'Crear tipo' : 'Guardar cambios') }}
         </Button>

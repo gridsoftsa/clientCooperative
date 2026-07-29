@@ -3,6 +3,13 @@ import { toast } from 'vue-sonner'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type { ArchivalFileType } from '~/types/archival-file'
 import { mapArchivalFileMetadataFields } from '~/utils/archival-metadata-fields'
+import {
+  archivalInputWarningClass,
+  archivalMultiselectWarningClass,
+  archivalMetadataFieldDomId,
+  findFirstMissingRequiredMetadataField,
+  focusArchivalFieldById,
+} from '~/utils/archival-form-validation'
 
 definePageMeta({
   layout: 'default',
@@ -17,6 +24,8 @@ const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promi
 
 const loading = ref(true)
 const saving = ref(false)
+const submitAttempted = ref(false)
+const highlightedMetadataFieldCode = ref<string | null>(null)
 const loadingTypeSchema = ref(false)
 const types = ref<ArchivalFileType[]>([])
 const orgUnits = ref<Array<{ id: number, name: string }>>([])
@@ -98,18 +107,37 @@ async function loadMeta() {
 }
 
 async function submit() {
+  submitAttempted.value = true
+  highlightedMetadataFieldCode.value = null
+
   if (!form.archival_file_type_id) {
     toast.error('Seleccione el tipo de expediente.')
+    await nextTick()
+    focusArchivalFieldById('archival_new_file_type')
     return
   }
 
   if (!form.title.trim()) {
     toast.error('Indique el título del expediente.')
+    await nextTick()
+    focusArchivalFieldById('archival_new_title')
     return
   }
 
   if (!form.org_unit_id) {
     toast.error('Seleccione el área responsable.')
+    await nextTick()
+    focusArchivalFieldById('archival_new_org_unit')
+    return
+  }
+
+  const missingMetadata = findFirstMissingRequiredMetadataField(typeMetadataFields.value, metadataValues.value)
+  if (missingMetadata) {
+    highlightedMetadataFieldCode.value = missingMetadata.code
+    toast.error(`Complete el metadato obligatorio: ${missingMetadata.name}`)
+    await nextTick()
+    const idx = typeMetadataFields.value.findIndex(f => f.code === missingMetadata.code)
+    focusArchivalFieldById(archivalMetadataFieldDomId(missingMetadata, idx >= 0 ? idx : 0))
     return
   }
 
@@ -168,26 +196,31 @@ onMounted(() => loadMeta())
               :options="typeSelectOptions"
               placeholder="Seleccione tipo"
               no-options-text="Sin tipos disponibles"
+              coerce-number
+              :class="archivalMultiselectWarningClass(submitAttempted && !form.archival_file_type_id)"
             />
           </div>
 
           <div class="space-y-2">
-            <Label for="archival_new_title">Título</Label>
+            <Label for="archival_new_title">Título *</Label>
             <Input
               id="archival_new_title"
               v-model="form.title"
               placeholder="Ej. Expediente de crédito 2026-001"
+              :class="archivalInputWarningClass(submitAttempted && !form.title.trim())"
             />
           </div>
 
           <div class="space-y-2">
-            <Label for="archival_new_org_unit">Área responsable</Label>
+            <Label for="archival_new_org_unit">Área responsable *</Label>
             <ArchivalSingleMultiselect
               id="archival_new_org_unit"
               v-model="form.org_unit_id"
               :options="orgUnitSelectOptions"
               placeholder="Seleccione área"
               no-options-text="Sin áreas disponibles"
+              coerce-number
+              :class="archivalMultiselectWarningClass(submitAttempted && !form.org_unit_id)"
             />
             <p v-if="selectedType?.org_unit" class="text-xs text-muted-foreground">
               Se sugiere según el tipo «{{ selectedType.name }}»: {{ selectedType.org_unit.name }}.
@@ -216,6 +249,7 @@ onMounted(() => loadMeta())
             :schema-version="selectedTypeDetail?.metadata_schema?.version_number"
             :loading="loadingTypeSchema"
             :disabled="saving"
+            :highlighted-field-code="highlightedMetadataFieldCode"
           />
 
           <p class="text-xs text-muted-foreground">
