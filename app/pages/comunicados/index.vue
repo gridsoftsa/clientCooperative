@@ -219,7 +219,7 @@ watch(() => route.query.unread, (value) => {
           Comunicados
         </h1>
         <p class="mt-1 text-sm text-muted-foreground">
-          Canal interno de avisos, noticias, circulares y eventos. Los cumpleaños del día salen de la fecha de nacimiento del funcionario en estructura organizacional.
+          Canal interno de avisos, noticias, circulares y eventos.
         </p>
       </div>
       <div class="flex w-full max-w-xl flex-col gap-2 sm:flex-row">
@@ -492,9 +492,6 @@ watch(() => route.query.unread, (value) => {
             <CardTitle class="text-base">
               Cumpleaños de hoy
             </CardTitle>
-            <CardDescription>
-              Personas con fecha de nacimiento hoy en la estructura organizacional (no es un tipo de publicación).
-            </CardDescription>
           </CardHeader>
           <CardContent class="space-y-3">
             <div
@@ -515,7 +512,7 @@ watch(() => route.query.unread, (value) => {
               </div>
             </div>
             <p v-if="!(dashboard?.birthdays_today?.length)" class="text-sm text-muted-foreground">
-              No hay cumpleaños hoy. Registre la fecha de nacimiento del funcionario en estructura organizacional para que aparezca aquí.
+              No hay cumpleaños hoy.
             </p>
           </CardContent>
         </Card>
