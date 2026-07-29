@@ -96,7 +96,7 @@ export function useWorkflowApi() {
     return res.data
   }
 
-  async function createDefinition(payload: WorkflowDefinitionPayload & { key: string }) {
+  async function createDefinition(payload: WorkflowDefinitionPayload) {
     const res = await api<{ data: WorkflowDefinition, message: string }>('/workflow/definitions', {
       method: 'POST',
       body: payload,

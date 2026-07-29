@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { WorkflowBindingCoverageRow, WorkflowDefinition } from '~/types/workflow'
+import { suggestWorkflowDefinitionKey } from '~/utils/workflow-technical-key'
 
 definePageMeta({
   layout: 'default',
@@ -16,14 +17,24 @@ const definitions = ref<WorkflowDefinition[]>([])
 const coverage = ref<WorkflowBindingCoverageRow[]>([])
 const createDialogOpen = ref(false)
 const creating = ref(false)
+const togglingId = ref<number | null>(null)
 
 const createForm = reactive({
-  key: '',
   name: '',
   description: '',
 })
 
-function isLocked(def: WorkflowDefinition) {
+const suggestedDefinitionKey = computed(() => suggestWorkflowDefinitionKey(createForm.name))
+
+function hasActiveProcesses(def: WorkflowDefinition) {
+  return (def.active_instances_count ?? 0) > 0
+}
+
+function canToggleActive(def: WorkflowDefinition) {
+  return def.is_active || !hasActiveProcesses(def)
+}
+
+function isStructureLocked(def: WorkflowDefinition) {
   return def.is_locked || (def.instances_count ?? 0) > 0
 }
 
@@ -58,13 +69,8 @@ async function load() {
 }
 
 async function createDefinition() {
-  if (!createForm.key.trim() || !createForm.name.trim()) {
-    toast.error('Complete clave y nombre.')
-    return
-  }
-
-  if (!/^[a-z0-9_-]+$/.test(createForm.key.trim())) {
-    toast.error('La clave solo puede tener minúsculas, números, guiones o guión bajo.')
+  if (!createForm.name.trim()) {
+    toast.error('Indique el nombre del flujo.')
     return
   }
 
@@ -72,7 +78,6 @@ async function createDefinition() {
 
   try {
     const created = await workflowApi.createDefinition({
-      key: createForm.key.trim(),
       name: createForm.name.trim(),
       description: createForm.description.trim() || undefined,
       is_active: true,
@@ -80,7 +85,6 @@ async function createDefinition() {
 
     toast.success('Flujo creado.')
     createDialogOpen.value = false
-    createForm.key = ''
     createForm.name = ''
     createForm.description = ''
     router.push(`/workflow/configuracion/${created.id}`)
@@ -90,6 +94,35 @@ async function createDefinition() {
   }
   finally {
     creating.value = false
+  }
+}
+
+async function setDefinitionActive(def: WorkflowDefinition, isActive: boolean) {
+  if (!canToggleActive(def) && !isActive) {
+    toast.error('No se puede desactivar mientras hay radicados con proceso en curso.')
+    return
+  }
+
+  if (def.is_active === isActive)
+    return
+
+  togglingId.value = def.id
+
+  try {
+    const updated = await workflowApi.updateDefinition(def.id, { is_active: isActive })
+    const index = definitions.value.findIndex(d => d.id === def.id)
+    if (index >= 0)
+      definitions.value[index] = { ...definitions.value[index], ...updated }
+    toast.success(isActive ? 'Flujo activado.' : 'Flujo desactivado.')
+    await load()
+  }
+  catch (error: unknown) {
+    const err = error as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    toast.error(first ?? err.data?.message ?? 'No se pudo actualizar el estado del flujo.')
+  }
+  finally {
+    togglingId.value = null
   }
 }
 
@@ -154,13 +187,21 @@ onMounted(() => {
                 <code>{{ def.key }}</code>
               </CardDescription>
             </div>
-            <div class="flex flex-wrap gap-2">
-              <Badge :variant="def.is_active ? 'default' : 'secondary'">
-                {{ def.is_active ? 'Activo' : 'Inactivo' }}
-              </Badge>
-              <Badge v-if="isLocked(def)" variant="outline" class="text-amber-700">
+            <div class="flex flex-wrap items-center gap-3" @click.stop>
+              <Badge v-if="isStructureLocked(def)" variant="outline" class="text-amber-700">
                 En uso
               </Badge>
+              <div class="flex items-center gap-2 text-sm">
+                <Switch
+                  :id="`workflow-active-${def.id}`"
+                  :checked="def.is_active"
+                  :disabled="togglingId === def.id || (def.is_active && hasActiveProcesses(def))"
+                  @update:checked="setDefinitionActive(def, $event === true)"
+                />
+                <Label :for="`workflow-active-${def.id}`" class="cursor-pointer text-muted-foreground">
+                  {{ def.is_active ? 'Activo' : 'Inactivo' }}
+                </Label>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -203,10 +244,11 @@ onMounted(() => {
           </DialogDescription>
         </DialogHeader>
         <div class="grid gap-4 py-2">
-          <div class="grid gap-2">
-            <Label>Clave técnica</Label>
-            <Input v-model="createForm.key" placeholder="ej. pqrs_workflow" />
-          </div>
+          <p class="text-sm text-muted-foreground leading-relaxed">
+            La <span class="font-medium text-foreground">clave técnica</span> se generará automáticamente al crear
+            (por ejemplo:
+            <span class="font-mono text-xs">{{ suggestedDefinitionKey || 'flujo_pqrs_workflow' }}</span>).
+          </p>
           <div class="grid gap-2">
             <Label>Nombre</Label>
             <Input v-model="createForm.name" placeholder="Flujo PQRS" />

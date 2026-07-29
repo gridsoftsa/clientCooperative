@@ -65,7 +65,7 @@ export interface WorkflowFunctionalTypeOption {
 }
 
 export interface WorkflowStagePayload {
-  key: string
+  key?: string
   name: string
   sort_order: number
   stage_type?: string
@@ -213,4 +213,5 @@ export interface WorkflowDefinition {
   functional_bindings?: WorkflowFunctionalBinding[]
   functionalBindings?: WorkflowFunctionalBinding[]
   instances_count?: number
+  active_instances_count?: number
 }

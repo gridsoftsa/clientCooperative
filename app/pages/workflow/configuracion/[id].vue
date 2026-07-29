@@ -45,11 +45,25 @@ const generalForm = reactive({
   is_active: true,
 })
 
-const isLocked = computed(() => {
+const isStructureLocked = computed(() => {
   if (!definition.value)
     return false
 
   return definition.value.is_locked || (definition.value.instances_count ?? 0) > 0
+})
+
+const hasActiveProcesses = computed(() => (definition.value?.active_instances_count ?? 0) > 0)
+
+const isActiveToggleDisabled = computed(() => hasActiveProcesses.value && generalForm.is_active)
+
+const canSaveGeneral = computed(() => {
+  if (!definition.value)
+    return false
+
+  if (!isStructureLocked.value)
+    return true
+
+  return generalForm.is_active !== definition.value.is_active && !hasActiveProcesses.value
 })
 
 const stages = computed(() => {
@@ -113,21 +127,33 @@ async function loadDefinition() {
 }
 
 async function saveGeneral() {
-  if (!definition.value || isLocked.value)
+  if (!definition.value || !canSaveGeneral.value)
     return
 
   savingGeneral.value = true
 
   try {
-    definition.value = await workflowApi.updateDefinition(definition.value.id, {
-      name: generalForm.name.trim(),
-      description: generalForm.description.trim() || null,
-      is_active: generalForm.is_active,
-    })
+    const payload: { name?: string, description?: string | null, is_active?: boolean } = {}
+
+    if (!isStructureLocked.value) {
+      payload.name = generalForm.name.trim()
+      payload.description = generalForm.description.trim() || null
+    }
+
+    if (generalForm.is_active !== definition.value.is_active) {
+      payload.is_active = generalForm.is_active
+    }
+
+    definition.value = await workflowApi.updateDefinition(definition.value.id, payload)
+    generalForm.name = definition.value.name
+    generalForm.description = definition.value.description ?? ''
+    generalForm.is_active = definition.value.is_active
     toast.success('Flujo actualizado.')
   }
-  catch {
-    toast.error('No se pudo actualizar el flujo.')
+  catch (error: unknown) {
+    const err = error as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    toast.error(first ?? err.data?.message ?? 'No se pudo actualizar el flujo.')
   }
   finally {
     savingGeneral.value = false
@@ -145,7 +171,7 @@ function openEditStage(stage: WorkflowStage) {
 }
 
 function openDeleteStageDialog(stage: WorkflowStage) {
-  if (isLocked.value || stages.value.length <= 1)
+  if (isStructureLocked.value || stages.value.length <= 1)
     return
 
   stagePendingDelete.value = stage
@@ -239,8 +265,8 @@ watch(deleteStageDialogOpen, (open) => {
         </h1>
         <p class="text-sm text-muted-foreground">
           <code v-if="definition">{{ definition.key }}</code>
-          <Badge v-if="isLocked" variant="outline" class="ml-2 text-amber-700 border-amber-300">
-            En uso — solo lectura
+          <Badge v-if="isStructureLocked" variant="outline" class="ml-2 text-amber-700 border-amber-300">
+            En uso — estructura bloqueada
           </Badge>
           <span v-else-if="definition" class="ml-2 text-emerald-600">Editable</span>
         </p>
@@ -253,11 +279,20 @@ watch(deleteStageDialogOpen, (open) => {
       </NuxtLink>
     </div>
 
-    <Alert v-if="isLocked">
+    <Alert v-if="isStructureLocked">
       <Icon name="lucide:lock" class="size-4" />
-      <AlertTitle>Flujo bloqueado</AlertTitle>
+      <AlertTitle>Flujo en uso</AlertTitle>
       <AlertDescription>
-        Este flujo ya tiene radicados en ejecución. Para cambiar etapas, cree un flujo nuevo y reasocie los tipos funcionales.
+        Este flujo ya tiene radicados asociados: no puede cambiar etapas ni el nombre.
+        Puede desactivarlo si no hay procesos en curso; los tipos funcionales dejarán de usarlo para nuevas radicaciones.
+      </AlertDescription>
+    </Alert>
+
+    <Alert v-if="hasActiveProcesses">
+      <Icon name="lucide:activity" class="size-4" />
+      <AlertTitle>Procesos en curso</AlertTitle>
+      <AlertDescription>
+        Hay radicados con este flujo activo. Espere a que finalicen o cancele esos procesos antes de desactivar el flujo.
       </AlertDescription>
     </Alert>
 
@@ -287,18 +322,21 @@ watch(deleteStageDialogOpen, (open) => {
           <CardContent class="grid max-w-xl gap-4">
             <div class="grid gap-2">
               <Label>Nombre</Label>
-              <Input v-model="generalForm.name" :disabled="isLocked" />
+              <Input v-model="generalForm.name" :disabled="isStructureLocked" />
             </div>
             <div class="grid gap-2">
               <Label>Descripción</Label>
-              <Textarea v-model="generalForm.description" rows="3" :disabled="isLocked" />
+              <Textarea v-model="generalForm.description" rows="3" :disabled="isStructureLocked" />
             </div>
             <label class="flex items-center gap-2 text-sm">
-              <Checkbox v-model="generalForm.is_active" :disabled="isLocked" />
+              <Checkbox v-model="generalForm.is_active" :disabled="isActiveToggleDisabled" />
               Flujo activo
             </label>
+            <p v-if="isActiveToggleDisabled" class="text-xs text-muted-foreground">
+              No se puede desactivar mientras haya radicados con proceso en curso.
+            </p>
             <Button
-              v-if="!isLocked"
+              v-if="canSaveGeneral"
               :disabled="savingGeneral"
               class="w-fit"
               @click="saveGeneral"
@@ -314,7 +352,7 @@ watch(deleteStageDialogOpen, (open) => {
           <p class="text-sm text-muted-foreground">
             {{ stages.length }} etapa(s) — el orden define las columnas del tablero
           </p>
-          <Button v-if="!isLocked" size="sm" @click="openCreateStage">
+          <Button v-if="!isStructureLocked" size="sm" @click="openCreateStage">
             <Icon name="lucide:plus" class="mr-1 size-4" />
             Nueva etapa
           </Button>
@@ -357,7 +395,7 @@ watch(deleteStageDialogOpen, (open) => {
                   </Badge>
                 </div>
               </div>
-              <div v-if="!isLocked" class="flex gap-2">
+              <div v-if="!isStructureLocked" class="flex gap-2">
                 <Button variant="outline" size="sm" @click="openEditStage(stage)">
                   Editar
                 </Button>
@@ -461,7 +499,7 @@ watch(deleteStageDialogOpen, (open) => {
       :definition-id="definition.id"
       :stage="editingStage"
       :next-sort-order="nextSortOrder"
-      :locked="isLocked"
+      :locked="isStructureLocked"
       :users="users"
       :org-units="orgUnits"
       :positions="positions"

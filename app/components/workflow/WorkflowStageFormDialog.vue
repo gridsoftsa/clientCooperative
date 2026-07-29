@@ -5,6 +5,7 @@ import {
   WORKFLOW_STAGE_TYPE_OPTIONS,
   WORKFLOW_VENTANILLA_ROLE_OPTIONS,
 } from '~/constants/workflow'
+import { suggestWorkflowStageKey } from '~/utils/workflow-technical-key'
 import type { WorkflowStage, WorkflowStagePayload } from '~/types/workflow'
 import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureApi'
 
@@ -27,9 +28,9 @@ const emit = defineEmits<{
 const workflowApi = useWorkflowApi()
 const saving = ref(false)
 const isEdit = computed(() => !!props.stage?.id)
+const suggestedStageKey = computed(() => suggestWorkflowStageKey(form.name))
 
 const form = reactive({
-  key: '',
   name: '',
   sort_order: 1,
   stage_type: 'manual',
@@ -50,7 +51,6 @@ watch(() => props.open, (isOpen) => {
     return
 
   if (props.stage) {
-    form.key = props.stage.key
     form.name = props.stage.name
     form.sort_order = props.stage.sort_order
     form.stage_type = props.stage.stage_type
@@ -66,7 +66,6 @@ watch(() => props.open, (isOpen) => {
     form.ventanilla_role = props.stage.ventanilla_role ?? 'none'
   }
   else {
-    form.key = ''
     form.name = ''
     form.sort_order = props.nextSortOrder
     form.stage_type = 'manual'
@@ -85,7 +84,6 @@ watch(() => props.open, (isOpen) => {
 
 function buildPayload(): WorkflowStagePayload {
   const payload: WorkflowStagePayload = {
-    key: form.key.trim(),
     name: form.name.trim(),
     sort_order: form.sort_order,
     stage_type: form.stage_type,
@@ -119,11 +117,6 @@ async function save() {
 
   if (!form.name.trim()) {
     toast.error('Indique el nombre de la etapa.')
-    return
-  }
-
-  if (!isEdit.value && !/^[a-z0-9_-]+$/.test(form.key.trim())) {
-    toast.error('La clave debe usar solo minúsculas, números, guiones o guión bajo.')
     return
   }
 
@@ -166,17 +159,11 @@ async function save() {
       </DialogHeader>
 
       <div class="grid gap-4 py-2">
-        <div v-if="!isEdit" class="grid gap-2">
-          <Label for="stage-key">Clave técnica</Label>
-          <Input
-            id="stage-key"
-            v-model="form.key"
-            placeholder="ej. assign, review, close"
-            :disabled="locked"
-          />
-          <p class="text-xs text-muted-foreground">
-            Solo minúsculas, números, guiones o guión bajo. No se puede cambiar después.
-          </p>
+        <div v-if="!isEdit" class="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+          La <span class="font-medium text-foreground">clave técnica</span> se asignará al crear
+          (ej.
+          <span class="font-mono text-xs">{{ suggestedStageKey || 'asignar_responsable' }}</span>).
+          No se puede cambiar después.
         </div>
 
         <div class="grid gap-2">
