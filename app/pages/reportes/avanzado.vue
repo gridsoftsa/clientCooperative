@@ -55,6 +55,8 @@ interface PreviewResponse {
       sucursal_label: string
       status: string | null
       status_label: string | null
+      date_criterion?: 'created_at' | 'status_entry'
+      date_criterion_label?: string
     }
     columns: ColumnDef[]
     rows: Array<Record<string, unknown>>
@@ -362,7 +364,9 @@ onUnmounted(() => {
               Filtros
             </CardTitle>
             <CardDescription>
-              Criterio de fecha: día en que se generó la radicación.
+              {{ statusValue
+                ? 'Criterio de fecha: día en que la radicación ingresó al estado seleccionado.'
+                : 'Criterio de fecha: día en que se generó la radicación (seleccione un estado para filtrar por ingreso a esa instancia).' }}
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-4">
