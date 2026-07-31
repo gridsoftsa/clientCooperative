@@ -47,6 +47,12 @@ export function useArchivalCatalogApi() {
     return res.data
   }
 
+  async function fetchDocumentTypeById(id: number): Promise<DocDocumentTypeRow> {
+    const res = await $api<{ data: DocDocumentTypeRow }>(`/archival/catalog/document-types/${id}`)
+
+    return res.data
+  }
+
   function subseriesListPath(seriesId: number): string {
     return `/settings/archival/catalog/series/${seriesId}/subseries`
   }
@@ -69,6 +75,7 @@ export function useArchivalCatalogApi() {
     fetchSubseries,
     fetchSubseriesById,
     fetchDocumentTypes,
+    fetchDocumentTypeById,
     subseriesListPath,
     subseriesCreatePath,
     documentTypesListPath,
