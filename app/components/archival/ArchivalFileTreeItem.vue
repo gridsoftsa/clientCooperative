@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type { ArchivalFileTreeNode } from '~/types/archival-file'
+import { INSTITUTIONAL_LIBRARY_DOCUMENTED_INFORMATION_SERIES_CODE } from '~/types/institutional-library'
 
 const props = defineProps<{
   node: ArchivalFileTreeNode
@@ -38,6 +39,12 @@ const viewing = ref(false)
 const hasChildren = computed(() => (props.node.children?.length ?? 0) > 0)
 const isDocument = computed(() => props.node.type === 'document' || props.node.type === 'document_reference')
 const isVersionableDocument = computed(() => props.node.type === 'document')
+
+const canPublishThisDocument = computed(() =>
+  props.canPublishToLibrary
+  && isVersionableDocument.value
+  && props.node.doc_series_code === INSTITUTIONAL_LIBRARY_DOCUMENTED_INFORMATION_SERIES_CODE,
+)
 const isFolder = computed(() => props.node.type === 'folder')
 const isFileRoot = computed(() => props.node.type === 'file')
 
@@ -239,7 +246,7 @@ function openExpediente() {
           </Button>
         </template>
         <Button
-          v-if="canPublishToLibrary && isVersionableDocument"
+          v-if="canPublishThisDocument"
           variant="ghost"
           size="sm"
           class="h-7 px-2 text-xs"

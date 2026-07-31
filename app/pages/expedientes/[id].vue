@@ -675,7 +675,7 @@ onMounted(() => loadAll())
         @replaced="loadAll"
       />
 
-      <InstitutionalLibraryPublishDialog
+      <ArchivalInstitutionalLibraryPublishDialog
         v-model:open="publishDialogOpen"
         :file-id="file.id"
         :document-id="selectedTreeNode?.archival_file_document_id ?? null"
