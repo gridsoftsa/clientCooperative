@@ -34,6 +34,9 @@ import {
   titleForApproverEntityDocumentUpload,
 } from '~/constants/documentation-approver-entity-checklist'
 import { appendFileToFormData } from '~/utils/safe-upload-file-name'
+import {
+  filterFreeAttachmentDocuments,
+} from '~/utils/radicacion-document-upload'
 
 definePageMeta({
   layout: 'default',
@@ -321,7 +324,12 @@ const canEditInsurabilityStatusInAsegurabilidadSection = computed(
     && !isCreditApplicationTerminalImmutable(application.value?.status),
 )
 
-const showDocumentationAuxiliaryChecklist = computed(() => documentationReviewFlowActive.value)
+/** Checklist auxiliar visible en revisión documental y también al director de agencia (consulta). */
+const showDocumentationAuxiliaryChecklist = computed(
+  () =>
+    documentationReviewFlowActive.value
+    || application.value?.status === 'Director_Review',
+)
 
 const showAuxiliaryDocumentReviewInChecklist = computed(
   () => documentationReviewFlowActive.value && canDocumentationDecide.value,
@@ -1064,6 +1072,17 @@ const documentsByApplicant = computed(() => {
 function getDocumentsForApplicant(applicantId: number | string | null | undefined): any[] {
   if (applicantId == null) return []
   return documentsByApplicant.value[String(applicantId)] ?? []
+}
+
+/**
+ * Adjuntos «libres» para listados planos (p. ej. vista director): excluye filas del checklist
+ * y huérfanos con título Auxiliar/FNG/… que ya no están en el mapa (evita “duplicados” visuales).
+ */
+function getFreeDocumentsForApplicant(
+  applicantId: number | string | null | undefined,
+  financialInfo: unknown,
+): any[] {
+  return filterFreeAttachmentDocuments(getDocumentsForApplicant(applicantId), financialInfo)
 }
 
 function creditMortgageSummaryText(opts: unknown): string {
@@ -3752,7 +3771,10 @@ onMounted(() => {
               :credit-application-id="application?.id ?? null"
               :credit-application-documents="application?.documents ?? []"
             />
-            <div v-if="!documentationReviewFlowActive && getDocumentsForApplicant(debtor.id).length > 0" class="space-y-3 border-t pt-4">
+            <div
+              v-if="!documentationReviewFlowActive && getFreeDocumentsForApplicant(debtor.id, debtor.financial_info ?? form.debtor?.financial_info).length > 0"
+              class="space-y-3 border-t pt-4"
+            >
               <div class="space-y-1">
                 <p class="text-sm font-semibold">
                   {{ documentationUploadMode ? 'Archivos de la solicitud (descarga y revisión)' : 'Documentos adjuntos' }}
@@ -3765,8 +3787,11 @@ onMounted(() => {
                 </p>
               </div>
               <div class="flex min-w-0 flex-wrap gap-2">
-                <PermissionGate v-for="doc in getDocumentsForApplicant(debtor.id)" :key="doc.id" permission="radicacion_descargar_documentos">
-                  <div class="min-w-0 max-w-full space-y-2 rounded-md border p-2">
+                <PermissionGate
+                  v-for="doc in getFreeDocumentsForApplicant(debtor.id, debtor.financial_info ?? form.debtor?.financial_info)"
+                  :key="doc.id"
+                  permission="radicacion_descargar_documentos"
+                >                  <div class="min-w-0 max-w-full space-y-2 rounded-md border p-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -3980,7 +4005,7 @@ onMounted(() => {
                   :credit-application-documents="application?.documents ?? []"
                 />
                 <div
-                  v-if="!documentationReviewFlowActive && getDocumentsForApplicant(coDebtors[selectedCoDebtorIndex]?.id ?? coDebtors[selectedCoDebtorIndex]?.applicant_id).length > 0"
+                  v-if="!documentationReviewFlowActive && getFreeDocumentsForApplicant(coDebtors[selectedCoDebtorIndex]?.id ?? coDebtors[selectedCoDebtorIndex]?.applicant_id, form.co_debtors[selectedCoDebtorIndex]?.financial_info).length > 0"
                   class="space-y-3"
                 >
                   <div class="space-y-1">
@@ -3996,7 +4021,7 @@ onMounted(() => {
                   </div>
                   <div class="flex min-w-0 flex-wrap gap-2">
                     <PermissionGate
-                      v-for="doc in getDocumentsForApplicant(coDebtors[selectedCoDebtorIndex]?.id ?? coDebtors[selectedCoDebtorIndex]?.applicant_id)"
+                      v-for="doc in getFreeDocumentsForApplicant(coDebtors[selectedCoDebtorIndex]?.id ?? coDebtors[selectedCoDebtorIndex]?.applicant_id, form.co_debtors[selectedCoDebtorIndex]?.financial_info)"
                       :key="doc.id"
                       permission="radicacion_descargar_documentos"
                     >

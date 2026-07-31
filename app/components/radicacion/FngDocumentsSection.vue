@@ -218,13 +218,15 @@ function pendingFileFor(key: string): File | undefined {
 }
 
 function hasSatisfiedUploadForKey(key: string): boolean {
+  // Archivo local pendiente siempre cuenta (se sube al guardar); debe ir antes del
+  // chequeo de ID para no ignorarlo cuando el mapa apunta a un documento huérfano.
+  if (pendingFileFor(key) instanceof File) {
+    return true
+  }
   const id = docIdsByKey.value[key]
   if (typeof id === 'number' && id >= 1) {
     // ID huérfano (archivo reemplazado/eliminado sin actualizar el mapa): tratar como vacío.
     return Boolean(docMetaForKey(key))
-  }
-  if (pendingFileFor(key) instanceof File) {
-    return true
   }
   if (docMetaForKey(key)) {
     return true

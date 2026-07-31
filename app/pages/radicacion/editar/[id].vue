@@ -22,7 +22,13 @@ import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from 
 import { parseActivityTemplateList } from '~/types/credit-application'
 import { mergeApplicantFromApi, normalizeFinancialInfoAliases } from '~/utils/merge-applicant-search'
 import { messageFromFetchError } from '~/utils/http-error-message'
-import { runDocumentUpload } from '~/utils/radicacion-document-upload'
+import {
+  filterFreeAttachmentDocuments,
+  findDocumentIdByTitle,
+  hasPendingRadicacionDocumentUploads,
+  readDocumentIdMap,
+  runDocumentUpload,
+} from '~/utils/radicacion-document-upload'
 import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
 import {
@@ -338,7 +344,7 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
     time_in_job: api?.time_in_job,
     financial_info: fi,
     references: parseReferences(api?.references),
-    documents: docs.map((d) => ({
+    documents: filterFreeAttachmentDocuments(docs, fi).map((d) => ({
       id: d.id,
       title: d.title || d.original_name || 'Documento',
       original_name: d.original_name,
@@ -1007,29 +1013,58 @@ async function uploadAllDocuments(
     coDebtors?: Array<{ applicant_id: number }>
   },
 ) {
+  if (!hasPendingRadicacionDocumentUploads(form.value)) {
+    return
+  }
+
   const sizeErr = validateAllDocumentsBeforeUpload()
   if (sizeErr) throw new Error(sizeErr)
+
+  // Contexto fresco: mapas e IDs en servidor (evita POST sin DELETE si el form perdió el mapa).
+  let serverDocuments: Array<{ id?: number; title?: string | null; applicant_id?: number | null }> = []
+  try {
+    const fresh = await $api<{ data?: { documents?: typeof serverDocuments } }>(`/credit-applications/${applicationId}`)
+    const data = (fresh as { data?: { documents?: typeof serverDocuments } })?.data ?? fresh
+    serverDocuments = Array.isArray((data as { documents?: typeof serverDocuments }).documents)
+      ? (data as { documents: typeof serverDocuments }).documents
+      : []
+  } catch {
+    serverDocuments = Array.isArray(application.value?.documents) ? application.value!.documents : []
+  }
 
   const pivots = app.application_applicants ?? app.applicationApplicants ?? []
   const debtorPivot = pivots.find((p: { role: string }) => (p.role ?? (p as any).Role) === 'DEUDOR')
   const coDebtorsList = app.co_debtors ?? app.coDebtors ?? []
   const codeudorApplicantIds = coDebtorsList.map((c: any) => c.applicant_id ?? c.applicantId)
+  const debtorApplicantId = debtorPivot
+    ? Number((debtorPivot as { applicant_id?: number }).applicant_id ?? 0) || null
+    : null
+
+  async function deleteDocIfPresent(docId: number | null | undefined) {
+    if (typeof docId === 'number' && docId > 0) {
+      await $api(`/credit-applications/${applicationId}/documents/${docId}`, { method: 'DELETE' })
+    }
+  }
 
   if (debtorPivot) {
     const docs = form.value.debtor.documents ?? []
     for (const doc of docs) {
       if (!doc.file || !doc.title?.trim()) continue
-      if (doc.id) {
-        await $api(`/credit-applications/${applicationId}/documents/${doc.id}`, { method: 'DELETE' })
-      }
+      await deleteDocIfPresent(doc.id)
       const fd = new FormData()
       fd.append('title', doc.title.trim())
       appendFileToFormData(fd, doc.file, 'adjunto')
-      await runDocumentUpload(
+      const res = await runDocumentUpload(
         `Deudor — adjunto: ${doc.title.trim()}`,
         doc.file,
-        () => $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd }),
+        () => $api<{ data: { id: number; original_name?: string } }>(
+          `/credit-applications/${applicationId}/documents`,
+          { method: 'POST', body: fd },
+        ),
       )
+      doc.id = res.data.id
+      doc.original_name = res.data.original_name ?? doc.file.name
+      doc.file = undefined
     }
 
     let labelByKey: Record<string, string> = {}
@@ -1052,19 +1087,17 @@ async function uploadAllDocuments(
     let didAuxiliarUpload = false
     if (auxFiles) {
       const fi = { ...(typeof fiRaw === 'object' && fiRaw ? fiRaw : {}) } as Record<string, unknown>
-      const docMap = { ...(typeof fi.auxiliaryDocuments === 'object' && fi.auxiliaryDocuments
-        ? fi.auxiliaryDocuments as Record<string, number | null>
-        : {}) }
+      const docMap = readDocumentIdMap(fi, 'auxiliaryDocuments')
 
       for (const [key, file] of Object.entries(auxFiles)) {
         if (!(file instanceof File)) continue
-        const prevId = docMap[key]
-        if (typeof prevId === 'number' && prevId > 0) {
-          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
-        }
         const label = labelByKey[key] ?? key
+        const uploadTitle = titleForAuxiliaryDocumentUpload(label)
+        const prevId = docMap[key]
+          ?? findDocumentIdByTitle(serverDocuments, uploadTitle, debtorApplicantId)
+        await deleteDocIfPresent(prevId)
         const fd = new FormData()
-        fd.append('title', titleForAuxiliaryDocumentUpload(label))
+        fd.append('title', uploadTitle)
         appendFileToFormData(fd, file, 'auxiliar')
         fd.append('auxiliary_checklist', '1')
         const res = await runDocumentUpload(
@@ -1076,6 +1109,8 @@ async function uploadAllDocuments(
           ),
         )
         docMap[key] = res.data.id
+        serverDocuments = serverDocuments.filter(d => d.id !== prevId)
+        serverDocuments.push({ id: res.data.id, title: uploadTitle, applicant_id: debtorApplicantId })
         didAuxiliarUpload = true
       }
 
@@ -1103,21 +1138,19 @@ async function uploadAllDocuments(
           labelByKeyFng = {}
         }
         const fiFng = { ...(typeof fiRaw === 'object' && fiRaw ? fiRaw : {}) } as Record<string, unknown>
-        const fngDocMap = { ...(typeof fiFng.fngDocuments === 'object' && fiFng.fngDocuments && !Array.isArray(fiFng.fngDocuments)
-          ? (fiFng.fngDocuments as Record<string, number | null>)
-          : {}) }
+        const fngDocMap = readDocumentIdMap(fiFng, 'fngDocuments')
 
         for (const [key, file] of Object.entries(fngFiles)) {
           if (!(file instanceof File)) {
             continue
           }
-          const prevIdFng = fngDocMap[key]
-          if (typeof prevIdFng === 'number' && prevIdFng > 0) {
-            await $api(`/credit-applications/${applicationId}/documents/${prevIdFng}`, { method: 'DELETE' })
-          }
           const labelFng = labelByKeyFng[key] ?? key
+          const uploadTitleFng = titleForFngDocumentUpload(labelFng)
+          const prevIdFng = fngDocMap[key]
+            ?? findDocumentIdByTitle(serverDocuments, uploadTitleFng, debtorApplicantId)
+          await deleteDocIfPresent(prevIdFng)
           const fdFng = new FormData()
-          fdFng.append('title', titleForFngDocumentUpload(labelFng))
+          fdFng.append('title', uploadTitleFng)
           appendFileToFormData(fdFng, file, 'fng')
           fdFng.append('fng_checklist', '1')
           const resFng = await runDocumentUpload(
@@ -1129,6 +1162,8 @@ async function uploadAllDocuments(
             ),
           )
           fngDocMap[key] = resFng.data.id
+          serverDocuments = serverDocuments.filter(d => d.id !== prevIdFng)
+          serverDocuments.push({ id: resFng.data.id, title: uploadTitleFng, applicant_id: debtorApplicantId })
           didFngUpload = true
         }
 
@@ -1153,18 +1188,22 @@ async function uploadAllDocuments(
     const docs = co.documents ?? []
     for (const doc of docs) {
       if (!doc.file || !doc.title?.trim()) continue
-      if (doc.id) {
-        await $api(`/credit-applications/${applicationId}/documents/${doc.id}`, { method: 'DELETE' })
-      }
+      await deleteDocIfPresent(doc.id)
       const fd = new FormData()
       fd.append('title', doc.title.trim())
       appendFileToFormData(fd, doc.file, 'adjunto')
       fd.append('applicant_id', String(applicantId))
-      await runDocumentUpload(
+      const res = await runDocumentUpload(
         `Codeudor ${i + 1} — adjunto: ${doc.title.trim()}`,
         doc.file,
-        () => $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd }),
+        () => $api<{ data: { id: number; original_name?: string } }>(
+          `/credit-applications/${applicationId}/documents`,
+          { method: 'POST', body: fd },
+        ),
       )
+      doc.id = res.data.id
+      doc.original_name = res.data.original_name ?? doc.file.name
+      doc.file = undefined
     }
 
     let labelByKeyCo: Record<string, string> = {}
@@ -1187,19 +1226,17 @@ async function uploadAllDocuments(
     let didAuxCo = false
     if (auxFilesCo) {
       const fiCo = { ...(typeof fiRawCo === 'object' && fiRawCo ? fiRawCo : {}) } as Record<string, unknown>
-      const docMapCo = { ...(typeof fiCo.auxiliaryDocuments === 'object' && fiCo.auxiliaryDocuments
-        ? fiCo.auxiliaryDocuments as Record<string, number | null>
-        : {}) }
+      const docMapCo = readDocumentIdMap(fiCo, 'auxiliaryDocuments')
 
       for (const [key, file] of Object.entries(auxFilesCo)) {
         if (!(file instanceof File)) continue
-        const prevId = docMapCo[key]
-        if (typeof prevId === 'number' && prevId > 0) {
-          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
-        }
         const labelCo = labelByKeyCo[key] ?? key
+        const uploadTitleCo = titleForAuxiliaryDocumentUpload(labelCo)
+        const prevId = docMapCo[key]
+          ?? findDocumentIdByTitle(serverDocuments, uploadTitleCo, applicantId)
+        await deleteDocIfPresent(prevId)
         const fdAux = new FormData()
-        fdAux.append('title', titleForAuxiliaryDocumentUpload(labelCo))
+        fdAux.append('title', uploadTitleCo)
         appendFileToFormData(fdAux, file, 'auxiliar-codeudor')
         fdAux.append('auxiliary_checklist', '1')
         fdAux.append('applicant_id', String(applicantId))
@@ -1212,6 +1249,8 @@ async function uploadAllDocuments(
           ),
         )
         docMapCo[key] = resCo.data.id
+        serverDocuments = serverDocuments.filter(d => d.id !== prevId)
+        serverDocuments.push({ id: resCo.data.id, title: uploadTitleCo, applicant_id: applicantId })
         didAuxCo = true
       }
 
@@ -1345,7 +1384,34 @@ async function saveChanges() {
   }
 }
 
+async function confirmSubmitToDirector() {
+  if (saving.value) return
+  saving.value = true
+  submitDirectorDialogOpen.value = false
+  try {
+    // saving ya está true: submitToDirectorReview no debe rearmarlo desde false al inicio
+    await submitToDirectorReviewBody()
+  } finally {
+    saving.value = false
+  }
+}
+
+function openSubmitDirectorDialog() {
+  if (saving.value) return
+  submitDirectorDialogOpen.value = true
+}
+
 async function submitToDirectorReview() {
+  if (saving.value) return
+  saving.value = true
+  try {
+    await submitToDirectorReviewBody()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function submitToDirectorReviewBody() {
   if (!skipNextDirectorReview.value && !form.value.numero_radicado_externo?.trim()) {
     radicadoExternoDirectorError.value = true
     toast.error('Indique el número de radicado externo para enviar al director de agencia.')
@@ -1382,7 +1448,6 @@ async function submitToDirectorReview() {
     return
   }
 
-  saving.value = true
   try {
     await $csrf()
     let applicationIdForSubmit = Number(application.value?.id ?? 0)
@@ -1405,19 +1470,7 @@ async function submitToDirectorReview() {
   } catch (e: unknown) {
     console.error('Error enviando al director:', e)
     toast.error(messageFromFetchError(e, 'Error al enviar al director'))
-  } finally {
-    saving.value = false
   }
-}
-
-function openSubmitDirectorDialog() {
-  if (saving.value) return
-  submitDirectorDialogOpen.value = true
-}
-
-async function confirmSubmitToDirector() {
-  submitDirectorDialogOpen.value = false
-  await submitToDirectorReview()
 }
 
 async function nextStep() {
