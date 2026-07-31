@@ -37,6 +37,10 @@ import { appendFileToFormData } from '~/utils/safe-upload-file-name'
 import {
   filterFreeAttachmentDocuments,
 } from '~/utils/radicacion-document-upload'
+import {
+  itemsByActivityFromCatalogResponse,
+  repairAuxiliaryDocumentsMapFromExisting,
+} from '~/utils/auxiliary-documents-validation'
 
 definePageMeta({
   layout: 'default',
@@ -1659,6 +1663,51 @@ function syncFormFromApplication() {
   )
 }
 
+/**
+ * Al abrir detalle: reenlaza checklist auxiliar con archivos ya guardados (mapa vacío / IDs huérfanos).
+ */
+async function repairLoadedAuxiliaryDocumentMapsOnDetail(): Promise<void> {
+  const docs = (application.value?.documents ?? []) as Array<{
+    id: number
+    applicant_id?: number | null
+    title?: string | null
+    original_name?: string | null
+  }>
+  if (docs.length === 0) {
+    return
+  }
+  let itemsByActivity: Record<string, Array<{ key: string, label: string, required: boolean }>> = {}
+  try {
+    const cfg = await $api<unknown>('/catalogs/template-flat-data/auxiliary-documents')
+    itemsByActivity = itemsByActivityFromCatalogResponse(cfg)
+  } catch {
+    return
+  }
+  const repairOne = (applicant: ApplicantForm) => {
+    const repaired = repairAuxiliaryDocumentsMapFromExisting({
+      itemsByActivity,
+      financialInfo: applicant.financial_info,
+      applicationDocuments: docs,
+      applicantId: applicant.id,
+    })
+    if (!repaired) {
+      return
+    }
+    const fi = (
+      applicant.financial_info
+      && typeof applicant.financial_info === 'object'
+      && !Array.isArray(applicant.financial_info)
+    )
+      ? { ...(applicant.financial_info as Record<string, unknown>) }
+      : {}
+    applicant.financial_info = { ...fi, auxiliaryDocuments: repaired }
+  }
+  repairOne(form.value.debtor)
+  for (const co of form.value.co_debtors ?? []) {
+    repairOne(co)
+  }
+}
+
 async function fetchApplication() {
   loading.value = true
   error.value = null
@@ -1687,6 +1736,10 @@ async function fetchApplication() {
     cancelPendingCodeudorDocumentationFinancialPush()
     skipDocumentationFinancialPatch.value = true
     syncFormFromApplication()
+    await repairLoadedAuxiliaryDocumentMapsOnDetail()
+    lastDebtorDocumentationFinancialPatchSignature.value = stableStringifyDocumentationFinancialPatch(
+      buildDocumentationFinancialPatch(form.value.debtor.financial_info),
+    )
     documentationInsurabilityChoice.value = application.value?.documentation_insurability_required === true ? 'yes' : 'no'
     documentationInsurabilityStatusValue.value = typeof application.value?.insurability_status_value === 'string'
       && application.value.insurability_status_value !== ''

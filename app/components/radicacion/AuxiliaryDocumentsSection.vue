@@ -114,11 +114,11 @@ function resolvedDocIdForKey(key: string): number | null {
   if (typeof mapped === 'number' && mapped >= 1 && docMetaById(mapped)) {
     return mapped
   }
-  const byTitle = findDocumentIdByTitle(
-    props.applicationDocuments ?? [],
-    titleForAuxiliaryDocumentUpload(labelForChecklistKey(key)),
-    applicantIdForDocs(),
-  )
+  const title = titleForAuxiliaryDocumentUpload(labelForChecklistKey(key))
+  const docs = props.applicationDocuments ?? []
+  // Primero con solicitante; si no hay match (applicant_id nulo/desfasado), buscar solo por título.
+  const byTitle = findDocumentIdByTitle(docs, title, applicantIdForDocs())
+    ?? findDocumentIdByTitle(docs, title, null)
   if (byTitle != null) {
     return byTitle
   }

@@ -33,6 +33,7 @@ import {
   extractActivityTypeFromFinancialInfo,
   itemsByActivityFromCatalogResponse,
   missingRequiredAuxiliaryLabels,
+  repairAuxiliaryDocumentsMapFromExisting,
 } from '~/utils/auxiliary-documents-validation'
 import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
@@ -487,12 +488,62 @@ async function fetchApplication() {
     }
     await nextTick()
     syncFormFromApplication()
+    await repairLoadedAuxiliaryDocumentMaps()
   } catch (e) {
     console.error('Error cargando solicitud:', e)
     error.value = 'No se pudo cargar la solicitud'
     application.value = null
   } finally {
     loading.value = false
+  }
+}
+
+/**
+ * Al abrir editar: si los archivos ya existen en la solicitud pero el mapa del checklist
+ * está vacío o con IDs viejos, reenlaza por título para que se vean en el checklist.
+ */
+async function repairLoadedAuxiliaryDocumentMaps(): Promise<void> {
+  const docs = (application.value?.documents ?? []) as Array<{
+    id: number
+    applicant_id?: number | null
+    title?: string | null
+    original_name?: string | null
+  }>
+  if (docs.length === 0) {
+    return
+  }
+
+  let itemsByActivity: Record<string, Array<{ key: string, label: string, required: boolean }>> = {}
+  try {
+    const cfg = await $api<unknown>('/catalogs/template-flat-data/auxiliary-documents')
+    itemsByActivity = itemsByActivityFromCatalogResponse(cfg)
+  } catch {
+    return
+  }
+
+  const repairOne = (applicant: ApplicantForm) => {
+    const repaired = repairAuxiliaryDocumentsMapFromExisting({
+      itemsByActivity,
+      financialInfo: applicant.financial_info,
+      applicationDocuments: docs,
+      applicantId: applicant.id,
+    })
+    if (!repaired) {
+      return
+    }
+    const fi = (
+      applicant.financial_info
+      && typeof applicant.financial_info === 'object'
+      && !Array.isArray(applicant.financial_info)
+    )
+      ? { ...(applicant.financial_info as Record<string, unknown>) }
+      : {}
+    applicant.financial_info = { ...fi, auxiliaryDocuments: repaired }
+  }
+
+  repairOne(form.value.debtor)
+  for (const co of form.value.co_debtors ?? []) {
+    repairOne(co)
   }
 }
 
@@ -1074,6 +1125,12 @@ async function uploadAllDocuments(
       doc.id = res.data.id
       doc.original_name = res.data.original_name ?? doc.file.name
       doc.file = undefined
+      upsertLocalApplicationDocument({
+        id: res.data.id,
+        title: doc.title.trim(),
+        original_name: doc.original_name,
+        applicant_id: debtorApplicantId,
+      })
     }
 
     let labelByKey: Record<string, string> = {}
@@ -1120,6 +1177,12 @@ async function uploadAllDocuments(
         docMap[key] = res.data.id
         serverDocuments = serverDocuments.filter(d => d.id !== prevId)
         serverDocuments.push({ id: res.data.id, title: uploadTitle, applicant_id: debtorApplicantId })
+        upsertLocalApplicationDocument({
+          id: res.data.id,
+          title: uploadTitle,
+          original_name: file.name,
+          applicant_id: debtorApplicantId,
+        })
         didAuxiliarUpload = true
       }
 
@@ -1173,6 +1236,12 @@ async function uploadAllDocuments(
           fngDocMap[key] = resFng.data.id
           serverDocuments = serverDocuments.filter(d => d.id !== prevIdFng)
           serverDocuments.push({ id: resFng.data.id, title: uploadTitleFng, applicant_id: debtorApplicantId })
+          upsertLocalApplicationDocument({
+            id: resFng.data.id,
+            title: uploadTitleFng,
+            original_name: file.name,
+            applicant_id: debtorApplicantId,
+          })
           didFngUpload = true
         }
 
@@ -1213,6 +1282,12 @@ async function uploadAllDocuments(
       doc.id = res.data.id
       doc.original_name = res.data.original_name ?? doc.file.name
       doc.file = undefined
+      upsertLocalApplicationDocument({
+        id: res.data.id,
+        title: doc.title.trim(),
+        original_name: doc.original_name,
+        applicant_id: Number(applicantId) || null,
+      })
     }
 
     let labelByKeyCo: Record<string, string> = {}
@@ -1260,6 +1335,12 @@ async function uploadAllDocuments(
         docMapCo[key] = resCo.data.id
         serverDocuments = serverDocuments.filter(d => d.id !== prevId)
         serverDocuments.push({ id: resCo.data.id, title: uploadTitleCo, applicant_id: applicantId })
+        upsertLocalApplicationDocument({
+          id: resCo.data.id,
+          title: uploadTitleCo,
+          original_name: file.name,
+          applicant_id: Number(applicantId) || null,
+        })
         didAuxCo = true
       }
 
@@ -1394,9 +1475,24 @@ async function refreshApplicationDocumentsFromServer(applicationId: number): Pro
   try {
     const fresh = await $api<{ data?: { documents?: unknown[] } }>(`/credit-applications/${applicationId}`)
     const data = (fresh as { data?: { documents?: unknown[] } })?.data ?? fresh
-    const list = Array.isArray((data as { documents?: unknown[] }).documents)
-      ? (data as { documents: unknown[] }).documents
-      : []
+    // Solo actualizar si el payload trae `documents` como array. Nunca reemplazar por []
+    // si la respuesta vino mal formada (antes borraba todos los adjuntos visibles).
+    if (
+      !data
+      || typeof data !== 'object'
+      || !('documents' in (data as object))
+      || !Array.isArray((data as { documents?: unknown[] }).documents)
+    ) {
+      return
+    }
+    const list = (data as { documents: unknown[] }).documents
+    const prevCount = Array.isArray(application.value?.documents)
+      ? application.value!.documents.length
+      : 0
+    if (list.length === 0 && prevCount > 0) {
+      console.warn('[radicacion] Refresh de documentos ignorado: respuesta vacía con adjuntos previos.')
+      return
+    }
     if (application.value) {
       skipFormSyncFromApplication.value = true
       try {
@@ -1411,6 +1507,44 @@ async function refreshApplicationDocumentsFromServer(applicationId: number): Pro
     }
   } catch {
     // La subida ya ocurrió; el listado se refrescará al recargar.
+  }
+}
+
+/** Añade o reemplaza un documento en el listado local sin ir al servidor. */
+function upsertLocalApplicationDocument(doc: {
+  id: number
+  title?: string | null
+  original_name?: string | null
+  applicant_id?: number | null
+}): void {
+  if (!application.value) {
+    return
+  }
+  skipFormSyncFromApplication.value = true
+  try {
+    const prev = Array.isArray(application.value.documents)
+      ? [...application.value.documents]
+      : []
+    const idx = prev.findIndex(d => Number((d as { id?: number }).id) === Number(doc.id))
+    const row = {
+      id: doc.id,
+      title: doc.title ?? undefined,
+      original_name: doc.original_name ?? undefined,
+      applicant_id: doc.applicant_id ?? undefined,
+    }
+    if (idx >= 0) {
+      prev[idx] = { ...(prev[idx] as object), ...row }
+    } else {
+      prev.push(row)
+    }
+    application.value = {
+      ...application.value,
+      documents: prev as typeof application.value.documents,
+    }
+  } finally {
+    void nextTick().then(() => {
+      skipFormSyncFromApplication.value = false
+    })
   }
 }
 

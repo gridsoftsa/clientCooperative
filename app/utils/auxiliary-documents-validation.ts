@@ -68,6 +68,10 @@ export function isAuxiliaryChecklistKeySatisfied(options: {
     options.applicationDocuments,
     uploadTitle,
     options.applicantId,
+  ) ?? findDocumentIdByTitle(
+    options.applicationDocuments,
+    uploadTitle,
+    null,
   )
   return byTitle != null
 }
@@ -108,6 +112,64 @@ export function extractActivityTypeFromFinancialInfo(financialInfo: unknown): st
     return ''
   }
   return normalizeStoredActivityType((financialInfo as Record<string, unknown>).activity_type)
+}
+
+/**
+ * Reconstruye `financial_info.auxiliaryDocuments` enlazando IDs de documentos ya subidos
+ * (por título «Auxiliar — …») cuando el mapa está vacío o apunta a IDs huérfanos.
+ * No sube ni borra archivos; solo repara el enlace en memoria para que Ver/Editar los muestren.
+ */
+export function repairAuxiliaryDocumentsMapFromExisting(options: {
+  itemsByActivity: Record<string, AuxiliaryChecklistItem[]>
+  financialInfo: unknown
+  applicationDocuments: AuxiliaryApplicationDocumentRef[]
+  applicantId?: number | null
+  economicActivityOptions?: ReadonlyArray<EconomicActivityCatalogOption>
+}): Record<string, number | null> | null {
+  const activityType = extractActivityTypeFromFinancialInfo(options.financialInfo)
+  const rows = resolveAuxiliaryChecklistRows(
+    options.itemsByActivity,
+    activityType,
+    options.economicActivityOptions,
+  )
+  if (!activityType || rows.length === 0) {
+    return null
+  }
+
+  const fi = (
+    options.financialInfo
+    && typeof options.financialInfo === 'object'
+    && !Array.isArray(options.financialInfo)
+  )
+    ? { ...(options.financialInfo as Record<string, unknown>) }
+    : {}
+  const map = parseFinancialChecklistDocumentIdMap(fi.auxiliaryDocuments)
+  let changed = false
+
+  for (const row of rows) {
+    const currentId = map[row.key]
+    if (typeof currentId === 'number' && currentId >= 1) {
+      if (findDocMeta(currentId, options.applicationDocuments, options.applicantId)) {
+        continue
+      }
+    }
+    const uploadTitle = titleForAuxiliaryDocumentUpload(row.label)
+    const recovered = findDocumentIdByTitle(
+      options.applicationDocuments,
+      uploadTitle,
+      options.applicantId,
+    ) ?? findDocumentIdByTitle(
+      options.applicationDocuments,
+      uploadTitle,
+      null,
+    )
+    if (recovered != null && recovered !== currentId) {
+      map[row.key] = recovered
+      changed = true
+    }
+  }
+
+  return changed ? map : null
 }
 
 /** Parse itemsByActivity from GET `/catalogs/template-flat-data/auxiliary-documents`. */
