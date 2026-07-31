@@ -386,6 +386,47 @@ export function useArchivalFileApi() {
     return `/api/archival-files/${fileId}/documents/${documentId}/view`
   }
 
+  async function fetchAccessGrants(status?: string) {
+    const res = await api<{ data: import('~/types/archival-access').ArchivalAccessGrant[] }>(
+      '/archival-files/access-grants',
+      { query: status ? { status } : undefined },
+    )
+    return res.data ?? []
+  }
+
+  async function fetchAccessGrantOptions() {
+    const res = await api<{ data: import('~/types/archival-access').ArchivalAccessGrantOptions }>(
+      '/archival-files/access-grants/options',
+    )
+    return res.data
+  }
+
+  async function createAccessGrant(payload: import('~/types/archival-access').StoreArchivalAccessGrantPayload) {
+    return api<{ data: import('~/types/archival-access').ArchivalAccessGrant, message: string }>(
+      '/archival-files/access-grants',
+      { method: 'POST', body: payload },
+    )
+  }
+
+  async function updateAccessGrant(id: number, payload: Partial<import('~/types/archival-access').StoreArchivalAccessGrantPayload>) {
+    return api<{ data: import('~/types/archival-access').ArchivalAccessGrant, message: string }>(
+      `/archival-files/access-grants/${id}`,
+      { method: 'PUT', body: payload },
+    )
+  }
+
+  async function deleteAccessGrant(id: number) {
+    return api<{ message: string }>(`/archival-files/access-grants/${id}`, { method: 'DELETE' })
+  }
+
+  async function fetchAccessControlReport(query: Record<string, string | number | undefined> = {}) {
+    const res = await api<{
+      data: import('~/types/archival-access').ArchivalAccessControlReportRow[]
+      meta: { total: number }
+    }>('/archival-files/reports/access-control', { query })
+    return res
+  }
+
   return {
     fetchFiles,
     fetchFile,
@@ -429,5 +470,11 @@ export function useArchivalFileApi() {
     fetchDocumentVersions,
     documentDownloadUrl,
     documentViewUrl,
+    fetchAccessGrants,
+    fetchAccessGrantOptions,
+    createAccessGrant,
+    updateAccessGrant,
+    deleteAccessGrant,
+    fetchAccessControlReport,
   }
 }

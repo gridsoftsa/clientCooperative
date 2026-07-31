@@ -22,8 +22,9 @@ const STATUS_FILTER_ALL = 'all'
 const PHASE_FILTER_ALL = 'all'
 const statusFilter = ref<ArchivalFileStatus | typeof STATUS_FILTER_ALL>(STATUS_FILTER_ALL)
 const phaseFilter = ref<string | typeof PHASE_FILTER_ALL>(PHASE_FILTER_ALL)
-const fileTypeFilter = ref('')
-const orgUnitFilter = ref('')
+const FILTER_NONE = 'all'
+const fileTypeFilter = ref(FILTER_NONE)
+const orgUnitFilter = ref(FILTER_NONE)
 const metadataSearch = ref('')
 const hasAlertsFilter = ref(false)
 const createdFrom = ref('')
@@ -70,9 +71,9 @@ async function loadFiles(page = 1) {
       query.status = statusFilter.value
     if (phaseFilter.value !== PHASE_FILTER_ALL)
       query.archival_phase = phaseFilter.value
-    if (fileTypeFilter.value)
+    if (fileTypeFilter.value !== FILTER_NONE)
       query.archival_file_type_id = Number(fileTypeFilter.value)
-    if (orgUnitFilter.value)
+    if (orgUnitFilter.value !== FILTER_NONE)
       query.org_unit_id = Number(orgUnitFilter.value)
     if (metadataSearch.value.trim())
       query.metadata_search = metadataSearch.value.trim()
@@ -105,8 +106,8 @@ async function loadFiles(page = 1) {
 
 function clearAdvanced() {
   phaseFilter.value = PHASE_FILTER_ALL
-  fileTypeFilter.value = ''
-  orgUnitFilter.value = ''
+  fileTypeFilter.value = FILTER_NONE
+  orgUnitFilter.value = FILTER_NONE
   metadataSearch.value = ''
   hasAlertsFilter.value = false
   createdFrom.value = ''
@@ -241,7 +242,7 @@ onMounted(async () => {
                   <SelectValue placeholder="Todos los tipos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">
+                  <SelectItem :value="FILTER_NONE">
                     Todos los tipos
                   </SelectItem>
                   <SelectItem
@@ -262,7 +263,7 @@ onMounted(async () => {
                   <SelectValue placeholder="Todas las áreas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">
+                  <SelectItem :value="FILTER_NONE">
                     Todas las áreas
                   </SelectItem>
                   <SelectItem
