@@ -2,6 +2,10 @@
 import { toast } from 'vue-sonner'
 import type { ArchivalFile, ArchivalFileStatus } from '~/types/archival-file'
 import { ARCHIVAL_FILE_STATUS_LABELS } from '~/types/archival-file'
+import {
+  archivalFileStatusActions,
+  type ArchivalFileStatusActionOption,
+} from '~/utils/archival-file-status'
 
 definePageMeta({
   layout: 'default',
@@ -36,6 +40,26 @@ const fileTypes = ref<Array<{ id: number, name: string }>>([])
 const orgUnits = ref<Array<{ id: number, name: string }>>([])
 
 const canCreate = computed(() => hasPermission('expedientes_crear'))
+
+const statusTransitionDialogOpen = ref(false)
+const selectedStatusFileId = ref<number | null>(null)
+const selectedStatusAction = ref<ArchivalFileStatusActionOption | null>(null)
+
+function statusActionsForFile(file: ArchivalFile): ArchivalFileStatusActionOption[] {
+  return archivalFileStatusActions(file.status).filter(action =>
+    hasPermission(action.permission),
+  )
+}
+
+function openStatusTransitionDialog(file: ArchivalFile, action: ArchivalFileStatusActionOption) {
+  selectedStatusFileId.value = file.id
+  selectedStatusAction.value = action
+  statusTransitionDialogOpen.value = true
+}
+
+async function onStatusUpdated() {
+  await loadFiles(meta.value.current_page)
+}
 
 const phaseOptions = [
   { value: 'management', label: 'Archivo de gestión' },
@@ -373,13 +397,37 @@ onMounted(async () => {
                   </Badge>
                 </TableCell>
                 <TableCell class="text-right">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    @click.stop="router.push(`/expedientes/${file.id}`)"
-                  >
-                    Ver
-                  </Button>
+                  <div class="flex items-center justify-end gap-1">
+                    <DropdownMenu v-if="statusActionsForFile(file).length > 0">
+                      <DropdownMenuTrigger as-child>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          @click.stop
+                        >
+                          Estado
+                          <Icon name="i-lucide-chevron-down" class="ml-1 size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" class="w-56">
+                        <DropdownMenuItem
+                          v-for="action in statusActionsForFile(file)"
+                          :key="`${file.id}-${action.target}`"
+                          :class="action.variant === 'destructive' ? 'text-destructive focus:text-destructive' : ''"
+                          @click.stop="openStatusTransitionDialog(file, action)"
+                        >
+                          {{ action.label }}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      @click.stop="router.push(`/expedientes/${file.id}`)"
+                    >
+                      Ver
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -412,5 +460,13 @@ onMounted(async () => {
         </template>
       </CardContent>
     </Card>
+
+    <ArchivalFileStatusTransitionDialog
+      v-if="selectedStatusFileId != null"
+      v-model:open="statusTransitionDialogOpen"
+      :file-id="selectedStatusFileId"
+      :action="selectedStatusAction"
+      @updated="onStatusUpdated"
+    />
   </div>
 </template>

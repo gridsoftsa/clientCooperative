@@ -335,6 +335,12 @@ export const navMenu: NavMenu[] = [
               'ventanilla_crear',
             ],
           },
+          {
+            title: 'Biblioteca institucional',
+            icon: 'i-lucide-library',
+            link: '/parametrizacion/biblioteca-institucional',
+            anyPermission: ['plantillas_ver', 'expedientes_biblioteca_ver'],
+          },
         ],
       },
       {

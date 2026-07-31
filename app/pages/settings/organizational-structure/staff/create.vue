@@ -47,6 +47,11 @@ const form = ref({
 
 const userOptions = ref<Array<{ id: number; label: string }>>([])
 const saving = ref(false)
+const activeTab = ref<'datos' | 'ubicacion'>('datos')
+
+function goToDatosTab(): void {
+  activeTab.value = 'datos'
+}
 
 const userSelectOptions = computed(() =>
   userOptions.value.map(u => ({
@@ -144,6 +149,7 @@ function applyReturnedUserFromQuery() {
 
 async function handleSubmit() {
   submitAttempted.value = true
+  activeTab.value = 'datos'
   const firstMissing = firstMissingField()
   if (firstMissing) {
     const messages: Record<RequiredField, string> = {
@@ -151,6 +157,7 @@ async function handleSubmit() {
       first_last_name: 'El primer apellido es obligatorio',
       email: orgStaffContactEmailErrorMessage(form.value.email),
       phone: orgStaffContactPhoneErrorMessage(),
+      date_of_birth: 'La fecha de nacimiento es obligatoria',
       user_id: 'El vínculo con el usuario del sistema es obligatorio',
       document_pair: 'Indique tipo y número de documento',
     }
@@ -180,7 +187,7 @@ async function handleSubmit() {
         extension: form.value.extension.trim() || undefined,
         document_type: form.value.document_type.trim() || undefined,
         document_number: form.value.document_number.trim() || undefined,
-        date_of_birth: form.value.date_of_birth || undefined,
+        date_of_birth: form.value.date_of_birth.trim(),
         is_active: form.value.is_active,
       },
     })
@@ -203,7 +210,7 @@ async function handleSubmit() {
   }
 }
 
-type RequiredField = 'first_name' | 'first_last_name' | 'email' | 'phone' | 'user_id' | 'document_pair'
+type RequiredField = 'first_name' | 'first_last_name' | 'email' | 'phone' | 'date_of_birth' | 'user_id' | 'document_pair'
 
 const submitAttempted = ref(false)
 
@@ -212,6 +219,7 @@ const requiredFieldIds: Record<Exclude<RequiredField, 'document_pair'>, string> 
   first_last_name: 'fl',
   email: 'em',
   phone: 'ph',
+  date_of_birth: 'dob',
   user_id: 'usr',
 }
 
@@ -228,6 +236,9 @@ function isFieldMissing(field: RequiredField): boolean {
   if (field === 'phone') {
     return !form.value.phone.trim()
   }
+  if (field === 'date_of_birth') {
+    return !form.value.date_of_birth.trim()
+  }
   if (field === 'user_id') {
     return form.value.user_id == null
   }
@@ -237,7 +248,7 @@ function isFieldMissing(field: RequiredField): boolean {
 }
 
 function firstMissingField(): RequiredField | null {
-  const order: RequiredField[] = ['first_name', 'first_last_name', 'email', 'phone', 'user_id', 'document_pair']
+  const order: RequiredField[] = ['first_name', 'first_last_name', 'email', 'phone', 'date_of_birth', 'user_id', 'document_pair']
   return order.find(field => isFieldMissing(field)) ?? null
 }
 
@@ -272,7 +283,11 @@ function contactPhoneErrorClass(): string {
   return fieldErrorClass(submitAttempted.value && isFieldMissing('phone'))
 }
 
-function formFieldErrorClass(field: Exclude<RequiredField, 'document_pair' | 'email' | 'phone'>): string {
+function dobErrorClass(): string {
+  return fieldErrorClass(submitAttempted.value && isFieldMissing('date_of_birth'))
+}
+
+function formFieldErrorClass(field: Exclude<RequiredField, 'document_pair' | 'email' | 'phone' | 'date_of_birth'>): string {
   return fieldErrorClass(submitAttempted.value && isFieldMissing(field))
 }
 
@@ -316,7 +331,7 @@ onMounted(async () => {
             Registrar funcionario
           </h2>
           <p class="text-muted-foreground leading-relaxed">
-            Tras crear el registro podrá definir ubicación organizacional y cargo principal.
+            Complete los datos personales y, al guardar, continúe en la pestaña Ubicación para definir agencia, área y cargo principal.
           </p>
         </div>
         <Button variant="outline" class="shrink-0" @click="router.back()">
@@ -325,263 +340,279 @@ onMounted(async () => {
         </Button>
       </div>
 
-      <form @submit.prevent="handleSubmit">
-        <div class="mx-auto w-full max-w-5xl space-y-6">
-          <Card>
-            <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Datos del funcionario</CardTitle>
-              <CardDescription class="leading-relaxed">
-                Nombre completo, correo, teléfono y vínculo con usuario del sistema son obligatorios.
-              </CardDescription>
-            </CardHeader>
-            <CardContent class="space-y-8">
-              <section class="space-y-4">
-                <p class="text-sm font-medium text-foreground">
-                  Identificación
-                </p>
-                <div class="flex flex-wrap gap-x-8 gap-y-5">
-                  <div class="staff-field-doc-type space-y-2">
-                    <Label for="doc_type" class="leading-snug">Tipo de documento</Label>
-                    <Multiselect
-                      id="doc_type"
-                      v-model="form.document_type"
-                      mode="single"
-                      :object="false"
-                      :options="documentTypeOptions"
-                      value-prop="value"
-                      label="label"
-                      :searchable="true"
-                      :can-clear="false"
-                      placeholder="Seleccione…"
-                      no-options-text="Sin opciones"
-                      no-results-text="Sin coincidencias"
-                      :class="formMultiselectErrorClass('document_type')"
-                    />
-                  </div>
-                  <div class="staff-field-doc space-y-2">
-                    <Label for="doc" class="leading-snug">Número de documento</Label>
-                    <Input id="doc" v-model="form.document_number" inputmode="numeric" :class="documentNumberErrorClass()" />
-                  </div>
-                  <div class="staff-field-doc space-y-2">
-                    <Label for="dob" class="leading-snug">Fecha de nacimiento</Label>
-                    <Input id="dob" v-model="form.date_of_birth" type="date" />
-                  </div>
-                </div>
-              </section>
+      <Tabs v-model="activeTab" class="w-full gap-4">
+        <TabsList class="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="datos">
+            Datos
+          </TabsTrigger>
+          <TabsTrigger value="ubicacion">
+            Ubicación
+          </TabsTrigger>
+        </TabsList>
 
-              <Separator />
-
-              <section class="space-y-4">
-                <p class="text-sm font-medium text-foreground">
-                  Nombres y apellidos
-                </p>
-                <div class="flex flex-wrap gap-x-8 gap-y-5">
-                  <div class="staff-field space-y-2">
-                    <Label for="fn" class="leading-snug">Primer nombre *</Label>
-                    <Input id="fn" v-model="form.first_name" required autocomplete="given-name" :class="formFieldErrorClass('first_name')" />
-                  </div>
-                  <div class="staff-field space-y-2">
-                    <Label for="sn" class="leading-snug">Segundo nombre</Label>
-                    <Input id="sn" v-model="form.second_name" autocomplete="additional-name" />
-                  </div>
-                  <div class="staff-field space-y-2">
-                    <Label for="fl" class="leading-snug">Primer apellido *</Label>
-                    <Input id="fl" v-model="form.first_last_name" required autocomplete="family-name" :class="formFieldErrorClass('first_last_name')" />
-                  </div>
-                  <div class="staff-field space-y-2">
-                    <Label for="sl" class="leading-snug">Segundo apellido</Label>
-                    <Input id="sl" v-model="form.second_last_name" />
-                  </div>
-                </div>
-              </section>
-
-              <Separator />
-
-              <section class="space-y-4">
-                <p class="text-sm font-medium text-foreground">
-                  Contacto
-                </p>
-                <div class="flex flex-wrap gap-x-8 gap-y-5">
-                  <div class="staff-field-email space-y-2">
-                    <Label for="em" class="leading-snug">Correo *</Label>
-                    <Input
-                      id="em"
-                      v-model="form.email"
-                      type="email"
-                      autocomplete="email"
-                      :class="contactEmailErrorClass()"
-                    />
-                    <p
-                      v-if="submitAttempted && isFieldMissing('email')"
-                      class="text-sm text-destructive"
-                    >
-                      {{ orgStaffContactEmailErrorMessage(form.email) }}
+        <TabsContent value="datos" class="mt-4">
+          <form @submit.prevent="handleSubmit">
+            <div class="grid gap-6">
+              <Card>
+                <CardHeader class="gap-2">
+                  <CardTitle class="leading-snug">
+                    Información personal y contacto
+                  </CardTitle>
+                  <CardDescription class="leading-relaxed">
+                    Nombre completo, correo, teléfono y vínculo con usuario del sistema son obligatorios.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-8">
+                  <section class="space-y-4">
+                    <p class="text-sm font-medium text-foreground leading-snug">
+                      Identificación
                     </p>
-                  </div>
-                  <div class="staff-field-phone space-y-2">
-                    <Label for="ph" class="leading-snug">Teléfono *</Label>
-                    <Input
-                      id="ph"
-                      v-model="form.phone"
-                      type="tel"
-                      autocomplete="tel"
-                      :class="contactPhoneErrorClass()"
-                    />
-                    <p
-                      v-if="submitAttempted && isFieldMissing('phone')"
-                      class="text-sm text-destructive"
-                    >
-                      {{ orgStaffContactPhoneErrorMessage() }}
-                    </p>
-                  </div>
-                  <div class="staff-field-extension space-y-2">
-                    <Label for="ex" class="leading-snug">Extensión</Label>
-                    <Input id="ex" v-model="form.extension" />
-                  </div>
-                </div>
-              </section>
-
-              <template v-if="hasPermission('usuarios_ver')">
-                <Separator />
-                <section class="space-y-4">
-                  <div class="space-y-1">
-                    <p class="text-sm font-medium text-foreground">
-                      Vínculo con usuario del sistema *
-                    </p>
-                    <p class="text-sm text-muted-foreground leading-relaxed">
-                      Obligatorio: asocie una cuenta existente sin funcionario vinculado o cree una nueva.
-                    </p>
-                  </div>
-                  <div class="space-y-2">
-                    <Label for="usr" class="leading-snug">Usuario *</Label>
-                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <div class="staff-field-user min-w-0">
+                    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3 md:gap-x-6 md:gap-y-5">
+                      <div class="space-y-3 min-w-0">
+                        <Label for="doc_type" class="leading-snug">Tipo de documento</Label>
                         <Multiselect
-                          id="usr"
-                          v-model="form.user_id"
+                          id="doc_type"
+                          v-model="form.document_type"
                           mode="single"
                           :object="false"
-                          :options="userSelectOptions"
+                          :options="documentTypeOptions"
                           value-prop="value"
                           label="label"
                           :searchable="true"
                           :can-clear="false"
-                          placeholder="Seleccione usuario…"
-                          no-options-text="No hay usuarios sin funcionario vinculado"
+                          placeholder="Seleccione…"
+                          no-options-text="Sin opciones"
                           no-results-text="Sin coincidencias"
-                          :class="formMultiselectErrorClass('user_id')"
+                          :class="formMultiselectErrorClass('document_type')"
                         />
                       </div>
-                      <PermissionGate permission="usuarios_crear">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          class="shrink-0"
-                          @click="saveDraftAndGoCreateUser"
-                        >
-                          <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-                          Crear usuario
-                        </Button>
-                      </PermissionGate>
+                      <div class="space-y-3 min-w-0">
+                        <Label for="doc" class="leading-snug">Número de documento</Label>
+                        <Input id="doc" v-model="form.document_number" inputmode="numeric" :class="documentNumberErrorClass()" />
+                      </div>
+                      <div class="space-y-3 min-w-0">
+                        <Label for="dob" class="leading-snug">Fecha de nacimiento *</Label>
+                        <Input id="dob" v-model="form.date_of_birth" type="date" required :class="dobErrorClass()" />
+                      </div>
                     </div>
-                    <p
-                      v-if="submitAttempted && isFieldMissing('user_id')"
-                      class="text-sm text-destructive"
-                    >
-                      Seleccione o cree un usuario del sistema.
+                  </section>
+
+                  <Separator />
+
+                  <section class="space-y-4">
+                    <p class="text-sm font-medium text-foreground leading-snug">
+                      Nombres y apellidos
                     </p>
-                  </div>
-                </section>
-              </template>
+                    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4 md:gap-x-6 md:gap-y-5">
+                      <div class="space-y-3 min-w-0">
+                        <Label for="fn" class="leading-snug">Primer nombre *</Label>
+                        <Input id="fn" v-model="form.first_name" required autocomplete="given-name" :class="formFieldErrorClass('first_name')" />
+                      </div>
+                      <div class="space-y-3 min-w-0">
+                        <Label for="sn" class="leading-snug">Segundo nombre</Label>
+                        <Input id="sn" v-model="form.second_name" autocomplete="additional-name" />
+                      </div>
+                      <div class="space-y-3 min-w-0">
+                        <Label for="fl" class="leading-snug">Primer apellido *</Label>
+                        <Input id="fl" v-model="form.first_last_name" required autocomplete="family-name" :class="formFieldErrorClass('first_last_name')" />
+                      </div>
+                      <div class="space-y-3 min-w-0">
+                        <Label for="sl" class="leading-snug">Segundo apellido</Label>
+                        <Input id="sl" v-model="form.second_last_name" />
+                      </div>
+                    </div>
+                  </section>
 
-              <p
-                v-else
-                class="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground leading-relaxed"
-              >
-                No tiene permiso para listar usuarios; puede crear el funcionario sin vínculo y asociarlo después desde la edición, si corresponde.
-              </p>
+                  <Separator />
 
-              <Separator />
+                  <section class="space-y-4">
+                    <p class="text-sm font-medium text-foreground leading-snug">
+                      Contacto
+                    </p>
+                    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3 md:gap-x-6 md:gap-y-5">
+                      <div class="space-y-3 min-w-0">
+                        <Label for="em" class="leading-snug">Correo *</Label>
+                        <Input
+                          id="em"
+                          v-model="form.email"
+                          type="email"
+                          autocomplete="email"
+                          :class="contactEmailErrorClass()"
+                        />
+                        <p
+                          v-if="submitAttempted && isFieldMissing('email')"
+                          class="text-sm text-destructive"
+                        >
+                          {{ orgStaffContactEmailErrorMessage(form.email) }}
+                        </p>
+                      </div>
+                      <div class="space-y-3 min-w-0">
+                        <Label for="ph" class="leading-snug">Teléfono *</Label>
+                        <Input
+                          id="ph"
+                          v-model="form.phone"
+                          type="tel"
+                          autocomplete="tel"
+                          :class="contactPhoneErrorClass()"
+                        />
+                        <p
+                          v-if="submitAttempted && isFieldMissing('phone')"
+                          class="text-sm text-destructive"
+                        >
+                          {{ orgStaffContactPhoneErrorMessage() }}
+                        </p>
+                      </div>
+                      <div class="space-y-3 min-w-0 sm:max-w-[10rem]">
+                        <Label for="ex" class="leading-snug">Extensión</Label>
+                        <Input id="ex" v-model="form.extension" />
+                      </div>
+                    </div>
+                  </section>
 
-              <section class="space-y-4">
-                <div class="space-y-1">
-                  <p class="text-sm font-medium text-foreground">
+                  <template v-if="hasPermission('usuarios_ver')">
+                    <Separator />
+                    <section class="space-y-4">
+                      <div class="space-y-1">
+                        <p class="text-sm font-medium text-foreground leading-snug">
+                          Vínculo con usuario del sistema *
+                        </p>
+                        <p class="text-sm text-muted-foreground leading-relaxed">
+                          Obligatorio: asocie una cuenta existente sin funcionario vinculado o cree una nueva.
+                        </p>
+                      </div>
+                      <div class="space-y-3">
+                        <Label for="usr" class="leading-snug">Usuario *</Label>
+                        <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                          <div class="min-w-0">
+                            <Multiselect
+                              id="usr"
+                              v-model="form.user_id"
+                              mode="single"
+                              :object="false"
+                              :options="userSelectOptions"
+                              value-prop="value"
+                              label="label"
+                              :searchable="true"
+                              :can-clear="false"
+                              placeholder="Seleccione usuario…"
+                              no-options-text="No hay usuarios sin funcionario vinculado"
+                              no-results-text="Sin coincidencias"
+                              :class="formMultiselectErrorClass('user_id')"
+                            />
+                          </div>
+                          <PermissionGate permission="usuarios_crear">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              class="shrink-0 w-full lg:w-auto"
+                              @click="saveDraftAndGoCreateUser"
+                            >
+                              <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                              Crear usuario
+                            </Button>
+                          </PermissionGate>
+                        </div>
+                        <p
+                          v-if="submitAttempted && isFieldMissing('user_id')"
+                          class="text-sm text-destructive"
+                        >
+                          Seleccione o cree un usuario del sistema.
+                        </p>
+                      </div>
+                    </section>
+                  </template>
+
+                  <p
+                    v-else
+                    class="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground leading-relaxed"
+                  >
+                    No tiene permiso para listar usuarios; puede crear el funcionario sin vínculo y asociarlo después desde la edición, si corresponde.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader class="gap-2">
+                  <CardTitle class="leading-snug">
                     Estado del registro
-                  </p>
-                  <p class="text-sm text-muted-foreground leading-relaxed">
+                  </CardTitle>
+                  <CardDescription class="leading-relaxed">
                     Por defecto queda activo; desactive si el alta es provisional.
-                  </p>
-                </div>
-                <div class="staff-field-status">
-                  <OrgStructureActiveMultiselect
-                    :model-value="form.is_active"
-                    gender="masculine"
-                    input-id="staff_create_active_ms"
-                    :show-label="false"
-                    @update:model-value="onStaffActiveChange"
-                  />
-                </div>
-              </section>
-            </CardContent>
-          </Card>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div class="max-w-xs">
+                    <OrgStructureActiveMultiselect
+                      :model-value="form.is_active"
+                      gender="masculine"
+                      input-id="staff_create_active_ms"
+                      :show-label="false"
+                      @update:model-value="onStaffActiveChange"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
-          <div class="flex flex-wrap justify-end gap-3">
-            <Button type="button" variant="outline" @click="router.back()">
-              Cancelar
-            </Button>
-            <Button type="submit" :disabled="saving">
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              {{ saving ? 'Guardando...' : 'Crear y continuar a ubicación' }}
-            </Button>
+              <div class="flex flex-wrap justify-end gap-3">
+                <Button type="button" variant="outline" @click="router.back()">
+                  Cancelar
+                </Button>
+                <Button type="submit" :disabled="saving">
+                  <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                  {{ saving ? 'Guardando...' : 'Crear y continuar a ubicación' }}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </TabsContent>
+
+        <TabsContent value="ubicacion" class="mt-4">
+          <div class="grid gap-6">
+            <Card class="border-dashed">
+              <CardHeader class="gap-2">
+                <CardTitle class="leading-snug">
+                  Ubicación organizacional
+                </CardTitle>
+                <CardDescription class="leading-relaxed">
+                  Este paso se habilita después de crear el funcionario. Guarde primero los datos personales en la pestaña Datos.
+                </CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-6 pb-6">
+                <ol class="grid gap-3 text-sm leading-relaxed text-muted-foreground sm:grid-cols-2 xl:grid-cols-4">
+                  <li class="rounded-lg border bg-muted/30 px-4 py-3">
+                    <span class="font-medium text-foreground">1. Datos</span>
+                    <p class="mt-1">
+                      Identificación, contacto y usuario del sistema.
+                    </p>
+                  </li>
+                  <li class="rounded-lg border border-primary/40 bg-primary/5 px-4 py-3">
+                    <span class="font-medium text-foreground">2. Ubicación</span>
+                    <p class="mt-1">
+                      Agencia, área, cargo, jefe inmediato y vigencia.
+                    </p>
+                  </li>
+                </ol>
+                <div class="flex flex-wrap gap-3">
+                  <Button type="button" variant="outline" @click="goToDatosTab">
+                    <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
+                    Volver a Datos
+                  </Button>
+                  <Button type="button" @click="handleSubmit" :disabled="saving">
+                    <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                    {{ saving ? 'Guardando...' : 'Crear funcionario y continuar' }}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </div>
-      </form>
+        </TabsContent>
+      </Tabs>
     </div>
   </SettingsLayout>
 </template>
 
 <style src="@vueform/multiselect/themes/default.css"></style>
 <style scoped>
-.staff-field {
-  width: 100%;
-  max-width: 13rem;
-}
-
-.staff-field-email {
-  width: 100%;
-  max-width: 18rem;
-}
-
-.staff-field-phone {
-  width: 100%;
-  max-width: 11rem;
-}
-
-.staff-field-extension {
-  width: 100%;
-  max-width: 6.5rem;
-}
-
-.staff-field-doc-type {
-  width: 100%;
-  max-width: 14rem;
-}
-
-.staff-field-doc {
-  width: 100%;
-  max-width: 11rem;
-}
-
-.staff-field-user {
-  width: 100%;
-  max-width: 18rem;
-}
-
-.staff-field-status {
-  width: 100%;
-  max-width: 11rem;
-}
-
 .multiselect-roles {
   --ms-font-size: 0.875rem;
   --ms-line-height: 1.25rem;

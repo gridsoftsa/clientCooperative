@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { InstitutionalLibraryDocument } from '~/types/institutional-library'
+import { institutionalLibraryCategoryIcon } from '~/utils/institutional-library-category'
 
 const props = defineProps<{
   document: InstitutionalLibraryDocument
@@ -13,18 +14,9 @@ const emit = defineEmits<{
 
 const archivalApi = useArchivalFileApi()
 
-const categoryIcon = computed(() => {
-  switch (props.document.institutional_category) {
-    case 'policies': return 'i-lucide-shield'
-    case 'procedures': return 'i-lucide-list-checks'
-    case 'manuals': return 'i-lucide-book-open'
-    case 'forms': return 'i-lucide-file-input'
-    case 'instructions': return 'i-lucide-lightbulb'
-    case 'regulations': return 'i-lucide-scale'
-    case 'guidelines': return 'i-lucide-compass'
-    default: return 'i-lucide-file-text'
-  }
-})
+const categoryIcon = computed(() =>
+  institutionalLibraryCategoryIcon(props.document.institutional_category_icon),
+)
 
 const downloadHref = computed(() => {
   if (!props.canDownload) {

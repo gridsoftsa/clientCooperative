@@ -3,7 +3,7 @@ import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import { ORG_ASSIGNMENT_CHANGE_KIND_OPTIONS } from '~/constants/org-structure-assignments'
 import type { OrgOffice, OrgStaffListItem } from '~/types/org-structure'
-import { toDateInputValue } from '~/utils/dateInputValue'
+import { dayAfterIsoDateString, formatIsoDateForDisplay, toDateInputValue } from '~/utils/dateInputValue'
 import type { OrgUnitRow, OrgPositionRow } from '~/composables/useOrgStructureApi'
 import type { PaginatedUsers, User } from '~/types/user'
 import {
@@ -610,7 +610,7 @@ async function hydrateUbicacionFormFromCurrentAssignment(): Promise<void> {
   const officeId = ca?.org_office?.id
   const unitId = ca?.org_unit?.id
   const positionId = ca?.org_position?.id
-  if (officeId == null || unitId == null || positionId == null) {
+  if (!ca || officeId == null || unitId == null || positionId == null) {
     ubicacionForm.value = {
       org_office_id: null,
       org_unit_id: null,
@@ -636,7 +636,7 @@ async function hydrateUbicacionFormFromCurrentAssignment(): Promise<void> {
     ubicacionForm.value.org_unit_id = unitId
     positions.value = await orgApi.fetchPositions({ activeOnly: false, orgUnitId: unitId })
     ubicacionForm.value.org_position_id = positionId
-    ubicacionForm.value.effective_from = todayISO()
+    ubicacionForm.value.effective_from = ca.effective_from ?? todayISO()
     ubicacionForm.value.effective_to = ''
     ubicacionForm.value.change_kind = 'assignment'
     ubicacionForm.value.notes = ''
@@ -726,7 +726,7 @@ async function loadAll() {
   }
 }
 
-type DatosRequiredField = 'first_name' | 'first_last_name' | 'email' | 'phone' | 'user_id' | 'document_pair'
+type DatosRequiredField = 'first_name' | 'first_last_name' | 'email' | 'phone' | 'date_of_birth' | 'user_id' | 'document_pair'
 type UbicacionRequiredField = 'org_office_id' | 'org_unit_id' | 'org_position_id' | 'effective_from'
 
 const datosSubmitAttempted = ref(false)
@@ -737,6 +737,7 @@ const datosRequiredFieldIds: Record<Exclude<DatosRequiredField, 'document_pair'>
   first_last_name: 'fl_p',
   email: 'em_p',
   phone: 'ph_p',
+  date_of_birth: 'dob_p',
   user_id: 'usr_panel',
 }
 
@@ -760,6 +761,9 @@ function isDatosFieldMissing(field: DatosRequiredField): boolean {
   if (field === 'phone') {
     return !datosForm.value.phone.trim()
   }
+  if (field === 'date_of_birth') {
+    return !datosForm.value.date_of_birth.trim()
+  }
   if (field === 'user_id') {
     return datosForm.value.user_id == null
   }
@@ -769,7 +773,7 @@ function isDatosFieldMissing(field: DatosRequiredField): boolean {
 }
 
 function firstMissingDatosField(): DatosRequiredField | null {
-  const order: DatosRequiredField[] = ['first_name', 'first_last_name', 'email', 'phone', 'user_id', 'document_pair']
+  const order: DatosRequiredField[] = ['first_name', 'first_last_name', 'email', 'phone', 'date_of_birth', 'user_id', 'document_pair']
   return order.find(field => isDatosFieldMissing(field)) ?? null
 }
 
@@ -816,7 +820,11 @@ function datosContactPhoneErrorClass(): string {
   return fieldErrorClass(datosSubmitAttempted.value && isDatosFieldMissing('phone'))
 }
 
-function datosFieldErrorClass(field: Exclude<DatosRequiredField, 'document_pair' | 'email' | 'phone'>): string {
+function datosDobErrorClass(): string {
+  return fieldErrorClass(datosSubmitAttempted.value && isDatosFieldMissing('date_of_birth'))
+}
+
+function datosFieldErrorClass(field: Exclude<DatosRequiredField, 'document_pair' | 'email' | 'phone' | 'date_of_birth'>): string {
   return fieldErrorClass(datosSubmitAttempted.value && isDatosFieldMissing(field))
 }
 
@@ -839,7 +847,18 @@ function ubicacionMultiselectErrorClass(field: Exclude<UbicacionRequiredField, '
   return multiselectErrorClass(ubicacionSubmitAttempted.value && isUbicacionFieldMissing(field))
 }
 
+function ubicacionEffectiveFromHasError(): boolean {
+  return ubicacionSubmitAttempted.value
+    && (isUbicacionFieldMissing('effective_from') || ubicacionEffectiveFromIssue() != null)
+}
+
 function ubicacionFieldErrorClass(field: 'effective_from'): string {
+  if (field === 'effective_from') {
+    return fieldErrorClass(
+      ubicacionEffectiveFromHasError() || ubicacionEffectiveFromServerError.value != null,
+    )
+  }
+
   return fieldErrorClass(ubicacionSubmitAttempted.value && isUbicacionFieldMissing(field))
 }
 
@@ -853,10 +872,12 @@ watch(datosForm, () => {
 }, { deep: true })
 
 watch(ubicacionForm, () => {
+  ubicacionEffectiveFromServerError.value = null
+
   if (!ubicacionSubmitAttempted.value) {
     return
   }
-  if (!firstMissingUbicacionField()) {
+  if (!firstMissingUbicacionField() && !ubicacionEffectiveFromIssue()) {
     ubicacionSubmitAttempted.value = false
   }
 }, { deep: true })
@@ -874,6 +895,7 @@ async function handleSubmitDatos() {
       first_last_name: 'El primer apellido es obligatorio',
       email: orgStaffContactEmailErrorMessage(datosForm.value.email),
       phone: orgStaffContactPhoneErrorMessage(),
+      date_of_birth: 'La fecha de nacimiento es obligatoria',
       user_id: 'El vínculo con el usuario del sistema es obligatorio',
       document_pair: 'Indique tipo y número de documento',
     }
@@ -902,7 +924,7 @@ async function handleSubmitDatos() {
         extension: datosForm.value.extension.trim() || null,
         document_type: datosForm.value.document_type.trim() || null,
         document_number: datosForm.value.document_number.trim() || null,
-        date_of_birth: datosForm.value.date_of_birth || null,
+        date_of_birth: datosForm.value.date_of_birth.trim(),
         is_active: datosForm.value.is_active,
       },
     })
@@ -917,6 +939,94 @@ async function handleSubmitDatos() {
   } finally {
     savingDatos.value = false
   }
+}
+
+const minUbicacionEffectiveFrom = computed(() => {
+  const from = summary.value?.current_assignment?.effective_from
+  if (!from) {
+    return undefined
+  }
+
+  return dayAfterIsoDateString(from)
+})
+
+function ubicacionSamePlacementAsCurrent(): boolean {
+  const ca = summary.value?.current_assignment
+  if (!ca) {
+    return false
+  }
+
+  return ubicacionForm.value.org_office_id === ca.org_office?.id
+    && ubicacionForm.value.org_unit_id === ca.org_unit?.id
+    && ubicacionForm.value.org_position_id === ca.org_position?.id
+}
+
+const ubicacionEffectiveFromServerError = ref<string | null>(null)
+
+function ubicacionEffectiveFromIssue(): { message: string, suggestedDate?: string } | null {
+  const currentFrom = summary.value?.current_assignment?.effective_from
+  const chosen = ubicacionForm.value.effective_from.trim()
+  if (!currentFrom || !chosen) {
+    return null
+  }
+
+  if (ubicacionSamePlacementAsCurrent()) {
+    if (chosen < currentFrom) {
+      return {
+        message: `La vigencia no puede ser anterior al inicio de la asignación vigente (${formatIsoDateForDisplay(currentFrom)}).`,
+        suggestedDate: currentFrom,
+      }
+    }
+
+    return null
+  }
+
+  const min = minUbicacionEffectiveFrom.value
+  if (min && chosen < min) {
+    return {
+      message: `La asignación vigente inició el ${formatIsoDateForDisplay(currentFrom)}. Para cambiar agencia, área o cargo use «Vigencia desde» el ${formatIsoDateForDisplay(min)} o posterior.`,
+      suggestedDate: min,
+    }
+  }
+
+  return null
+}
+
+const ubicacionEffectiveFromError = computed(() => {
+  return ubicacionEffectiveFromServerError.value ?? ubicacionEffectiveFromIssue()?.message ?? null
+})
+
+const suggestedUbicacionEffectiveFrom = computed(() => {
+  return ubicacionEffectiveFromIssue()?.suggestedDate
+    ?? ubicacionEffectiveFromServerErrorSuggestedDate.value
+    ?? null
+})
+
+const ubicacionEffectiveFromServerErrorSuggestedDate = ref<string | null>(null)
+
+function applySuggestedUbicacionEffectiveFrom(): void {
+  const suggested = suggestedUbicacionEffectiveFrom.value
+  if (!suggested) {
+    return
+  }
+
+  ubicacionForm.value.effective_from = suggested
+  ubicacionEffectiveFromServerError.value = null
+  ubicacionEffectiveFromServerErrorSuggestedDate.value = null
+}
+
+function parseSuggestedDateFromAssignmentError(message: string): string | null {
+  const match = message.match(/desde el (\d{2}\/\d{2}\/\d{4})/i)
+  if (!match?.[1]) {
+    return null
+  }
+
+  const [day, month, year] = match[1].split('/')
+  if (!day || !month || !year) {
+    return null
+  }
+
+  return `${year}-${month}-${day}`
 }
 
 async function submitAssignment() {
@@ -939,6 +1049,19 @@ async function submitAssignment() {
     return
   }
 
+  const effectiveFromIssue = ubicacionEffectiveFromIssue()
+  if (effectiveFromIssue) {
+    ubicacionEffectiveFromServerError.value = effectiveFromIssue.message
+    ubicacionEffectiveFromServerErrorSuggestedDate.value = effectiveFromIssue.suggestedDate ?? null
+    toast.error(effectiveFromIssue.message)
+    await nextTick()
+    focusByElementId(ubicacionRequiredFieldIds.effective_from)
+    return
+  }
+
+  ubicacionEffectiveFromServerError.value = null
+  ubicacionEffectiveFromServerErrorSuggestedDate.value = null
+
   savingUbicacion.value = true
   try {
     await $api(`/organizational-structure/org-staff/${props.staffId}/assignments`, {
@@ -957,7 +1080,12 @@ async function submitAssignment() {
     toast.success('Ubicación principal registrada (historial actualizado)')
     router.push('/settings/organizational-structure/staff')
   } catch (e: any) {
-    toast.error(e?.data?.message || 'No se pudo guardar la asignación')
+    const message = e?.data?.message || 'No se pudo guardar la asignación'
+    ubicacionEffectiveFromServerError.value = message
+    ubicacionEffectiveFromServerErrorSuggestedDate.value = parseSuggestedDateFromAssignmentError(message)
+    toast.error(message)
+    await nextTick()
+    focusByElementId(ubicacionRequiredFieldIds.effective_from)
   } finally {
     savingUbicacion.value = false
   }
@@ -1026,8 +1154,8 @@ watch(
                   <p class="text-sm font-medium text-foreground">
                     Identificación
                   </p>
-                  <div class="flex flex-wrap gap-x-8 gap-y-5">
-                    <div class="staff-field-doc-type space-y-2">
+                  <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3 md:gap-x-6 md:gap-y-5">
+                    <div class="staff-field-doc-type space-y-2 min-w-0">
                       <Label for="doc_type_p" class="leading-snug">Tipo de documento</Label>
                       <p v-if="readOnly" class="text-sm leading-relaxed">
                         {{ documentTypeLabel(datosForm.document_type) }}
@@ -1049,7 +1177,7 @@ watch(
                         :class="datosMultiselectErrorClass('document_type')"
                       />
                     </div>
-                    <div class="staff-field-doc space-y-2">
+                    <div class="staff-field-doc space-y-2 min-w-0">
                       <Label for="doc_p" class="leading-snug">Número de documento</Label>
                       <Input
                         id="doc_p"
@@ -1059,13 +1187,15 @@ watch(
                         :class="documentNumberErrorClass()"
                       />
                     </div>
-                    <div class="staff-field-doc space-y-2">
-                      <Label for="dob_p" class="leading-snug">Fecha de nacimiento</Label>
+                    <div class="staff-field-doc space-y-2 min-w-0">
+                      <Label for="dob_p" class="leading-snug">Fecha de nacimiento <span v-if="!readOnly">*</span></Label>
                       <Input
                         id="dob_p"
                         v-model="datosForm.date_of_birth"
                         type="date"
                         :readonly="readOnly"
+                        :required="!readOnly"
+                        :class="datosDobErrorClass()"
                       />
                     </div>
                   </div>
@@ -1077,8 +1207,8 @@ watch(
                   <p class="text-sm font-medium text-foreground">
                     Nombres y apellidos
                   </p>
-                  <div class="flex flex-wrap gap-x-8 gap-y-5">
-                    <div class="staff-field space-y-2">
+                  <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4 md:gap-x-6 md:gap-y-5">
+                    <div class="staff-field space-y-2 min-w-0">
                       <Label for="fn_p" class="leading-snug">Primer nombre <span v-if="!readOnly">*</span></Label>
                       <Input
                         id="fn_p"
@@ -1088,11 +1218,11 @@ watch(
                         :class="datosFieldErrorClass('first_name')"
                       />
                     </div>
-                    <div class="staff-field space-y-2">
+                    <div class="staff-field space-y-2 min-w-0">
                       <Label for="sn_p" class="leading-snug">Segundo nombre</Label>
                       <Input id="sn_p" v-model="datosForm.second_name" :readonly="readOnly" />
                     </div>
-                    <div class="staff-field space-y-2">
+                    <div class="staff-field space-y-2 min-w-0">
                       <Label for="fl_p" class="leading-snug">Primer apellido <span v-if="!readOnly">*</span></Label>
                       <Input
                         id="fl_p"
@@ -1102,7 +1232,7 @@ watch(
                         :class="datosFieldErrorClass('first_last_name')"
                       />
                     </div>
-                    <div class="staff-field space-y-2">
+                    <div class="staff-field space-y-2 min-w-0">
                       <Label for="sl_p" class="leading-snug">Segundo apellido</Label>
                       <Input id="sl_p" v-model="datosForm.second_last_name" :readonly="readOnly" />
                     </div>
@@ -1115,8 +1245,8 @@ watch(
                   <p class="text-sm font-medium text-foreground">
                     Contacto
                   </p>
-                  <div class="flex flex-wrap gap-x-8 gap-y-5">
-                    <div class="staff-field-email space-y-2">
+                  <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3 md:gap-x-6 md:gap-y-5">
+                    <div class="staff-field-email space-y-2 min-w-0">
                       <Label for="em_p" class="leading-snug">Correo <span v-if="!readOnly">*</span></Label>
                       <Input
                         id="em_p"
@@ -1133,7 +1263,7 @@ watch(
                         {{ orgStaffContactEmailErrorMessage(datosForm.email) }}
                       </p>
                     </div>
-                    <div class="staff-field-phone space-y-2">
+                    <div class="staff-field-phone space-y-2 min-w-0">
                       <Label for="ph_p" class="leading-snug">Teléfono <span v-if="!readOnly">*</span></Label>
                       <Input
                         id="ph_p"
@@ -1150,7 +1280,7 @@ watch(
                         {{ orgStaffContactPhoneErrorMessage() }}
                       </p>
                     </div>
-                    <div class="staff-field-extension space-y-2">
+                    <div class="staff-field-extension space-y-2 min-w-0 sm:max-w-[10rem]">
                       <Label for="ex_p" class="leading-snug">Extensión</Label>
                       <Input id="ex_p" v-model="datosForm.extension" :readonly="readOnly" />
                     </div>
@@ -1170,7 +1300,7 @@ watch(
                     </div>
                     <div class="space-y-2">
                       <Label for="usr_panel" class="leading-snug">Usuario *</Label>
-                      <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <div class="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-3">
                         <div class="staff-field-user min-w-0">
                           <Multiselect
                             id="usr_panel"
@@ -1553,8 +1683,34 @@ watch(
                             v-model="ubicacionForm.effective_from"
                             type="date"
                             required
+                            :min="ubicacionSamePlacementAsCurrent() ? summary?.current_assignment?.effective_from ?? undefined : minUbicacionEffectiveFrom"
                             :class="ubicacionFieldErrorClass('effective_from')"
                           />
+                          <p
+                            v-if="ubicacionEffectiveFromError"
+                            class="text-xs text-destructive leading-relaxed space-y-1"
+                          >
+                            <span>{{ ubicacionEffectiveFromError }}</span>
+                            <button
+                              v-if="suggestedUbicacionEffectiveFrom"
+                              type="button"
+                              class="block font-medium underline underline-offset-2 hover:no-underline"
+                              @click="applySuggestedUbicacionEffectiveFrom"
+                            >
+                              Usar {{ formatIsoDateForDisplay(suggestedUbicacionEffectiveFrom) }}
+                            </button>
+                          </p>
+                          <p
+                            v-else-if="summary?.current_assignment?.effective_from"
+                            class="text-xs text-muted-foreground leading-relaxed"
+                          >
+                            <template v-if="ubicacionSamePlacementAsCurrent()">
+                              Misma ubicación: puede mantener la fecha vigente ({{ formatIsoDateForDisplay(summary.current_assignment.effective_from) }}) para actualizar jefe o notas.
+                            </template>
+                            <template v-else>
+                              Cambió agencia, área o cargo: indique «Vigencia desde» el {{ formatIsoDateForDisplay(minUbicacionEffectiveFrom) }} o posterior para cerrar la asignación anterior.
+                            </template>
+                          </p>
                         </div>
                         <div class="space-y-3">
                           <Label for="eff_to_p" class="leading-snug">Vigente hasta (opcional)</Label>
@@ -1611,39 +1767,15 @@ watch(
 
 <style src="@vueform/multiselect/themes/default.css"></style>
 <style scoped>
-.staff-field {
-  width: 100%;
-  max-width: 13rem;
-}
-
-.staff-field-email {
-  width: 100%;
-  max-width: 18rem;
-}
-
-.staff-field-phone {
-  width: 100%;
-  max-width: 11rem;
-}
-
-.staff-field-extension {
-  width: 100%;
-  max-width: 6.5rem;
-}
-
-.staff-field-doc-type {
-  width: 100%;
-  max-width: 14rem;
-}
-
-.staff-field-doc {
-  width: 100%;
-  max-width: 11rem;
-}
-
+.staff-field,
+.staff-field-email,
+.staff-field-phone,
+.staff-field-extension,
+.staff-field-doc-type,
+.staff-field-doc,
 .staff-field-user {
   width: 100%;
-  max-width: 18rem;
+  min-width: 0;
 }
 
 .multiselect-roles {

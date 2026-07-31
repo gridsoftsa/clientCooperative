@@ -46,6 +46,7 @@ const typeTabs: Array<{ value: string, label: string }> = [
   { value: 'news', label: 'Noticias' },
   { value: 'circular', label: 'Circulares' },
   { value: 'event', label: 'Eventos' },
+  { value: 'birthday', label: 'Cumpleaños' },
   { value: 'announcement', label: 'Comunicados' },
 ]
 

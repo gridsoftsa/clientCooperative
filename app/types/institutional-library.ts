@@ -1,11 +1,13 @@
-export type InstitutionalLibraryCategoryValue =
-  | 'policies'
-  | 'procedures'
-  | 'manuals'
-  | 'forms'
-  | 'instructions'
-  | 'regulations'
-  | 'guidelines'
+export type InstitutionalLibraryCategoryValue = string
+
+export interface InstitutionalLibraryCategoryRow {
+  key: string
+  label: string
+  icon: string
+  doc_type_code?: string | null
+  sort_order: number
+  is_active: boolean
+}
 
 export interface InstitutionalLibraryCategory {
   value: InstitutionalLibraryCategoryValue
@@ -22,6 +24,7 @@ export interface InstitutionalLibraryDocument {
   mime_type?: string | null
   institutional_category?: InstitutionalLibraryCategoryValue | null
   institutional_category_label?: string | null
+  institutional_category_icon?: string | null
   effective_from?: string | null
   effective_to?: string | null
   is_effective?: boolean

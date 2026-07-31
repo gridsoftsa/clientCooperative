@@ -35,17 +35,7 @@ const previewing = ref(false)
 const selectedDocument = ref<InstitutionalLibraryDocument | null>(null)
 const documentDetail = ref<InstitutionalLibraryDocument | null>(null)
 
-const canDownload = computed(() => hasPermission('expedientes_documentos_descargar'))
-
-const categoryIcons: Record<string, string> = {
-  policies: 'i-lucide-shield',
-  procedures: 'i-lucide-list-checks',
-  manuals: 'i-lucide-book-open',
-  forms: 'i-lucide-file-input',
-  instructions: 'i-lucide-lightbulb',
-  regulations: 'i-lucide-scale',
-  guidelines: 'i-lucide-compass',
-}
+import { institutionalLibraryCategoryIcon } from '~/utils/institutional-library-category'
 
 async function loadOrgUnits() {
   try {
@@ -222,7 +212,7 @@ onMounted(async () => {
         @click="selectCategory(category.value)"
       >
         <div class="mb-3 flex size-10 items-center justify-center rounded-lg bg-muted">
-          <Icon :name="categoryIcons[category.value] ?? 'i-lucide-file-text'" class="size-5 text-primary" />
+          <Icon :name="institutionalLibraryCategoryIcon(category.icon)" class="size-5 text-primary" />
         </div>
         <div class="font-medium">
           {{ category.label }}

@@ -58,6 +58,17 @@ export function archivalFileStatusActions(
   status: ArchivalFileStatus,
 ): ArchivalFileStatusActionOption[] {
   switch (status) {
+    case 'draft':
+      return [
+        {
+          target: 'inactive',
+          label: 'Anular expediente',
+          description: 'Use esta opción si el expediente se creó por error o no se completará. Quedará inactivo y dejará de estar en gestión.',
+          variant: 'destructive',
+          requiresReason: true,
+          permission: 'expedientes_editar',
+        },
+      ]
     case 'active':
       return [
         {

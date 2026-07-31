@@ -29,7 +29,7 @@ async function handleSubmit() {
   }
 
   if (props.action.requiresReason && !reason.value.trim()) {
-    toast.error('Indique el motivo de la devolución.')
+    toast.error('Indique el motivo de esta acción.')
     return
   }
 
@@ -68,12 +68,12 @@ async function handleSubmit() {
       </DialogHeader>
 
       <div v-if="action?.requiresReason" class="space-y-2">
-        <Label for="status-transition-reason">Motivo</Label>
+        <Label for="status-transition-reason">Motivo *</Label>
         <Textarea
           id="status-transition-reason"
           v-model="reason"
           rows="3"
-          placeholder="Describa qué debe ajustarse..."
+          placeholder="Describa el motivo..."
         />
       </div>
 

@@ -39,12 +39,7 @@ watch(selected, (v) => {
 
 <template>
   <div class="space-y-3 text-left w-full">
-    <div class="space-y-1.5 text-left">
-      <Label :for="inputId" class="text-base leading-snug">{{ label }}</Label>
-      <p v-if="helperText" class="text-sm text-muted-foreground leading-relaxed">
-        {{ helperText }}
-      </p>
-    </div>
+    <Label :for="inputId" class="leading-snug">{{ label }}</Label>
     <div class="org-yesno-ms w-full">
       <Multiselect
         :id="inputId"
@@ -59,9 +54,12 @@ watch(selected, (v) => {
         :disabled="disabled"
         placeholder="Seleccione"
         no-options-text="Sin opciones"
-        class="multiselect-org-yesno w-full max-w-md"
+        class="multiselect-org-yesno w-full"
       />
     </div>
+    <p v-if="helperText" class="text-xs text-muted-foreground leading-relaxed">
+      {{ helperText }}
+    </p>
   </div>
 </template>
 

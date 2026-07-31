@@ -19,6 +19,7 @@ const DEFAULT_TYPES: Array<{ value: CommunicationTypeValue, label: string }> = [
   { value: 'circular', label: 'Circular' },
   { value: 'announcement', label: 'Comunicado' },
   { value: 'event', label: 'Evento' },
+  { value: 'birthday', label: 'Cumpleaños' },
 ]
 
 const AUDIENCE_MODE_OPTIONS: Array<{ value: CommunicationAudienceTypeValue, label: string }> = [
@@ -66,7 +67,7 @@ const isEvent = computed(() => form.value.type === 'event')
 
 const typeOptions = computed(() =>
   types.value
-    .filter(type => type.value && type.value !== 'birthday')
+    .filter(type => type.value)
     .map(type => ({ value: type.value, label: type.label })),
 )
 
@@ -129,7 +130,7 @@ async function loadOptions() {
   try {
     const options = await communicationsApi.fetchOptions()
     const apiTypes = (options.types ?? [])
-      .filter(type => type.value && type.value !== 'birthday')
+      .filter(type => type.value)
       .map(type => ({
         value: type.value as CommunicationTypeValue,
         label: type.label,
@@ -147,7 +148,7 @@ async function loadOptions() {
     try {
       const fallbackTypes = await communicationsApi.fetchTypes()
       const mapped = fallbackTypes
-        .filter(type => type.value && type.value !== 'birthday')
+        .filter(type => type.value)
         .map(type => ({
           value: type.value as CommunicationTypeValue,
           label: type.label,

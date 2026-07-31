@@ -1,5 +1,6 @@
 import type {
   InstitutionalLibraryCategory,
+  InstitutionalLibraryCategoryRow,
   InstitutionalLibraryDocument,
   InstitutionalLibraryListResponse,
   PublishInstitutionalLibraryPayload,
@@ -65,6 +66,25 @@ export function useInstitutionalLibraryApi() {
     )
   }
 
+  async function fetchCategorySettings() {
+    const res = await api<{ data: InstitutionalLibraryCategoryRow[] }>('/institutional-library/category-settings')
+    return res.data ?? []
+  }
+
+  async function createCategory(payload: Omit<InstitutionalLibraryCategoryRow, 'key'> & { key: string }) {
+    return api<{ data: InstitutionalLibraryCategoryRow, message: string }>(
+      '/institutional-library/category-settings',
+      { method: 'POST', body: payload },
+    )
+  }
+
+  async function updateCategory(key: string, payload: Partial<InstitutionalLibraryCategoryRow>) {
+    return api<{ data: InstitutionalLibraryCategoryRow, message: string }>(
+      `/institutional-library/category-settings/${encodeURIComponent(key)}`,
+      { method: 'PUT', body: payload },
+    )
+  }
+
   return {
     fetchDocuments,
     fetchCategories,
@@ -75,5 +95,8 @@ export function useInstitutionalLibraryApi() {
     fetchDocument,
     publishDocument,
     unpublishDocument,
+    fetchCategorySettings,
+    createCategory,
+    updateCategory,
   }
 }

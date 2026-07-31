@@ -1,3 +1,30 @@
+/** Muestra `YYYY-MM-DD` como `DD/MM/YYYY` para mensajes al usuario. */
+export function formatIsoDateForDisplay(iso: string | null | undefined): string {
+  if (iso == null || iso === '') {
+    return '—'
+  }
+
+  const slice = String(iso).slice(0, 10)
+  const [year, month, day] = slice.split('-')
+  if (!year || !month || !day) {
+    return slice
+  }
+
+  return `${day}/${month}/${year}`
+}
+
+/** Día siguiente a una fecha `YYYY-MM-DD` (calendario local). */
+export function dayAfterIsoDateString(iso: string): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  date.setDate(date.getDate() + 1)
+  const ny = date.getFullYear()
+  const nm = String(date.getMonth() + 1).padStart(2, '0')
+  const nd = String(date.getDate()).padStart(2, '0')
+
+  return `${ny}-${nm}-${nd}`
+}
+
 /** Fecha local de hoy en `YYYY-MM-DD` (para valores por defecto en formularios). */
 export function todayIsoDateString(): string {
   const d = new Date()

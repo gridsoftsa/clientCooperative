@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import InstitutionalLibraryPublishDialog from '~/components/archival/InstitutionalLibraryPublishDialog.vue'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type {
   ArchivalFile,
@@ -18,6 +19,7 @@ import {
   isArchivalFileOperational,
   type ArchivalFileStatusActionOption,
 } from '~/utils/archival-file-status'
+import { messageFromFetchError } from '~/utils/http-error-message'
 
 definePageMeta({
   layout: 'default',
@@ -234,8 +236,22 @@ async function loadAll() {
 }
 
 async function handleClose() {
-  if (!file.value)
+  if (!file.value) {
     return
+  }
+
+  if (closureReadiness.value && !closureReadiness.value.ready) {
+    workspaceTab.value = 'gestion'
+    const lines = closureReadiness.value.blocking.map(item => item.message)
+    toast.error(
+      lines.length > 0
+        ? lines.join(' · ')
+        : 'Revise los requisitos de cierre en la pestaña Gestión.',
+    )
+    await nextTick()
+    document.getElementById('closure-readiness-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
 
   try {
     await archivalApi.closeFile(file.value.id)
@@ -243,19 +259,22 @@ async function handleClose() {
     await loadAll()
   }
   catch (error: unknown) {
-    const apiError = error as { data?: { errors?: Record<string, unknown> } }
+    workspaceTab.value = 'gestion'
+    await loadAll()
+    const apiError = error as { data?: { errors?: Record<string, unknown>, message?: string } }
     const errors = apiError?.data?.errors
     if (errors && typeof errors === 'object') {
       const messages = Object.entries(errors)
-        .filter(([key]) => !key.endsWith('_details'))
-        .flatMap(([, value]) => Array.isArray(value) ? value : [String(value)])
-      if (messages.length) {
-        toast.error(messages.join(' '))
-        await loadAll()
+        .filter(([key]) => key !== 'file' && !key.endsWith('_details'))
+        .flatMap(([, value]) => Array.isArray(value) ? value.map(String) : [String(value)])
+      if (messages.length > 0) {
+        toast.error(messages.join(' · '))
+        await nextTick()
+        document.getElementById('closure-readiness-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
         return
       }
     }
-    toast.error('No se pudo cerrar el expediente. Verifique los requisitos de cierre.')
+    toast.error(messageFromFetchError(error, 'No se pudo cerrar el expediente.'))
   }
 }
 
@@ -270,6 +289,10 @@ function openVersionDialog(node: ArchivalFileTreeNode) {
 }
 
 function openPublishDialog(node: ArchivalFileTreeNode) {
+  if (!node.archival_file_document_id) {
+    toast.error('No se identificó el documento a publicar.')
+    return
+  }
   selectedTreeNode.value = node
   publishDialogOpen.value = true
 }
@@ -557,11 +580,13 @@ onMounted(() => loadAll())
                 </CardContent>
               </Card>
 
-              <ArchivalFileClosureReadinessCard
-                v-if="canClose"
-                :readiness="closureReadiness"
-                :loading="loading"
-              />
+              <div id="closure-readiness-card">
+                <ArchivalFileClosureReadinessCard
+                  v-if="canClose"
+                  :readiness="closureReadiness"
+                  :loading="loading"
+                />
+              </div>
 
               <Card v-if="alerts.length">
                 <CardHeader class="pb-2">
@@ -651,11 +676,10 @@ onMounted(() => loadAll())
       />
 
       <InstitutionalLibraryPublishDialog
-        v-if="file && selectedTreeNode?.archival_file_document_id"
         v-model:open="publishDialogOpen"
         :file-id="file.id"
-        :document-id="selectedTreeNode.archival_file_document_id"
-        :document-title="selectedTreeNode.name"
+        :document-id="selectedTreeNode?.archival_file_document_id ?? null"
+        :document-title="selectedTreeNode?.name ?? ''"
         @published="loadAll"
       />
 

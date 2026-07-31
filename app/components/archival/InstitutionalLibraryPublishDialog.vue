@@ -5,7 +5,7 @@ import type { InstitutionalLibraryCategoryValue } from '~/types/institutional-li
 const props = defineProps<{
   open: boolean
   fileId: number
-  documentId: number
+  documentId: number | null
   documentTitle: string
   defaultCategory?: InstitutionalLibraryCategoryValue | null
 }>()
@@ -31,13 +31,24 @@ watch(() => props.open, async (isOpen) => {
     return
   }
 
+  if (props.documentId == null) {
+    toast.error('No se identificó el documento a publicar.')
+    emit('update:open', false)
+    return
+  }
+
   categories.value = await libraryApi.fetchCatalog()
   form.value.institutional_category = props.defaultCategory ?? categories.value[0]?.value ?? ''
   form.value.effective_from = new Date().toISOString().slice(0, 10)
   form.value.effective_to = ''
-})
+}, { immediate: true })
 
 async function submit() {
+  if (props.documentId == null) {
+    toast.error('No se identificó el documento a publicar.')
+    return
+  }
+
   if (!form.value.institutional_category) {
     toast.error('Seleccione una categoría.')
     return
@@ -55,8 +66,12 @@ async function submit() {
     emit('update:open', false)
     emit('published')
   }
-  catch {
-    toast.error('No se pudo publicar el documento.')
+  catch (error: unknown) {
+    const err = error as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err?.data?.errors
+      ? Object.values(err.data.errors)[0]?.[0]
+      : null
+    toast.error(first ?? err?.data?.message ?? 'No se pudo publicar el documento.')
   }
   finally {
     loading.value = false
@@ -81,6 +96,9 @@ async function submit() {
 
         <div class="space-y-2">
           <Label>Categoría</Label>
+          <p class="text-xs text-muted-foreground leading-relaxed">
+            Clasificación en la biblioteca institucional. Las opciones se administran en Parametrización → Biblioteca institucional.
+          </p>
           <Select v-model="form.institutional_category">
             <SelectTrigger>
               <SelectValue placeholder="Seleccione categoría" />

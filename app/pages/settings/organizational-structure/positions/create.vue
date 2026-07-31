@@ -226,7 +226,7 @@ onMounted(() => {
                     v-model="chargesSelectedArea"
                     input-id="position_charges_area_ms"
                     label="¿Este cargo está a cargo del área elegida?"
-                    helper-text="Si elige Sí, al guardar se guardará el nombre de este cargo en el área (referencia de jefe de área), además del catálogo de cargos."
+                    helper-text="Si elige Sí, al guardar se actualiza la referencia de jefe del área con el nombre de este cargo."
                     :disabled="form.org_unit_id == null"
                   />
                 </div>
