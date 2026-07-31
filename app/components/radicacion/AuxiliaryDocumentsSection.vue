@@ -10,9 +10,11 @@ import {
   isAuxiliaryUploadFileAllowed,
   normalizeStoredActivityType,
   resolveAuxiliaryChecklistRows,
+  titleForAuxiliaryDocumentUpload,
 } from '~/constants/auxiliary-documents-checklist'
 import { messageFromFetchError } from '~/utils/http-error-message'
 import { creditApplicationDocumentIdEquals, parseFinancialChecklistDocumentIdMap } from '~/utils/financial-checklist-document-id-map'
+import { findDocumentIdByTitle } from '~/utils/radicacion-document-upload'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = withDefaults(
@@ -93,9 +95,7 @@ function applicantIdForDocs(): number | undefined {
   return props.applicant.id
 }
 
-function docMetaForKey(key: string) {
-  const id = docIdsByKey.value[key]
-  if (id == null || id < 1) return null
+function docMetaById(id: number) {
   const aid = applicantIdForDocs()
   const list = props.applicationDocuments ?? []
   return list.find(d =>
@@ -104,13 +104,43 @@ function docMetaForKey(key: string) {
   ) ?? list.find(d => creditApplicationDocumentIdEquals(d.id, id)) ?? null
 }
 
+function labelForChecklistKey(key: string): string {
+  return checklistRows.value.find(r => r.key === key)?.label ?? key
+}
+
+/** Resuelve documento por mapa o, si el ID está huérfano / ausente, por título «Auxiliar — …». */
+function resolvedDocIdForKey(key: string): number | null {
+  const mapped = docIdsByKey.value[key]
+  if (typeof mapped === 'number' && mapped >= 1 && docMetaById(mapped)) {
+    return mapped
+  }
+  const byTitle = findDocumentIdByTitle(
+    props.applicationDocuments ?? [],
+    titleForAuxiliaryDocumentUpload(labelForChecklistKey(key)),
+    applicantIdForDocs(),
+  )
+  if (byTitle != null) {
+    return byTitle
+  }
+  if (typeof mapped === 'number' && mapped >= 1) {
+    return mapped
+  }
+  return null
+}
+
+function docMetaForKey(key: string) {
+  const id = resolvedDocIdForKey(key)
+  if (id == null || id < 1) return null
+  return docMetaById(id)
+}
+
 /** Misma fila que `applicationDocuments` del padre (mutación para revisión documental). */
 function documentReviewRowForKey(key: string): {
   id: number
   is_reviewed?: boolean
   review_comment?: string | null
 } | null {
-  const docId = docIdsByKey.value[key]
+  const docId = resolvedDocIdForKey(key)
   if (docId == null || docId < 1) {
     return null
   }
@@ -151,15 +181,8 @@ function hasSatisfiedUploadForKey(key: string): boolean {
   if (pending instanceof File) {
     return true
   }
-  const id = docIdsByKey.value[key]
-  if (typeof id === 'number' && id >= 1) {
-    // ID huérfano (archivo reemplazado/eliminado sin actualizar el mapa): tratar como vacío.
-    return Boolean(docMetaForKey(key))
-  }
-  if (docMetaForKey(key)) {
-    return true
-  }
-  return false
+  // docMetaForKey ya recupera por título si el ID del mapa está huérfano o ausente.
+  return Boolean(docMetaForKey(key))
 }
 
 /** En revisión documental con subida: solo reemplazar; no cargar el primer archivo en una fila vacía. */
@@ -283,7 +306,7 @@ function clearPending(key: string): void {
 }
 
 async function removeUploaded(key: string): Promise<void> {
-  const id = docIdsByKey.value[key]
+  const id = resolvedDocIdForKey(key)
   const appId = props.creditApplicationId
   if (!id || !appId) return
   try {
@@ -353,8 +376,9 @@ function pendingFileFor(key: string): File | undefined {
 
 /**
  * Devuelve true si puede avanzar de paso; si faltan obligatorios, activa resaltado danger y false.
+ * @param opts.silent Si true, no muestra toast (el padre ya explicó quién/qué falta).
  */
-function validateRequiredAuxiliaryUploads(): boolean {
+function validateRequiredAuxiliaryUploads(opts?: { silent?: boolean }): boolean {
   if (props.interactionMode === 'viewOnly') {
     highlightMissingRequired.value = false
     return true
@@ -371,7 +395,9 @@ function validateRequiredAuxiliaryUploads(): boolean {
   if (missing.length > 0) {
     highlightMissingRequired.value = true
     docFilter.value = 'pending'
-    toast.error('Adjunta los documentos obligatorios del checklist antes de continuar.')
+    if (!opts?.silent) {
+      toast.error('Adjunta los documentos obligatorios del checklist antes de continuar.')
+    }
     void nextTick(() => {
       document.querySelector('[data-aux-doc-error="1"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     })

@@ -29,6 +29,11 @@ import {
   readDocumentIdMap,
   runDocumentUpload,
 } from '~/utils/radicacion-document-upload'
+import {
+  extractActivityTypeFromFinancialInfo,
+  itemsByActivityFromCatalogResponse,
+  missingRequiredAuxiliaryLabels,
+} from '~/utils/auxiliary-documents-validation'
 import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
 import {
@@ -132,17 +137,19 @@ function timelineEventStatusLabel(
 const currentStep = ref(1)
 const radicacionStepOneFormRef = ref<{
   validateRequiredStepOneFields: () => boolean
-  validateAuxiliaryDocumentsRequired: () => boolean
+  validateAuxiliaryDocumentsRequired: (opts?: { silent?: boolean }) => boolean
 } | null>(null)
 const debtorActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
 const destinationActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
 const codeudorActivityTemplatesListRef = ref<InstanceType<typeof CreditsFinancialActivityFormList> | null>(null)
 const codeudorWizardStepOneFormRef = ref<{
   validateRequiredStepOneFields: () => boolean
-  validateAuxiliaryDocumentsRequired: () => boolean
+  validateAuxiliaryDocumentsRequired: (opts?: { silent?: boolean }) => boolean
 } | null>(null)
 
 const addingCodeudor = ref(false)
+/** Evita que syncFormFromApplication borre mapas/pending al refrescar solo `documents`. */
+const skipFormSyncFromApplication = ref(false)
 const codeudorStep = ref(1)
 const codeudorBeingAdded = ref<ApplicantForm>({
   document_type: 'CC',
@@ -316,7 +323,9 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
   const residenceName = (typeof api?.residence_city_name === 'string' && api.residence_city_name?.trim())
     ? api.residence_city_name
     : (api?.residence_city as { name?: string } | null)?.name ?? ''
+  const applicantId = typeof api?.id === 'number' ? api.id : Number(api?.id)
   return {
+    id: Number.isInteger(applicantId) && applicantId > 0 ? applicantId : undefined,
     document_type: api?.document_type ?? 'CC',
     document_number: api?.document_number ?? '',
     expedition_date: toDateInputFormat(api?.expedition_date) ?? api?.expedition_date,
@@ -1269,6 +1278,8 @@ async function uploadAllDocuments(
       }
     }
   }
+
+  await refreshApplicationDocumentsFromServer(applicationId)
 }
 
 /** Igual que «Siguiente» en paso 1: obligatorios + checklist auxiliar. Requiere paso 1 montado (v-show). */
@@ -1299,10 +1310,108 @@ async function validateRadicacionStepOneForPersist(): Promise<boolean> {
     toast.error('Completa los campos obligatorios del deudor')
     return false
   }
-  if (!formRef.validateAuxiliaryDocumentsRequired()) {
+  // No basta con el formulario visible: al enviar/guardar hay que cubrir deudor y todos los codeudores.
+  if (!(await validateAllApplicantsAuxiliaryChecklists())) {
     return false
   }
   return true
+}
+
+/**
+ * Valida checklists auxiliares del deudor y de cada codeudor (datos del form + documentos en servidor).
+ * Si falla, lleva al usuario a la pantalla correcta y muestra quién/qué falta.
+ */
+async function validateAllApplicantsAuxiliaryChecklists(): Promise<boolean> {
+  let itemsByActivity: Record<string, Array<{ key: string, label: string, required: boolean }>> = {}
+  try {
+    const cfg = await $api<unknown>('/catalogs/template-flat-data/auxiliary-documents')
+    itemsByActivity = itemsByActivityFromCatalogResponse(cfg)
+  } catch {
+    toast.error('No se pudo cargar el listado de documentos auxiliares para validar.')
+    return false
+  }
+
+  const docs = (application.value?.documents ?? []) as Array<{
+    id: number
+    applicant_id?: number | null
+    title?: string | null
+    original_name?: string | null
+  }>
+
+  const debtorMissing = missingRequiredAuxiliaryLabels({
+    itemsByActivity,
+    activityType: extractActivityTypeFromFinancialInfo(form.value.debtor.financial_info),
+    financialInfo: form.value.debtor.financial_info,
+    pendingFiles: form.value.debtor.auxiliaryDocumentFiles,
+    applicationDocuments: docs,
+    applicantId: form.value.debtor.id,
+  })
+  if (debtorMissing.length > 0) {
+    addingCodeudor.value = false
+    currentStep.value = 1
+    await nextTick()
+    toast.error(
+      `Deudor: faltan documentos obligatorios del checklist (${debtorMissing.slice(0, 3).join(', ')}${debtorMissing.length > 3 ? '…' : ''}).`,
+    )
+    document.querySelector('#radicacion-auxiliary-documents')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    radicacionStepOneFormRef.value?.validateAuxiliaryDocumentsRequired({ silent: true })
+    return false
+  }
+
+  const cos = form.value.co_debtors ?? []
+  for (let i = 0; i < cos.length; i++) {
+    const co = cos[i]
+    if (!co) continue
+    const coMissing = missingRequiredAuxiliaryLabels({
+      itemsByActivity,
+      activityType: extractActivityTypeFromFinancialInfo(co.financial_info),
+      financialInfo: co.financial_info,
+      pendingFiles: co.auxiliaryDocumentFiles,
+      applicationDocuments: docs,
+      applicantId: co.id,
+    })
+    if (coMissing.length > 0) {
+      startEditingCodeudor(i)
+      await nextTick()
+      codeudorStep.value = 1
+      await nextTick()
+      const who = co.first_name || co.first_last_name
+        ? `${co.first_name ?? ''} ${co.first_last_name ?? ''}`.trim()
+        : `codeudor ${i + 1}`
+      toast.error(
+        `Codeudor (${who}): faltan documentos obligatorios del checklist (${coMissing.slice(0, 3).join(', ')}${coMissing.length > 3 ? '…' : ''}).`,
+      )
+      document.querySelector('#radicacion-auxiliary-documents')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      codeudorWizardStepOneFormRef.value?.validateAuxiliaryDocumentsRequired({ silent: true })
+      return false
+    }
+  }
+
+  return true
+}
+
+async function refreshApplicationDocumentsFromServer(applicationId: number): Promise<void> {
+  try {
+    const fresh = await $api<{ data?: { documents?: unknown[] } }>(`/credit-applications/${applicationId}`)
+    const data = (fresh as { data?: { documents?: unknown[] } })?.data ?? fresh
+    const list = Array.isArray((data as { documents?: unknown[] }).documents)
+      ? (data as { documents: unknown[] }).documents
+      : []
+    if (application.value) {
+      skipFormSyncFromApplication.value = true
+      try {
+        application.value = {
+          ...application.value,
+          documents: list as typeof application.value.documents,
+        }
+        await nextTick()
+      } finally {
+        skipFormSyncFromApplication.value = false
+      }
+    }
+  } catch {
+    // La subida ya ocurrió; el listado se refrescará al recargar.
+  }
 }
 
 async function saveChanges() {
@@ -1539,6 +1648,9 @@ function prevStep() {
 }
 
 watch([application, debtor, coDebtors], () => {
+  if (skipFormSyncFromApplication.value) {
+    return
+  }
   if (application.value && debtor.value && canEdit.value) {
     syncFormFromApplication()
   }

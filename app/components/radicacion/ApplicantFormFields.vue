@@ -272,7 +272,7 @@ const freeAttachmentStats = computed(() => {
 })
 
 type AuxiliaryDocumentsSectionExpose = {
-  validateRequiredAuxiliaryUploads: () => boolean
+  validateRequiredAuxiliaryUploads: (opts?: { silent?: boolean }) => boolean
 }
 
 const auxiliaryDocumentsSectionRef = ref<AuxiliaryDocumentsSectionExpose | null>(null)
@@ -550,11 +550,11 @@ watch(financial, () => {
   }
 }, { deep: true })
 
-function validateAuxiliaryDocumentsRequired(): boolean {
+function validateAuxiliaryDocumentsRequired(opts?: { silent?: boolean }): boolean {
   if (!props.showDocumentosAuxiliarChecklist || !docCanSubir.value || props.auxiliaryInteractionMode === 'viewOnly') {
     return true
   }
-  return auxiliaryDocumentsSectionRef.value?.validateRequiredAuxiliaryUploads() ?? true
+  return auxiliaryDocumentsSectionRef.value?.validateRequiredAuxiliaryUploads(opts) ?? true
 }
 
 defineExpose({
