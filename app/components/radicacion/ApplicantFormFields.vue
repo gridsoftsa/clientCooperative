@@ -237,15 +237,18 @@ const sectionTitleClass = 'text-sm font-semibold text-foreground border-b pb-2 m
 const fieldClass = 'space-y-1.5'
 
 /**
- * Checklist auxiliar (deudor): visible si puede subir adjuntos o si el padre activa revisión documental
- * (`showAuxiliaryDocumentReview`, p. ej. `radicacion_documentos_decidir` en Documentation_Review sin subir).
- * Antes solo se mostraba con `radicacion_documentos_subir`, lo que ocultaba archivos y «Revisado» al revisor.
+ * Checklist auxiliar (deudor): visible si puede subir, si el padre activa revisión documental,
+ * o en consulta (`viewOnly`) para que los adjuntos ya cargados se vean al abrir la radicación.
  */
 const auxiliaryChecklistVisible = computed(
   () =>
     !props.hideDocumentsSection
     && props.showDocumentosAuxiliarChecklist
-    && (docCanSubir.value || props.showAuxiliaryDocumentReview),
+    && (
+      docCanSubir.value
+      || props.showAuxiliaryDocumentReview
+      || props.auxiliaryInteractionMode === 'viewOnly'
+    ),
 )
 
 /** Documentos libres (sin checklist): flujo de codeudor u otros formularios. */

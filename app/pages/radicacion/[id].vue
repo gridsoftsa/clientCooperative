@@ -328,11 +328,13 @@ const canEditInsurabilityStatusInAsegurabilidadSection = computed(
     && !isCreditApplicationTerminalImmutable(application.value?.status),
 )
 
-/** Checklist auxiliar visible en revisión documental y también al director de agencia (consulta). */
+/**
+ * Checklist auxiliar siempre visible en el detalle (consulta).
+ * Antes solo salía en Documentation_Review / Director_Review: fuera de esos estados
+ * los archivos del checklist no aparecían en ningún listado (la lista «libre» los excluye).
+ */
 const showDocumentationAuxiliaryChecklist = computed(
-  () =>
-    documentationReviewFlowActive.value
-    || application.value?.status === 'Director_Review',
+  () => Boolean(application.value?.id),
 )
 
 const showAuxiliaryDocumentReviewInChecklist = computed(
