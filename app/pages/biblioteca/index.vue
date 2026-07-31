@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import InstitutionalLibraryBrowser from '~/components/archival/InstitutionalLibraryBrowser.vue'
 import type { InstitutionalLibraryCategory, InstitutionalLibraryDocument } from '~/types/institutional-library'
+
+const FILTER_ALL_ORG_UNITS = 'all'
 
 definePageMeta({
   layout: 'default',
@@ -17,7 +20,7 @@ const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promi
 
 const search = ref('')
 const selectedCategory = ref('')
-const selectedOrgUnitId = ref('')
+const selectedOrgUnitId = ref(FILTER_ALL_ORG_UNITS)
 const loading = ref(false)
 const page = ref(1)
 
@@ -35,7 +38,7 @@ const previewing = ref(false)
 const selectedDocument = ref<InstitutionalLibraryDocument | null>(null)
 const documentDetail = ref<InstitutionalLibraryDocument | null>(null)
 
-import { institutionalLibraryCategoryIcon } from '~/utils/institutional-library-category'
+const canDownload = computed(() => hasPermission('expedientes_documentos_descargar'))
 
 async function loadOrgUnits() {
   try {
@@ -55,7 +58,9 @@ async function loadLibrary() {
       libraryApi.fetchDocuments({
         search: search.value || undefined,
         category: selectedCategory.value || undefined,
-        org_unit_id: selectedOrgUnitId.value ? Number(selectedOrgUnitId.value) : undefined,
+        org_unit_id: selectedOrgUnitId.value !== FILTER_ALL_ORG_UNITS
+          ? Number(selectedOrgUnitId.value)
+          : undefined,
         page: page.value,
         per_page: 12,
       }),
@@ -81,18 +86,6 @@ async function loadLibrary() {
   finally {
     loading.value = false
   }
-}
-
-function selectCategory(category: string) {
-  selectedCategory.value = selectedCategory.value === category ? '' : category
-  page.value = 1
-  loadLibrary()
-}
-
-function selectOrgUnit(orgUnitId: string) {
-  selectedOrgUnitId.value = selectedOrgUnitId.value === orgUnitId ? '' : orgUnitId
-  page.value = 1
-  loadLibrary()
 }
 
 async function openDocument(document: InstitutionalLibraryDocument) {
@@ -150,208 +143,43 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-8">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+  <div class="space-y-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 class="text-3xl font-semibold tracking-tight">
-          Biblioteca Institucional
+        <h1 class="text-2xl font-semibold tracking-tight">
+          Biblioteca institucional
         </h1>
-        <p class="mt-1 text-sm text-muted-foreground">
-          Documentación oficial organizada por categorías, áreas y vigencia.
+        <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
+          Consulte la documentación oficial publicada por categoría y área productora.
+          Use el panel izquierdo para navegar y el panel derecho para ver y descargar documentos.
         </p>
       </div>
-
-      <div class="w-full max-w-xl">
-        <div class="relative">
-          <Icon name="i-lucide-search" class="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            v-model="search"
-            class="pl-10"
-            placeholder="Buscar documentos, procedimientos, formatos..."
-            @keyup.enter="page = 1; loadLibrary()"
-          />
-        </div>
-      </div>
     </div>
 
-    <Card
-      v-if="featured"
-      class="overflow-hidden border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-background"
-    >
-      <CardContent class="flex flex-col gap-6 p-6 lg:flex-row lg:items-center lg:justify-between">
-        <div class="space-y-3">
-          <Badge variant="secondary">
-            Destacado
-          </Badge>
-          <div>
-            <h2 class="text-2xl font-semibold">
-              {{ featured.title }}
-            </h2>
-            <p class="mt-1 text-sm text-muted-foreground">
-              Versión {{ featured.version_number }}
-              <span v-if="featured.effective_from"> · Vigente desde {{ formatDate(featured.effective_from) }}</span>
-            </p>
-          </div>
-          <p v-if="featured.org_unit" class="text-sm text-muted-foreground">
-            {{ featured.org_unit.name }}
-          </p>
-        </div>
-        <Button type="button" @click="openDocument(featured)">
-          Ver documento
-        </Button>
+    <Card>
+      <CardContent class="p-0 sm:p-0">
+        <InstitutionalLibraryBrowser
+          :loading="loading"
+          :categories="categories"
+          :documents="documents"
+          :featured="featured"
+          :recent="recent"
+          :most-viewed="mostViewed"
+          :org-units="orgUnits"
+          :org-unit-id="selectedOrgUnitId"
+          :search="search"
+          :selected-category="selectedCategory"
+          :pagination="pagination"
+          :can-download="canDownload"
+          @update:org-unit-id="selectedOrgUnitId = $event"
+          @update:search="search = $event"
+          @update:selected-category="selectedCategory = $event"
+          @update:page="page = $event"
+          @refresh="loadLibrary"
+          @view-document="openDocument"
+        />
       </CardContent>
     </Card>
-
-    <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-      <button
-        v-for="category in categories"
-        :key="category.value"
-        type="button"
-        class="rounded-xl border bg-card p-4 text-left transition hover:border-primary/40 hover:shadow-sm"
-        :class="{ 'border-primary ring-1 ring-primary/20': selectedCategory === category.value }"
-        @click="selectCategory(category.value)"
-      >
-        <div class="mb-3 flex size-10 items-center justify-center rounded-lg bg-muted">
-          <Icon :name="institutionalLibraryCategoryIcon(category.icon)" class="size-5 text-primary" />
-        </div>
-        <div class="font-medium">
-          {{ category.label }}
-        </div>
-        <div class="mt-1 text-sm text-muted-foreground">
-          {{ category.count ?? 0 }} documentos
-        </div>
-      </button>
-    </div>
-
-    <div class="flex flex-wrap gap-2">
-      <Button
-        size="sm"
-        :variant="selectedOrgUnitId === '' ? 'default' : 'outline'"
-        type="button"
-        @click="selectOrgUnit('')"
-      >
-        Todas las áreas
-      </Button>
-      <Button
-        v-for="unit in orgUnits"
-        :key="unit.id"
-        size="sm"
-        :variant="selectedOrgUnitId === String(unit.id) ? 'default' : 'outline'"
-        type="button"
-        @click="selectOrgUnit(String(unit.id))"
-      >
-        {{ unit.name }}
-      </Button>
-    </div>
-
-    <div class="grid gap-6 xl:grid-cols-[1fr_320px]">
-      <div class="space-y-4">
-        <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold">
-            Documentos
-            <span class="text-sm font-normal text-muted-foreground">({{ pagination.total }})</span>
-          </h2>
-          <Button variant="outline" size="sm" :disabled="loading" @click="loadLibrary">
-            Actualizar
-          </Button>
-        </div>
-
-        <div v-if="loading" class="py-16 text-center text-muted-foreground">
-          Cargando biblioteca...
-        </div>
-        <div v-else-if="documents.length === 0" class="rounded-xl border border-dashed py-16 text-center text-muted-foreground">
-          No hay documentos publicados con los filtros seleccionados.
-        </div>
-        <div v-else class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <InstitutionalLibraryCard
-            v-for="document in documents"
-            :key="document.id"
-            :document="document"
-            :can-download="canDownload"
-            @view="openDocument"
-            @download="() => {}"
-          />
-        </div>
-
-        <div v-if="pagination.last_page > 1" class="flex items-center justify-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            :disabled="page <= 1 || loading"
-            @click="page--; loadLibrary()"
-          >
-            Anterior
-          </Button>
-          <span class="text-sm text-muted-foreground">
-            Página {{ pagination.current_page }} de {{ pagination.last_page }}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            :disabled="page >= pagination.last_page || loading"
-            @click="page++; loadLibrary()"
-          >
-            Siguiente
-          </Button>
-        </div>
-      </div>
-
-      <div class="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle class="text-base">
-              Documentos actualizados
-            </CardTitle>
-          </CardHeader>
-          <CardContent class="space-y-3">
-            <button
-              v-for="document in recent"
-              :key="`recent-${document.id}`"
-              type="button"
-              class="block w-full rounded-md px-2 py-2 text-left hover:bg-muted/60"
-              @click="openDocument(document)"
-            >
-              <div class="text-sm font-medium line-clamp-2">
-                {{ document.title }}
-              </div>
-              <div class="text-xs text-muted-foreground">
-                Versión {{ document.version_number }}
-              </div>
-            </button>
-            <p v-if="recent.length === 0" class="text-sm text-muted-foreground">
-              Sin actualizaciones recientes.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle class="text-base">
-              Más consultados
-            </CardTitle>
-          </CardHeader>
-          <CardContent class="space-y-3">
-            <button
-              v-for="document in mostViewed"
-              :key="`viewed-${document.id}`"
-              type="button"
-              class="block w-full rounded-md px-2 py-2 text-left hover:bg-muted/60"
-              @click="openDocument(document)"
-            >
-              <div class="text-sm font-medium line-clamp-2">
-                {{ document.title }}
-              </div>
-              <div class="text-xs text-muted-foreground">
-                {{ document.view_count ?? 0 }} consultas
-              </div>
-            </button>
-            <p v-if="mostViewed.length === 0" class="text-sm text-muted-foreground">
-              Aún no hay consultas registradas.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
 
     <Dialog v-model:open="detailOpen">
       <DialogContent class="max-h-[90vh] max-w-3xl overflow-y-auto">
