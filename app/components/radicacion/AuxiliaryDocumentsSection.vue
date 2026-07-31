@@ -15,6 +15,7 @@ import {
 import { messageFromFetchError } from '~/utils/http-error-message'
 import { creditApplicationDocumentIdEquals, parseFinancialChecklistDocumentIdMap } from '~/utils/financial-checklist-document-id-map'
 import { findDocumentIdByTitle } from '~/utils/radicacion-document-upload'
+import { isAuxiliaryChecklistLabelUnique } from '~/utils/auxiliary-documents-validation'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = withDefaults(
@@ -108,19 +109,23 @@ function labelForChecklistKey(key: string): string {
   return checklistRows.value.find(r => r.key === key)?.label ?? key
 }
 
-/** Resuelve documento por mapa o, si el ID está huérfano / ausente, por título «Auxiliar — …». */
+/** Resuelve documento por mapa o, si el ID está huérfano / ausente, por título (solo si el label es único). */
 function resolvedDocIdForKey(key: string): number | null {
   const mapped = docIdsByKey.value[key]
   if (typeof mapped === 'number' && mapped >= 1 && docMetaById(mapped)) {
     return mapped
   }
-  const title = titleForAuxiliaryDocumentUpload(labelForChecklistKey(key))
-  const docs = props.applicationDocuments ?? []
-  // Primero con solicitante; si no hay match (applicant_id nulo/desfasado), buscar solo por título.
-  const byTitle = findDocumentIdByTitle(docs, title, applicantIdForDocs())
-    ?? findDocumentIdByTitle(docs, title, null)
-  if (byTitle != null) {
-    return byTitle
+  const label = labelForChecklistKey(key)
+  // Si hay varias filas con el mismo texto (p. ej. 4× «Otros soportes…»), no recuperar por título:
+  // un solo PDF se mostraría en todas.
+  if (isAuxiliaryChecklistLabelUnique(checklistRows.value, label)) {
+    const title = titleForAuxiliaryDocumentUpload(label)
+    const docs = props.applicationDocuments ?? []
+    const byTitle = findDocumentIdByTitle(docs, title, applicantIdForDocs())
+      ?? findDocumentIdByTitle(docs, title, null)
+    if (byTitle != null) {
+      return byTitle
+    }
   }
   if (typeof mapped === 'number' && mapped >= 1) {
     return mapped

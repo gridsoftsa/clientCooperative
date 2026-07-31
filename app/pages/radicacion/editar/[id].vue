@@ -31,6 +31,7 @@ import {
 } from '~/utils/radicacion-document-upload'
 import {
   extractActivityTypeFromFinancialInfo,
+  isAuxiliaryChecklistLabelUnique,
   itemsByActivityFromCatalogResponse,
   missingRequiredAuxiliaryLabels,
   repairAuxiliaryDocumentsMapFromExisting,
@@ -1159,8 +1160,11 @@ async function uploadAllDocuments(
         if (!(file instanceof File)) continue
         const label = labelByKey[key] ?? key
         const uploadTitle = titleForAuxiliaryDocumentUpload(label)
+        const labelRows = Object.entries(labelByKey).map(([k, lab]) => ({ key: k, label: lab }))
         const prevId = docMap[key]
-          ?? findDocumentIdByTitle(serverDocuments, uploadTitle, debtorApplicantId)
+          ?? (isAuxiliaryChecklistLabelUnique(labelRows, label)
+            ? findDocumentIdByTitle(serverDocuments, uploadTitle, debtorApplicantId)
+            : null)
         await deleteDocIfPresent(prevId)
         const fd = new FormData()
         fd.append('title', uploadTitle)
@@ -1316,8 +1320,11 @@ async function uploadAllDocuments(
         if (!(file instanceof File)) continue
         const labelCo = labelByKeyCo[key] ?? key
         const uploadTitleCo = titleForAuxiliaryDocumentUpload(labelCo)
+        const labelRowsCo = Object.entries(labelByKeyCo).map(([k, lab]) => ({ key: k, label: lab }))
         const prevId = docMapCo[key]
-          ?? findDocumentIdByTitle(serverDocuments, uploadTitleCo, applicantId)
+          ?? (isAuxiliaryChecklistLabelUnique(labelRowsCo, labelCo)
+            ? findDocumentIdByTitle(serverDocuments, uploadTitleCo, applicantId)
+            : null)
         await deleteDocIfPresent(prevId)
         const fdAux = new FormData()
         fdAux.append('title', uploadTitleCo)
