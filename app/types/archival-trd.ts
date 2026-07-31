@@ -50,7 +50,7 @@ export interface EffectiveRetentionPayload {
   inherited_from: 'document_type' | 'subseries' | 'series'
 }
 
-export interface CatalogTreeSeries extends Pick<DocSeriesRow, 'id' | 'code' | 'name' | 'is_active'> {
+export interface CatalogTreeSeries extends Pick<DocSeriesRow, 'id' | 'code' | 'name' | 'is_active' | 'publishable_to_institutional_library'> {
   subseries: Array<
     Pick<DocSubseriesRow, 'id' | 'doc_series_id' | 'code' | 'name' | 'is_active'> & {
       document_types: DocDocumentTypeRow[]

@@ -131,6 +131,7 @@ export interface ArchivalFileTreeNode {
   doc_document_type_id?: number
   doc_document_type_name?: string
   doc_series_code?: string | null
+  doc_series_publishable_to_institutional_library?: boolean
   version_number?: number
   is_current_version?: boolean
   referenced_document_id?: number | null

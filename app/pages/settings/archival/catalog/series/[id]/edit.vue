@@ -16,7 +16,13 @@ const { $api } = useNuxtApp()
 
 const id = computed(() => Number(route.params.id))
 const series = ref<DocSeriesRow | null>(null)
-const form = ref({ code: '', name: '', description: '', is_active: true })
+const form = ref({
+  code: '',
+  name: '',
+  description: '',
+  is_active: true,
+  publishable_to_institutional_library: false,
+})
 const initialIsActive = ref(true)
 const activeSubseriesCount = ref(0)
 const loading = ref(true)
@@ -37,6 +43,7 @@ async function load() {
       name: res.data.name,
       description: res.data.description ?? '',
       is_active: res.data.is_active,
+      publishable_to_institutional_library: res.data.publishable_to_institutional_library ?? false,
     }
     initialIsActive.value = res.data.is_active
     activeSubseriesCount.value = res.data.active_subseries_count ?? 0
@@ -61,6 +68,7 @@ async function persist(cascadeDeactivateChildren: boolean) {
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
         is_active: form.value.is_active,
+        publishable_to_institutional_library: form.value.publishable_to_institutional_library,
         ...(isDeactivating.value && cascadeDeactivateChildren
           ? { cascade_deactivate_active_children: true }
           : {}),
@@ -148,6 +156,25 @@ onMounted(load)
           <div class="flex items-center gap-2">
             <Switch id="active" v-model="form.is_active" />
             <Label for="active" class="font-normal">{{ form.is_active ? 'Activa' : 'Inactiva' }}</Label>
+          </div>
+          <div class="rounded-md border bg-muted/20 p-3">
+            <div class="flex items-start gap-2">
+              <Checkbox
+                id="publishable_library"
+                v-model="form.publishable_to_institutional_library"
+                bare
+                class="mt-0.5"
+              />
+              <div class="space-y-1">
+                <Label for="publishable_library" class="font-normal leading-snug cursor-pointer">
+                  Publicable en biblioteca institucional
+                </Label>
+                <p class="text-xs text-muted-foreground">
+                  Los documentos clasificados en esta serie (y sus subseries y tipos documentales)
+                  podrán publicarse en la biblioteca institucional.
+                </p>
+              </div>
+            </div>
           </div>
           <p
             v-if="activeSubseriesCount > 0 && form.is_active"

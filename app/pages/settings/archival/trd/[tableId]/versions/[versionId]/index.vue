@@ -12,6 +12,7 @@ import {
   parseFinalDisposition,
   serializeFinalDisposition,
 } from '~/constants/archival-trd'
+import { coerceBoolean } from '~/utils/coerce-boolean'
 import { resolveEffectiveRetentionFromRules } from '~/utils/archival-trd-version'
 import type { DocDocumentTypeRow } from '~/types/archival-catalog'
 import type { CatalogTreeSeries, EffectiveRetentionPayload, TrdRetentionRuleRow, TrdVersionRow } from '~/types/archival-trd'
@@ -112,6 +113,42 @@ async function reloadCatalogTree() {
     return
   }
   catalogTree.value = await trdApi.fetchCatalogTree(producerOrgUnitId.value, true)
+}
+
+const savingSeriesLibraryId = ref<number | null>(null)
+
+function isSeriesPublishableToLibrary(serie: CatalogTreeSeries): boolean {
+  return coerceBoolean(serie.publishable_to_institutional_library)
+}
+
+async function toggleSeriesLibraryPublishable(serie: CatalogTreeSeries, enabled: boolean) {
+  if (!canManageCatalog.value) {
+    return
+  }
+
+  const previous = serie.publishable_to_institutional_library
+  serie.publishable_to_institutional_library = enabled
+  savingSeriesLibraryId.value = serie.id
+
+  try {
+    await $api(`/archival/catalog/series/${serie.id}`, {
+      method: 'PUT',
+      body: { publishable_to_institutional_library: enabled },
+    })
+    toast.success(
+      enabled
+        ? 'Serie habilitada para biblioteca institucional.'
+        : 'Serie deshabilitada para biblioteca institucional.',
+    )
+  }
+  catch (e: unknown) {
+    serie.publishable_to_institutional_library = previous
+    const err = e as { data?: { message?: string } }
+    toast.error(err.data?.message ?? 'No se pudo actualizar la serie.')
+  }
+  finally {
+    savingSeriesLibraryId.value = null
+  }
 }
 
 function dispositionLabel(v: string): string {
@@ -1209,15 +1246,28 @@ watch(
 
         <TabsContent value="catalog" class="mt-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Tipos documentales de esta TRD</CardTitle>
-              <CardDescription>
-                Catálogo del área productora
-                <template v-if="table?.org_unit">
-                  {{ table.org_unit.name }} ({{ table.org_unit.code }})
-                </template>
-                — serie → subserie → tipo.
-              </CardDescription>
+            <CardHeader class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div class="space-y-1">
+                <CardTitle>Tipos documentales de esta TRD</CardTitle>
+                <CardDescription>
+                  Catálogo del área productora
+                  <template v-if="table?.org_unit">
+                    {{ table.org_unit.name }} ({{ table.org_unit.code }})
+                  </template>
+                  — serie → subserie → tipo.
+                </CardDescription>
+              </div>
+              <PermissionGate v-if="catalogTree.length > 0" permission="trd_catalogo_editar">
+                <div class="flex flex-wrap gap-2 shrink-0">
+                  <Button variant="outline" size="sm" @click="router.push(catalogSeriesListPath)">
+                    Administrar catálogo
+                  </Button>
+                  <Button size="sm" @click="router.push(catalogCreateSeriesPath)">
+                    <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                    Nueva serie
+                  </Button>
+                </div>
+              </PermissionGate>
             </CardHeader>
             <CardContent class="space-y-4">
               <p
@@ -1321,18 +1371,57 @@ watch(
               </div>
               <div v-for="serie in filteredCatalogTree" :key="serie.id" class="border rounded-lg p-4 space-y-3">
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                  <p class="font-medium font-mono text-sm">
-                    {{ serie.code }} — {{ serie.name }}
-                  </p>
-                  <PermissionGate permission="trd_catalogo_editar">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      @click="router.push(`/settings/archival/catalog/series/${serie.id}/subseries/create?return_to=${encodeURIComponent(catalogReturnTo)}`)"
-                    >
-                      Nueva subserie
-                    </Button>
-                  </PermissionGate>
+                  <div class="min-w-0 space-y-2">
+                    <p class="font-medium font-mono text-sm">
+                      {{ serie.code }} — {{ serie.name }}
+                    </p>
+                    <div class="flex flex-wrap items-center gap-3">
+                      <div
+                        v-if="canManageCatalog"
+                        class="flex items-start gap-2"
+                      >
+                        <Checkbox
+                          :id="`serie-library-${serie.id}`"
+                          bare
+                          class="mt-0.5"
+                          :model-value="isSeriesPublishableToLibrary(serie)"
+                          :disabled="savingSeriesLibraryId === serie.id"
+                          @update:model-value="toggleSeriesLibraryPublishable(serie, $event === true)"
+                        />
+                        <Label
+                          :for="`serie-library-${serie.id}`"
+                          class="font-normal text-sm text-muted-foreground cursor-pointer leading-snug"
+                        >
+                          Publicable en biblioteca institucional
+                        </Label>
+                      </div>
+                      <Badge
+                        v-else-if="isSeriesPublishableToLibrary(serie)"
+                        variant="outline"
+                        class="text-xs"
+                      >
+                        Biblioteca
+                      </Badge>
+                    </div>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <PermissionGate permission="trd_catalogo_editar">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        @click="router.push(`/settings/archival/catalog/series/${serie.id}/edit?return_to=${encodeURIComponent(catalogReturnTo)}`)"
+                      >
+                        Editar serie
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        @click="router.push(`/settings/archival/catalog/series/${serie.id}/subseries/create?return_to=${encodeURIComponent(catalogReturnTo)}`)"
+                      >
+                        Nueva subserie
+                      </Button>
+                    </PermissionGate>
+                  </div>
                 </div>
                 <p v-if="serie.subseries.length === 0" class="text-sm text-muted-foreground pl-1">
                   Sin subseries.

@@ -5,6 +5,7 @@ export interface DocSeriesRow {
   name: string
   description?: string | null
   is_active: boolean
+  publishable_to_institutional_library?: boolean
   subseries_count?: number
   active_subseries_count?: number
   org_unit?: { id: number; name: string; code: string }

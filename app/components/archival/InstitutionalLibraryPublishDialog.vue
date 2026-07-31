@@ -91,7 +91,8 @@ async function submit() {
 
       <div class="space-y-4">
         <div class="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-          Solo documentos de la serie TRD «Información documentada», vigentes y aprobados, aparecen en la biblioteca.
+          Solo documentos de series TRD habilitadas para biblioteca institucional pueden publicarse.
+          Configure la serie en Catálogo TRD → Series.
         </div>
 
         <div class="space-y-2">

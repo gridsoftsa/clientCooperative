@@ -1,8 +1,5 @@
 export type InstitutionalLibraryCategoryValue = string
 
-/** Serie TRD requerida para publicar en biblioteca institucional (debe coincidir con config API). */
-export const INSTITUTIONAL_LIBRARY_DOCUMENTED_INFORMATION_SERIES_CODE = '005-54'
-
 export interface InstitutionalLibraryCategoryRow {
   key: string
   label: string

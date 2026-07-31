@@ -226,6 +226,7 @@ onMounted(async () => {
                     Subseries
                   </TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead>Biblioteca</TableHead>
                   <TableHead class="text-right">
                     Acciones
                   </TableHead>
@@ -244,6 +245,12 @@ onMounted(async () => {
                     <Badge :variant="r.is_active ? 'default' : 'secondary'">
                       {{ r.is_active ? 'Activa' : 'Inactiva' }}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge v-if="r.publishable_to_institutional_library" variant="outline">
+                      Publicable
+                    </Badge>
+                    <span v-else class="text-xs text-muted-foreground">—</span>
                   </TableCell>
                   <TableCell class="text-right !whitespace-normal">
                     <div class="flex flex-wrap justify-end gap-1">

@@ -29,6 +29,7 @@ const form = ref({
   name: '',
   description: '',
   is_active: true,
+  publishable_to_institutional_library: false,
 })
 
 const saving = ref(false)
@@ -78,6 +79,7 @@ async function submit() {
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
         is_active: form.value.is_active,
+        publishable_to_institutional_library: form.value.publishable_to_institutional_library,
       },
     })
     toast.success('Serie creada')
@@ -159,6 +161,24 @@ onMounted(fetchProducerUnits)
           <div class="flex items-center gap-2">
             <Switch id="active" v-model="form.is_active" />
             <Label for="active" class="font-normal">{{ form.is_active ? 'Activa' : 'Inactiva' }}</Label>
+          </div>
+          <div class="rounded-md border bg-muted/20 p-3">
+            <div class="flex items-start gap-2">
+              <Checkbox
+                id="publishable_library"
+                v-model="form.publishable_to_institutional_library"
+                bare
+                class="mt-0.5"
+              />
+              <div class="space-y-1">
+                <Label for="publishable_library" class="font-normal leading-snug cursor-pointer">
+                  Publicable en biblioteca institucional
+                </Label>
+                <p class="text-xs text-muted-foreground">
+                  Habilita la publicación en biblioteca de los documentos de esta serie.
+                </p>
+              </div>
+            </div>
           </div>
           <div class="flex gap-2 justify-end">
             <Button type="button" variant="outline" @click="router.back()">
