@@ -70,8 +70,13 @@ async function load() {
   }
 }
 
-function onGeneralSaved() {
-  router.push('/expedientes/tipos')
+async function onGeneralSaved(type: ArchivalFileType) {
+  try {
+    fileType.value = await archivalApi.fetchFileType(type.id)
+  }
+  catch {
+    fileType.value = type
+  }
 }
 
 async function saveRequiredDocuments() {

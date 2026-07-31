@@ -106,11 +106,35 @@ const trdTableSelectOptions = computed(() =>
 )
 
 const seriesSelectOptions = computed(() =>
-  seriesList.value.map(series => ({
+  ensureSeriesInList(seriesList.value).map(series => ({
     value: String(series.id),
     label: `${series.code} — ${series.name}`,
   })),
 )
+
+function ensureSeriesInList(list: DocSeriesRow[]): DocSeriesRow[] {
+  const initialSeries = props.initial?.doc_series
+  const selectedId = nullableId(form.doc_series_id)
+
+  if (
+    initialSeries
+    && selectedId === initialSeries.id
+    && !list.some(row => row.id === initialSeries.id)
+  ) {
+    return [
+      ...list,
+      {
+        id: initialSeries.id,
+        org_unit_id: nullableId(form.org_unit_id) ?? 0,
+        code: initialSeries.code,
+        name: initialSeries.name,
+        is_active: true,
+      } as DocSeriesRow,
+    ]
+  }
+
+  return list
+}
 
 function ensureSubseriesInList(list: DocSubseriesRow[]): DocSubseriesRow[] {
   const initialSub = props.initial?.doc_subseries
@@ -172,6 +196,10 @@ const documentTypeSelectOptions = computed(() =>
   })),
 )
 
+const documentTypeSelectKey = computed(() =>
+  `${form.doc_subseries_id}-${documentTypeSelectOptions.value.length}-${form.doc_document_type_id}`,
+)
+
 function nullableId(value: string): number | null {
   return value ? Number(value) : null
 }
@@ -207,6 +235,39 @@ async function loadDocumentTypes() {
   documentTypes.value = subseriesId ? await catalogApi.fetchDocumentTypes(subseriesId) : []
 }
 
+async function ensureSelectedDocumentTypeInList(): Promise<void> {
+  const selectedDocTypeId = nullableId(form.doc_document_type_id)
+
+  if (selectedDocTypeId === null || documentTypes.value.some(row => row.id === selectedDocTypeId)) {
+    return
+  }
+
+  const initialType = props.initial?.doc_document_type
+
+  if (initialType && initialType.id === selectedDocTypeId) {
+    documentTypes.value = [
+      ...documentTypes.value,
+      {
+        id: initialType.id,
+        doc_subseries_id: initialType.doc_subseries_id ?? nullableId(form.doc_subseries_id) ?? 0,
+        code: initialType.code,
+        name: initialType.name,
+        is_active: true,
+      } as DocDocumentTypeRow,
+    ]
+
+    return
+  }
+
+  try {
+    const row = await catalogApi.fetchDocumentTypeById(selectedDocTypeId)
+    documentTypes.value = [...documentTypes.value, row]
+  }
+  catch {
+    // El tipo pudo haberse inactivado o eliminado; el formulario conserva el id guardado.
+  }
+}
+
 async function hydrateCatalogCascade() {
   suppressCascadeWatch.value = true
 
@@ -214,6 +275,7 @@ async function hydrateCatalogCascade() {
     await loadSeries()
     await loadSubseries()
     await loadDocumentTypes()
+    await ensureSelectedDocumentTypeInList()
   }
   finally {
     await nextTick()
@@ -507,6 +569,7 @@ onMounted(() => loadCatalogs())
             <Label for="file_type_doc_type">Tipo documental</Label>
             <ArchivalCatalogSearchSelect
               id="file_type_doc_type"
+              :key="documentTypeSelectKey"
               :model-value="form.doc_document_type_id || null"
               :options="documentTypeSelectOptions"
               placeholder="Buscar tipo documental…"

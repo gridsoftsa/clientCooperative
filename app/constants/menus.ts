@@ -116,6 +116,8 @@ export const navMenu: NavMenu[] = [
           'expedientes_tipos_configurar',
           'expedientes_reportes_ver',
           'expedientes_alertas_configurar',
+          'expedientes_acceso_gestionar',
+          'expedientes_acceso_reporte',
         ],
         children: [
           {
@@ -144,9 +146,14 @@ export const navMenu: NavMenu[] = [
             permission: 'expedientes_tipos_configurar',
           },
           {
+            title: 'Control de acceso',
+            link: '/expedientes/acceso',
+            permission: 'expedientes_acceso_gestionar',
+          },
+          {
             title: 'Reportes',
             link: '/expedientes/reportes',
-            permission: 'expedientes_reportes_ver',
+            anyPermission: ['expedientes_reportes_ver', 'expedientes_acceso_reporte'],
           },
           {
             title: 'Auditoría',

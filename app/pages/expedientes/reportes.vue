@@ -5,14 +5,16 @@ import {
   ARCHIVAL_FILE_ALERT_TYPE_LABELS,
 } from '~/constants/archival-file-alerts'
 import type { ArchivalFileAlert, ArchivalFileAlertType } from '~/types/archival-file'
+import type { ArchivalAccessControlReportRow } from '~/types/archival-access'
 
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'expedientes_reportes_ver',
+  permissions: 'expedientes_reportes_ver|expedientes_acceso_reporte',
 })
 
 const router = useRouter()
+const route = useRoute()
 const archivalApi = useArchivalFileApi()
 const { hasPermission } = usePermissions()
 
@@ -20,11 +22,15 @@ const summary = ref<Record<string, number> | null>(null)
 const alerts = ref<ArchivalFileAlert[]>([])
 const retentionRows = ref<Array<Record<string, unknown>>>([])
 const incompleteRows = ref<Array<Record<string, unknown>>>([])
+const accessRows = ref<ArchivalAccessControlReportRow[]>([])
 const loading = ref(true)
 const refreshing = ref(false)
 const exporting = ref(false)
 
 const canRefresh = computed(() => hasPermission('expedientes_reportes_ver'))
+const canOperationalReports = computed(() => hasPermission('expedientes_reportes_ver'))
+const canAccessReport = computed(() => hasPermission('expedientes_acceso_reporte'))
+const highlightAccess = computed(() => route.query.tab === 'acceso')
 
 function alertTypeLabel(type: string): string {
   return ARCHIVAL_FILE_ALERT_TYPE_LABELS[type as ArchivalFileAlertType] ?? type
@@ -38,16 +44,33 @@ async function load() {
   loading.value = true
 
   try {
-    const [summaryData, alertsData, retentionData, incompleteData] = await Promise.all([
-      archivalApi.fetchReportsSummary(),
-      archivalApi.fetchAlertsReport({ per_page: 50 }),
-      archivalApi.fetchRetentionReport({ per_page: 25, upcoming_only: 1 }),
-      archivalApi.fetchIncompleteReport({ per_page: 25 }),
-    ])
-    summary.value = summaryData
-    alerts.value = alertsData.data
-    retentionRows.value = retentionData.data
-    incompleteRows.value = incompleteData.data
+    const tasks: Promise<unknown>[] = []
+
+    if (canOperationalReports.value) {
+      tasks.push(
+        Promise.all([
+          archivalApi.fetchReportsSummary(),
+          archivalApi.fetchAlertsReport({ per_page: 50 }),
+          archivalApi.fetchRetentionReport({ per_page: 25, upcoming_only: 1 }),
+          archivalApi.fetchIncompleteReport({ per_page: 25 }),
+        ]).then(([summaryData, alertsData, retentionData, incompleteData]) => {
+          summary.value = summaryData
+          alerts.value = alertsData.data
+          retentionRows.value = retentionData.data
+          incompleteRows.value = incompleteData.data
+        }),
+      )
+    }
+
+    if (canAccessReport.value) {
+      tasks.push(
+        archivalApi.fetchAccessControlReport().then((res) => {
+          accessRows.value = res.data ?? []
+        }),
+      )
+    }
+
+    await Promise.all(tasks)
   }
   catch {
     toast.error('No se pudieron cargar los reportes.')
@@ -108,6 +131,7 @@ onMounted(() => load())
       </div>
       <div class="flex flex-wrap gap-2">
         <Button
+          v-if="canOperationalReports"
           variant="outline"
           size="sm"
           :disabled="exporting || loading"
@@ -117,6 +141,7 @@ onMounted(() => load())
           {{ exporting ? 'Exportando…' : 'Excel' }}
         </Button>
         <Button
+          v-if="canOperationalReports"
           variant="outline"
           size="sm"
           :disabled="exporting || loading"
@@ -148,6 +173,7 @@ onMounted(() => load())
     </div>
 
     <template v-else>
+      <template v-if="canOperationalReports">
       <div class="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader class="pb-2">
@@ -307,6 +333,98 @@ onMounted(() => load())
               </TableRow>
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+      </template>
+
+      <Card
+        v-if="canAccessReport"
+        :class="{ 'ring-2 ring-primary/30': highlightAccess }"
+        id="acceso"
+      >
+        <CardHeader class="flex flex-row flex-wrap items-start justify-between gap-3">
+          <div>
+            <CardTitle>Tabla de control de acceso documental</CardTitle>
+            <CardDescription>
+              Usuarios y roles con permisos sobre tipos de expediente, series, subseries y documentos.
+            </CardDescription>
+          </div>
+          <Button
+            v-if="hasPermission('expedientes_acceso_gestionar')"
+            variant="outline"
+            size="sm"
+            as-child
+          >
+            <NuxtLink to="/expedientes/acceso">
+              Gestionar
+            </NuxtLink>
+          </Button>
+          <Button
+            v-if="canAccessReport"
+            variant="outline"
+            size="sm"
+            as-child
+          >
+            <NuxtLink to="/expedientes/acceso/reporte">
+              Abrir reporte
+            </NuxtLink>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div v-if="accessRows.length === 0" class="text-sm text-muted-foreground">
+            No hay grants de acceso configurados.
+          </div>
+          <div v-else class="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tipo expediente</TableHead>
+                  <TableHead>Serie</TableHead>
+                  <TableHead>Subserie</TableHead>
+                  <TableHead>Tipo documental</TableHead>
+                  <TableHead>Destinatario</TableHead>
+                  <TableHead>Permiso</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Autorizado por</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow v-for="row in accessRows" :key="row.id">
+                  <TableCell class="text-sm">
+                    {{ row.file_type }}
+                  </TableCell>
+                  <TableCell class="text-sm">
+                    {{ row.series }}
+                  </TableCell>
+                  <TableCell class="text-sm">
+                    {{ row.subseries }}
+                  </TableCell>
+                  <TableCell class="text-sm">
+                    {{ row.document_type }}
+                  </TableCell>
+                  <TableCell>
+                    <div class="text-sm font-medium">
+                      {{ row.grantable_label }}
+                    </div>
+                    <div class="text-xs text-muted-foreground">
+                      {{ row.grantable_type }}
+                    </div>
+                  </TableCell>
+                  <TableCell class="text-sm">
+                    {{ row.permission }}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {{ row.status }}
+                    </Badge>
+                  </TableCell>
+                  <TableCell class="text-sm">
+                    {{ row.authorized_by }}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </template>
