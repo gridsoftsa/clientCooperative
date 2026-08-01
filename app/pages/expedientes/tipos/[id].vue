@@ -90,6 +90,12 @@ async function saveRequiredDocuments() {
     return
   }
 
+  if (!fileType.value.doc_series_id || !fileType.value.doc_subseries_id) {
+    toast.error('Configure serie y subserie en General y TRD antes de guardar obligatorios.')
+    activeTab.value = 'general'
+    return
+  }
+
   savingRequired.value = true
 
   try {
@@ -214,6 +220,8 @@ onMounted(() => load())
               <ArchivalFileTypeRequiredDocumentsEditor
                 v-model="requiredDraft"
                 :org-unit-id="fileType.org_unit_id"
+                :doc-series-id="fileType.doc_series_id"
+                :doc-subseries-id="fileType.doc_subseries_id"
               />
             </CardContent>
           </Card>

@@ -19,6 +19,8 @@ export interface RequiredDocumentDraft {
 
 const props = defineProps<{
   orgUnitId?: number | null
+  docSeriesId?: number | null
+  docSubseriesId?: number | null
 }>()
 
 const model = defineModel<RequiredDocumentDraft[]>({ required: true })
@@ -87,6 +89,26 @@ async function loadWorkflowDefinitions() {
   }
 }
 
+const scopedCatalogTree = computed(() => {
+  if (!props.docSeriesId || !props.docSubseriesId) {
+    return []
+  }
+
+  return catalogTree.value
+    .filter(series => Number(series.id) === Number(props.docSeriesId))
+    .map(series => ({
+      ...series,
+      subseries: (series.subseries ?? []).filter(
+        sub => Number(sub.id) === Number(props.docSubseriesId),
+      ),
+    }))
+    .filter(series => series.subseries.length > 0)
+})
+
+const canConfigureRequired = computed(() =>
+  props.orgUnitId != null && props.docSeriesId != null && props.docSubseriesId != null,
+)
+
 function excludedDocTypeIds(rowIndex: number): number[] {
   return model.value
     .filter((_, index) => index !== rowIndex)
@@ -110,20 +132,21 @@ onMounted(() => loadWorkflowDefinitions())
           </Badge>
         </p>
         <p class="text-xs text-muted-foreground">
-          Cada fila es un documento obligatorio distinto. Elija serie → subserie → tipo y, si aplica, workflow → etapa.
+          Cada fila es un documento obligatorio distinto. Solo puede elegir tipos documentales de la serie y subserie configuradas en General.
         </p>
       </div>
-      <Button type="button" variant="outline" size="sm" :disabled="!orgUnitId" @click="addRow">
+      <Button type="button" variant="outline" size="sm" :disabled="!canConfigureRequired" @click="addRow">
         <Icon name="i-lucide-plus" class="mr-1 size-4" />
         Agregar
       </Button>
     </div>
 
-    <Alert v-if="!orgUnitId" variant="secondary">
+    <Alert v-if="!canConfigureRequired" variant="secondary">
       <Icon name="i-lucide-info" class="size-4" />
-      <AlertTitle>Área productora requerida</AlertTitle>
+      <AlertTitle>Serie y subserie requeridas</AlertTitle>
       <AlertDescription>
-        Configure el área productora en la pestaña General para listar tipos documentales del catálogo.
+        Configure el área productora, la serie y la subserie en la pestaña <strong>General y TRD</strong>
+        antes de definir documentos obligatorios.
       </AlertDescription>
     </Alert>
 
@@ -151,11 +174,7 @@ onMounted(() => loadWorkflowDefinitions())
             class="required-doc-header-grid hidden border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground xl:grid"
           >
             <span>#</span>
-            <div class="grid min-w-0 grid-cols-3 gap-2">
-              <span>Serie</span>
-              <span>Subserie</span>
-              <span>Tipo documental</span>
-            </div>
+            <span>Tipo documental</span>
             <div class="grid min-w-0 grid-cols-2 gap-2">
               <span>Workflow</span>
               <span>Etapa</span>
@@ -183,10 +202,12 @@ onMounted(() => loadWorkflowDefinitions())
                   v-if="isWideRequiredRow"
                   v-model="row.doc_document_type_id"
                   inline
-                  :catalog-tree="catalogTree"
+                  :catalog-tree="scopedCatalogTree"
                   :catalog-hierarchy-hint="row.catalogHierarchyHint"
+                  :locked-series-id="docSeriesId"
+                  :locked-subseries-id="docSubseriesId"
                   :exclude-ids="excludedDocTypeIds(index)"
-                  :disabled="loadingCatalog"
+                  :disabled="loadingCatalog || !canConfigureRequired"
                 />
 
                 <ArchivalWorkflowStageCascadePicker
@@ -247,10 +268,12 @@ onMounted(() => loadWorkflowDefinitions())
                   <ArchivalTrdCascadePicker
                     v-if="!isWideRequiredRow"
                     v-model="row.doc_document_type_id"
-                    :catalog-tree="catalogTree"
+                    :catalog-tree="scopedCatalogTree"
                     :catalog-hierarchy-hint="row.catalogHierarchyHint"
+                    :locked-series-id="docSeriesId"
+                    :locked-subseries-id="docSubseriesId"
                     :exclude-ids="excludedDocTypeIds(index)"
-                    :disabled="loadingCatalog"
+                    :disabled="loadingCatalog || !canConfigureRequired"
                   />
                 </div>
 
@@ -301,7 +324,7 @@ onMounted(() => loadWorkflowDefinitions())
 .required-doc-row-grid {
   grid-template-columns:
     2.25rem
-    minmax(0, 3.4fr)
+    minmax(0, 1.6fr)
     minmax(0, 2fr)
     minmax(8rem, 9.5rem)
     4.75rem;

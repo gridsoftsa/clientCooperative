@@ -76,8 +76,8 @@ function requiredCount(type: ArchivalFileType): number {
 }
 
 function catalogSummary(type: ArchivalFileType): string {
-  if (type.doc_document_type) {
-    return `${type.doc_series?.code ?? '—'} / ${type.doc_subseries?.code ?? '—'} / ${type.doc_document_type.code}`
+  if (type.doc_series && type.doc_subseries) {
+    return `${type.doc_series.code} — ${type.doc_subseries.code}`
   }
 
   if (type.doc_series) {
@@ -85,6 +85,18 @@ function catalogSummary(type: ArchivalFileType): string {
   }
 
   return '—'
+}
+
+function catalogDetail(type: ArchivalFileType): string | null {
+  if (type.doc_series && type.doc_subseries) {
+    return `${type.doc_series.name} / ${type.doc_subseries.name}`
+  }
+
+  if (type.doc_series) {
+    return type.doc_series.name
+  }
+
+  return null
 }
 
 onMounted(() => load())
@@ -116,34 +128,60 @@ onMounted(() => load())
         <Table v-else>
           <TableHeader>
             <TableRow>
-              <TableHead>Clave</TableHead>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Modelo</TableHead>
-              <TableHead>Catálogo / TRD</TableHead>
-              <TableHead>Obligatorios</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead class="text-right">
+              <TableHead class="min-w-[14rem]">
+                Nombre
+              </TableHead>
+              <TableHead class="w-[10rem]">
+                Modelo
+              </TableHead>
+              <TableHead class="min-w-[16rem]">
+                Catálogo / TRD
+              </TableHead>
+              <TableHead class="w-[7rem] text-center">
+                Obligatorios
+              </TableHead>
+              <TableHead class="w-[7rem]">
+                Estado
+              </TableHead>
+              <TableHead class="w-[11rem] text-right">
                 Acciones
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow v-for="type in types" :key="type.id">
-              <TableCell class="font-mono text-sm">
-                {{ type.type_key }}
-                <Badge v-if="type.is_system" variant="outline" class="ml-2">
-                  Sistema
-                </Badge>
-              </TableCell>
-              <TableCell>{{ type.name }}</TableCell>
-              <TableCell>{{ ARCHIVAL_FILE_MODEL_LABELS[type.model] }}</TableCell>
-              <TableCell class="text-sm text-muted-foreground">
-                <div>{{ catalogSummary(type) }}</div>
-                <div v-if="type.trd_table?.org_unit" class="text-xs">
-                  TRD: {{ type.trd_table.org_unit.name }}
+              <TableCell>
+                <div class="space-y-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-medium">{{ type.name }}</span>
+                    <Badge v-if="type.is_system" variant="outline" class="text-xs">
+                      Sistema
+                    </Badge>
+                  </div>
+                  <p v-if="type.org_unit" class="text-xs text-muted-foreground">
+                    {{ type.org_unit.name }}
+                  </p>
                 </div>
               </TableCell>
-              <TableCell>{{ requiredCount(type) }}</TableCell>
+              <TableCell class="text-sm">
+                {{ ARCHIVAL_FILE_MODEL_LABELS[type.model] }}
+              </TableCell>
+              <TableCell>
+                <div class="space-y-1 text-sm">
+                  <div class="font-mono text-xs">
+                    {{ catalogSummary(type) }}
+                  </div>
+                  <div v-if="catalogDetail(type)" class="text-muted-foreground">
+                    {{ catalogDetail(type) }}
+                  </div>
+                  <div v-if="type.trd_table?.org_unit" class="text-xs text-muted-foreground">
+                    TRD: {{ type.trd_table.org_unit.name }}
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell class="text-center">
+                {{ requiredCount(type) }}
+              </TableCell>
               <TableCell>
                 <Badge :variant="type.is_active ? 'default' : 'secondary'">
                   {{ type.is_active ? 'Activo' : 'Inactivo' }}

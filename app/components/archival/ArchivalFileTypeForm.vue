@@ -4,7 +4,7 @@ import { ARCHIVAL_FILE_MODEL_LABELS } from '~/constants/archival-file'
 import { suggestArchivalFileTypeKey } from '~/utils/archival-file-type-key'
 import type { ArchivalMetadataSchemaRow } from '~/composables/useArchivalMetadataApi'
 import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
-import type { DocDocumentTypeRow, DocSeriesRow, DocSubseriesRow } from '~/types/archival-catalog'
+import type { DocSeriesRow, DocSubseriesRow } from '~/types/archival-catalog'
 import type { ArchivalFileModel, ArchivalFileType } from '~/types/archival-file'
 import type { TrdTableRow } from '~/types/archival-trd'
 import {
@@ -39,7 +39,6 @@ const trdTables = ref<TrdTableRow[]>([])
 const metadataSchemas = ref<ArchivalMetadataSchemaRow[]>([])
 const seriesList = ref<DocSeriesRow[]>([])
 const subseriesList = ref<DocSubseriesRow[]>([])
-const documentTypes = ref<DocDocumentTypeRow[]>([])
 
 const form = reactive({
   type_key: '',
@@ -49,7 +48,6 @@ const form = reactive({
   org_unit_id: '',
   doc_series_id: '',
   doc_subseries_id: '',
-  doc_document_type_id: '',
   trd_table_id: '',
   archival_metadata_schema_id: '',
   allows_master_documents: false,
@@ -159,45 +157,11 @@ function ensureSubseriesInList(list: DocSubseriesRow[]): DocSubseriesRow[] {
   return list
 }
 
-function ensureDocumentTypesInList(list: DocDocumentTypeRow[]): DocDocumentTypeRow[] {
-  const initialType = props.initial?.doc_document_type
-  const selectedId = nullableId(form.doc_document_type_id)
-
-  if (
-    initialType
-    && selectedId === initialType.id
-    && !list.some(row => row.id === initialType.id)
-  ) {
-    return [
-      ...list,
-      {
-        id: initialType.id,
-        doc_subseries_id: initialType.doc_subseries_id ?? nullableId(form.doc_subseries_id) ?? 0,
-        code: initialType.code,
-        name: initialType.name,
-      } as DocDocumentTypeRow,
-    ]
-  }
-
-  return list
-}
-
 const subseriesSelectOptions = computed(() =>
   ensureSubseriesInList(subseriesList.value).map(sub => ({
     value: String(sub.id),
     label: `${sub.code} — ${sub.name}`,
   })),
-)
-
-const documentTypeSelectOptions = computed(() =>
-  ensureDocumentTypesInList(documentTypes.value).map(docType => ({
-    value: String(docType.id),
-    label: `${docType.code} — ${docType.name}`,
-  })),
-)
-
-const documentTypeSelectKey = computed(() =>
-  `${form.doc_subseries_id}-${documentTypeSelectOptions.value.length}-${form.doc_document_type_id}`,
 )
 
 function nullableId(value: string): number | null {
@@ -212,7 +176,6 @@ function applyInitial(type: ArchivalFileType | null | undefined) {
   form.org_unit_id = type?.org_unit_id ? String(type.org_unit_id) : ''
   form.doc_series_id = type?.doc_series_id ? String(type.doc_series_id) : ''
   form.doc_subseries_id = type?.doc_subseries_id ? String(type.doc_subseries_id) : ''
-  form.doc_document_type_id = type?.doc_document_type_id ? String(type.doc_document_type_id) : ''
   form.trd_table_id = type?.trd_table_id ? String(type.trd_table_id) : ''
   form.archival_metadata_schema_id = type?.archival_metadata_schema_id ? String(type.archival_metadata_schema_id) : ''
   form.allows_master_documents = type?.allows_master_documents ?? false
@@ -230,52 +193,12 @@ async function loadSubseries() {
   subseriesList.value = seriesId ? await catalogApi.fetchSubseries(seriesId) : []
 }
 
-async function loadDocumentTypes() {
-  const subseriesId = nullableId(form.doc_subseries_id)
-  documentTypes.value = subseriesId ? await catalogApi.fetchDocumentTypes(subseriesId) : []
-}
-
-async function ensureSelectedDocumentTypeInList(): Promise<void> {
-  const selectedDocTypeId = nullableId(form.doc_document_type_id)
-
-  if (selectedDocTypeId === null || documentTypes.value.some(row => row.id === selectedDocTypeId)) {
-    return
-  }
-
-  const initialType = props.initial?.doc_document_type
-
-  if (initialType && initialType.id === selectedDocTypeId) {
-    documentTypes.value = [
-      ...documentTypes.value,
-      {
-        id: initialType.id,
-        doc_subseries_id: initialType.doc_subseries_id ?? nullableId(form.doc_subseries_id) ?? 0,
-        code: initialType.code,
-        name: initialType.name,
-        is_active: true,
-      } as DocDocumentTypeRow,
-    ]
-
-    return
-  }
-
-  try {
-    const row = await catalogApi.fetchDocumentTypeById(selectedDocTypeId)
-    documentTypes.value = [...documentTypes.value, row]
-  }
-  catch {
-    // El tipo pudo haberse inactivado o eliminado; el formulario conserva el id guardado.
-  }
-}
-
 async function hydrateCatalogCascade() {
   suppressCascadeWatch.value = true
 
   try {
     await loadSeries()
     await loadSubseries()
-    await loadDocumentTypes()
-    await ensureSelectedDocumentTypeInList()
   }
   finally {
     await nextTick()
@@ -316,7 +239,7 @@ function buildPayload(): Record<string, unknown> {
     org_unit_id: nullableId(form.org_unit_id),
     doc_series_id: nullableId(form.doc_series_id),
     doc_subseries_id: nullableId(form.doc_subseries_id),
-    doc_document_type_id: nullableId(form.doc_document_type_id),
+    doc_document_type_id: null,
     trd_table_id: nullableId(form.trd_table_id),
     archival_metadata_schema_id: nullableId(form.archival_metadata_schema_id),
     allows_master_documents: form.allows_master_documents,
@@ -338,6 +261,11 @@ async function submit() {
     toast.error('Complete el nombre del tipo.')
     await nextTick()
     focusArchivalFieldById('file_type_name')
+    return
+  }
+
+  if (!form.doc_series_id || !form.doc_subseries_id) {
+    toast.error('Seleccione la serie y la subserie del catálogo TRD.')
     return
   }
 
@@ -379,10 +307,8 @@ watch(() => form.org_unit_id, async () => {
 
   form.doc_series_id = ''
   form.doc_subseries_id = ''
-  form.doc_document_type_id = ''
   await loadSeries()
   subseriesList.value = []
-  documentTypes.value = []
 })
 
 watch(() => form.doc_series_id, async () => {
@@ -391,18 +317,7 @@ watch(() => form.doc_series_id, async () => {
   }
 
   form.doc_subseries_id = ''
-  form.doc_document_type_id = ''
   await loadSubseries()
-  documentTypes.value = []
-})
-
-watch(() => form.doc_subseries_id, async () => {
-  if (loading.value || suppressCascadeWatch.value) {
-    return
-  }
-
-  form.doc_document_type_id = ''
-  await loadDocumentTypes()
 })
 
 watch(() => props.initial, async (value) => {
@@ -506,7 +421,7 @@ onMounted(() => loadCatalogs())
             Catálogo documental y TRD
           </p>
           <p class="text-xs text-muted-foreground">
-            Serie, subserie y tipo documental de referencia. Use la búsqueda en cada lista cuando hay muchas opciones.
+            Ubicación del expediente en el catálogo TRD (serie y subserie). Los tipos documentales se definen en la pestaña Obligatorios.
           </p>
         </div>
 
@@ -538,9 +453,9 @@ onMounted(() => loadCatalogs())
           </div>
         </div>
 
-        <div class="grid min-w-0 gap-4 md:grid-cols-3">
+        <div class="grid min-w-0 gap-4 md:grid-cols-2">
           <div class="min-w-0 space-y-2">
-            <Label for="file_type_series">Serie</Label>
+            <Label for="file_type_series">Serie *</Label>
             <ArchivalCatalogSearchSelect
               id="file_type_series"
               :model-value="form.doc_series_id || null"
@@ -553,7 +468,7 @@ onMounted(() => loadCatalogs())
           </div>
 
           <div class="min-w-0 space-y-2">
-            <Label for="file_type_subseries">Subserie</Label>
+            <Label for="file_type_subseries">Subserie *</Label>
             <ArchivalCatalogSearchSelect
               id="file_type_subseries"
               :model-value="form.doc_subseries_id || null"
@@ -562,20 +477,6 @@ onMounted(() => loadCatalogs())
               no-options-text="Seleccione una serie primero"
               :disabled="saving || !form.doc_series_id"
               @update:model-value="form.doc_subseries_id = $event ?? ''"
-            />
-          </div>
-
-          <div class="min-w-0 space-y-2">
-            <Label for="file_type_doc_type">Tipo documental</Label>
-            <ArchivalCatalogSearchSelect
-              id="file_type_doc_type"
-              :key="documentTypeSelectKey"
-              :model-value="form.doc_document_type_id || null"
-              :options="documentTypeSelectOptions"
-              placeholder="Buscar tipo documental…"
-              no-options-text="Seleccione una subserie primero"
-              :disabled="saving || !form.doc_subseries_id"
-              @update:model-value="form.doc_document_type_id = $event ?? ''"
             />
           </div>
         </div>

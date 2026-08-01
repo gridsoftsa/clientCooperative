@@ -12,6 +12,9 @@ const props = withDefaults(
       doc_subseries_id: number
       doc_type?: { id: number, code: string, name: string }
     } | null
+    /** Fija serie/subserie del tipo de expediente; el usuario solo elige tipo documental. */
+    lockedSeriesId?: number | null
+    lockedSubseriesId?: number | null
     /** Sin etiquetas; los hijos participan en el grid del padre (`display: contents`). */
     inline?: boolean
   }>(),
@@ -19,6 +22,8 @@ const props = withDefaults(
     disabled: false,
     excludeIds: () => [],
     catalogHierarchyHint: null,
+    lockedSeriesId: null,
+    lockedSubseriesId: null,
     inline: false,
   },
 )
@@ -83,19 +88,36 @@ const placeholders = computed(() => {
 
 const resolvedPath = computed(() => findDocTypePath(normalizeCatalogId(docDocumentTypeId.value)))
 
-const seriesOptions = computed(() =>
-  props.catalogTree.map(series => ({
+const isSeriesLocked = computed(() => props.lockedSeriesId != null)
+const isSubseriesLocked = computed(() => props.lockedSubseriesId != null)
+const documentTypeOnly = computed(() => isSeriesLocked.value && isSubseriesLocked.value)
+
+const seriesOptions = computed(() => {
+  const options = props.catalogTree.map(series => ({
     value: series.id,
     label: `${series.code} — ${series.name}`,
-  })),
-)
+  }))
+
+  if (props.lockedSeriesId != null) {
+    return options.filter(option => Number(option.value) === Number(props.lockedSeriesId))
+  }
+
+  return options
+})
 
 const subseriesOptions = computed(() => {
   const series =
     props.catalogTree.find(item => item.id === seriesId.value)
+    ?? props.catalogTree.find(item => item.id === props.lockedSeriesId)
     ?? resolvedPath.value?.series
 
-  const options = (series?.subseries ?? []).map(subseries => ({
+  let subseriesList = series?.subseries ?? []
+
+  if (props.lockedSubseriesId != null) {
+    subseriesList = subseriesList.filter(sub => Number(sub.id) === Number(props.lockedSubseriesId))
+  }
+
+  const options = subseriesList.map(subseries => ({
     value: subseries.id,
     label: `${subseries.code} — ${subseries.name}`,
   }))
@@ -156,8 +178,39 @@ const typeOptions = computed(() => {
   return options
 })
 
-const canPickSubseries = computed(() => seriesId.value != null || resolvedPath.value != null)
-const canPickDocType = computed(() => subseriesId.value != null || resolvedPath.value != null)
+const canPickSubseries = computed(() =>
+  !isSeriesLocked.value && (seriesId.value != null || resolvedPath.value != null),
+)
+const canPickDocType = computed(() =>
+  subseriesId.value != null || resolvedPath.value != null || props.lockedSubseriesId != null,
+)
+
+async function applyLockedHierarchy(): Promise<void> {
+  if (props.lockedSeriesId == null && props.lockedSubseriesId == null) {
+    return
+  }
+
+  const series = props.lockedSeriesId
+  const subseries = props.lockedSubseriesId
+
+  if (series != null && subseries != null) {
+    await setHierarchy(series, subseries)
+
+    return
+  }
+
+  if (series != null) {
+    syncingHierarchy.value = true
+    try {
+      seriesId.value = series
+      subseriesId.value = null
+      await nextTick()
+    }
+    finally {
+      syncingHierarchy.value = false
+    }
+  }
+}
 
 const multiselectHydrationKey = computed(() => {
   const docId = normalizeCatalogId(docDocumentTypeId.value)
@@ -248,8 +301,9 @@ watch(subseriesId, (next, prev) => {
 })
 
 watch(
-  [() => props.catalogTree, () => docDocumentTypeId.value],
-  () => {
+  [() => props.catalogTree, () => docDocumentTypeId.value, () => props.lockedSeriesId, () => props.lockedSubseriesId],
+  async () => {
+    await applyLockedHierarchy()
     applyHierarchyFromDocType()
   },
   { immediate: true, deep: true },
@@ -259,9 +313,13 @@ watch(
 <template>
   <div
     class="min-w-0"
-    :class="inline ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-1 gap-3 lg:grid-cols-3'"
+    :class="documentTypeOnly
+      ? 'grid grid-cols-1 gap-2'
+      : inline
+        ? 'grid grid-cols-3 gap-2'
+        : 'grid grid-cols-1 gap-3 lg:grid-cols-3'"
   >
-    <div class="min-w-0" :class="inline ? '' : 'space-y-2'">
+    <div v-if="!documentTypeOnly" class="min-w-0" :class="inline ? '' : 'space-y-2'">
       <Label v-if="!inline">Serie</Label>
       <ArchivalSingleMultiselect
         :id="fieldIds.series"
@@ -269,13 +327,13 @@ watch(
         v-model="seriesId"
         coerce-number
         :options="seriesOptions"
-        :disabled="disabled"
+        :disabled="disabled || isSeriesLocked"
         :placeholder="placeholders.series"
         no-options-text="Sin series"
         no-results-text="Sin coincidencias"
       />
     </div>
-    <div class="min-w-0" :class="inline ? '' : 'space-y-2'">
+    <div v-if="!documentTypeOnly" class="min-w-0" :class="inline ? '' : 'space-y-2'">
       <Label v-if="!inline">Subserie</Label>
       <ArchivalSingleMultiselect
         :id="fieldIds.subseries"
@@ -283,7 +341,7 @@ watch(
         v-model="subseriesId"
         coerce-number
         :options="subseriesOptions"
-        :disabled="disabled || !canPickSubseries"
+        :disabled="disabled || isSubseriesLocked || !canPickSubseries"
         :placeholder="placeholders.subseries"
         no-options-text="Sin subseries"
         no-results-text="Sin coincidencias"
