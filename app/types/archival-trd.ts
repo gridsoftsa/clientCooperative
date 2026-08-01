@@ -58,9 +58,20 @@ export interface CatalogTreeSeries extends Pick<DocSeriesRow, 'id' | 'code' | 'n
   >
 }
 
+export interface TrdTestingOptions {
+  allow_manual_effective_to: boolean
+  today: string
+  suggested_effective_to: {
+    days_30: string
+    days_15: string
+    days_1: string
+  }
+}
+
 export interface TrdVersionShowResponse {
   data: TrdVersionRow
   effective_retention_preview: Record<number, EffectiveRetentionPayload | null>
+  testing_options?: TrdTestingOptions
 }
 
 /** Tipo documental en consulta TRD vigente (HU-TRD-16) con retención efectiva. */

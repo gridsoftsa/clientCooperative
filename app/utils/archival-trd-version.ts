@@ -140,5 +140,6 @@ export function normalizeTrdVersionShowResponse(
     effective_retention_preview: normalizeEffectiveRetentionPreview(
       res.effective_retention_preview ?? nestedPreview,
     ),
+    testing_options: res.testing_options,
   }
 }

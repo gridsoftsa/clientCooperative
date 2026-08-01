@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import CommunicationAnnouncementHost from '~/components/communications/CommunicationAnnouncementHost.vue'
 </script>
 
 <template>
@@ -16,7 +15,7 @@ import CommunicationAnnouncementHost from '~/components/communications/Communica
           </div>
         </SidebarInset>
         <ScrollToTop />
-        <CommunicationAnnouncementHost />
+        <LayoutNotificationToastHost />
       </SidebarProvider>
     </AuthGuard>
     <template #fallback>

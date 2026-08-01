@@ -1,35 +1,22 @@
 <script setup lang="ts">
-import { toast } from 'vue-sonner'
 import type { InboxNotificationRow } from '~/composables/useInboxNotificationsApi'
 
 const router = useRouter()
 const inboxApi = useInboxNotificationsApi()
+const {
+  inboxItems,
+  unreadCount,
+  loading,
+  refreshAll,
+  requestImmediateRefresh,
+} = useNotificationToasts()
 
 const open = ref(false)
-const loading = ref(false)
-const unreadCount = ref(0)
-const items = ref<InboxNotificationRow[]>([])
+
+const items = computed(() => inboxItems.value)
 
 async function refresh() {
-  if (import.meta.server) {
-    return
-  }
-
-  loading.value = true
-  try {
-    const response = await inboxApi.fetchInbox({
-      per_page: 8,
-      page: 1,
-    })
-    items.value = response.data
-    unreadCount.value = response.meta.unread_count
-  }
-  catch {
-    // Silencioso en header para no spamear toasts
-  }
-  finally {
-    loading.value = false
-  }
+  await refreshAll()
 }
 
 async function openItem(row: InboxNotificationRow) {
@@ -40,7 +27,7 @@ async function openItem(row: InboxNotificationRow) {
       unreadCount.value = Math.max(0, unreadCount.value - 1)
     }
     catch {
-      toast.error('No se pudo marcar la notificación.')
+      // Silencioso en header
     }
   }
 
@@ -76,15 +63,11 @@ function formatDate(value?: string | null) {
 
 watch(open, (isOpen) => {
   if (isOpen) {
-    refresh()
+    void refresh()
   }
 })
 
-onMounted(() => {
-  refresh()
-  const timer = window.setInterval(refresh, 60_000)
-  onBeforeUnmount(() => window.clearInterval(timer))
-})
+defineExpose({ requestImmediateRefresh })
 </script>
 
 <template>

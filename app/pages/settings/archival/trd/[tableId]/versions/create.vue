@@ -23,7 +23,6 @@ const form = ref({
   retention_application_level: 'document_type',
   approved_at: '',
   effective_from: '',
-  effective_to: '',
 })
 const saving = ref(false)
 
@@ -55,7 +54,6 @@ async function submit() {
         retention_application_level: form.value.retention_application_level,
         approved_at: form.value.approved_at || undefined,
         effective_from: form.value.effective_from || undefined,
-        effective_to: form.value.effective_to || undefined,
       },
     })
     toast.success('Versión creada en borrador')
@@ -105,7 +103,7 @@ onMounted(loadTable)
               </SelectContent>
             </Select>
           </div>
-          <div class="grid gap-4 sm:grid-cols-3">
+          <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-2">
               <Label>Fecha aprobación</Label>
               <Input v-model="form.approved_at" type="date" />
@@ -113,10 +111,9 @@ onMounted(loadTable)
             <div class="space-y-2">
               <Label>Vigencia desde</Label>
               <Input v-model="form.effective_from" type="date" />
-            </div>
-            <div class="space-y-2">
-              <Label>Vigencia hasta</Label>
-              <Input v-model="form.effective_to" type="date" />
+              <p class="text-xs text-muted-foreground">
+                La vigencia hasta se calcula automáticamente (1 año) o finaliza al publicar una nueva versión.
+              </p>
             </div>
           </div>
           <div class="flex justify-end gap-2">

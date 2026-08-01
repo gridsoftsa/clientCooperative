@@ -15,7 +15,7 @@ import {
 import { coerceBoolean } from '~/utils/coerce-boolean'
 import { resolveEffectiveRetentionFromRules } from '~/utils/archival-trd-version'
 import type { DocDocumentTypeRow } from '~/types/archival-catalog'
-import type { CatalogTreeSeries, EffectiveRetentionPayload, TrdRetentionRuleRow, TrdVersionRow } from '~/types/archival-trd'
+import type { CatalogTreeSeries, EffectiveRetentionPayload, TrdRetentionRuleRow, TrdTestingOptions, TrdVersionRow } from '~/types/archival-trd'
 
 definePageMeta({
   layout: 'default',
@@ -39,6 +39,10 @@ const catalogTree = ref<CatalogTreeSeries[]>([])
 const loading = ref(true)
 const saving = ref(false)
 const activating = ref(false)
+const testingOptions = ref<TrdTestingOptions | null>(null)
+const testEffectiveTo = ref('')
+const savingTestEffectiveTo = ref(false)
+const publishingTestAlerts = ref(false)
 
 const selectedTypeIds = ref<number[]>([])
 const metaForm = ref({
@@ -50,14 +54,19 @@ const metaForm = ref({
   effective_to: '',
 })
 
-type MetaDateField = 'approved_at' | 'effective_from' | 'effective_to'
+const trdTestingEnabled = computed(() =>
+  testingOptions.value?.allow_manual_effective_to === true && hasPermission('trd_tablas_editar'),
+)
 
-const META_DATE_FIELDS: MetaDateField[] = ['approved_at', 'effective_from', 'effective_to']
+const isVersionActive = computed(() => version.value?.status === 'active')
+
+type MetaDateField = 'approved_at' | 'effective_from'
+
+const META_DATE_FIELDS: MetaDateField[] = ['approved_at', 'effective_from']
 
 const META_DATE_LABELS: Record<MetaDateField, string> = {
   approved_at: 'Fecha aprobación',
   effective_from: 'Vigencia desde',
-  effective_to: 'Vigencia hasta',
 }
 
 const metaValidationVisible = ref(false)
@@ -692,20 +701,7 @@ function isMetaDateFieldInvalid(field: MetaDateField): boolean {
     return false
   }
 
-  if (isMetaDateFieldEmpty(field)) {
-    return true
-  }
-
-  if (
-    field === 'effective_to'
-    && metaForm.value.effective_from
-    && metaForm.value.effective_to
-    && metaForm.value.effective_to < metaForm.value.effective_from
-  ) {
-    return true
-  }
-
-  return false
+  return isMetaDateFieldEmpty(field)
 }
 
 function metaDateInputClass(field: MetaDateField): string {
@@ -729,24 +725,24 @@ function validateMetaDates(): boolean {
     return false
   }
 
-  if (metaForm.value.effective_to < metaForm.value.effective_from) {
-    toast.error('La vigencia hasta debe ser igual o posterior a la vigencia desde')
-    return false
-  }
-
   metaValidationVisible.value = false
   return true
 }
 
 function buildMetaBody() {
-  return {
+  const body: Record<string, string> = {
     producer_office_name: metaForm.value.producer_office_name.trim(),
     producer_office_code: metaForm.value.producer_office_code.trim(),
     retention_application_level: metaForm.value.retention_application_level,
     approved_at: metaForm.value.approved_at,
     effective_from: metaForm.value.effective_from,
-    effective_to: metaForm.value.effective_to,
   }
+
+  if (trdTestingEnabled.value && metaForm.value.effective_to.trim()) {
+    body.effective_to = metaForm.value.effective_to
+  }
+
+  return body
 }
 
 async function persistMetaRequest() {
@@ -760,6 +756,7 @@ async function reload() {
   const res = await trdApi.fetchVersion(tableId.value, versionId.value)
   version.value = res.data
   preview.value = res.effective_retention_preview ?? {}
+  testingOptions.value = res.testing_options ?? null
   selectedTypeIds.value = (res.data.document_types ?? []).map(t => normalizeTypeId(t.id))
   metaForm.value = {
     producer_office_name: res.data.producer_office_name,
@@ -768,6 +765,67 @@ async function reload() {
     approved_at: res.data.approved_at?.slice(0, 10) ?? '',
     effective_from: res.data.effective_from?.slice(0, 10) ?? '',
     effective_to: res.data.effective_to?.slice(0, 10) ?? '',
+  }
+  testEffectiveTo.value = res.data.effective_to?.slice(0, 10) ?? ''
+}
+
+async function saveTestEffectiveTo() {
+  if (!trdTestingEnabled.value || !testEffectiveTo.value.trim()) {
+    toast.error('Indique la vigencia hasta de prueba')
+    return
+  }
+
+  savingTestEffectiveTo.value = true
+  try {
+    await $api(`/archival/trd-tables/${tableId.value}/versions/${versionId.value}/test-effective-to`, {
+      method: 'PUT',
+      body: { effective_to: testEffectiveTo.value },
+    })
+    toast.success('Vigencia hasta de prueba guardada')
+    await reload()
+  } catch (e: any) {
+    toast.error(e?.data?.message || 'No se pudo guardar la fecha de prueba')
+  } finally {
+    savingTestEffectiveTo.value = false
+  }
+}
+
+async function publishTestExpiryAlerts() {
+  if (!trdTestingEnabled.value) {
+    return
+  }
+
+  publishingTestAlerts.value = true
+  try {
+    const res = await $api<{
+      message?: string
+      data?: { published_count: number }
+    }>('/archival/trd-tables/testing/publish-expiry-alerts', {
+      method: 'POST',
+      body: {},
+    })
+    if ((res.data?.published_count ?? 0) > 0) {
+      toast.success(res.message || 'Alertas publicadas')
+      useNotificationToasts().requestImmediateRefresh()
+    } else {
+      toast.info(res.message || 'No había alertas pendientes para hoy')
+    }
+  } catch (e: any) {
+    toast.error(e?.data?.message || 'No se pudieron publicar las alertas de prueba')
+  } finally {
+    publishingTestAlerts.value = false
+  }
+}
+
+function applySuggestedTestDate(key: 'days_30' | 'days_15' | 'days_1') {
+  const suggested = testingOptions.value?.suggested_effective_to[key]
+  if (!suggested) {
+    return
+  }
+
+  testEffectiveTo.value = suggested
+  if (canEdit.value) {
+    metaForm.value.effective_to = suggested
   }
 }
 
@@ -800,7 +858,7 @@ async function saveMeta() {
     await reload()
   } catch (e: any) {
     const errors = e?.data?.errors
-    if (errors?.approved_at || errors?.effective_from || errors?.effective_to) {
+    if (errors?.approved_at || errors?.effective_from) {
       metaValidationVisible.value = true
       activeTab.value = 'general'
     }
@@ -984,14 +1042,13 @@ async function activateVersion() {
     await reload()
   } catch (e: any) {
     const errors = e?.data?.errors
-    if (errors?.approved_at || errors?.effective_from || errors?.effective_to) {
+    if (errors?.approved_at || errors?.effective_from) {
       metaValidationVisible.value = true
       activeTab.value = 'general'
     }
     const msg = errors?.retention_rules?.[0]
       ?? errors?.approved_at?.[0]
       ?? errors?.effective_from?.[0]
-      ?? errors?.effective_to?.[0]
       ?? e?.data?.message
       ?? 'No se pudo activar'
     toast.error(msg)
@@ -1154,7 +1211,7 @@ watch(
               >
                 <AlertTitle>Fechas obligatorias</AlertTitle>
                 <AlertDescription>
-                  Indique la fecha de aprobación y el rango de vigencia (desde y hasta) antes de guardar o activar la TRD.
+                  Indique la fecha de aprobación y la vigencia desde antes de guardar o activar la TRD.
                 </AlertDescription>
               </Alert>
               <p class="text-sm text-muted-foreground leading-relaxed">
@@ -1179,7 +1236,7 @@ watch(
                   </SelectContent>
                 </Select>
               </div>
-              <div class="grid gap-4 sm:grid-cols-3">
+              <div class="grid gap-4 sm:grid-cols-2">
                 <div class="space-y-2">
                   <Label :class="metaDateLabelClass('approved_at')">Fecha aprobación *</Label>
                   <Input
@@ -1211,30 +1268,76 @@ watch(
                   >
                     Campo obligatorio
                   </p>
-                </div>
-                <div class="space-y-2">
-                  <Label :class="metaDateLabelClass('effective_to')">Vigencia hasta *</Label>
-                  <Input
-                    v-model="metaForm.effective_to"
-                    type="date"
-                    :disabled="!canEdit"
-                    :aria-invalid="isMetaDateFieldInvalid('effective_to')"
-                    :class="metaDateInputClass('effective_to')"
-                  />
-                  <p
-                    v-if="isMetaDateFieldInvalid('effective_to') && !isMetaDateFieldEmpty('effective_to')"
-                    class="text-xs text-destructive"
-                  >
-                    Debe ser igual o posterior a vigencia desde
+                  <p class="text-xs text-muted-foreground">
+                    La vigencia hasta se calcula automáticamente (1 año) o finaliza al publicar una nueva versión.
                   </p>
-                  <p
-                    v-else-if="isMetaDateFieldInvalid('effective_to')"
-                    class="text-xs text-destructive"
-                  >
-                    Campo obligatorio
+                </div>
+                <div v-if="trdTestingEnabled && canEdit" class="space-y-2 sm:col-span-2">
+                  <Label>Vigencia hasta (solo prueba)</Label>
+                  <Input v-model="metaForm.effective_to" type="date" />
+                  <p class="text-xs text-muted-foreground">
+                    Solo visible con modo prueba activo. Sobrescribe el cálculo automático al guardar.
                   </p>
                 </div>
               </div>
+
+              <Card v-if="trdTestingEnabled" class="border-amber-500/50 bg-amber-500/5">
+                <CardHeader class="pb-2">
+                  <CardTitle class="text-base">
+                    Probar alertas de vencimiento
+                  </CardTitle>
+                  <CardDescription>
+                    La TRD debe estar <strong>activa</strong> y con vigencia hasta en 30, 15 o 1 día desde hoy
+                    ({{ testingOptions?.today }}). Use los accesos rápidos, guarde la fecha y publique las alertas.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                  <div class="flex flex-wrap gap-2">
+                    <Button type="button" size="sm" variant="outline" @click="applySuggestedTestDate('days_30')">
+                      Alerta 30 días
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" @click="applySuggestedTestDate('days_15')">
+                      Alerta 15 días
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" @click="applySuggestedTestDate('days_1')">
+                      Alerta 1 día
+                    </Button>
+                  </div>
+                  <div class="grid gap-4 sm:grid-cols-2 max-w-xl">
+                    <div class="space-y-2">
+                      <Label>Vigencia hasta (prueba)</Label>
+                      <Input
+                        v-model="testEffectiveTo"
+                        type="date"
+                        :disabled="!isVersionActive && !canEdit"
+                      />
+                      <p v-if="version?.effective_to" class="text-xs text-muted-foreground">
+                        Guardada en sistema: {{ version.effective_to.slice(0, 10) }}
+                      </p>
+                    </div>
+                    <div class="flex flex-col gap-2 justify-end">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        :disabled="savingTestEffectiveTo || !testEffectiveTo"
+                        @click="isVersionActive ? saveTestEffectiveTo() : saveMeta()"
+                      >
+                        Guardar fecha de prueba
+                      </Button>
+                      <Button
+                        type="button"
+                        :disabled="publishingTestAlerts || !isVersionActive"
+                        @click="publishTestExpiryAlerts"
+                      >
+                        Publicar alertas ahora
+                      </Button>
+                    </div>
+                  </div>
+                  <p v-if="!isVersionActive" class="text-xs text-amber-700 dark:text-amber-400">
+                    Active la versión TRD para poder publicar comunicados de vencimiento.
+                  </p>
+                </CardContent>
+              </Card>
               <div v-if="canEdit" class="flex justify-end">
                 <Button :disabled="saving" @click="saveMeta">
                   Guardar
