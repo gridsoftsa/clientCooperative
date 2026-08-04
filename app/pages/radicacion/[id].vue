@@ -2064,17 +2064,11 @@ async function flushDebtorAuxiliaryDocumentUploads(): Promise<void> {
   await $csrf()
   for (const [key, file] of pending) {
     const prevId = docMap[key]
-    if (typeof prevId === 'number' && prevId > 0) {
-      try {
-        await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
-      } catch (e) {
-        console.error(e)
-      }
-    }
     const label = labelByKey[key] ?? key
     const fd = new FormData()
     fd.append('title', titleForAuxiliaryDocumentUpload(label))
     appendFileToFormData(fd, file, 'auxiliar')
+    fd.append('checklist_key', key)
     const res = await $api<{ data: unknown }>(
       `/credit-applications/${applicationId}/documents?auxiliary_checklist=1`,
       { method: 'POST', body: fd },
@@ -2086,6 +2080,14 @@ async function flushDebtorAuxiliaryDocumentUploads(): Promise<void> {
       : NaN
     if (Number.isFinite(newId) && newId > 0) {
       docMap[key] = newId
+      if (typeof prevId === 'number' && prevId > 0 && prevId !== newId) {
+        try {
+          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+          removeInsurabilityDocumentFromApplicationState(prevId)
+        } catch (e) {
+          console.error(e)
+        }
+      }
     }
   }
   const nextFi = { ...fi, auxiliaryDocuments: docMap }
@@ -2133,17 +2135,11 @@ async function flushDebtorInsurabilityDocumentUploads(): Promise<void> {
   await $csrf()
   for (const [key, file] of pending) {
     const prevId = docMap[key]
-    if (typeof prevId === 'number' && prevId > 0) {
-      try {
-        await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
-      } catch (e) {
-        console.error(e)
-      }
-    }
     const label = labelByKey[key] ?? key
     const fd = new FormData()
     fd.append('title', titleForInsurabilityDocumentUpload(label))
     appendFileToFormData(fd, file, 'asegurabilidad')
+    fd.append('checklist_key', key)
     const res = await $api<{ data: unknown }>(
       `/credit-applications/${applicationId}/documents?insurability_checklist=1`,
       { method: 'POST', body: fd },
@@ -2155,6 +2151,14 @@ async function flushDebtorInsurabilityDocumentUploads(): Promise<void> {
       : NaN
     if (Number.isFinite(newId) && newId > 0) {
       docMap[key] = newId
+      if (typeof prevId === 'number' && prevId > 0 && prevId !== newId) {
+        try {
+          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+          removeInsurabilityDocumentFromApplicationState(prevId)
+        } catch (e) {
+          console.error(e)
+        }
+      }
     }
   }
   const nextFi = { ...fi, insurabilityDocuments: docMap }
@@ -2202,18 +2206,12 @@ async function flushDebtorFngDocumentUploads(): Promise<void> {
   await $csrf()
   for (const [key, file] of pending) {
     const prevId = docMap[key]
-    if (typeof prevId === 'number' && prevId > 0) {
-      try {
-        await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
-      } catch (e) {
-        console.error(e)
-      }
-    }
     const label = labelByKey[key] ?? key
     const fd = new FormData()
     fd.append('title', titleForFngDocumentUpload(label))
     appendFileToFormData(fd, file, 'fng')
     fd.append('fng_checklist', '1')
+    fd.append('checklist_key', key)
     const res = await $api<{ data: unknown }>(
       `/credit-applications/${applicationId}/documents`,
       { method: 'POST', body: fd },
@@ -2225,6 +2223,14 @@ async function flushDebtorFngDocumentUploads(): Promise<void> {
       : NaN
     if (Number.isFinite(newId) && newId > 0) {
       docMap[key] = newId
+      if (typeof prevId === 'number' && prevId > 0 && prevId !== newId) {
+        try {
+          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+          removeInsurabilityDocumentFromApplicationState(prevId)
+        } catch (e) {
+          console.error(e)
+        }
+      }
     }
   }
   const nextFi = { ...fi, fngDocuments: docMap }
@@ -2272,17 +2278,11 @@ async function flushDebtorApproverEntityDocumentUploads(): Promise<void> {
   await $csrf()
   for (const [key, file] of pending) {
     const prevId = docMap[key]
-    if (typeof prevId === 'number' && prevId > 0) {
-      try {
-        await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
-      } catch (e) {
-        console.error(e)
-      }
-    }
     const label = labelByKey[key] ?? key
     const fd = new FormData()
     fd.append('title', titleForApproverEntityDocumentUpload(label))
     appendFileToFormData(fd, file, 'ente-aprobador')
+    fd.append('checklist_key', key)
     const res = await $api<{ data: unknown }>(
       `/credit-applications/${applicationId}/documents?approver_entity_checklist=1`,
       { method: 'POST', body: fd },
@@ -2294,6 +2294,14 @@ async function flushDebtorApproverEntityDocumentUploads(): Promise<void> {
       : NaN
     if (Number.isFinite(newId) && newId > 0) {
       docMap[key] = newId
+      if (typeof prevId === 'number' && prevId > 0 && prevId !== newId) {
+        try {
+          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+          removeInsurabilityDocumentFromApplicationState(prevId)
+        } catch (e) {
+          console.error(e)
+        }
+      }
     }
   }
   const nextFi = { ...fi, approverEntityDocuments: docMap }
@@ -2348,18 +2356,12 @@ async function flushCodeudorAuxiliaryDocumentUploads(applicantId: number): Promi
   await $csrf()
   for (const [key, file] of pending) {
     const prevId = docMap[key]
-    if (typeof prevId === 'number' && prevId > 0) {
-      try {
-        await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
-      } catch (e) {
-        console.error(e)
-      }
-    }
     const label = labelByKey[key] ?? key
     const fd = new FormData()
     fd.append('title', titleForAuxiliaryDocumentUpload(label))
     appendFileToFormData(fd, file, 'auxiliar-codeudor')
     fd.append('applicant_id', String(applicantId))
+    fd.append('checklist_key', key)
     const res = await $api<{ data: unknown }>(
       `/credit-applications/${applicationId}/documents?auxiliary_checklist=1`,
       { method: 'POST', body: fd },
@@ -2371,6 +2373,14 @@ async function flushCodeudorAuxiliaryDocumentUploads(applicantId: number): Promi
       : NaN
     if (Number.isFinite(newId) && newId > 0) {
       docMap[key] = newId
+      if (typeof prevId === 'number' && prevId > 0 && prevId !== newId) {
+        try {
+          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+          removeInsurabilityDocumentFromApplicationState(prevId)
+        } catch (e) {
+          console.error(e)
+        }
+      }
     }
   }
   const nextFi = { ...fi, auxiliaryDocuments: docMap }
@@ -2438,14 +2448,9 @@ async function patchDebtorDocumentationFinancialToServer(): Promise<void> {
   let financialInfoForRequest: FiPatch = patch
 
   if (!docReviewFinancial) {
-    const hasActOrAux = patch.activity_type !== undefined || patch.auxiliaryDocuments !== undefined
     const hasIns = patch.insurabilityDocuments !== undefined
     const hasApp = patch.approverEntityDocuments !== undefined
     const hasFng = patch.fngDocuments !== undefined
-
-    if (hasActOrAux) {
-      return
-    }
 
     const insAllowed = insurabilityDocumentUploadMode.value
     const appAllowed = approverEntityDocumentUploadMode.value && status === 'Credit_Director_Review'
