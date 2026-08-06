@@ -8,7 +8,7 @@ import {
 import type { ArchivalMetadataFieldRow, ArchivalMetadataSchemaRow } from '~/composables/useArchivalMetadataApi'
 import {
   isValidArchivalMetadataFieldCode,
-  suggestArchivalMetadataFieldCode,
+  resolveUniqueArchivalMetadataFieldCode,
 } from '~/utils/archival-metadata-field-code'
 
 definePageMeta({
@@ -30,7 +30,6 @@ const saving = ref(false)
 const metaForm = ref({ name: '', description: '' })
 const showFieldForm = ref(false)
 const editingFieldId = ref<number | null>(null)
-const fieldCodeTouched = ref(false)
 const fieldForm = ref({
   code: '',
   name: '',
@@ -50,9 +49,21 @@ const fieldForm = ref({
 const isDraft = computed(() => schema.value?.status === 'draft')
 const canEdit = computed(() => isDraft.value && hasPermission('trd_metadatos_editar'))
 
+const existingFieldCodes = computed(() => (schema.value?.fields ?? []).map(field => field.code))
+
+const effectiveFieldCode = computed(() => {
+  if (editingFieldId.value != null) {
+    return fieldForm.value.code.trim()
+  }
+
+  return resolveUniqueArchivalMetadataFieldCode(
+    fieldForm.value.name,
+    existingFieldCodes.value,
+  )
+})
+
 function resetFieldForm() {
   editingFieldId.value = null
-  fieldCodeTouched.value = false
   fieldForm.value = {
     code: '',
     name: '',
@@ -134,7 +145,6 @@ function editField(f: ArchivalMetadataFieldRow) {
     return
   }
   editingFieldId.value = f.id ?? null
-  fieldCodeTouched.value = true
   fieldForm.value = {
     code: f.code,
     name: f.name,
@@ -158,17 +168,18 @@ async function saveField() {
     return
   }
 
-  const code = fieldForm.value.code.trim()
+  if (!fieldForm.value.name.trim()) {
+    toast.error('Indique el nombre visible del campo.')
+    return
+  }
+
+  const code = effectiveFieldCode.value
   if (!code) {
-    toast.error('Indique el código del campo.')
+    toast.error('No se pudo generar el código del campo.')
     return
   }
   if (!isValidArchivalMetadataFieldCode(code)) {
-    toast.error('El código debe iniciar con letra y usar solo minúsculas, números y guiones bajos.')
-    return
-  }
-  if (!fieldForm.value.name.trim()) {
-    toast.error('Indique el nombre visible del campo.')
+    toast.error('El código generado no es válido. Ajuste el nombre visible del campo.')
     return
   }
 
@@ -196,21 +207,6 @@ async function saveField() {
 function addSelectOption() {
   fieldForm.value.options.push({ value: '', label: '' })
 }
-
-function onFieldCodeInput() {
-  fieldCodeTouched.value = true
-}
-
-watch(
-  () => fieldForm.value.name,
-  (name) => {
-    if (editingFieldId.value != null || fieldCodeTouched.value) {
-      return
-    }
-
-    fieldForm.value.code = suggestArchivalMetadataFieldCode(name)
-  },
-)
 </script>
 
 <template>
@@ -316,23 +312,28 @@ watch(
           </CardTitle>
         </CardHeader>
         <CardContent class="space-y-3 max-w-xl">
+          <div v-if="!editingFieldId" class="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground leading-relaxed">
+            El <span class="font-medium text-foreground">código</span> se generará automáticamente al guardar
+            (por ejemplo:
+            <span class="font-mono text-xs text-foreground">{{ effectiveFieldCode || 'nombre_campo' }}</span>).
+          </div>
+
           <div class="grid gap-3 sm:grid-cols-2">
-            <div class="space-y-2">
-              <Label for="metadata_field_code">Código *</Label>
+            <div class="space-y-2" :class="{ 'sm:col-span-2': !editingFieldId }">
+              <Label for="metadata_field_name">Nombre visible *</Label>
+              <Input id="metadata_field_name" v-model="fieldForm.name" />
+            </div>
+            <div v-if="editingFieldId" class="space-y-2">
+              <Label for="metadata_field_code">Código</Label>
               <Input
                 id="metadata_field_code"
-                v-model="fieldForm.code"
+                :model-value="fieldForm.code"
+                disabled
                 class="font-mono"
-                placeholder="Se genera al escribir el nombre"
-                @input="onFieldCodeInput"
               />
-              <p v-if="!editingFieldId" class="text-xs text-muted-foreground leading-relaxed">
-                Se sugiere automáticamente desde el nombre visible; puede editarlo antes de guardar.
+              <p class="text-xs text-muted-foreground leading-relaxed">
+                El código no se puede modificar después de crear el campo.
               </p>
-            </div>
-            <div class="space-y-2">
-              <Label>Nombre visible *</Label>
-              <Input v-model="fieldForm.name" />
             </div>
             <div class="space-y-2">
               <Label>Tipo de dato *</Label>
