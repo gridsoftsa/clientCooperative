@@ -25,6 +25,7 @@ const props = withDefaults(
 const router = useRouter()
 const route = useRoute()
 const ventanillaApi = useVentanillaApi()
+const archivalApi = useArchivalFileApi()
 const { hasPermission } = usePermissions()
 
 const canEditFunctionalTypes = computed(() =>
@@ -62,6 +63,7 @@ const selectedSection = ref<CatalogSection>('functional-types')
 
 const functionalTypes = ref<VentanillaFunctionalTypeRow[]>([])
 const receptionMedia = ref<VentanillaReceptionMediumRow[]>([])
+const archivalFileTypes = ref<Array<{ id: number, name: string, type_key: string }>>([])
 const savedVersion = ref(0)
 
 const catalogSections: Array<{ value: CatalogSection, label: string, icon: string }> = [
@@ -76,9 +78,17 @@ const selectedCatalogLabel = computed(() =>
 async function loadCatalog() {
   loading.value = true
   try {
-    const data = await ventanillaApi.fetchCatalogSettings()
+    const [data, fileTypes] = await Promise.all([
+      ventanillaApi.fetchCatalogSettings(),
+      archivalApi.fetchFileTypes(),
+    ])
     functionalTypes.value = data.functional_types ?? []
     receptionMedia.value = data.reception_media ?? []
+    archivalFileTypes.value = (fileTypes ?? []).map(type => ({
+      id: type.id,
+      name: type.name,
+      type_key: type.type_key,
+    }))
   } catch {
     toast.error('No se pudieron cargar los catálogos de ventanilla')
     functionalTypes.value = []
@@ -108,6 +118,7 @@ async function saveFunctional(rows: Array<{
   sla_business_days: string | number
   sort_order: string | number
   is_active: boolean
+  archival_file_type_id: string
   _isNew?: boolean
   _removed?: boolean
 }>) {
@@ -129,6 +140,9 @@ async function saveFunctional(rows: Array<{
         sla_business_days: slaPayload(row.sla_business_days, row.requires_response_default),
         is_active: row._removed ? false : row.is_active !== false,
         sort_order: Number(row.sort_order) || 0,
+        archival_file_type_id: row.archival_file_type_id === 'none' || row.archival_file_type_id === ''
+          ? null
+          : Number(row.archival_file_type_id),
       }
 
       if (row._isNew && !row._removed) {
@@ -294,6 +308,7 @@ onMounted(() => {
                     :kind="selectedSection"
                     :functional-types="functionalTypes"
                     :reception-media="receptionMedia"
+                    :archival-file-types="archivalFileTypes"
                     :can-edit="canEdit"
                     :saving="saving"
                     :saved-version="savedVersion"

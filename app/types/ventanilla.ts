@@ -17,6 +17,12 @@ export interface VentanillaFunctionalTypeRow {
   sla_business_days: number | null
   is_active?: boolean
   sort_order?: number
+  archival_file_type_id?: number | null
+  archival_file_type?: {
+    id: number
+    type_key: string
+    name: string
+  } | null
 }
 
 export interface VentanillaReceptionMediumRow {

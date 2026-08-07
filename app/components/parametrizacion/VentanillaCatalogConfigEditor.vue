@@ -13,6 +13,7 @@ type FunctionalDraft = {
   sla_business_days: string | number
   sort_order: string | number
   is_active: boolean
+  archival_file_type_id: string
   _isNew?: boolean
   _removed?: boolean
 }
@@ -30,6 +31,7 @@ const props = defineProps<{
   kind: VentanillaCatalogEditorKind
   functionalTypes: VentanillaFunctionalTypeRow[]
   receptionMedia: VentanillaReceptionMediumRow[]
+  archivalFileTypes: Array<{ id: number, name: string, type_key: string }>
   canEdit: boolean
   saving: boolean
   savedVersion?: number
@@ -50,9 +52,11 @@ const catalogTitle = computed(() =>
 
 const helperText = computed(() =>
   props.kind === 'functional-types'
-    ? `Opciones del desplegable «Tipo funcional» en nuevo radicado. Configure respuesta, SLA y orden.`
+    ? `Opciones del desplegable «Tipo funcional» en nuevo radicado. Configure respuesta, SLA, tipo de expediente automático y orden.`
     : `Mismo texto que aparece en el desplegable de «Medio de recepción» al radicar.`,
 )
+
+const NONE_ARCHIVAL_FILE_TYPE = 'none'
 
 function slugFromLabel(label: string): string {
   const base = label
@@ -84,6 +88,9 @@ function cloneFunctional(rows: VentanillaFunctionalTypeRow[]): FunctionalDraft[]
       sla_business_days: row.sla_business_days != null ? String(row.sla_business_days) : '',
       sort_order: String(row.sort_order ?? 0),
       is_active: row.is_active === undefined ? true : coerceBoolean(row.is_active),
+      archival_file_type_id: row.archival_file_type_id != null
+        ? String(row.archival_file_type_id)
+        : NONE_ARCHIVAL_FILE_TYPE,
     }
   })
 }
@@ -151,6 +158,7 @@ function addFunctionalRow() {
     sla_business_days: '',
     sort_order: String(maxOrder + 10),
     is_active: true,
+    archival_file_type_id: NONE_ARCHIVAL_FILE_TYPE,
     _isNew: true,
   })
 }
@@ -354,10 +362,11 @@ watch(
     <template v-else>
       <div class="overflow-x-auto rounded-md border bg-background">
         <div
-          class="grid min-w-[48rem] grid-cols-[minmax(10rem,1.4fr)_minmax(8rem,1fr)_5.5rem_5rem_4.5rem_4.5rem_auto] gap-2 border-b bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground"
+          class="grid min-w-[56rem] grid-cols-[minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_auto] gap-2 border-b bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground"
         >
           <span>Texto en el formulario</span>
           <span>Clave técnica</span>
+          <span>Tipo de expediente</span>
           <span>Respuesta</span>
           <span>SLA</span>
           <span>Orden</span>
@@ -367,7 +376,7 @@ watch(
         <div
           v-for="(row, idx) in visibleFunctionalRows"
           :key="`${functionalRowKey(row) || 'new'}-${idx}`"
-          class="grid min-w-[48rem] grid-cols-[minmax(10rem,1.4fr)_minmax(8rem,1fr)_5.5rem_5rem_4.5rem_4.5rem_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
+          class="grid min-w-[56rem] grid-cols-[minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
         >
           <Input
             v-model="row.label"
@@ -381,6 +390,23 @@ watch(
             :disabled="!editing || !canEdit || !row._isNew"
             placeholder="pqrsfd"
           />
+          <Select v-model="row.archival_file_type_id" :disabled="!editing || !canEdit">
+            <SelectTrigger class="h-9">
+              <SelectValue placeholder="Sin expediente" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem :value="NONE_ARCHIVAL_FILE_TYPE">
+                Sin expediente automático
+              </SelectItem>
+              <SelectItem
+                v-for="fileType in archivalFileTypes"
+                :key="fileType.id"
+                :value="String(fileType.id)"
+              >
+                {{ fileType.name }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
           <div class="flex justify-center py-0.5">
             <Checkbox
               v-model="row.requires_response_default"
