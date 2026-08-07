@@ -2,10 +2,12 @@
 import Multiselect from '@vueform/multiselect'
 import { toast } from 'vue-sonner'
 import type { CatalogTreeSeries } from '~/types/archival-trd'
+import { ventanillaMultiselectErrorClass } from '~/utils/ventanilla-form-field-focus'
 
 const props = defineProps<{
   orgUnitId: number | null
   orgUnitRoleLabel?: string
+  submitAttempted?: boolean
 }>()
 
 const docDocumentTypeId = defineModel<number | null>('docDocumentTypeId', { default: null })
@@ -102,6 +104,51 @@ watch(docDocumentTypeId, (id) => {
     }
   }
 })
+
+const showTrdValidation = computed(() => Boolean(props.submitAttempted && props.orgUnitId))
+
+const seriesMissing = computed(() => showTrdValidation.value && !seriesId.value)
+const subseriesMissing = computed(() => showTrdValidation.value && Boolean(seriesId.value) && !subseriesId.value)
+const documentTypeMissing = computed(() => showTrdValidation.value && Boolean(subseriesId.value) && !docDocumentTypeId.value)
+
+function seriesErrorClass(): string {
+  return ventanillaMultiselectErrorClass(seriesMissing.value)
+}
+
+function subseriesErrorClass(): string {
+  return ventanillaMultiselectErrorClass(subseriesMissing.value)
+}
+
+function documentTypeErrorClass(): string {
+  return ventanillaMultiselectErrorClass(documentTypeMissing.value)
+}
+
+function focusFirstMissingTrdField(): void {
+  const rootId = seriesMissing.value
+    ? 'ventanilla_trd_series'
+    : subseriesMissing.value
+      ? 'ventanilla_trd_subseries'
+      : documentTypeMissing.value
+        ? 'ventanilla_trd_document_type'
+        : null
+
+  if (!rootId) {
+    return
+  }
+
+  const root = document.getElementById(rootId)
+  if (!root) {
+    return
+  }
+
+  const focusable = root.querySelector('input,button,[tabindex]:not([tabindex="-1"])') as HTMLElement | null
+  focusable?.focus()
+  root.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+defineExpose({
+  focusFirstMissingTrdField,
+})
 </script>
 
 <template>
@@ -109,6 +156,7 @@ watch(docDocumentTypeId, (id) => {
     <div class="min-w-0 space-y-2">
       <Label>Serie</Label>
       <Multiselect
+        id="ventanilla_trd_series"
         v-model="seriesId"
         mode="single"
         :object="false"
@@ -121,12 +169,13 @@ watch(docDocumentTypeId, (id) => {
         placeholder="Seleccione serie"
         no-options-text="Sin series en la TRD"
         no-results-text="Sin coincidencias"
-        class="ventanilla-single-multiselect"
+        :class="seriesErrorClass()"
       />
     </div>
     <div class="min-w-0 space-y-2">
       <Label>Subserie</Label>
       <Multiselect
+        id="ventanilla_trd_subseries"
         v-model="subseriesId"
         mode="single"
         :object="false"
@@ -139,12 +188,13 @@ watch(docDocumentTypeId, (id) => {
         placeholder="Seleccione subserie"
         no-options-text="Sin subseries"
         no-results-text="Sin coincidencias"
-        class="ventanilla-single-multiselect"
+        :class="subseriesErrorClass()"
       />
     </div>
     <div class="min-w-0 space-y-2">
       <Label>Tipo documental</Label>
       <Multiselect
+        id="ventanilla_trd_document_type"
         v-model="docDocumentTypeId"
         mode="single"
         :object="false"
@@ -157,7 +207,7 @@ watch(docDocumentTypeId, (id) => {
         placeholder="Seleccione tipo"
         no-options-text="Sin tipos documentales"
         no-results-text="Sin coincidencias"
-        class="ventanilla-single-multiselect"
+        :class="documentTypeErrorClass()"
       />
     </div>
     <p v-if="loading" class="md:col-span-3 text-xs text-muted-foreground">
@@ -184,5 +234,14 @@ watch(docDocumentTypeId, (id) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ventanilla-single-multiselect.multiselect-danger :deep(.multiselect-wrapper) {
+  border-color: hsl(var(--destructive));
+}
+
+.ventanilla-single-multiselect.multiselect-danger :deep(.multiselect-wrapper:focus-within) {
+  border-color: hsl(var(--destructive));
+  box-shadow: 0 0 0 2px hsl(var(--destructive) / 0.4);
 }
 </style>

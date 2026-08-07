@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onDigitsOnlyInput } from '~/utils/digits-only-input'
+import { ventanillaInputErrorClass } from '~/utils/ventanilla-form-field-focus'
 import type { ArchivalMetadataFieldRow, ArchivalMetadataSchemaRow } from '~/composables/useArchivalMetadataApi'
 
 const { formatPesosConSimbolo: formatCurrency, parsePesosInput: parseCurrency } = usePesosFormat()
@@ -9,6 +10,7 @@ const props = defineProps<{
   functionalTypeKey: string | null | undefined
   modelValue: Record<string, unknown>
   disabled?: boolean
+  submitAttempted?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -79,22 +81,66 @@ function fieldId(f: ArchivalMetadataFieldRow, idx: number) {
   return `ventanilla_meta_${f.code}_${idx}`
 }
 
-function validateRequiredFields(): string | null {
-  for (const field of activeFields.value) {
-    if (!field.is_required) {
+function isRequiredFieldMissing(field: ArchivalMetadataFieldRow): boolean {
+  if (!field.is_required) {
+    return false
+  }
+  const value = values.value[field.code]
+
+  return value === null || value === undefined || value === ''
+}
+
+function metadataFieldErrorClass(field: ArchivalMetadataFieldRow): string {
+  return ventanillaInputErrorClass(Boolean(props.submitAttempted && isRequiredFieldMissing(field)))
+}
+
+function findFirstMissingRequiredField(): {
+  fieldCode: string
+  fieldIndex: number
+  message: string
+} | null {
+  for (const [idx, field] of activeFields.value.entries()) {
+    if (!isRequiredFieldMissing(field)) {
       continue
     }
-    const value = values.value[field.code]
-    if (value === null || value === undefined || value === '') {
-      return `Complete el metadato obligatorio: ${field.name}`
+
+    return {
+      fieldCode: field.code,
+      fieldIndex: idx,
+      message: `Complete el metadato obligatorio: ${field.name}`,
     }
   }
 
   return null
 }
 
+function focusMissingField(fieldCode: string, fieldIndex: number): void {
+  const id = `ventanilla_meta_${fieldCode}_${fieldIndex}`
+  const root = document.getElementById(id)
+  if (!root) {
+    return
+  }
+
+  if (root instanceof HTMLInputElement || root instanceof HTMLTextAreaElement || root instanceof HTMLSelectElement) {
+    root.focus()
+    root.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+    return
+  }
+
+  const focusable = root.querySelector('input,button,[tabindex]:not([tabindex="-1"])') as HTMLElement | null
+  focusable?.focus()
+  root.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+function validateRequiredFields(): string | null {
+  return findFirstMissingRequiredField()?.message ?? null
+}
+
 defineExpose({
   validateRequiredFields,
+  findFirstMissingRequiredField,
+  focusMissingField,
 })
 </script>
 
@@ -122,6 +168,7 @@ defineExpose({
         :model-value="String(values[field.code] ?? '')"
         :disabled="disabled"
         rows="2"
+        :class="metadataFieldErrorClass(field)"
         @update:model-value="updateField(field.code, $event)"
       />
       <Input
@@ -130,6 +177,7 @@ defineExpose({
         :type="field.data_type === 'number' ? 'number' : 'text'"
         :model-value="values[field.code] != null ? String(values[field.code]) : ''"
         :disabled="disabled"
+        :class="metadataFieldErrorClass(field)"
         @update:model-value="updateField(field.code, field.data_type === 'number' ? Number($event) : $event)"
       />
       <Input
@@ -138,6 +186,7 @@ defineExpose({
         type="date"
         :model-value="String(values[field.code] ?? '')"
         :disabled="disabled"
+        :class="metadataFieldErrorClass(field)"
         @update:model-value="updateField(field.code, $event)"
       />
       <div v-else-if="field.data_type === 'boolean'" class="flex items-center gap-2">
@@ -156,6 +205,7 @@ defineExpose({
         :model-value="String(values[field.code] ?? '')"
         :disabled="disabled"
         placeholder="correo@ejemplo.com"
+        :class="metadataFieldErrorClass(field)"
         @update:model-value="updateField(field.code, $event)"
       />
       <Input
@@ -165,6 +215,7 @@ defineExpose({
         :model-value="currencyDisplay(field.code)"
         :disabled="disabled"
         placeholder="$ 0"
+        :class="metadataFieldErrorClass(field)"
         @update:model-value="updateCurrencyField(field.code, $event)"
       />
       <Input
@@ -174,6 +225,7 @@ defineExpose({
         :model-value="String(values[field.code] ?? '')"
         :disabled="disabled"
         :placeholder="field.data_type === 'nit' ? 'Solo números (NIT)' : 'Solo números'"
+        :class="metadataFieldErrorClass(field)"
         @input="onDigitsOnlyInput($event, v => updateDigitsField(field.code, v))"
       />
       <Select
@@ -182,7 +234,7 @@ defineExpose({
         :disabled="disabled"
         @update:model-value="updateField(field.code, $event)"
       >
-        <SelectTrigger :id="fieldId(field, idx)">
+        <SelectTrigger :id="fieldId(field, idx)" :class="metadataFieldErrorClass(field)">
           <SelectValue placeholder="Seleccione…" />
         </SelectTrigger>
         <SelectContent>

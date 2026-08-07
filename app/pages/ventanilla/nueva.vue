@@ -7,7 +7,18 @@ import {
 import type { VentanillaCatalogData, VentanillaFilingTypeValue, VentanillaFunctionalTypeRow } from '~/types/ventanilla'
 import type { OrgStaffListItem } from '~/types/org-structure'
 import { onDigitsOnlyInput, filterDigitsOnly } from '~/utils/digits-only-input'
-import { validateVentanillaCoreFilingForm } from '~/utils/ventanilla-filing-form-validation'
+import {
+  isVentanillaFilingFieldMissing,
+  resolveFirstVentanillaFilingValidationIssue,
+  VENTANILLA_FILING_FIELD_IDS,
+  type VentanillaFilingFieldKey,
+  type VentanillaFilingValidationIssue,
+} from '~/utils/ventanilla-filing-form-validation'
+import {
+  focusVentanillaFieldById,
+  ventanillaInputErrorClass,
+  ventanillaMultiselectErrorClass,
+} from '~/utils/ventanilla-form-field-focus'
 import Multiselect from '@vueform/multiselect'
 import { toast } from 'vue-sonner'
 
@@ -37,6 +48,7 @@ const {
 const catalog = ref<VentanillaCatalogData | null>(null)
 const saving = ref(false)
 const errorMessage = ref('')
+const submitAttempted = ref(false)
 
 const filingType = ref<VentanillaFilingTypeValue>('incoming')
 const functionalTypeKey = ref('')
@@ -68,7 +80,11 @@ const recipientStaffId = ref<number | null>(null)
 const senderStaffIds = computed(() => senderStaffId.value != null ? [senderStaffId.value] : [])
 const recipientStaffIds = computed(() => recipientStaffId.value != null ? [recipientStaffId.value] : [])
 const fileRows = ref<Array<{ file: File | null; title: string }>>([{ file: null, title: 'Documento principal' }])
-const metadataFieldsRef = ref<{ validateRequiredFields?: () => string | null } | null>(null)
+const trdPickerRef = ref<{ focusFirstMissingTrdField?: () => void } | null>(null)
+const metadataFieldsRef = ref<{
+  findFirstMissingRequiredField?: () => { fieldCode: string; fieldIndex: number; message: string } | null
+  focusMissingField?: (fieldCode: string, fieldIndex: number) => void
+} | null>(null)
 
 const canOverrideResponse = computed(() => hasPermission('ventanilla_override_respuesta'))
 
@@ -181,6 +197,84 @@ const effectiveRequiresResponse = computed(() => {
 
   return selectedFunctionalType.value?.requires_response_default ?? true
 })
+
+const computedFilingParties = computed(() => {
+  const computedSenderName = filingType.value === 'incoming'
+    ? senderName.value.trim()
+    : selectedSenderStaff.value
+      ? buildSelectedStaffText(selectedSenderStaff.value)
+      : senderName.value.trim()
+  const computedSenderIdentifier = filingType.value === 'incoming'
+    ? filterDigitsOnly(senderIdentifier.value.trim())
+    : selectedSenderStaff.value
+      ? staffDocumentIdentifier(selectedSenderStaff.value)
+      : filterDigitsOnly(senderIdentifier.value.trim())
+  const computedRecipientName = (filingType.value === 'incoming' || filingType.value === 'internal')
+    ? (selectedRecipientStaff.value ? buildSelectedStaffText(selectedRecipientStaff.value) : recipientName.value.trim())
+    : recipientName.value.trim()
+  const computedRecipientIdentifier = (filingType.value === 'incoming' || filingType.value === 'internal')
+    ? (selectedRecipientStaff.value ? staffDocumentIdentifier(selectedRecipientStaff.value) : filterDigitsOnly(recipientIdentifier.value.trim()))
+    : filterDigitsOnly(recipientIdentifier.value.trim())
+
+  return {
+    senderName: computedSenderName,
+    senderIdentifier: computedSenderIdentifier,
+    recipientName: computedRecipientName,
+    recipientIdentifier: computedRecipientIdentifier,
+  }
+})
+
+const attachedFileCount = computed(() =>
+  fileRows.value.filter((row: { file: File | null; title: string }) => row.file).length,
+)
+
+const validationInput = computed(() => {
+  const metadataSnapshot = metadataValues.value
+  void metadataSnapshot
+  const metadataMissing = metadataFieldsRef.value?.findFirstMissingRequiredField?.() ?? null
+
+  return {
+    filingType: filingType.value,
+    functionalTypeKey: functionalTypeKey.value,
+    subject: subject.value,
+    producerOrgUnitId: producerOrgUnitId.value,
+    recipientOrgUnitId: recipientOrgUnitId.value,
+    docDocumentTypeId: docDocumentTypeId.value,
+    minFileCount: attachedFileCount.value,
+    senderStaffId: senderStaffId.value,
+    recipientStaffId: recipientStaffId.value,
+    senderStaffHasDocument: selectedSenderStaff.value
+      ? staffDocumentIdentifier(selectedSenderStaff.value).length > 0
+      : true,
+    recipientStaffHasDocument: selectedRecipientStaff.value
+      ? staffDocumentIdentifier(selectedRecipientStaff.value).length > 0
+      : true,
+    parties: computedFilingParties.value,
+    metadataError: metadataMissing?.message ?? null,
+    metadataFieldCode: metadataMissing?.fieldCode,
+    metadataFieldIndex: metadataMissing?.fieldIndex,
+  }
+})
+
+function isMissing(field: VentanillaFilingFieldKey): boolean {
+  return submitAttempted.value && isVentanillaFilingFieldMissing(field, validationInput.value)
+}
+
+function inputErrorClass(field: VentanillaFilingFieldKey): string {
+  return ventanillaInputErrorClass(isMissing(field))
+}
+
+function multiselectErrorClass(field: VentanillaFilingFieldKey): string {
+  return ventanillaMultiselectErrorClass(isMissing(field))
+}
+
+function fileInputErrorClass(index: number): string {
+  return ventanillaInputErrorClass(isMissing('file') && index === 0)
+}
+
+function fileRowBorderClass(index: number): string {
+  return isMissing('file') && index === 0 ? 'border-destructive' : ''
+}
 
 watch(functionalTypeKey, () => {
   requiresResponseOverride.value = null
@@ -331,93 +425,40 @@ function staffDocumentIdentifier(staffRow: OrgStaffListItem | null): string {
   return filterDigitsOnly(staffRow?.document_number?.trim() ?? '')
 }
 
-function staffDocumentError(staffRow: OrgStaffListItem | null, label: string): string | null {
-  if (!staffRow) {
-    return null
-  }
-  if (!staffDocumentIdentifier(staffRow)) {
-    return `${label} no tiene número de documento registrado en nómina`
+async function focusValidationIssue(issue: VentanillaFilingValidationIssue): Promise<void> {
+  await nextTick()
+
+  if (issue.field === 'trd_document_type') {
+    trdPickerRef.value?.focusFirstMissingTrdField?.()
+
+    return
   }
 
-  return null
+  if (issue.field === 'metadata' && issue.metadataFieldCode != null && issue.metadataFieldIndex != null) {
+    metadataFieldsRef.value?.focusMissingField?.(issue.metadataFieldCode, issue.metadataFieldIndex)
+
+    return
+  }
+
+  focusVentanillaFieldById(VENTANILLA_FILING_FIELD_IDS[issue.field])
 }
 
 async function submit() {
   errorMessage.value = ''
+  submitAttempted.value = true
+
+  const issue = resolveFirstVentanillaFilingValidationIssue(validationInput.value)
+  if (issue) {
+    errorMessage.value = issue.message
+    await focusValidationIssue(issue)
+
+    return
+  }
+
+  submitAttempted.value = false
 
   const withFiles = fileRows.value.filter((r: { file: File | null; title: string }) => r.file)
-
-  const computedSenderName = filingType.value === 'incoming'
-    ? senderName.value.trim()
-    : selectedSenderStaff.value
-      ? buildSelectedStaffText(selectedSenderStaff.value)
-      : senderName.value.trim()
-  const computedSenderIdentifier = filingType.value === 'incoming'
-    ? filterDigitsOnly(senderIdentifier.value.trim())
-    : selectedSenderStaff.value
-      ? staffDocumentIdentifier(selectedSenderStaff.value)
-      : filterDigitsOnly(senderIdentifier.value.trim())
-  const computedRecipientName = (filingType.value === 'incoming' || filingType.value === 'internal')
-    ? (selectedRecipientStaff.value ? buildSelectedStaffText(selectedRecipientStaff.value) : recipientName.value.trim())
-    : recipientName.value.trim()
-  const computedRecipientIdentifier = (filingType.value === 'incoming' || filingType.value === 'internal')
-    ? (selectedRecipientStaff.value ? staffDocumentIdentifier(selectedRecipientStaff.value) : filterDigitsOnly(recipientIdentifier.value.trim()))
-    : filterDigitsOnly(recipientIdentifier.value.trim())
-
-  if (filingType.value === 'incoming' && !recipientStaffId.value) {
-    errorMessage.value = 'Seleccione destinatario del área'
-    return
-  }
-  if (filingType.value === 'outgoing' && !senderStaffId.value) {
-    errorMessage.value = 'Seleccione remitente del área'
-    return
-  }
-  if (filingType.value === 'internal') {
-    if (!senderStaffId.value) {
-      errorMessage.value = 'Seleccione remitente del área'
-      return
-    }
-    if (!recipientStaffId.value) {
-      errorMessage.value = 'Seleccione destinatario del área'
-      return
-    }
-  }
-
-  const senderDocError = filingType.value !== 'incoming'
-    ? staffDocumentError(selectedSenderStaff.value, 'El remitente seleccionado')
-    : null
-  if (senderDocError) {
-    errorMessage.value = senderDocError
-    return
-  }
-  const recipientDocError = filingType.value === 'incoming' || filingType.value === 'internal'
-    ? staffDocumentError(selectedRecipientStaff.value, 'El destinatario seleccionado')
-    : null
-  if (recipientDocError) {
-    errorMessage.value = recipientDocError
-    return
-  }
-
-  const formError = validateVentanillaCoreFilingForm({
-    filingType: filingType.value,
-    functionalTypeKey: functionalTypeKey.value,
-    subject: subject.value,
-    producerOrgUnitId: producerOrgUnitId.value,
-    recipientOrgUnitId: recipientOrgUnitId.value,
-    docDocumentTypeId: docDocumentTypeId.value,
-    minFileCount: withFiles.length,
-    parties: {
-      senderName: computedSenderName,
-      senderIdentifier: computedSenderIdentifier,
-      recipientName: computedRecipientName,
-      recipientIdentifier: computedRecipientIdentifier,
-    },
-    metadataError: metadataFieldsRef.value?.validateRequiredFields?.() ?? null,
-  })
-  if (formError) {
-    errorMessage.value = formError
-    return
-  }
+  const parties = computedFilingParties.value
 
   const fd = new FormData()
   fd.append('filing_type', filingType.value)
@@ -431,13 +472,13 @@ async function submit() {
   if (recipientOrgUnitId.value) {
     fd.append('recipient_org_unit_id', String(recipientOrgUnitId.value))
   }
-  fd.append('sender_name', computedSenderName)
-  fd.append('sender_identifier', computedSenderIdentifier)
-  if (computedRecipientName) {
-    fd.append('recipient_name', computedRecipientName)
+  fd.append('sender_name', parties.senderName)
+  fd.append('sender_identifier', parties.senderIdentifier)
+  if (parties.recipientName) {
+    fd.append('recipient_name', parties.recipientName)
   }
-  if (computedRecipientIdentifier) {
-    fd.append('recipient_identifier', computedRecipientIdentifier)
+  if (parties.recipientIdentifier) {
+    fd.append('recipient_identifier', parties.recipientIdentifier)
   }
   fd.append('subject', subject.value.trim())
   if (receptionMedium.value) {
@@ -526,6 +567,7 @@ async function submit() {
           <div class="space-y-2">
             <Label>Tipo funcional *</Label>
             <Multiselect
+              id="ventanilla_functional_type"
               v-model="functionalTypeKey"
               mode="single"
               :object="false"
@@ -537,7 +579,7 @@ async function submit() {
               placeholder="Seleccione…"
               no-options-text="Sin opciones"
               no-results-text="Sin coincidencias"
-              class="ventanilla-single-multiselect"
+              :class="multiselectErrorClass('functional_type')"
             />
           </div>
           <p v-if="selectedFunctionalType" class="text-muted-foreground text-xs">
@@ -586,6 +628,7 @@ async function submit() {
           <div v-if="filingType === 'incoming'" class="space-y-2 md:col-span-2">
             <Label>Área destinataria *</Label>
             <Multiselect
+              id="ventanilla_recipient_org_unit"
               v-model="recipientOrgUnitId"
               mode="single"
               :object="false"
@@ -597,12 +640,13 @@ async function submit() {
               placeholder="Seleccione área"
               no-options-text="Sin áreas disponibles"
               no-results-text="Sin coincidencias"
-              class="ventanilla-single-multiselect"
+              :class="multiselectErrorClass('recipient_org_unit')"
             />
           </div>
           <div v-else class="space-y-2 md:col-span-2">
             <Label>Área productora *</Label>
             <Multiselect
+              id="ventanilla_producer_org_unit"
               v-model="producerOrgUnitId"
               mode="single"
               :object="false"
@@ -614,12 +658,13 @@ async function submit() {
               placeholder="Seleccione área"
               no-options-text="Sin áreas productoras"
               no-results-text="Sin coincidencias"
-              class="ventanilla-single-multiselect"
+              :class="multiselectErrorClass('producer_org_unit')"
             />
           </div>
           <div v-if="filingType === 'internal'" class="space-y-2 md:col-span-2">
             <Label>Área destinataria *</Label>
             <Multiselect
+              id="ventanilla_recipient_org_unit"
               v-model="recipientOrgUnitId"
               mode="single"
               :object="false"
@@ -631,17 +676,18 @@ async function submit() {
               placeholder="Seleccione área destino"
               no-options-text="Sin áreas disponibles"
               no-results-text="Sin coincidencias"
-              class="ventanilla-single-multiselect"
+              :class="multiselectErrorClass('recipient_org_unit')"
             />
           </div>
           <div class="min-w-0 space-y-2">
             <Label>{{ filingType === 'incoming' ? 'Remitente *' : 'Remitente *' }}</Label>
             <Multiselect
               v-if="filingType !== 'incoming'"
+              id="ventanilla_sender_staff"
               v-model="senderStaffId"
               mode="single"
               :object="false"
-              class="ventanilla-single-multiselect"
+              :class="multiselectErrorClass('sender_staff')"
               :options="senderStaffChoices"
               value-prop="value"
               label="label"
@@ -652,16 +698,24 @@ async function submit() {
               no-options-text="Sin funcionarios en el área"
               no-results-text="Sin coincidencias"
             />
-            <Input v-else v-model="senderName" placeholder="Nombre" />
+            <Input
+              v-else
+              id="ventanilla_sender_name"
+              v-model="senderName"
+              placeholder="Nombre"
+              :class="inputErrorClass('sender_name')"
+            />
           </div>
           <div class="space-y-2">
             <Label>Identificación remitente *</Label>
             <Input
+              id="ventanilla_sender_identifier"
               v-model="senderIdentifier"
               inputmode="numeric"
               maxlength="64"
               :readonly="filingType !== 'incoming' && !!senderStaffId"
               :placeholder="filingType !== 'incoming' ? 'Autocompletado' : 'Solo números'"
+              :class="inputErrorClass('sender_identifier')"
               @input="onDigitsOnlyInput($event, v => (senderIdentifier = v))"
             />
           </div>
@@ -669,10 +723,11 @@ async function submit() {
             <Label>{{ filingType === 'incoming' || filingType === 'internal' ? 'Destinatario *' : 'Destinatario *' }}</Label>
             <Multiselect
               v-if="filingType === 'incoming' || filingType === 'internal'"
+              id="ventanilla_recipient_staff"
               v-model="recipientStaffId"
               mode="single"
               :object="false"
-              class="ventanilla-single-multiselect"
+              :class="multiselectErrorClass('recipient_staff')"
               :options="recipientStaffChoices"
               value-prop="value"
               label="label"
@@ -683,7 +738,13 @@ async function submit() {
               no-options-text="Sin funcionarios en el área"
               no-results-text="Sin coincidencias"
             />
-            <Input v-else v-model="recipientName" placeholder="Nombre" />
+            <Input
+              v-else
+              id="ventanilla_recipient_name"
+              v-model="recipientName"
+              placeholder="Nombre"
+              :class="inputErrorClass('recipient_name')"
+            />
           </div>
           <div class="space-y-2">
             <Label>
@@ -691,17 +752,19 @@ async function submit() {
               <span v-if="filingType === 'outgoing' || filingType === 'internal'">*</span>
             </Label>
             <Input
+              id="ventanilla_recipient_identifier"
               v-model="recipientIdentifier"
               inputmode="numeric"
               maxlength="64"
               :readonly="(filingType === 'incoming' || filingType === 'internal') && !!recipientStaffId"
               :placeholder="(filingType === 'incoming' || filingType === 'internal') ? 'Autocompletado' : 'Solo números'"
+              :class="inputErrorClass('recipient_identifier')"
               @input="onDigitsOnlyInput($event, v => (recipientIdentifier = v))"
             />
           </div>
           <div class="space-y-2 md:col-span-2">
             <Label>Asunto *</Label>
-            <Input v-model="subject" maxlength="500" />
+            <Input id="ventanilla_subject" v-model="subject" maxlength="500" :class="inputErrorClass('subject')" />
           </div>
           <div class="space-y-2">
             <Label>Responsable asignado</Label>
@@ -763,8 +826,10 @@ async function submit() {
         </CardHeader>
         <CardContent class="min-w-0">
           <VentanillaTrdPicker
+            ref="trdPickerRef"
             :org-unit-id="responsibleOrgUnitId"
             :org-unit-role-label="trdOrgUnitRoleLabel"
+            :submit-attempted="submitAttempted"
             v-model:doc-document-type-id="docDocumentTypeId"
           />
         </CardContent>
@@ -783,6 +848,7 @@ async function submit() {
             v-model="metadataValues"
             :doc-document-type-id="docDocumentTypeId"
             :functional-type-key="functionalTypeKey"
+            :submit-attempted="submitAttempted"
           />
           <p v-if="!docDocumentTypeId && !functionalTypeKey" class="text-muted-foreground text-sm">
             Seleccione tipo funcional y tipo documental para cargar los metadatos aplicables.
@@ -803,6 +869,7 @@ async function submit() {
             v-for="(row, index) in (fileRows ?? [])"
             :key="index"
             class="flex flex-wrap items-end gap-3 rounded-lg border p-3"
+            :class="fileRowBorderClass(index)"
           >
             <div class="min-w-[200px] flex-1 space-y-2">
               <Label>Título *</Label>
@@ -810,7 +877,13 @@ async function submit() {
             </div>
             <div class="min-w-[200px] flex-1 space-y-2">
               <Label>Archivo</Label>
-              <Input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" @change="onFileChange(index, $event)" />
+              <Input
+                :id="index === 0 ? 'ventanilla_file_0' : undefined"
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                :class="fileInputErrorClass(index)"
+                @change="onFileChange(index, $event)"
+              />
             </div>
             <Button
               v-if="(fileRows?.length ?? 0) > 1"
@@ -850,5 +923,14 @@ async function submit() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.ventanilla-single-multiselect.multiselect-danger :deep(.multiselect-wrapper) {
+  border-color: hsl(var(--destructive));
+}
+
+.ventanilla-single-multiselect.multiselect-danger :deep(.multiselect-wrapper:focus-within) {
+  border-color: hsl(var(--destructive));
+  box-shadow: 0 0 0 2px hsl(var(--destructive) / 0.4);
 }
 </style>
