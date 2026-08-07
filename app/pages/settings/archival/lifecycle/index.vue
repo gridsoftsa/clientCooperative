@@ -17,9 +17,9 @@ const api = useArchivalLifecycleApi()
 
 const loading = ref(false)
 const rows = ref<ArchivalLifecycleDocumentRow[]>([])
-const orgUnitId = ref<number | undefined>(undefined)
-const phase = ref<string | undefined>(undefined)
-const eligibleOnly = ref(true)
+const orgUnitFilter = ref<string>('all')
+const phaseFilter = ref<string>('all')
+const eligibleOnly = ref(false)
 const units = ref<Array<{ id: number, name: string, code: string }>>([])
 
 async function loadUnits() {
@@ -38,8 +38,8 @@ async function load() {
   loading.value = true
   try {
     rows.value = await api.fetchLifecycleDocuments({
-      org_unit_id: orgUnitId.value,
-      phase: phase.value,
+      org_unit_id: orgUnitFilter.value === 'all' ? undefined : Number(orgUnitFilter.value),
+      phase: phaseFilter.value === 'all' ? undefined : phaseFilter.value,
       eligible_transfer: eligibleOnly.value ? 1 : undefined,
     })
   } catch {
@@ -56,7 +56,9 @@ async function runAutomatic() {
     return
   }
   try {
-    const res = await api.runAutomaticTransfers(orgUnitId.value ?? null)
+    const res = await api.runAutomaticTransfers(
+      orgUnitFilter.value === 'all' ? null : Number(orgUnitFilter.value),
+    )
     toast.success(res.message ?? `Transferidos: ${res.data.transferred}`)
     await load()
   } catch (e: unknown) {
@@ -126,12 +128,15 @@ onMounted(async () => {
         <CardContent class="pt-6 flex flex-wrap gap-4 items-end">
           <div class="space-y-2 min-w-[220px]">
             <Label>Área productora</Label>
-            <Select v-model="orgUnitId">
+            <Select v-model="orgUnitFilter">
               <SelectTrigger>
                 <SelectValue placeholder="Todas" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="u in units" :key="u.id" :value="u.id">
+                <SelectItem value="all">
+                  Todas
+                </SelectItem>
+                <SelectItem v-for="u in units" :key="u.id" :value="String(u.id)">
                   {{ u.name }} ({{ u.code }})
                 </SelectItem>
               </SelectContent>
@@ -139,11 +144,14 @@ onMounted(async () => {
           </div>
           <div class="space-y-2">
             <Label>Fase</Label>
-            <Select v-model="phase">
+            <Select v-model="phaseFilter">
               <SelectTrigger class="w-[200px]">
                 <SelectValue placeholder="Todas" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">
+                  Todas
+                </SelectItem>
                 <SelectItem v-for="(label, key) in ARCHIVAL_PHASE_LABELS" :key="key" :value="key">
                   {{ label }}
                 </SelectItem>
@@ -219,8 +227,15 @@ onMounted(async () => {
               </tr>
             </tbody>
           </table>
-          <p v-else-if="!loading" class="text-sm text-muted-foreground">
-            No hay documentos clasificados con TRD para los filtros indicados.
+          <p v-else-if="!loading" class="space-y-2 text-sm text-muted-foreground">
+            <span class="block">
+              No hay documentos clasificados con TRD para los filtros indicados.
+            </span>
+            <span class="block text-xs leading-relaxed">
+              Esta vista lista documentos de <strong class="font-medium text-foreground">radicación de crédito</strong> con tipo documental TRD (no radicados de ventanilla).
+              Si acaba de subir un documento, verifique que tenga clasificación TRD en la solicitud.
+              Desmarque «Solo pendientes de transferencia» para ver todos los documentos en archivo de gestión, aunque aún no cumplan el plazo.
+            </span>
           </p>
         </CardContent>
       </Card>

@@ -9,6 +9,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'applicants': 'Solicitantes',
   'account': 'Cuenta',
   'appearance': 'Apariencia',
+  'archival': 'TRD y archivo',
   'assign': 'Asignar',
   'audits': 'Auditoría',
   'audit': 'Auditoría',
@@ -18,6 +19,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'credits': 'Créditos',
   'display': 'Pantalla',
   'directory': 'Directorio',
+  'disposition': 'Disposición final',
   'delegations': 'Backup',
   'edit': 'Editar',
   'editar': 'Editar',
@@ -59,6 +61,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'work-groups': 'Grupos y comités',
   'users': 'Usuarios',
   'kanban': 'Kanban',
+  'lifecycle': 'Ciclo de vida',
   'login': 'Iniciar sesión',
   'otp': 'Verificación',
 }
