@@ -79,7 +79,15 @@ export interface ArchivalFile {
   file_number: string
   title: string
   status: ArchivalFileStatus
-  archival_phase?: string | null
+  archival_phase?: ArchivalPhaseTarget | string | null
+  archival_phase_entered_at?: string | null
+  archival_management_ends_at?: string | null
+  archival_central_ends_at?: string | null
+  archival_historical_ends_at?: string | null
+  effective_retention_snapshot?: Record<string, unknown> | null
+  eligible_next_phase?: ArchivalPhaseTarget | null
+  can_transfer_to_next_phase?: boolean
+  transfer_blocked_reason?: string | null
   parent_archival_file_id?: number | null
   org_unit_id: number
   org_office_id?: number | null

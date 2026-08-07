@@ -10,7 +10,7 @@ import type {
   ArchivalFileTreeNode,
   ArchivalPhaseTarget,
 } from '~/types/archival-file'
-import { ARCHIVAL_FILE_STATUS_LABELS } from '~/types/archival-file'
+import { ARCHIVAL_FILE_STATUS_LABELS, ARCHIVAL_PHASE_TARGET_LABELS } from '~/types/archival-file'
 import {
   archivalFileStatusActions,
   archivalFileStatusBadgeVariant,
@@ -112,19 +112,38 @@ const canReconsolidate = computed(() =>
 )
 const canTransferToDisposed = computed(() =>
   hasPermission('expedientes_transferir')
-  && file.value?.status === 'historical_archive'
-  && file.value?.archival_phase === 'historical',
+  && file.value?.eligible_next_phase === 'disposed'
+  && file.value?.can_transfer_to_next_phase === true,
 )
 const canDownloadConsolidated = computed(() =>
   hasPermission('expedientes_documentos_descargar') && !!file.value?.consolidated_path,
 )
 const canTransfer = computed(() =>
   hasPermission('expedientes_transferir')
-  && (file.value?.status === 'closed'
-    || file.value?.status === 'management_archive'
-    || file.value?.status === 'central_archive'
-    || file.value?.status === 'historical_archive'),
+  && file.value?.eligible_next_phase != null,
 )
+
+const archivalPhaseLabel = computed(() => {
+  const phase = file.value?.archival_phase
+  if (phase && phase in ARCHIVAL_PHASE_TARGET_LABELS) {
+    return ARCHIVAL_PHASE_TARGET_LABELS[phase as ArchivalPhaseTarget]
+  }
+
+  if (file.value?.status === 'closed') {
+    return ARCHIVAL_PHASE_TARGET_LABELS.management
+  }
+
+  return '—'
+})
+
+const eligibleNextPhaseLabel = computed(() => {
+  const phase = file.value?.eligible_next_phase
+  if (!phase) {
+    return null
+  }
+
+  return ARCHIVAL_PHASE_TARGET_LABELS[phase]
+})
 const consolidating = ref(false)
 
 const expedienteMetadataFields = computed<ArchivalMetadataFieldRow[]>(() => {
@@ -299,7 +318,9 @@ function openPublishDialog(node: ArchivalFileTreeNode) {
 
 function openTransferDialog(alert?: ArchivalFileAlert) {
   transferAlertType.value = alert?.alert_type ?? null
-  transferSuggestedPhase.value = inferPhaseFromAlert(alert?.alert_type) ?? null
+  transferSuggestedPhase.value = file.value?.eligible_next_phase
+    ?? inferPhaseFromAlert(alert?.alert_type)
+    ?? null
   transferDialogOpen.value = true
 }
 
@@ -543,6 +564,41 @@ onMounted(() => loadAll())
                     {{ file.entity_key }}
                   </div>
                 </div>
+
+                <div
+                  v-if="file.status === 'closed' || file.archival_phase"
+                  class="grid gap-2 rounded-lg border p-3"
+                >
+                  <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Ciclo archivístico
+                  </p>
+                  <div>
+                    <span class="text-muted-foreground">Fase actual:</span>
+                    {{ archivalPhaseLabel }}
+                  </div>
+                  <div v-if="eligibleNextPhaseLabel">
+                    <span class="text-muted-foreground">Siguiente fase:</span>
+                    {{ eligibleNextPhaseLabel }}
+                  </div>
+                  <div v-if="file.archival_management_ends_at">
+                    <span class="text-muted-foreground">Fin gestión:</span>
+                    {{ file.archival_management_ends_at }}
+                  </div>
+                  <div v-if="file.archival_central_ends_at">
+                    <span class="text-muted-foreground">Fin central:</span>
+                    {{ file.archival_central_ends_at }}
+                  </div>
+                  <div v-if="file.archival_historical_ends_at">
+                    <span class="text-muted-foreground">Fin histórico:</span>
+                    {{ file.archival_historical_ends_at }}
+                  </div>
+                  <p
+                    v-if="file.transfer_blocked_reason"
+                    class="text-xs text-amber-700 dark:text-amber-300"
+                  >
+                    {{ file.transfer_blocked_reason }}
+                  </p>
+                </div>
                 <p class="text-xs text-muted-foreground leading-relaxed">
                   El árbol queda siempre visible a la izquierda. Use las pestañas para gestión, metadatos y carga sin perder el contexto documental.
                 </p>
@@ -686,6 +742,9 @@ onMounted(() => loadAll())
       <ArchivalFileTransferDialog
         v-model:open="transferDialogOpen"
         :file-id="file.id"
+        :eligible-next-phase="file.eligible_next_phase"
+        :can-transfer-to-next-phase="file.can_transfer_to_next_phase"
+        :transfer-blocked-reason="file.transfer_blocked_reason"
         :alert-type="transferAlertType"
         :suggested-phase="transferSuggestedPhase"
         @transferred="loadAll"

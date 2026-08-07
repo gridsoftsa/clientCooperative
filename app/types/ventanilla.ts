@@ -15,6 +15,7 @@ export interface VentanillaFunctionalTypeRow {
   label: string
   requires_response_default: boolean
   sla_business_days: number | null
+  has_active_workflow_binding?: boolean
   is_active?: boolean
   sort_order?: number
   archival_file_type_id?: number | null

@@ -112,13 +112,18 @@ async function loadIntakes() {
       total: res.meta.total,
     }
     if (selectedIntake.value) {
-      selectedIntake.value = intakes.value.find((item: VentanillaIntakeRow) => item.id === selectedIntake.value?.id) ?? selectedIntake.value
+      selectedIntake.value = intakes.value.find((item: VentanillaIntakeRow) => item.id === selectedIntake.value?.id) ?? null
     }
   } catch {
     errorMessage.value = 'No se pudo cargar la bandeja.'
   } finally {
     loading.value = false
   }
+}
+
+function filterAndLoad() {
+  pagination.value.current_page = 1
+  loadIntakes()
 }
 
 onMounted(async () => {
@@ -312,9 +317,15 @@ async function viewIntakeFile(fileId: number, mimeType?: string | null) {
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="grid gap-3 md:grid-cols-[1fr_180px_180px_auto]">
-            <Input v-model="search" placeholder="Buscar asunto, remitente o correo" @keyup.enter="loadIntakes" />
-            <Select v-model="statusFilter">
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Input
+              v-model="search"
+              placeholder="Buscar asunto, remitente o correo"
+              @keyup.enter="filterAndLoad"
+            />
+            <Select v-model="statusFilter" @update:model-value="filterAndLoad">
+              <SelectTrigger>
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los estados</SelectItem>
                 <SelectItem value="pending_classification">Pendientes</SelectItem>
@@ -322,15 +333,17 @@ async function viewIntakeFile(fileId: number, mimeType?: string | null) {
                 <SelectItem value="discarded">Descartadas</SelectItem>
               </SelectContent>
             </Select>
-            <Select v-model="sourceFilter">
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select v-model="sourceFilter" @update:model-value="filterAndLoad">
+              <SelectTrigger>
+                <SelectValue placeholder="Origen" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los orígenes</SelectItem>
                 <SelectItem value="web_form">Formulario web</SelectItem>
                 <SelectItem value="email">Correo</SelectItem>
               </SelectContent>
             </Select>
-            <Button :disabled="loading" @click="loadIntakes">
+            <Button :disabled="loading" @click="filterAndLoad">
               {{ loading ? 'Cargando…' : 'Filtrar' }}
             </Button>
           </div>

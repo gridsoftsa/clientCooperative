@@ -150,12 +150,38 @@ const selectedFunctionalType = computed(() =>
   catalog.value?.functional_types.find((t: VentanillaFunctionalTypeRow) => t.key === functionalTypeKey.value),
 )
 
+const selectableFunctionalTypes = computed(() =>
+  (catalog.value?.functional_types ?? []).filter(
+    (t: VentanillaFunctionalTypeRow) => t.has_active_workflow_binding !== false,
+  ),
+)
+
+const excludedFunctionalTypes = computed(() =>
+  (catalog.value?.functional_types ?? []).filter(
+    (t: VentanillaFunctionalTypeRow) => t.has_active_workflow_binding === false,
+  ),
+)
+
 const functionalTypeOptions = computed(() =>
-  (catalog.value?.functional_types ?? []).map((t: VentanillaFunctionalTypeRow) => ({
+  selectableFunctionalTypes.value.map((t: VentanillaFunctionalTypeRow) => ({
     value: t.key,
     label: t.label,
   })),
 )
+
+function syncFunctionalTypeSelection(): void {
+  if (!functionalTypeKey.value) {
+    return
+  }
+
+  const stillSelectable = selectableFunctionalTypes.value.some(
+    (t: VentanillaFunctionalTypeRow) => t.key === functionalTypeKey.value,
+  )
+
+  if (!stillSelectable) {
+    functionalTypeKey.value = ''
+  }
+}
 
 const orgUnitSelectOptions = computed(() =>
   orgUnits.value.map((u: VentanillaOrgUnitOption) => ({
@@ -340,6 +366,7 @@ onMounted(async () => {
     catalog.value = await ventanillaApi.fetchCatalog()
     orgUnits.value = catalog.value.org_units ?? []
     staffOptions.value = catalog.value.org_staff ?? []
+    syncFunctionalTypeSelection()
   } catch {
     catalog.value = null
     toast.error('No se pudo cargar el catálogo de ventanilla')
@@ -446,6 +473,11 @@ async function focusValidationIssue(issue: VentanillaFilingValidationIssue): Pro
 async function submit() {
   errorMessage.value = ''
   submitAttempted.value = true
+
+  if (selectableFunctionalTypes.value.length === 0) {
+    errorMessage.value = 'No hay tipos funcionales con flujo de trabajo activo. Configure el anclaje en Workflow → Configuración.'
+    return
+  }
 
   const issue = resolveFirstVentanillaFilingValidationIssue(validationInput.value)
   if (issue) {
@@ -564,6 +596,33 @@ async function submit() {
           <CardTitle>Clasificación funcional</CardTitle>
         </CardHeader>
         <CardContent class="grid gap-4">
+          <Alert
+            v-if="excludedFunctionalTypes.length > 0"
+            class="border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100"
+          >
+            <Icon name="i-lucide-triangle-alert" class="size-4" />
+            <AlertTitle>Tipos funcionales no disponibles</AlertTitle>
+            <AlertDescription class="space-y-2 text-sm">
+              <p>
+                Los siguientes tipos no tienen un flujo de trabajo activo anclado y no aparecen en el selector:
+              </p>
+              <ul class="list-inside list-disc">
+                <li v-for="type in excludedFunctionalTypes" :key="type.key">
+                  {{ type.label }}
+                </li>
+              </ul>
+              <p v-if="selectableFunctionalTypes.length === 0" class="font-medium">
+                No puede radicar hasta que al menos un tipo funcional tenga workflow configurado.
+              </p>
+              <p>
+                Configure el anclaje en
+                <NuxtLink to="/workflow/configuracion" class="font-medium underline underline-offset-2">
+                  Workflow → Configuración
+                </NuxtLink>.
+              </p>
+            </AlertDescription>
+          </Alert>
+
           <div class="space-y-2">
             <Label>Tipo funcional *</Label>
             <Multiselect
