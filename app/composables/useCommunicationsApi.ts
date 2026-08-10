@@ -1,6 +1,8 @@
 import type {
   CommunicationDashboard,
   CommunicationItem,
+  CommunicationReminderSettings,
+  CommunicationSettingsPayload,
   CreateCommunicationPayload,
 } from '~/types/communications'
 
@@ -52,9 +54,28 @@ export function useCommunicationsApi() {
         org_offices: Array<{ id: number, name: string }>
         roles: Array<{ id: number, name: string }>
         users: Array<{ id: number, name: string, email?: string | null }>
+        reminder_settings?: CommunicationReminderSettings
+        attachment_limits?: {
+          max_kb: number
+          php_upload_max_kb: number
+          php_post_max_kb: number
+          effective_max_kb: number
+        }
       }
     }>('/communications/meta/options')
     return res.data
+  }
+
+  async function fetchSettings() {
+    const res = await api<{ data: CommunicationSettingsPayload }>('/communications/settings')
+    return res.data
+  }
+
+  async function updateSettings(payload: CommunicationSettingsPayload) {
+    return api<{ data: CommunicationSettingsPayload, message: string }>('/communications/settings', {
+      method: 'PUT',
+      body: payload,
+    })
   }
 
   async function fetchCommunication(id: number) {
@@ -82,6 +103,12 @@ export function useCommunicationsApi() {
     )
   }
 
+  async function deleteCommunication(id: number) {
+    return api<{ message: string }>(`/communications/${id}`, {
+      method: 'DELETE',
+    })
+  }
+
   async function uploadAttachment(id: number, file: File) {
     const form = new FormData()
     form.append('file', file)
@@ -97,9 +124,12 @@ export function useCommunicationsApi() {
     fetchBirthdays,
     fetchTypes,
     fetchOptions,
+    fetchSettings,
+    updateSettings,
     fetchCommunication,
     createCommunication,
     publishCommunication,
+    deleteCommunication,
     confirmRead,
     uploadAttachment,
   }

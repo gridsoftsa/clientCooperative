@@ -343,6 +343,12 @@ export const navMenu: NavMenu[] = [
             ],
           },
           {
+            title: 'Comunicados',
+            icon: 'i-lucide-megaphone',
+            link: '/parametrizacion/comunicados',
+            permission: 'comunicados_parametrizar',
+          },
+          {
             title: 'Biblioteca institucional',
             icon: 'i-lucide-library',
             link: '/parametrizacion/biblioteca-institucional',

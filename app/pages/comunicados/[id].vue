@@ -90,6 +90,26 @@ function typeBadgeClass(type?: string) {
   }
 }
 
+function engagementStatusLabel(member: NonNullable<CommunicationItem['engagement']>['audience'][number]) {
+  if (member.has_confirmed) {
+    return 'Confirmó lectura'
+  }
+  if (member.has_read) {
+    return 'Leído sin confirmar'
+  }
+  return 'Pendiente'
+}
+
+function engagementStatusClass(member: NonNullable<CommunicationItem['engagement']>['audience'][number]) {
+  if (member.has_confirmed) {
+    return 'border-emerald-300 bg-emerald-100 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100'
+  }
+  if (member.has_read) {
+    return 'border-amber-300 bg-amber-100 text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100'
+  }
+  return 'border-border bg-muted text-muted-foreground'
+}
+
 onMounted(load)
 </script>
 
@@ -189,6 +209,121 @@ onMounted(load)
             <Icon :name="file.kind === 'link' ? 'i-lucide-link' : 'i-lucide-paperclip'" class="size-4" />
             {{ file.title || file.original_name || 'Adjunto' }}
           </button>
+        </CardContent>
+      </Card>
+
+      <Card v-if="item.can_view_engagement && item.engagement">
+        <CardHeader>
+          <CardTitle class="text-base">
+            Seguimiento de lectura y recordatorios
+          </CardTitle>
+          <CardDescription>
+            Destinatarios, confirmaciones de lectura y recordatorios enviados.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-lg border p-3">
+              <div class="text-xs text-muted-foreground">
+                Destinatarios
+              </div>
+              <div class="text-2xl font-semibold">
+                {{ item.engagement.audience_total }}
+              </div>
+            </div>
+            <div class="rounded-lg border p-3">
+              <div class="text-xs text-muted-foreground">
+                Leídos
+              </div>
+              <div class="text-2xl font-semibold">
+                {{ item.engagement.read_count }}
+              </div>
+            </div>
+            <div v-if="item.requires_read_confirmation" class="rounded-lg border p-3">
+              <div class="text-xs text-muted-foreground">
+                Confirmaron lectura
+              </div>
+              <div class="text-2xl font-semibold">
+                {{ item.engagement.confirmed_count }}
+              </div>
+            </div>
+            <div class="rounded-lg border p-3">
+              <div class="text-xs text-muted-foreground">
+                Recordatorios enviados
+              </div>
+              <div class="text-2xl font-semibold">
+                {{ item.engagement.reminders_sent_total }}
+              </div>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-lg border">
+            <table class="w-full min-w-[640px] text-sm">
+              <thead class="border-b bg-muted/40 text-left">
+                <tr>
+                  <th class="px-3 py-2 font-medium">
+                    Destinatario
+                  </th>
+                  <th class="px-3 py-2 font-medium">
+                    Estado
+                  </th>
+                  <th class="px-3 py-2 font-medium">
+                    Leído
+                  </th>
+                  <th v-if="item.requires_read_confirmation" class="px-3 py-2 font-medium">
+                    Confirmado
+                  </th>
+                  <th class="px-3 py-2 font-medium">
+                    Recordatorios
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="member in item.engagement.audience"
+                  :key="member.user_id"
+                  class="border-b last:border-b-0"
+                >
+                  <td class="px-3 py-2">
+                    <div class="font-medium">
+                      {{ member.name }}
+                    </div>
+                    <div v-if="member.email" class="text-xs text-muted-foreground">
+                      {{ member.email }}
+                    </div>
+                  </td>
+                  <td class="px-3 py-2">
+                    <Badge variant="outline" :class="engagementStatusClass(member)">
+                      {{ engagementStatusLabel(member) }}
+                    </Badge>
+                  </td>
+                  <td class="px-3 py-2 text-muted-foreground">
+                    {{ formatDate(member.read_at) }}
+                  </td>
+                  <td v-if="item.requires_read_confirmation" class="px-3 py-2 text-muted-foreground">
+                    {{ formatDate(member.confirmed_at) }}
+                  </td>
+                  <td class="px-3 py-2">
+                    <div class="font-medium">
+                      {{ member.reminders_sent_count }}
+                    </div>
+                    <div
+                      v-for="reminder in member.reminders"
+                      :key="`${member.user_id}-${reminder.reminder_number}`"
+                      class="text-xs text-muted-foreground"
+                    >
+                      #{{ reminder.reminder_number }} · {{ formatDate(reminder.sent_at) }}
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="item.engagement.audience.length === 0">
+                  <td :colspan="item.requires_read_confirmation ? 5 : 4" class="px-3 py-6 text-center text-muted-foreground">
+                    No hay destinatarios resueltos para este comunicado.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
 

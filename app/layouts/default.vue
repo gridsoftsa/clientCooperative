@@ -16,6 +16,7 @@
         </SidebarInset>
         <ScrollToTop />
         <LayoutNotificationToastHost />
+        <CommunicationAnnouncementHost />
       </SidebarProvider>
     </AuthGuard>
     <template #fallback>

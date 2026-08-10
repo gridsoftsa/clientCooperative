@@ -4,8 +4,8 @@ const {
   current,
   canCheck,
   dismissCurrent,
-  startPolling,
 } = useCommunicationAnnouncements()
+const { refreshAll } = useNotificationToasts()
 
 const open = computed({
   get: () => current.value !== null,
@@ -52,16 +52,10 @@ async function viewDetail() {
   await router.push(item.url)
 }
 
-let stopPolling: (() => void) | undefined
-
 onMounted(() => {
   if (canCheck.value) {
-    stopPolling = startPolling()
+    void refreshAll()
   }
-})
-
-onBeforeUnmount(() => {
-  stopPolling?.()
 })
 </script>
 

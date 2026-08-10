@@ -44,6 +44,9 @@ export interface CommunicationItem {
   is_featured: boolean
   is_important: boolean
   requires_read_confirmation: boolean
+  reminders_enabled?: boolean
+  reminder_interval_days?: number
+  reminder_max_count?: number
   published_at?: string | null
   expires_at?: string | null
   scheduled_at?: string | null
@@ -57,6 +60,46 @@ export interface CommunicationItem {
   is_confirmed?: boolean
   confirmed_reads_count?: number
   audiences?: Array<{ audience_type: CommunicationAudienceTypeValue, audience_id: number | null }>
+  can_view_engagement?: boolean
+  engagement?: CommunicationEngagement
+}
+
+export interface CommunicationEngagementAudienceMember {
+  user_id: number
+  name: string
+  email?: string | null
+  read_at?: string | null
+  confirmed_at?: string | null
+  has_read: boolean
+  has_confirmed: boolean
+  reminders_sent_count: number
+  reminders: Array<{ reminder_number: number, sent_at?: string | null }>
+}
+
+export interface CommunicationEngagement {
+  audience_total: number
+  read_count: number
+  confirmed_count: number
+  pending_read_count: number
+  pending_confirmation_count: number
+  reminders_sent_total: number
+  audience: CommunicationEngagementAudienceMember[]
+}
+
+export interface CommunicationReminderSettings {
+  reminder_default_interval_days: number
+  reminder_default_max_count: number
+  reminder_interval_options: number[]
+  reminder_max_count_options: number[]
+  reminder_interval_choices: Array<{ value: number, label: string }>
+  reminder_max_count_choices: Array<{ value: number, label: string }>
+}
+
+export interface CommunicationSettingsPayload {
+  reminder_default_interval_days: number
+  reminder_default_max_count: number
+  reminder_interval_options: number[]
+  reminder_max_count_options: number[]
 }
 
 export interface CommunicationDashboard {
@@ -80,6 +123,9 @@ export interface CreateCommunicationPayload {
   requires_read_confirmation?: boolean
   notify_internal?: boolean
   notify_email?: boolean
+  reminders_enabled?: boolean
+  reminder_interval_days?: number
+  reminder_max_count?: number
   publish_now?: boolean
   scheduled_at?: string | null
   expires_at?: string | null

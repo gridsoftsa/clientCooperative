@@ -6,7 +6,15 @@ export { default as AlertDescription } from './AlertDescription.vue'
 export { default as AlertTitle } from './AlertTitle.vue'
 
 export const alertVariants = cva(
-  'relative w-full rounded-lg border px-4 py-3 text-sm grid has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] grid-cols-[0_1fr] has-[>svg]:gap-x-3 gap-y-0.5 items-start [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current',
+  [
+    'relative w-full rounded-lg border px-4 py-3 text-sm grid gap-y-0.5 items-start',
+    'grid-cols-[0_1fr]',
+    'has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-3',
+    'has-[>:first-child:not([data-slot])]:grid-cols-[auto_1fr] has-[>:first-child:not([data-slot])]:gap-x-3',
+    '[&>svg]:col-start-1 [&>svg]:row-start-1 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:translate-y-0.5 [&>svg]:text-current',
+    '[&>:first-child:not([data-slot])]:col-start-1 [&>:first-child:not([data-slot])]:row-start-1',
+    '[&>:first-child:not([data-slot])]:size-4 [&>:first-child:not([data-slot])]:shrink-0 [&>:first-child:not([data-slot])]:translate-y-0.5',
+  ].join(' '),
   {
     variants: {
       variant: {

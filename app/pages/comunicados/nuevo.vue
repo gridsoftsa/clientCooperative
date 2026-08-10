@@ -6,6 +6,12 @@ import type {
   CommunicationTypeValue,
   CreateCommunicationPayload,
 } from '~/types/communications'
+import {
+  COMMUNICATION_PUBLISH_PRESET_LABELS,
+  formatBogotaSchedulePreview,
+  resolveCommunicationPublishPreset,
+  type CommunicationPublishPreset,
+} from '~/utils/communication-schedule-presets'
 
 definePageMeta({
   layout: 'default',
@@ -39,6 +45,35 @@ const orgUnits = ref<Array<{ id: number, name: string }>>([])
 const roles = ref<Array<{ id: number, name: string }>>([])
 const users = ref<Array<{ id: number, name: string, email?: string | null }>>([])
 const files = ref<File[]>([])
+const attachmentMaxMb = ref(2)
+
+function formatAttachmentLimitMb(kilobytes: number): string {
+  return (kilobytes / 1024).toFixed(1).replace(/\.0$/, '')
+}
+
+function extractApiErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object') {
+    const payload = error as {
+      data?: { message?: string, errors?: Record<string, string[]> }
+      message?: string
+    }
+
+    const fileError = payload.data?.errors?.file?.[0]
+    if (fileError) {
+      return fileError
+    }
+
+    if (payload.data?.message) {
+      return payload.data.message
+    }
+
+    if (payload.message) {
+      return payload.message
+    }
+  }
+
+  return fallback
+}
 
 const form = ref({
   type: 'notice' as CommunicationTypeValue,
@@ -51,7 +86,11 @@ const form = ref({
   notify_internal: true,
   notify_email: false,
   publish_now: true,
+  publish_preset: 'now' as CommunicationPublishPreset,
   scheduled_at: '',
+  reminders_enabled: false,
+  reminder_interval_days: 3,
+  reminder_max_count: 2,
   expires_at: '',
   org_unit_id: null as number | null,
   event_starts_at: '',
@@ -64,6 +103,27 @@ const form = ref({
 })
 
 const isEvent = computed(() => form.value.type === 'event')
+
+const isScheduled = computed(() => form.value.publish_preset !== 'now')
+
+const schedulePreview = computed(() => formatBogotaSchedulePreview(form.value.scheduled_at))
+
+const publishPresetOptions = computed(() =>
+  (Object.entries(COMMUNICATION_PUBLISH_PRESET_LABELS) as Array<[CommunicationPublishPreset, string]>)
+    .map(([value, label]) => ({ value, label })),
+)
+
+const reminderIntervalOptions = ref<Array<{ value: number, label: string }>>([
+  { value: 1, label: 'Cada 1 día' },
+  { value: 3, label: 'Cada 3 días' },
+  { value: 7, label: 'Cada 7 días' },
+])
+
+const reminderMaxCountOptions = ref<Array<{ value: number, label: string }>>([
+  { value: 1, label: '1 recordatorio' },
+  { value: 2, label: '2 recordatorios' },
+  { value: 3, label: '3 recordatorios' },
+])
 
 const typeOptions = computed(() =>
   types.value
@@ -143,6 +203,22 @@ async function loadOptions() {
     orgUnits.value = options.org_units ?? []
     roles.value = options.roles ?? []
     users.value = options.users ?? []
+
+    const reminderSettings = options.reminder_settings
+    if (reminderSettings) {
+      form.value.reminder_interval_days = reminderSettings.reminder_default_interval_days
+      form.value.reminder_max_count = reminderSettings.reminder_default_max_count
+      if (reminderSettings.reminder_interval_choices.length > 0) {
+        reminderIntervalOptions.value = reminderSettings.reminder_interval_choices
+      }
+      if (reminderSettings.reminder_max_count_choices.length > 0) {
+        reminderMaxCountOptions.value = reminderSettings.reminder_max_count_choices
+      }
+    }
+
+    if (options.attachment_limits?.effective_max_kb) {
+      attachmentMaxMb.value = Number(formatAttachmentLimitMb(options.attachment_limits.effective_max_kb))
+    }
   }
   catch {
     try {
@@ -178,6 +254,25 @@ watch(() => form.value.audience_mode, () => {
   form.value.audience_ids = []
 })
 
+watch(() => form.value.publish_preset, (preset) => {
+  if (preset === 'now') {
+    form.value.scheduled_at = ''
+    form.value.publish_now = true
+    return
+  }
+
+  form.value.publish_now = false
+  if (preset !== 'custom') {
+    form.value.scheduled_at = resolveCommunicationPublishPreset(preset)
+  }
+})
+
+watch(() => form.value.requires_read_confirmation, (required) => {
+  if (!required) {
+    form.value.reminders_enabled = false
+  }
+})
+
 function buildAudiences(): CreateCommunicationPayload['audiences'] {
   if (form.value.audience_mode === 'all') {
     return [{ audience_type: 'all' }]
@@ -187,6 +282,18 @@ function buildAudiences(): CreateCommunicationPayload['audiences'] {
     audience_type: form.value.audience_mode,
     audience_id: Number(id),
   }))
+}
+
+function validateAttachmentSizes(): string | null {
+  const maxBytes = attachmentMaxMb.value * 1024 * 1024
+
+  for (const file of files.value) {
+    if (file.size > maxBytes) {
+      return `${file.name} supera el máximo de ${attachmentMaxMb.value} MB por archivo.`
+    }
+  }
+
+  return null
 }
 
 async function submit() {
@@ -200,7 +307,30 @@ async function submit() {
     return
   }
 
+  if (isScheduled.value && !form.value.scheduled_at) {
+    toast.error('Indique la fecha y hora de publicación.')
+    return
+  }
+
+  if (form.value.reminders_enabled && !form.value.requires_read_confirmation) {
+    toast.error('Active la confirmación de lectura para usar recordatorios.')
+    return
+  }
+
+  const attachmentSizeError = validateAttachmentSizes()
+  if (attachmentSizeError) {
+    toast.error(attachmentSizeError)
+    return
+  }
+
+  const wantsPublishNow = form.value.publish_now && !isScheduled.value
+  const wantsSchedule = isScheduled.value
+  const hasAttachments = files.value.length > 0
+  const shouldDeferPublication = hasAttachments && wantsPublishNow
+
   loading.value = true
+  let createdId: number | null = null
+
   try {
     const payload: CreateCommunicationPayload = {
       type: form.value.type,
@@ -212,8 +342,11 @@ async function submit() {
       requires_read_confirmation: form.value.requires_read_confirmation,
       notify_internal: form.value.notify_internal,
       notify_email: form.value.notify_email,
-      publish_now: form.value.publish_now && !form.value.scheduled_at,
-      scheduled_at: bogotaDatetimeLocalToIso(form.value.scheduled_at),
+      reminders_enabled: form.value.reminders_enabled,
+      reminder_interval_days: form.value.reminder_interval_days,
+      reminder_max_count: form.value.reminder_max_count,
+      publish_now: shouldDeferPublication ? false : wantsPublishNow,
+      scheduled_at: wantsSchedule ? bogotaDatetimeLocalToIso(form.value.scheduled_at) : null,
       expires_at: bogotaDatetimeLocalToIso(form.value.expires_at),
       org_unit_id: form.value.org_unit_id,
       event_starts_at: bogotaDatetimeLocalToIso(form.value.event_starts_at),
@@ -226,17 +359,39 @@ async function submit() {
     }
 
     const created = await communicationsApi.createCommunication(payload)
-    const id = created.data.id
+    createdId = created.data.id
 
     for (const file of files.value) {
-      await communicationsApi.uploadAttachment(id, file)
+      await communicationsApi.uploadAttachment(createdId, file)
     }
 
-    toast.success(created.message || 'Comunicado creado.')
-    await router.push(`/comunicados/${id}`)
+    if (shouldDeferPublication) {
+      await communicationsApi.publishCommunication(createdId)
+    }
+
+    if (wantsPublishNow) {
+      toast.success('Comunicado publicado.')
+    }
+    else if (wantsSchedule) {
+      toast.success('Comunicado programado.')
+    }
+    else {
+      toast.success(created.message || 'Comunicado creado.')
+    }
+
+    await router.push(`/comunicados/${createdId}`)
   }
-  catch {
-    toast.error('No se pudo crear el comunicado.')
+  catch (error) {
+    if (createdId !== null) {
+      try {
+        await communicationsApi.deleteCommunication(createdId)
+      }
+      catch {
+        // Borrador huérfano: requiere limpieza manual si falla el rollback.
+      }
+    }
+
+    toast.error(extractApiErrorMessage(error, 'No se pudo publicar el comunicado. No se guardó ningún cambio.'))
   }
   finally {
     loading.value = false
@@ -398,19 +553,46 @@ onMounted(loadOptions)
             </div>
           </div>
 
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2">
-              <Label>Programar publicación (opcional)</Label>
-              <Input v-model="form.scheduled_at" type="datetime-local" />
+          <div class="space-y-4 rounded-lg border p-4">
+            <div class="space-y-1">
+              <Label>¿Cuándo publicar?</Label>
               <p class="text-xs text-muted-foreground">
-                Si la defines, el comunicado se publica automáticamente a esa hora (Colombia).
+                A la hora programada el comunicado se publica y, si está activa la notificación interna, los destinatarios reciben el aviso.
               </p>
             </div>
-            <div class="space-y-2">
+
+            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <button
+                v-for="option in publishPresetOptions"
+                :key="option.value"
+                type="button"
+                class="rounded-lg border px-3 py-2 text-left text-sm transition-colors"
+                :class="form.publish_preset === option.value
+                  ? 'border-primary bg-primary/5 font-medium'
+                  : 'border-border hover:bg-muted/50'"
+                @click="form.publish_preset = option.value"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+
+            <div v-if="form.publish_preset === 'custom'" class="space-y-2">
+              <Label>Fecha y hora (Colombia)</Label>
+              <Input v-model="form.scheduled_at" type="datetime-local" />
+            </div>
+
+            <p class="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              <span class="font-medium text-foreground">Vista previa:</span>
+              {{ schedulePreview }}
+            </p>
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="space-y-2 sm:col-span-2">
               <Label>Expira el (opcional)</Label>
               <Input v-model="form.expires_at" type="datetime-local" />
               <p class="text-xs text-muted-foreground">
-                Debe ser posterior a la publicación. No confundir con el fin del evento: al expirar deja de verse en el feed.
+                Debe ser posterior a la publicación. Al expirar deja de verse en el feed y se detienen los recordatorios.
               </p>
             </div>
           </div>
@@ -422,6 +604,9 @@ onMounted(loadOptions)
               multiple
               @change="files = Array.from(($event.target as HTMLInputElement).files ?? [])"
             />
+            <p class="text-xs text-muted-foreground">
+              Máximo {{ attachmentMaxMb }} MB por archivo.
+            </p>
           </div>
 
           <div class="grid gap-4 sm:grid-cols-2">
@@ -450,14 +635,75 @@ onMounted(loadOptions)
             </label>
             <label class="flex items-center gap-2 text-sm">
               <Checkbox v-model="form.notify_internal" />
-              Notificación interna
+              Notificación interna al publicar
             </label>
             <label class="flex items-center gap-2 text-sm">
               <Checkbox v-model="form.notify_email" />
-              Notificar por correo
+              Notificar por correo al publicar
             </label>
-            <label class="flex items-center gap-2 text-sm" :class="{ 'opacity-50': !!form.scheduled_at }">
-              <Checkbox v-model="form.publish_now" :disabled="!!form.scheduled_at" />
+          </div>
+
+          <div
+            v-if="form.requires_read_confirmation"
+            class="space-y-3 rounded-lg border border-dashed p-4"
+          >
+            <div class="space-y-1">
+              <Label>Recordatorios de lectura</Label>
+              <p class="text-xs text-muted-foreground">
+                Solo a usuarios que no hayan confirmado. Se envían como notificación en la campana (máximo configurable).
+              </p>
+            </div>
+            <label class="flex items-center gap-2 text-sm">
+              <Checkbox v-model="form.reminders_enabled" />
+              Enviar recordatorios automáticos
+            </label>
+            <div v-if="form.reminders_enabled" class="grid gap-3 sm:grid-cols-2">
+              <div class="space-y-2">
+                <Label>Frecuencia</Label>
+                <Select
+                  :model-value="String(form.reminder_interval_days)"
+                  @update:model-value="form.reminder_interval_days = Number($event)"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="option in reminderIntervalOptions"
+                      :key="option.value"
+                      :value="String(option.value)"
+                    >
+                      {{ option.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="space-y-2">
+                <Label>Máximo de recordatorios</Label>
+                <Select
+                  :model-value="String(form.reminder_max_count)"
+                  @update:model-value="form.reminder_max_count = Number($event)"
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="option in reminderMaxCountOptions"
+                      :key="option.value"
+                      :value="String(option.value)"
+                    >
+                      {{ option.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+
+          <div class="hidden">
+            <label class="flex items-center gap-2 text-sm" :class="{ 'opacity-50': isScheduled }">
+              <Checkbox v-model="form.publish_now" :disabled="isScheduled" />
               Publicar ahora
             </label>
           </div>
@@ -469,7 +715,7 @@ onMounted(loadOptions)
               </NuxtLink>
             </Button>
             <Button :disabled="loading" type="button" @click="submit">
-              {{ form.scheduled_at ? 'Programar' : (form.publish_now ? 'Publicar' : 'Guardar borrador') }}
+              {{ isScheduled ? 'Programar' : 'Publicar' }}
             </Button>
           </div>
         </template>
