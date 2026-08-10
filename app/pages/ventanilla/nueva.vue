@@ -553,18 +553,29 @@ async function submit() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-4xl space-y-6 p-4 md:p-6">
-    <div class="flex items-center gap-3">
-      <Button variant="ghost" size="icon" @click="router.push('/ventanilla')">
-        <Icon name="i-lucide-arrow-left" class="size-4" />
-      </Button>
-      <div>
-        <h1 class="text-2xl font-semibold tracking-tight">
-          Radicar documento
-        </h1>
-        <p class="text-muted-foreground text-sm">
-          Ventanilla única — registro manual
-        </p>
+  <div class="mx-auto w-full max-w-7xl space-y-6 px-4 pb-8 md:px-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div class="flex items-start gap-3">
+        <Button variant="ghost" size="icon" class="shrink-0" @click="router.push('/ventanilla')">
+          <Icon name="i-lucide-arrow-left" class="size-4" />
+        </Button>
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight">
+            Radicar documento
+          </h1>
+          <p class="text-sm text-muted-foreground">
+            Ventanilla única — registro manual
+          </p>
+        </div>
+      </div>
+
+      <div class="flex shrink-0 gap-2 sm:pt-1">
+        <Button type="button" variant="outline" @click="router.push('/ventanilla')">
+          Cancelar
+        </Button>
+        <Button type="button" :disabled="saving" @click="submit">
+          {{ saving ? 'Registrando…' : 'Registrar radicado' }}
+        </Button>
       </div>
     </div>
 
@@ -574,8 +585,10 @@ async function submit() {
       </p>
 
       <Card>
-        <CardHeader>
-          <CardTitle>Tipo de radicación</CardTitle>
+        <CardHeader class="pb-4">
+          <CardTitle class="text-base">
+            Tipo de radicación
+          </CardTitle>
         </CardHeader>
         <CardContent class="grid gap-4 md:grid-cols-3">
           <button
@@ -591,11 +604,16 @@ async function submit() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Clasificación funcional</CardTitle>
+      <Card class="border-primary/20 shadow-sm">
+        <CardHeader class="pb-4">
+          <CardTitle>
+            Clasificación funcional
+          </CardTitle>
+          <CardDescription>
+            Paso principal: define el tipo de trámite, el flujo de trabajo y la obligación de respuesta.
+          </CardDescription>
         </CardHeader>
-        <CardContent class="grid gap-4">
+        <CardContent class="space-y-4">
           <Alert
             v-if="excludedFunctionalTypes.length > 0"
             class="border-amber-500/40 bg-amber-500/10 text-amber-950 dark:text-amber-100"
@@ -623,67 +641,85 @@ async function submit() {
             </AlertDescription>
           </Alert>
 
-          <div class="space-y-2">
-            <Label>Tipo funcional *</Label>
-            <Multiselect
-              id="ventanilla_functional_type"
-              v-model="functionalTypeKey"
-              mode="single"
-              :object="false"
-              :options="functionalTypeOptions"
-              value-prop="value"
-              label="label"
-              :searchable="true"
-              :can-clear="false"
-              placeholder="Seleccione…"
-              no-options-text="Sin opciones"
-              no-results-text="Sin coincidencias"
-              :class="multiselectErrorClass('functional_type')"
-            />
-          </div>
-          <p v-if="selectedFunctionalType" class="text-muted-foreground text-xs">
-            <template v-if="effectiveRequiresResponse">
-              Requiere respuesta — SLA: {{ selectedFunctionalType.sla_business_days ?? '—' }} días hábiles
-            </template>
-            <template v-else>
-              No requiere respuesta (sin SLA)
-            </template>
-          </p>
-          <p
-            v-if="functionalTypeKey === VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY"
-            class="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground"
-          >
-            {{ VENTANILLA_INFORMATIVE_TYPE_HINT }}
-          </p>
-          <div v-if="canOverrideResponse && selectedFunctionalType" class="flex items-center gap-2">
-            <Checkbox
-              :checked="requiresResponseOverride !== null"
-              @update:checked="toggleResponseOverride"
-            />
-            <Label class="font-normal">
-              Ajustar manualmente obligación de respuesta
-            </Label>
-            <Multiselect
-              v-if="requiresResponseOverride !== null"
-              v-model="requiresResponseOverride"
-              mode="single"
-              :object="false"
-              :options="requiresResponseSelectOptions"
-              value-prop="value"
-              label="label"
-              :can-clear="false"
-              :searchable="false"
-              class="ventanilla-single-multiselect w-[220px]"
-            />
+          <div class="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] xl:items-start">
+            <div class="space-y-2">
+              <Label>Tipo funcional *</Label>
+              <Multiselect
+                id="ventanilla_functional_type"
+                v-model="functionalTypeKey"
+                mode="single"
+                :object="false"
+                :options="functionalTypeOptions"
+                value-prop="value"
+                label="label"
+                :searchable="true"
+                :can-clear="false"
+                placeholder="Seleccione…"
+                no-options-text="Sin opciones"
+                no-results-text="Sin coincidencias"
+                :class="multiselectErrorClass('functional_type')"
+              />
+            </div>
+
+            <div class="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <p v-if="selectedFunctionalType" class="text-sm">
+                <template v-if="effectiveRequiresResponse">
+                  <span class="font-medium text-foreground">Requiere respuesta</span>
+                  <span class="text-muted-foreground"> — SLA: {{ selectedFunctionalType.sla_business_days ?? '—' }} días hábiles</span>
+                </template>
+                <template v-else>
+                  <span class="font-medium text-foreground">No requiere respuesta</span>
+                  <span class="text-muted-foreground"> (sin SLA)</span>
+                </template>
+              </p>
+              <p v-else class="text-sm text-muted-foreground">
+                Seleccione un tipo funcional para ver el SLA y las reglas de respuesta.
+              </p>
+
+              <p
+                v-if="functionalTypeKey === VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY"
+                class="rounded-md border border-border bg-background p-3 text-xs text-muted-foreground"
+              >
+                {{ VENTANILLA_INFORMATIVE_TYPE_HINT }}
+              </p>
+
+              <div v-if="canOverrideResponse && selectedFunctionalType" class="space-y-2 border-t pt-3">
+                <label class="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    :checked="requiresResponseOverride !== null"
+                    @update:checked="toggleResponseOverride"
+                  />
+                  <span>Ajustar manualmente obligación de respuesta</span>
+                </label>
+                <Multiselect
+                  v-if="requiresResponseOverride !== null"
+                  v-model="requiresResponseOverride"
+                  mode="single"
+                  :object="false"
+                  :options="requiresResponseSelectOptions"
+                  value-prop="value"
+                  label="label"
+                  :can-clear="false"
+                  :searchable="false"
+                  class="ventanilla-single-multiselect w-full"
+                />
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Datos del radicado</CardTitle>
-        </CardHeader>
-        <CardContent class="grid min-w-0 gap-4 md:grid-cols-2">
+      <div class="space-y-6">
+          <Card>
+            <CardHeader class="pb-4">
+              <CardTitle class="text-base">
+                Datos del radicado
+              </CardTitle>
+              <CardDescription>
+                Áreas, partes, asunto y observaciones del trámite.
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="grid min-w-0 gap-4 md:grid-cols-2">
           <div v-if="filingType === 'incoming'" class="space-y-2 md:col-span-2">
             <Label>Área destinataria *</Label>
             <Multiselect
@@ -871,100 +907,115 @@ async function submit() {
           </div>
           <div class="space-y-2 md:col-span-2">
             <Label>Observaciones</Label>
-            <Textarea v-model="notes" rows="3" />
+            <Textarea v-model="notes" rows="4" class="min-h-[6rem] resize-y" />
           </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Clasificación archivística (TRD)</CardTitle>
-          <CardDescription>
-            Según la TRD vigente del área productora (en interna y salida) o del área destinataria (en entrada).
-          </CardDescription>
-        </CardHeader>
-        <CardContent class="min-w-0">
-          <VentanillaTrdPicker
-            ref="trdPickerRef"
-            :org-unit-id="responsibleOrgUnitId"
-            :org-unit-role-label="trdOrgUnitRoleLabel"
-            :submit-attempted="submitAttempted"
-            v-model:doc-document-type-id="docDocumentTypeId"
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Metadatos</CardTitle>
-          <CardDescription>
-            Campos dinámicos según el tipo funcional y la clasificación TRD.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <VentanillaArchivalMetadataFields
-            ref="metadataFieldsRef"
-            v-model="metadataValues"
-            :doc-document-type-id="docDocumentTypeId"
-            :functional-type-key="functionalTypeKey"
-            :submit-attempted="submitAttempted"
-          />
-          <p v-if="!docDocumentTypeId && !functionalTypeKey" class="text-muted-foreground text-sm">
-            Seleccione tipo funcional y tipo documental para cargar los metadatos aplicables.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader class="flex flex-row items-center justify-between">
-          <CardTitle>Archivos *</CardTitle>
-          <Button type="button" variant="outline" size="sm" @click="addFileRow">
-            <Icon name="i-lucide-plus" class="mr-1 size-4" />
-            Anexo
-          </Button>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div
-            v-for="(row, index) in (fileRows ?? [])"
-            :key="index"
-            class="flex flex-wrap items-end gap-3 rounded-lg border p-3"
-            :class="fileRowBorderClass(index)"
-          >
-            <div class="min-w-[200px] flex-1 space-y-2">
-              <Label>Título *</Label>
-              <Input v-model="row.title" />
-            </div>
-            <div class="min-w-[200px] flex-1 space-y-2">
-              <Label>Archivo</Label>
-              <Input
-                :id="index === 0 ? 'ventanilla_file_0' : undefined"
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                :class="fileInputErrorClass(index)"
-                @change="onFileChange(index, $event)"
+          <Card>
+            <CardHeader class="pb-4">
+              <CardTitle class="text-base">
+                Clasificación archivística (TRD)
+              </CardTitle>
+              <CardDescription>
+                Según la TRD vigente del área productora (en interna y salida) o del área destinataria (en entrada).
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="min-w-0">
+              <VentanillaTrdPicker
+                ref="trdPickerRef"
+                :org-unit-id="responsibleOrgUnitId"
+                :org-unit-role-label="trdOrgUnitRoleLabel"
+                :submit-attempted="submitAttempted"
+                v-model:doc-document-type-id="docDocumentTypeId"
               />
-            </div>
-            <Button
-              v-if="(fileRows?.length ?? 0) > 1"
-              type="button"
-              variant="ghost"
-              size="icon"
-              @click="removeFileRow(index)"
-            >
-              <Icon name="i-lucide-trash-2" class="size-4 text-destructive" />
-            </Button>
-          </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader class="pb-4">
+              <CardTitle class="text-base">
+                Metadatos
+              </CardTitle>
+              <CardDescription>
+                Campos dinámicos según el tipo funcional y la clasificación TRD.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <VentanillaArchivalMetadataFields
+                ref="metadataFieldsRef"
+                v-model="metadataValues"
+                :doc-document-type-id="docDocumentTypeId"
+                :functional-type-key="functionalTypeKey"
+                :submit-attempted="submitAttempted"
+              />
+              <p v-if="!docDocumentTypeId && !functionalTypeKey" class="text-muted-foreground text-sm">
+                Seleccione tipo funcional y tipo documental para cargar los metadatos aplicables.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader class="flex flex-row items-center justify-between pb-4">
+              <div>
+                <CardTitle class="text-base">
+                  Archivos *
+                </CardTitle>
+                <CardDescription>
+                  Documento principal y anexos del radicado.
+                </CardDescription>
+              </div>
+              <Button type="button" variant="outline" size="sm" @click="addFileRow">
+                <Icon name="i-lucide-plus" class="mr-1 size-4" />
+                Anexo
+              </Button>
+            </CardHeader>
+            <CardContent class="space-y-4">
+              <div
+                v-for="(row, index) in (fileRows ?? [])"
+                :key="index"
+                class="grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end"
+                :class="fileRowBorderClass(index)"
+              >
+                <div class="min-w-0 space-y-2">
+                  <Label>Título *</Label>
+                  <Input v-model="row.title" />
+                </div>
+                <div class="min-w-0 space-y-2">
+                  <Label>Archivo</Label>
+                  <Input
+                    :id="index === 0 ? 'ventanilla_file_0' : undefined"
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    :class="fileInputErrorClass(index)"
+                    @change="onFileChange(index, $event)"
+                  />
+                </div>
+                <Button
+                  v-if="(fileRows?.length ?? 0) > 1"
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  class="md:mb-0.5"
+                  @click="removeFileRow(index)"
+                >
+                  <Icon name="i-lucide-trash-2" class="size-4 text-destructive" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+      </div>
+
+      <Card class="lg:hidden">
+        <CardContent class="flex justify-end gap-3 p-4">
+          <Button type="button" variant="outline" @click="router.push('/ventanilla')">
+            Cancelar
+          </Button>
+          <Button type="submit" :disabled="saving">
+            {{ saving ? 'Registrando…' : 'Registrar radicado' }}
+          </Button>
         </CardContent>
       </Card>
-
-      <div class="flex justify-end gap-3">
-        <Button type="button" variant="outline" @click="router.push('/ventanilla')">
-          Cancelar
-        </Button>
-        <Button type="submit" :disabled="saving">
-          {{ saving ? 'Registrando…' : 'Registrar radicado' }}
-        </Button>
-      </div>
     </form>
   </div>
 </template>

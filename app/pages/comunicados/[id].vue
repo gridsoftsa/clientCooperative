@@ -114,7 +114,7 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl space-y-6">
+  <div class="mx-auto w-full max-w-7xl space-y-6 px-4 pb-8 md:px-6">
     <Button variant="ghost" size="sm" as-child class="-ml-2">
       <NuxtLink to="/comunicados">
         <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
@@ -156,7 +156,7 @@ onMounted(load)
             {{ item.status_label || item.status }}
           </Badge>
         </div>
-        <h1 class="text-3xl font-semibold tracking-tight">
+        <h1 class="text-3xl font-semibold tracking-tight lg:text-4xl">
           {{ item.title }}
         </h1>
         <p class="text-sm text-muted-foreground">
@@ -165,52 +165,137 @@ onMounted(load)
         </p>
       </div>
 
-      <Card v-if="item.type === 'event'">
-        <CardContent class="space-y-2 p-5 text-sm">
-          <div><span class="text-muted-foreground">Inicio:</span> {{ formatDate(item.event_starts_at) }}</div>
-          <div v-if="item.event_ends_at">
-            <span class="text-muted-foreground">Fin:</span> {{ formatDate(item.event_ends_at) }}
-          </div>
-          <div v-if="item.event_location">
-            <span class="text-muted-foreground">Lugar:</span> {{ item.event_location }}
-          </div>
-        </CardContent>
-      </Card>
+      <div class="grid gap-6 lg:grid-cols-12 lg:items-start">
+        <div class="space-y-6 lg:col-span-8">
+          <Card>
+            <CardHeader class="pb-4">
+              <CardTitle class="text-base">
+                Contenido
+              </CardTitle>
+            </CardHeader>
+            <CardContent class="prose prose-sm max-w-none dark:prose-invert">
+              <p v-if="item.summary" class="text-base text-muted-foreground not-prose">
+                {{ item.summary }}
+              </p>
+              <div v-if="item.body" class="whitespace-pre-wrap not-prose">
+                {{ item.body }}
+              </div>
+              <p v-else-if="!item.summary" class="text-muted-foreground not-prose">
+                Sin contenido adicional.
+              </p>
+            </CardContent>
+          </Card>
 
-      <Card>
-        <CardContent class="prose prose-sm max-w-none p-6 dark:prose-invert">
-          <p v-if="item.summary" class="text-base text-muted-foreground">
-            {{ item.summary }}
-          </p>
-          <div v-if="item.body" class="whitespace-pre-wrap">
-            {{ item.body }}
-          </div>
-          <p v-else class="text-muted-foreground">
-            Sin contenido adicional.
-          </p>
-        </CardContent>
-      </Card>
+          <Card v-if="item.attachments?.length">
+            <CardHeader class="pb-4">
+              <CardTitle class="text-base">
+                Adjuntos
+              </CardTitle>
+              <CardDescription>
+                {{ item.attachments.length }} archivo(s) o enlace(s)
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="grid gap-2 sm:grid-cols-2">
+              <button
+                v-for="file in item.attachments"
+                :key="file.id"
+                type="button"
+                class="flex items-center gap-2 rounded-md border px-3 py-3 text-left text-sm hover:bg-muted/50 disabled:opacity-50"
+                :disabled="openingAttachmentId === file.id"
+                @click="openAttachment(file)"
+              >
+                <Icon :name="file.kind === 'link' ? 'i-lucide-link' : 'i-lucide-paperclip'" class="size-4 shrink-0" />
+                <span class="min-w-0 truncate">
+                  {{ file.title || file.original_name || 'Adjunto' }}
+                </span>
+              </button>
+            </CardContent>
+          </Card>
+        </div>
 
-      <Card v-if="item.attachments?.length">
-        <CardHeader>
-          <CardTitle class="text-base">
-            Adjuntos
-          </CardTitle>
-        </CardHeader>
-        <CardContent class="space-y-2">
-          <button
-            v-for="file in item.attachments"
-            :key="file.id"
-            type="button"
-            class="flex w-full items-center gap-2 rounded-md border px-3 py-2 text-left text-sm hover:bg-muted/50 disabled:opacity-50"
-            :disabled="openingAttachmentId === file.id"
-            @click="openAttachment(file)"
-          >
-            <Icon :name="file.kind === 'link' ? 'i-lucide-link' : 'i-lucide-paperclip'" class="size-4" />
-            {{ file.title || file.original_name || 'Adjunto' }}
-          </button>
-        </CardContent>
-      </Card>
+        <div class="space-y-6 lg:col-span-4">
+          <Card v-if="item.type === 'event'">
+            <CardHeader class="pb-4">
+              <CardTitle class="text-base">
+                Detalles del evento
+              </CardTitle>
+            </CardHeader>
+            <CardContent class="space-y-2 text-sm">
+              <div>
+                <span class="text-muted-foreground">Inicio:</span>
+                {{ formatDate(item.event_starts_at) }}
+              </div>
+              <div v-if="item.event_ends_at">
+                <span class="text-muted-foreground">Fin:</span>
+                {{ formatDate(item.event_ends_at) }}
+              </div>
+              <div v-if="item.event_location">
+                <span class="text-muted-foreground">Lugar:</span>
+                {{ item.event_location }}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader class="pb-4">
+              <CardTitle class="text-base">
+                Información
+              </CardTitle>
+            </CardHeader>
+            <CardContent class="space-y-3 text-sm">
+              <div class="flex justify-between gap-3">
+                <span class="text-muted-foreground">Estado</span>
+                <span class="font-medium text-right">{{ item.status_label || item.status }}</span>
+              </div>
+              <div v-if="item.scheduled_at" class="flex justify-between gap-3">
+                <span class="text-muted-foreground">Programado</span>
+                <span class="text-right">{{ formatDate(item.scheduled_at) }}</span>
+              </div>
+              <div v-if="item.expires_at" class="flex justify-between gap-3">
+                <span class="text-muted-foreground">Expira</span>
+                <span class="text-right">{{ formatDate(item.expires_at) }}</span>
+              </div>
+              <div v-if="item.requires_read_confirmation" class="flex justify-between gap-3">
+                <span class="text-muted-foreground">Confirmaciones</span>
+                <span class="font-medium">{{ item.confirmed_reads_count ?? 0 }}</span>
+              </div>
+              <div v-if="item.reminders_enabled" class="flex justify-between gap-3">
+                <span class="text-muted-foreground">Recordatorios</span>
+                <span class="text-right">
+                  cada {{ item.reminder_interval_days }} d · máx. {{ item.reminder_max_count }}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card v-if="item.requires_read_confirmation">
+            <CardHeader class="pb-4">
+              <CardTitle class="text-base">
+                Confirmación de lectura
+              </CardTitle>
+            </CardHeader>
+            <CardContent class="space-y-4">
+              <p class="text-sm text-muted-foreground">
+                <template v-if="item.is_confirmed">
+                  Ya confirmó la lectura de este comunicado.
+                </template>
+                <template v-else>
+                  Esta publicación requiere que confirme haberla leído.
+                </template>
+              </p>
+              <Button
+                v-if="!item.is_confirmed"
+                class="w-full"
+                :disabled="confirming"
+                type="button"
+                @click="confirmRead"
+              >
+                Marcar como leído
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
 
       <Card v-if="item.can_view_engagement && item.engagement">
         <CardHeader>
@@ -222,7 +307,7 @@ onMounted(load)
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-lg border p-3">
               <div class="text-xs text-muted-foreground">
                 Destinatarios
@@ -258,7 +343,7 @@ onMounted(load)
           </div>
 
           <div class="overflow-x-auto rounded-lg border">
-            <table class="w-full min-w-[640px] text-sm">
+            <table class="w-full min-w-[720px] text-sm">
               <thead class="border-b bg-muted/40 text-left">
                 <tr>
                   <th class="px-3 py-2 font-medium">
@@ -324,32 +409,6 @@ onMounted(load)
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card v-if="item.requires_read_confirmation">
-        <CardContent class="flex flex-wrap items-center justify-between gap-3 p-5">
-          <div>
-            <div class="font-medium">
-              Confirmación de lectura
-            </div>
-            <div class="text-sm text-muted-foreground">
-              <template v-if="item.is_confirmed">
-                Ya confirmó la lectura de este comunicado.
-              </template>
-              <template v-else>
-                Esta circular requiere que confirme haberla leído.
-              </template>
-            </div>
-          </div>
-          <Button
-            v-if="!item.is_confirmed"
-            :disabled="confirming"
-            type="button"
-            @click="confirmRead"
-          >
-            Marcar como leído
-          </Button>
         </CardContent>
       </Card>
     </template>

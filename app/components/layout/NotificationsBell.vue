@@ -112,17 +112,25 @@ defineExpose({ requestImmediateRefresh })
           v-for="row in items"
           :key="row.id"
           type="button"
-          class="flex w-full flex-col gap-1 border-b px-3 py-2.5 text-left transition-colors last:border-b-0 hover:bg-muted/50"
-          :class="{ 'bg-primary/5': !row.read_at }"
+          class="relative flex w-full flex-col gap-1 border-b py-2.5 pr-3 pl-4 text-left transition-colors last:border-b-0 hover:bg-muted/50"
+          :class="!row.read_at ? 'bg-primary/10 hover:bg-primary/15' : ''"
           @click="openItem(row)"
         >
+          <span
+            v-if="!row.read_at"
+            class="absolute inset-y-2 left-0 w-1 rounded-r-full bg-primary"
+            aria-hidden="true"
+          />
           <div class="flex items-start justify-between gap-2">
-            <p class="text-sm font-medium leading-snug">
+            <p
+              class="text-sm leading-snug"
+              :class="!row.read_at ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'"
+            >
               {{ row.title || 'Notificación' }}
             </p>
             <span
-              v-if="!row.read_at"
-              class="mt-1 size-2 shrink-0 rounded-full bg-primary"
+              class="mt-1 size-2.5 shrink-0 rounded-full"
+              :class="!row.read_at ? 'bg-primary ring-2 ring-primary/25' : 'bg-muted-foreground/25'"
             />
           </div>
           <p v-if="row.message" class="line-clamp-2 text-xs text-muted-foreground">

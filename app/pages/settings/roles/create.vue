@@ -1,18 +1,11 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { Permission } from '~/types/role'
-import {
-  PERMISSION_CATEGORY_LABELS,
-  PERMISSION_CATEGORY_SECTION_TITLES,
-  formatPermissionDisplayName,
-  groupRadicacionPermissions,
-  sortPermissionCategoryKeys,
-} from '~/constants/permission-labels'
 
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'roles_crear'
+  permissions: 'roles_crear',
 })
 
 const { $api } = useNuxtApp()
@@ -42,62 +35,6 @@ const formData = ref({
 const permissions = ref<Permission[]>([])
 const loading = ref(false)
 const saving = ref(false)
-
-const groupedPermissions = computed(() => {
-  const groups: Record<string, Permission[]> = {}
-  for (const p of permissions.value) {
-    const category = p.name.split('_')[0] ?? 'otros'
-    if (!groups[category]) groups[category] = []
-    groups[category].push(p)
-  }
-  return groups
-})
-
-const orderedCategoryKeys = computed(() =>
-  sortPermissionCategoryKeys(Object.keys(groupedPermissions.value)),
-)
-
-const radicacionSubgroups = computed(() =>
-  groupRadicacionPermissions(groupedPermissions.value['radicacion'] ?? []),
-)
-
-const getCategoryLabel = (key: string) =>
-  PERMISSION_CATEGORY_SECTION_TITLES[key] ?? PERMISSION_CATEGORY_LABELS[key] ?? key
-
-const openCategories = ref<Record<string, boolean>>({})
-
-const collapseAll = () => {
-  openCategories.value = Object.fromEntries(
-    Object.keys(groupedPermissions.value).map((c) => [c, false]),
-  )
-}
-
-const setCategoryOpen = (category: string, open: boolean) => {
-  openCategories.value = { ...openCategories.value, [category]: open }
-}
-
-const togglePermission = (name: string, checked: boolean) => {
-  if (checked) {
-    if (!formData.value.permissions.includes(name)) {
-      formData.value.permissions = [...formData.value.permissions, name]
-    }
-  } else {
-    formData.value.permissions = formData.value.permissions.filter(p => p !== name)
-  }
-}
-
-const toggleCategory = (category: string) => {
-  const list = groupedPermissions.value[category] ?? []
-  const allSelected = list.every(p => formData.value.permissions.includes(p.name))
-  if (allSelected) {
-    formData.value.permissions = formData.value.permissions.filter(
-      p => !list.some(l => l.name === p)
-    )
-  } else {
-    const toAdd = list.filter(p => !formData.value.permissions.includes(p.name)).map(p => p.name)
-    formData.value.permissions = [...formData.value.permissions, ...toAdd]
-  }
-}
 
 const fetchPermissions = async () => {
   loading.value = true
@@ -145,159 +82,74 @@ onMounted(() => fetchPermissions())
 
 <template>
   <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4">
-    <div class="flex items-center justify-between">
-      <div>
-        <h2 class="text-2xl font-bold tracking-tight">Crear Nuevo Rol</h2>
-        <p class="text-muted-foreground">
-          {{
-            fromUserCreate
-              ? 'Al guardar volverá al alta de usuario con este rol preseleccionado.'
-              : 'Define un nuevo rol y asigna sus permisos'
-          }}
-        </p>
+    <div class="flex w-full flex-col gap-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-2xl font-bold tracking-tight">
+            Crear Nuevo Rol
+          </h2>
+          <p class="text-muted-foreground">
+            {{
+              fromUserCreate
+                ? 'Al guardar volverá al alta de usuario con este rol preseleccionado.'
+                : 'Define un nuevo rol y asigna sus permisos'
+            }}
+          </p>
+        </div>
+        <Button variant="outline" @click="goBack">
+          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
+          Volver
+        </Button>
       </div>
-      <Button variant="outline" @click="goBack">
-        <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
-        Volver
-      </Button>
-    </div>
 
-    <form @submit.prevent="handleSubmit">
-      <div class="grid gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Información del Rol</CardTitle>
-            <CardDescription>Información básica del rol</CardDescription>
-          </CardHeader>
-          <CardContent class="space-y-4">
-            <div>
-              <Label for="name">Nombre del Rol *</Label>
-              <Input
-                id="name"
-                v-model="formData.name"
-                required
-                placeholder="Ej: moderador, editor, supervisor..."
-              />
-              <p class="text-sm text-muted-foreground mt-1">
-                El nombre debe ser único y en minúsculas (ej: moderador, editor)
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+      <form @submit.prevent="handleSubmit">
+        <div class="grid gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Información del Rol</CardTitle>
+              <CardDescription>Información básica del rol</CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-4">
+              <div>
+                <Label for="name">Nombre del Rol *</Label>
+                <Input
+                  id="name"
+                  v-model="formData.name"
+                  required
+                  placeholder="Ej: moderador, editor, supervisor..."
+                />
+                <p class="mt-1 text-sm text-muted-foreground">
+                  El nombre debe ser único y en minúsculas (ej: moderador, editor)
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader class="flex flex-row items-center justify-between space-y-0">
-            <div>
+          <Card>
+            <CardHeader>
               <CardTitle>Permisos</CardTitle>
               <CardDescription>Selecciona los permisos que tendrá este rol</CardDescription>
-            </div>
-            <Button type="button" variant="outline" size="sm" @click="collapseAll">
-              <Icon name="i-lucide-chevrons-up-down" class="mr-2 h-4 w-4" />
-              Contraer todo
+            </CardHeader>
+            <CardContent>
+              <SettingsRolePermissionsPicker
+                v-model="formData.permissions"
+                :permissions="permissions"
+                :loading="loading"
+              />
+            </CardContent>
+          </Card>
+
+          <div class="flex justify-end gap-4">
+            <Button type="button" variant="outline" @click="goBack">
+              Cancelar
             </Button>
-          </CardHeader>
-          <CardContent>
-            <div v-if="loading" class="flex items-center justify-center py-8">
-              <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
-            </div>
-
-            <div v-else class="space-y-2">
-              <Collapsible
-                v-for="category in orderedCategoryKeys"
-                :key="category"
-                :open="openCategories[category] ?? true"
-                class="group/perm border rounded-lg"
-                @update:open="(v) => setCategoryOpen(category, v)"
-              >
-                <div class="flex items-center justify-between px-4 py-2 bg-muted/50 rounded-t-lg">
-                  <CollapsibleTrigger as-child>
-                    <button
-                      type="button"
-                      class="flex items-center gap-2 w-full text-left font-semibold hover:opacity-80"
-                    >
-                      <Icon
-                        name="i-lucide-chevron-down"
-                        class="h-4 w-4 transition-transform duration-200 group-data-[state=open]/perm:rotate-180"
-                      />
-                      {{ getCategoryLabel(category) }}
-                      <Badge variant="secondary" class="ml-2">
-                        {{ (groupedPermissions[category] ?? []).filter(p => formData.permissions.includes(p.name)).length }}/{{ (groupedPermissions[category] ?? []).length }}
-                      </Badge>
-                    </button>
-                  </CollapsibleTrigger>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    @click.stop="toggleCategory(category)"
-                  >
-                    {{ (groupedPermissions[category] ?? []).every(p => formData.permissions.includes(p.name)) ? 'Deseleccionar' : 'Seleccionar' }} todos
-                  </Button>
-                </div>
-                <CollapsibleContent>
-                  <div v-if="category === 'radicacion'" class="divide-y border-t">
-                    <div
-                      v-for="sub in radicacionSubgroups"
-                      :key="sub.key"
-                      class="px-4 py-3"
-                    >
-                      <p class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {{ sub.label }}
-                      </p>
-                      <div class="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
-                        <div
-                          v-for="p in sub.items"
-                          :key="p.id"
-                          class="flex items-center space-x-2"
-                        >
-                          <Checkbox
-                            :id="`permission-${p.id}`"
-                            :model-value="formData.permissions.includes(p.name)"
-                            @update:model-value="(v: boolean | 'indeterminate') => togglePermission(p.name, v === true)"
-                          />
-                          <Label :for="`permission-${p.id}`" class="cursor-pointer text-sm font-normal">
-                            {{ formatPermissionDisplayName(p.name) }}
-                          </Label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div v-else class="grid grid-cols-1 gap-2 border-t p-4 md:grid-cols-2 lg:grid-cols-3">
-                    <div
-                      v-for="p in groupedPermissions[category] ?? []"
-                      :key="p.id"
-                      class="flex items-center space-x-2"
-                    >
-                      <Checkbox
-                        :id="`permission-${p.id}`"
-                        :model-value="formData.permissions.includes(p.name)"
-                        @update:model-value="(v: boolean | 'indeterminate') => togglePermission(p.name, v === true)"
-                      />
-                      <Label :for="`permission-${p.id}`" class="cursor-pointer text-sm font-normal">
-                        {{ formatPermissionDisplayName(p.name) }}
-                      </Label>
-                    </div>
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-
-              <p v-if="Object.keys(groupedPermissions).length === 0" class="text-center py-8 text-muted-foreground">
-                No hay permisos disponibles
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div class="flex justify-end gap-4">
-          <Button type="button" variant="outline" @click="goBack">Cancelar</Button>
-          <Button type="submit" :disabled="saving">
-            <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-            {{ saving ? 'Guardando...' : (fromUserCreate ? 'Crear y volver al usuario' : 'Crear Rol') }}
-          </Button>
+            <Button type="submit" :disabled="saving">
+              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              {{ saving ? 'Guardando...' : (fromUserCreate ? 'Crear y volver al usuario' : 'Crear Rol') }}
+            </Button>
+          </div>
         </div>
-      </div>
-    </form>
+      </form>
     </div>
   </SettingsLayout>
 </template>

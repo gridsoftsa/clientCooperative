@@ -147,7 +147,7 @@ async function saveFunctional(rows: Array<{
 
       if (row._isNew && !row._removed) {
         if (!payload.key) {
-          throw new Error('Falta la clave técnica de un tipo funcional nuevo.')
+          throw new Error('No se pudo generar la clave técnica. Revise la etiqueta del tipo funcional.')
         }
         await ventanillaApi.createFunctionalType(payload)
         savedCount += 1

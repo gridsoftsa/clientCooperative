@@ -52,7 +52,7 @@ const catalogTitle = computed(() =>
 
 const helperText = computed(() =>
   props.kind === 'functional-types'
-    ? `Opciones del desplegable «Tipo funcional» en nuevo radicado. Configure respuesta, SLA, tipo de expediente automático y orden.`
+    ? `Opciones del desplegable «Tipo funcional» en nuevo radicado. La clave técnica se asigna sola al guardar. Configure respuesta, SLA, tipo de expediente automático y orden.`
     : `Mismo texto que aparece en el desplegable de «Medio de recepción» al radicar.`,
 )
 
@@ -211,13 +211,46 @@ function validateFunctionalKey(row: FunctionalDraft): string {
   let typeKey = String(row.typeKey ?? '').trim()
   if (!typeKey && row._isNew) {
     typeKey = slugFromLabel(row.label)
-    row.typeKey = typeKey
   }
   if (!typeKey && row.originalKey) {
     typeKey = String(row.originalKey).trim()
-    row.typeKey = typeKey
   }
+  if (row._isNew && typeKey) {
+    typeKey = ensureUniqueFunctionalKey(typeKey, row)
+  }
+  row.typeKey = typeKey
   return typeKey
+}
+
+function usedFunctionalKeys(excludingRow?: FunctionalDraft): Set<string> {
+  const used = new Set<string>()
+  for (const row of functionalDraft.value) {
+    if (row._removed) {
+      continue
+    }
+    if (excludingRow && row === excludingRow) {
+      continue
+    }
+    const key = String(row.originalKey ?? row.typeKey ?? '').trim()
+    if (key) {
+      used.add(key)
+    }
+  }
+
+  return used
+}
+
+function ensureUniqueFunctionalKey(base: string, row: FunctionalDraft): string {
+  const used = usedFunctionalKeys(row)
+  let candidate = base
+  let suffix = 2
+  while (used.has(candidate)) {
+    const tail = `_${suffix}`
+    candidate = `${base.slice(0, Math.max(1, 64 - tail.length))}${tail}`
+    suffix += 1
+  }
+
+  return candidate
 }
 
 function validateAndSave() {
@@ -362,10 +395,9 @@ watch(
     <template v-else>
       <div class="overflow-x-auto rounded-md border bg-background">
         <div
-          class="grid min-w-[56rem] grid-cols-[minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_auto] gap-2 border-b bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground"
+          class="grid min-w-[48rem] grid-cols-[minmax(10rem,1.2fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_auto] gap-2 border-b bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground"
         >
           <span>Texto en el formulario</span>
-          <span>Clave técnica</span>
           <span>Tipo de expediente</span>
           <span>Respuesta</span>
           <span>SLA</span>
@@ -376,19 +408,13 @@ watch(
         <div
           v-for="(row, idx) in visibleFunctionalRows"
           :key="`${functionalRowKey(row) || 'new'}-${idx}`"
-          class="grid min-w-[56rem] grid-cols-[minmax(10rem,1.2fr)_minmax(8rem,1fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
+          class="grid min-w-[48rem] grid-cols-[minmax(10rem,1.2fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
         >
           <Input
             v-model="row.label"
             class="h-9"
             :disabled="!editing || !canEdit"
             placeholder="Ej.: PQRSFD"
-          />
-          <Input
-            v-model="row.typeKey"
-            class="h-9 font-mono text-xs"
-            :disabled="!editing || !canEdit || !row._isNew"
-            placeholder="pqrsfd"
           />
           <Select v-model="row.archival_file_type_id" :disabled="!editing || !canEdit">
             <SelectTrigger class="h-9">

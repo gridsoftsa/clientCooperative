@@ -402,112 +402,190 @@ onMounted(loadOptions)
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl space-y-6">
-    <div>
-      <Button variant="ghost" size="sm" as-child class="mb-2 -ml-2">
-        <NuxtLink to="/comunicados">
-          <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
-          Volver
-        </NuxtLink>
-      </Button>
-      <h1 class="text-2xl font-semibold tracking-tight">
-        Nueva publicación
-      </h1>
-      <p class="text-sm text-muted-foreground">
-        Cree un aviso, noticia, circular, evento o comunicado interno.
-      </p>
+  <div class="mx-auto w-full max-w-7xl space-y-6 px-4 pb-8 md:px-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <Button variant="ghost" size="sm" as-child class="mb-2 -ml-2">
+          <NuxtLink to="/comunicados">
+            <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
+            Volver
+          </NuxtLink>
+        </Button>
+        <h1 class="text-2xl font-semibold tracking-tight">
+          Nueva publicación
+        </h1>
+        <p class="text-sm text-muted-foreground">
+          Cree un aviso, noticia, circular, evento o comunicado interno.
+        </p>
+      </div>
+
+      <div v-if="optionsReady" class="flex shrink-0 gap-2 sm:pt-8">
+        <Button variant="outline" as-child>
+          <NuxtLink to="/comunicados">
+            Cancelar
+          </NuxtLink>
+        </Button>
+        <Button :disabled="loading" type="button" @click="submit">
+          {{ isScheduled ? 'Programar' : 'Publicar' }}
+        </Button>
+      </div>
     </div>
 
-    <Card>
-      <CardContent class="space-y-5 p-6">
-        <div v-if="!optionsReady" class="space-y-3 py-6">
+    <div v-if="!optionsReady" class="space-y-6">
+      <Card>
+        <CardContent class="space-y-3 p-6">
           <Skeleton class="h-10 w-full" />
           <Skeleton class="h-10 w-full" />
-          <Skeleton class="h-24 w-full" />
-        </div>
+          <Skeleton class="h-48 w-full" />
+        </CardContent>
+      </Card>
+    </div>
 
-        <template v-else>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2">
-              <Label>Tipo</Label>
-              <ClientOnly>
-                <Multiselect
-                  v-model="form.type"
-                  mode="single"
-                  :object="false"
-                  :options="typeOptions"
-                  value-prop="value"
-                  label="label"
-                  :searchable="true"
-                  :can-clear="false"
-                  placeholder="Seleccione tipo"
-                  no-options-text="Sin opciones"
-                  no-results-text="Sin coincidencias"
-                  class="comunicados-ms"
-                />
-                <template #fallback>
-                  <Skeleton class="h-10 w-full" />
-                </template>
-              </ClientOnly>
-            </div>
-            <div class="space-y-2">
-              <Label>Área emisora (opcional)</Label>
-              <ClientOnly>
-                <Multiselect
-                  v-model="form.org_unit_id"
-                  mode="single"
-                  :object="false"
-                  :options="orgUnitOptions"
-                  value-prop="value"
-                  label="label"
-                  :searchable="true"
-                  :can-clear="true"
-                  placeholder="Sin área"
-                  no-options-text="Sin áreas disponibles"
-                  no-results-text="Sin coincidencias"
-                  class="comunicados-ms"
-                />
-                <template #fallback>
-                  <Skeleton class="h-10 w-full" />
-                </template>
-              </ClientOnly>
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <Label>Título</Label>
-            <Input v-model="form.title" placeholder="Título de la publicación" />
-          </div>
-
-          <div class="space-y-2">
-            <Label>Resumen</Label>
-            <Input v-model="form.summary" maxlength="500" placeholder="Texto corto para el feed" />
-          </div>
-
-          <div class="space-y-2">
-            <Label>Contenido</Label>
-            <Textarea v-model="form.body" rows="8" placeholder="Contenido de la publicación" />
-          </div>
-
-          <template v-if="isEvent">
-            <div class="grid gap-4 sm:grid-cols-2">
+    <div v-else class="grid gap-6 lg:grid-cols-12 lg:items-start">
+      <div class="space-y-6 lg:col-span-8">
+        <Card>
+          <CardHeader class="pb-4">
+            <CardTitle class="text-base">
+              Contenido
+            </CardTitle>
+            <CardDescription>
+              Tipo, título y cuerpo de la publicación.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="grid gap-4 md:grid-cols-2">
               <div class="space-y-2">
-                <Label>Inicio del evento</Label>
-                <Input v-model="form.event_starts_at" type="datetime-local" />
+                <Label>Tipo</Label>
+                <ClientOnly>
+                  <Multiselect
+                    v-model="form.type"
+                    mode="single"
+                    :object="false"
+                    :options="typeOptions"
+                    value-prop="value"
+                    label="label"
+                    :searchable="true"
+                    :can-clear="false"
+                    placeholder="Seleccione tipo"
+                    no-options-text="Sin opciones"
+                    no-results-text="Sin coincidencias"
+                    class="comunicados-ms"
+                  />
+                  <template #fallback>
+                    <Skeleton class="h-10 w-full" />
+                  </template>
+                </ClientOnly>
               </div>
               <div class="space-y-2">
-                <Label>Fin del evento</Label>
-                <Input v-model="form.event_ends_at" type="datetime-local" />
+                <Label>Área emisora (opcional)</Label>
+                <ClientOnly>
+                  <Multiselect
+                    v-model="form.org_unit_id"
+                    mode="single"
+                    :object="false"
+                    :options="orgUnitOptions"
+                    value-prop="value"
+                    label="label"
+                    :searchable="true"
+                    :can-clear="true"
+                    placeholder="Sin área"
+                    no-options-text="Sin áreas disponibles"
+                    no-results-text="Sin coincidencias"
+                    class="comunicados-ms"
+                  />
+                  <template #fallback>
+                    <Skeleton class="h-10 w-full" />
+                  </template>
+                </ClientOnly>
               </div>
             </div>
-            <div class="space-y-2">
-              <Label>Lugar</Label>
-              <Input v-model="form.event_location" placeholder="Salón, sede, enlace..." />
-            </div>
-          </template>
 
-          <div class="space-y-3 rounded-lg border p-4">
-            <Label>Destinatarios</Label>
+            <div class="space-y-2">
+              <Label>Título</Label>
+              <Input v-model="form.title" placeholder="Título de la publicación" />
+            </div>
+
+            <div class="space-y-2">
+              <Label>Resumen</Label>
+              <Input v-model="form.summary" maxlength="500" placeholder="Texto corto para el feed" />
+            </div>
+
+            <div class="space-y-2">
+              <Label>Contenido</Label>
+              <Textarea
+                v-model="form.body"
+                rows="14"
+                class="min-h-[18rem] resize-y"
+                placeholder="Contenido de la publicación"
+              />
+            </div>
+
+            <template v-if="isEvent">
+              <div class="grid gap-4 md:grid-cols-2">
+                <div class="space-y-2">
+                  <Label>Inicio del evento</Label>
+                  <Input v-model="form.event_starts_at" type="datetime-local" />
+                </div>
+                <div class="space-y-2">
+                  <Label>Fin del evento</Label>
+                  <Input v-model="form.event_ends_at" type="datetime-local" />
+                </div>
+              </div>
+              <div class="space-y-2">
+                <Label>Lugar</Label>
+                <Input v-model="form.event_location" placeholder="Salón, sede, enlace..." />
+              </div>
+            </template>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader class="pb-4">
+            <CardTitle class="text-base">
+              Archivos y enlaces
+            </CardTitle>
+            <CardDescription>
+              Adjuntos opcionales y enlace externo de apoyo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="space-y-2">
+              <Label>Adjuntos</Label>
+              <Input
+                type="file"
+                multiple
+                @change="files = Array.from(($event.target as HTMLInputElement).files ?? [])"
+              />
+              <p class="text-xs text-muted-foreground">
+                Máximo {{ attachmentMaxMb }} MB por archivo.
+                <span v-if="files.length > 0" class="text-foreground">
+                  · {{ files.length }} archivo(s) seleccionado(s)
+                </span>
+              </p>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-2">
+              <div class="space-y-2">
+                <Label>Enlace (opcional)</Label>
+                <Input v-model="form.link_url" type="url" placeholder="https://..." />
+              </div>
+              <div class="space-y-2">
+                <Label>Título del enlace</Label>
+                <Input v-model="form.link_title" placeholder="Ver documento" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div class="space-y-6 lg:col-span-4">
+        <Card>
+          <CardHeader class="pb-4">
+            <CardTitle class="text-base">
+              Destinatarios
+            </CardTitle>
+          </CardHeader>
+          <CardContent class="space-y-4">
             <ClientOnly>
               <Multiselect
                 v-model="form.audience_mode"
@@ -551,17 +629,20 @@ onMounted(loadOptions)
                 </template>
               </ClientOnly>
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          <div class="space-y-4 rounded-lg border p-4">
-            <div class="space-y-1">
-              <Label>¿Cuándo publicar?</Label>
-              <p class="text-xs text-muted-foreground">
-                A la hora programada el comunicado se publica y, si está activa la notificación interna, los destinatarios reciben el aviso.
-              </p>
-            </div>
-
-            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader class="pb-4">
+            <CardTitle class="text-base">
+              Publicación
+            </CardTitle>
+            <CardDescription>
+              Programación y vigencia del comunicado.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="grid gap-2 sm:grid-cols-2">
               <button
                 v-for="option in publishPresetOptions"
                 :key="option.value"
@@ -585,42 +666,24 @@ onMounted(loadOptions)
               <span class="font-medium text-foreground">Vista previa:</span>
               {{ schedulePreview }}
             </p>
-          </div>
 
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2 sm:col-span-2">
+            <div class="space-y-2 border-t pt-4">
               <Label>Expira el (opcional)</Label>
               <Input v-model="form.expires_at" type="datetime-local" />
               <p class="text-xs text-muted-foreground">
-                Debe ser posterior a la publicación. Al expirar deja de verse en el feed y se detienen los recordatorios.
+                Al expirar deja de verse en el feed y se detienen los recordatorios.
               </p>
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          <div class="space-y-2">
-            <Label>Adjuntos</Label>
-            <Input
-              type="file"
-              multiple
-              @change="files = Array.from(($event.target as HTMLInputElement).files ?? [])"
-            />
-            <p class="text-xs text-muted-foreground">
-              Máximo {{ attachmentMaxMb }} MB por archivo.
-            </p>
-          </div>
-
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2">
-              <Label>Enlace (opcional)</Label>
-              <Input v-model="form.link_url" type="url" placeholder="https://..." />
-            </div>
-            <div class="space-y-2">
-              <Label>Título del enlace</Label>
-              <Input v-model="form.link_title" placeholder="Ver documento" />
-            </div>
-          </div>
-
-          <div class="grid gap-3 sm:grid-cols-2">
+        <Card>
+          <CardHeader class="pb-4">
+            <CardTitle class="text-base">
+              Opciones
+            </CardTitle>
+          </CardHeader>
+          <CardContent class="space-y-3">
             <label class="flex items-center gap-2 text-sm">
               <Checkbox v-model="form.is_featured" />
               Destacar en el feed
@@ -641,23 +704,24 @@ onMounted(loadOptions)
               <Checkbox v-model="form.notify_email" />
               Notificar por correo al publicar
             </label>
-          </div>
+          </CardContent>
+        </Card>
 
-          <div
-            v-if="form.requires_read_confirmation"
-            class="space-y-3 rounded-lg border border-dashed p-4"
-          >
-            <div class="space-y-1">
-              <Label>Recordatorios de lectura</Label>
-              <p class="text-xs text-muted-foreground">
-                Solo a usuarios que no hayan confirmado. Se envían como notificación en la campana (máximo configurable).
-              </p>
-            </div>
+        <Card v-if="form.requires_read_confirmation">
+          <CardHeader class="pb-4">
+            <CardTitle class="text-base">
+              Recordatorios
+            </CardTitle>
+            <CardDescription>
+              Solo a quienes no hayan confirmado la lectura.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
             <label class="flex items-center gap-2 text-sm">
               <Checkbox v-model="form.reminders_enabled" />
               Enviar recordatorios automáticos
             </label>
-            <div v-if="form.reminders_enabled" class="grid gap-3 sm:grid-cols-2">
+            <div v-if="form.reminders_enabled" class="grid gap-3">
               <div class="space-y-2">
                 <Label>Frecuencia</Label>
                 <Select
@@ -699,16 +763,18 @@ onMounted(loadOptions)
                 </Select>
               </div>
             </div>
-          </div>
+          </CardContent>
+        </Card>
 
-          <div class="hidden">
-            <label class="flex items-center gap-2 text-sm" :class="{ 'opacity-50': isScheduled }">
-              <Checkbox v-model="form.publish_now" :disabled="isScheduled" />
-              Publicar ahora
-            </label>
-          </div>
+        <div class="hidden">
+          <label class="flex items-center gap-2 text-sm" :class="{ 'opacity-50': isScheduled }">
+            <Checkbox v-model="form.publish_now" :disabled="isScheduled" />
+            Publicar ahora
+          </label>
+        </div>
 
-          <div class="flex justify-end gap-2">
+        <Card class="lg:hidden">
+          <CardContent class="flex justify-end gap-2 p-4">
             <Button variant="outline" as-child>
               <NuxtLink to="/comunicados">
                 Cancelar
@@ -717,10 +783,10 @@ onMounted(loadOptions)
             <Button :disabled="loading" type="button" @click="submit">
               {{ isScheduled ? 'Programar' : 'Publicar' }}
             </Button>
-          </div>
-        </template>
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   </div>
 </template>
 

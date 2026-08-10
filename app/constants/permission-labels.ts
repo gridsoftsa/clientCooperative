@@ -344,3 +344,56 @@ export function groupRadicacionPermissions(list: PermissionLike[]): RadicacionPe
 
   return out
 }
+
+/**
+ * Normaliza texto para búsqueda flexible (sin acentos, minúsculas).
+ */
+function normalizeSearchText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+}
+
+/**
+ * Divide la consulta en palabras; todas deben aparecer en el permiso (en cualquier orden).
+ */
+function searchTokens(query: string): string[] {
+  return normalizeSearchText(query)
+    .split(/[\s,_-]+/)
+    .map(token => token.trim())
+    .filter(token => token.length > 0)
+}
+
+/**
+ * Indica si un permiso coincide con el texto de búsqueda (nombre técnico, etiqueta o sección).
+ * Acepta varias palabras en cualquier orden (ej. «anular ventanilla» → «Anular radicados de ventanilla»).
+ */
+export function permissionMatchesSearchQuery(
+  permissionName: string,
+  query: string,
+  options?: {
+    categoryKey?: string
+    subgroupLabel?: string
+  },
+): boolean {
+  const tokens = searchTokens(query)
+  if (tokens.length === 0) {
+    return true
+  }
+
+  const categoryKey = options?.categoryKey ?? permissionName.split('_')[0] ?? ''
+  const categoryLabel =
+    PERMISSION_CATEGORY_SECTION_TITLES[categoryKey]
+    ?? PERMISSION_CATEGORY_LABELS[categoryKey]
+    ?? categoryKey
+
+  const haystack = normalizeSearchText([
+    permissionName.replaceAll('_', ' '),
+    getPermissionLabel(permissionName),
+    categoryLabel,
+    options?.subgroupLabel ?? '',
+  ].join(' '))
+
+  return tokens.every(token => haystack.includes(token))
+}

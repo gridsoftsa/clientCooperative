@@ -145,9 +145,13 @@ onMounted(() => load())
       </div>
     </div>
 
-    <p v-if="unreadCount > 0" class="text-sm">
+    <Badge
+      v-if="unreadCount > 0"
+      variant="secondary"
+      class="w-fit border-primary/20 bg-primary/10 text-primary"
+    >
       {{ unreadCount }} sin leer
-    </p>
+    </Badge>
 
     <div v-if="loading" class="flex justify-center py-16">
       <Icon name="i-lucide-loader-2" class="size-9 animate-spin text-muted-foreground" />
@@ -156,27 +160,41 @@ onMounted(() => load())
     <Card v-else>
       <CardContent class="p-0">
         <ul v-if="rows.length" class="divide-y">
-          <li
+          <NotificationsInboxNotificationListItem
             v-for="row in rows"
             :key="row.id"
-            class="cursor-pointer px-4 py-3 transition-colors hover:bg-muted/40"
-            :class="{ 'bg-primary/5': !row.read_at }"
+            :unread="!row.read_at"
             @click="openNotification(row)"
           >
             <div class="flex flex-wrap items-center justify-between gap-2">
-              <p class="font-medium">
-                {{ row.title || 'Notificación' }}
-              </p>
-              <span class="text-xs text-muted-foreground">{{ formatDate(row.created_at) }}</span>
+              <div class="flex min-w-0 flex-wrap items-center gap-2">
+                <p
+                  class="text-sm leading-snug"
+                  :class="!row.read_at ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'"
+                >
+                  {{ row.title || 'Notificación' }}
+                </p>
+                <Badge
+                  v-if="!row.read_at"
+                  variant="outline"
+                  class="h-5 border-primary/30 bg-primary/5 px-1.5 text-[10px] text-primary uppercase"
+                >
+                  Nueva
+                </Badge>
+              </div>
+              <span class="shrink-0 text-xs text-muted-foreground">{{ formatDate(row.created_at) }}</span>
             </div>
-            <p class="mt-1 text-sm text-muted-foreground">
+            <p
+              class="mt-1 text-sm leading-relaxed"
+              :class="!row.read_at ? 'text-foreground/90' : 'text-muted-foreground'"
+            >
               {{ row.message }}
             </p>
             <p class="mt-1 text-xs text-muted-foreground">
               {{ moduleLabel(row.module) }}
               <span v-if="row.filing_number"> · Radicado {{ row.filing_number }}</span>
             </p>
-          </li>
+          </NotificationsInboxNotificationListItem>
         </ul>
         <p v-else class="px-4 py-12 text-center text-sm text-muted-foreground">
           No hay notificaciones.

@@ -75,7 +75,11 @@ watch(
               :key="subItem.title"
             >
               <SidebarMenuSubButton as-child :data-active="isSubRouteActive(subItem.link)">
-                <NuxtLink :to="subItem.link" @click="setOpenMobile(false)">
+                <NuxtLink
+                  :to="subItem.link"
+                  :title="subItem.title"
+                  @click="setOpenMobile(false)"
+                >
                   <span>{{ subItem.title }}</span>
                   <span v-if="subItem.new" class="rounded-md bg-[#adfa1d] px-1.5 py-0.5 text-xs text-black leading-none no-underline group-hover:no-underline">
                     New
