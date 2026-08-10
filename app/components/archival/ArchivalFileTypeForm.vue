@@ -339,173 +339,179 @@ onMounted(() => loadCatalogs())
     </div>
 
     <template v-else>
-      <div class="grid gap-4 md:grid-cols-2">
-        <div v-if="isCreate" class="space-y-2 md:col-span-2">
-          <p class="text-sm text-muted-foreground leading-relaxed">
-            La <span class="font-medium text-foreground">clave técnica</span> se generará automáticamente al crear
-            (por ejemplo, a partir del nombre:
-            <span class="font-mono text-xs">{{ effectiveTypeKey || 'expediente_contrato_file' }}</span>).
-          </p>
-        </div>
+      <div class="grid gap-8 xl:grid-cols-2 xl:items-start">
+        <div class="space-y-6">
+          <div class="grid gap-4 md:grid-cols-2">
+            <div v-if="isCreate" class="space-y-2 md:col-span-2">
+              <p class="text-sm text-muted-foreground leading-relaxed">
+                La <span class="font-medium text-foreground">clave técnica</span> se generará automáticamente al crear
+                (por ejemplo, a partir del nombre:
+                <span class="font-mono text-xs">{{ effectiveTypeKey || 'expediente_contrato_file' }}</span>).
+              </p>
+            </div>
 
-        <div v-else class="space-y-2">
-          <Label for="file_type_key">Clave técnica</Label>
-          <Input
-            id="file_type_key"
-            v-model="form.type_key"
-            :disabled="isSystem || saving"
-            placeholder="credit_file"
-            class="font-mono"
-            :class="archivalInputWarningClass(submitAttempted && !form.type_key.trim())"
-          />
-          <p v-if="isSystem" class="text-xs text-muted-foreground">
-            La clave de tipos del sistema no se puede modificar.
-          </p>
-        </div>
+            <div v-else class="space-y-2 md:col-span-2">
+              <Label for="file_type_key">Clave técnica</Label>
+              <Input
+                id="file_type_key"
+                v-model="form.type_key"
+                :disabled="isSystem || saving"
+                placeholder="credit_file"
+                class="font-mono"
+                :class="archivalInputWarningClass(submitAttempted && !form.type_key.trim())"
+              />
+              <p v-if="isSystem" class="text-xs text-muted-foreground">
+                La clave de tipos del sistema no se puede modificar.
+              </p>
+            </div>
 
-        <div class="space-y-2" :class="{ 'md:col-span-2': isCreate }">
-          <Label for="file_type_name">Nombre *</Label>
-          <Input
-            id="file_type_name"
-            v-model="form.name"
-            :disabled="saving"
-            :class="archivalInputWarningClass(submitAttempted && !form.name.trim())"
-          />
-        </div>
-      </div>
-
-      <div class="space-y-2">
-        <Label for="file_type_description">Descripción</Label>
-        <Textarea id="file_type_description" v-model="form.description" rows="2" :disabled="saving" />
-      </div>
-
-      <div class="grid gap-4 md:grid-cols-3">
-        <div class="space-y-2">
-          <Label>Modelo</Label>
-          <Select v-model="form.model" :disabled="saving">
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                v-for="(label, value) in ARCHIVAL_FILE_MODEL_LABELS"
-                :key="value"
-                :value="value"
-              >
-                {{ label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div class="space-y-2">
-          <Label>Orden</Label>
-          <Input v-model.number="form.sort_order" type="number" min="0" :disabled="saving" />
-        </div>
-
-        <div class="flex flex-col justify-end gap-3 pb-1">
-          <div class="flex items-center gap-2">
-            <Checkbox id="file_type_active" v-model="form.is_active" :disabled="saving" />
-            <Label for="file_type_active" class="font-normal">Activo</Label>
+            <div class="space-y-2 md:col-span-2">
+              <Label for="file_type_name">Nombre *</Label>
+              <Input
+                id="file_type_name"
+                v-model="form.name"
+                :disabled="saving"
+                :class="archivalInputWarningClass(submitAttempted && !form.name.trim())"
+              />
+            </div>
           </div>
-          <div class="flex items-center gap-2">
-            <Checkbox id="file_type_master" v-model="form.allows_master_documents" :disabled="saving" />
-            <Label for="file_type_master" class="font-normal">Permite documentos maestros</Label>
+
+          <div class="space-y-2">
+            <Label for="file_type_description">Descripción</Label>
+            <Textarea id="file_type_description" v-model="form.description" rows="3" :disabled="saving" />
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="space-y-2">
+              <Label>Modelo</Label>
+              <Select v-model="form.model" :disabled="saving">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="(label, value) in ARCHIVAL_FILE_MODEL_LABELS"
+                    :key="value"
+                    :value="value"
+                  >
+                    {{ label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Orden</Label>
+              <Input v-model.number="form.sort_order" type="number" min="0" :disabled="saving" />
+            </div>
+          </div>
+
+          <div class="flex flex-wrap gap-x-6 gap-y-3 rounded-lg border bg-muted/20 p-4">
+            <div class="flex items-center gap-2">
+              <Checkbox id="file_type_active" v-model="form.is_active" :disabled="saving" />
+              <Label for="file_type_active" class="font-normal">Activo</Label>
+            </div>
+            <div class="flex items-center gap-2">
+              <Checkbox id="file_type_master" v-model="form.allows_master_documents" :disabled="saving" />
+              <Label for="file_type_master" class="font-normal">Permite documentos maestros</Label>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="min-w-0 space-y-3 rounded-lg border bg-muted/20 p-4">
-        <div>
-          <p class="text-sm font-medium">
-            Catálogo documental y TRD
-          </p>
-          <p class="text-xs text-muted-foreground">
-            Ubicación del expediente en el catálogo TRD (serie y subserie). Los tipos documentales se definen en la pestaña Obligatorios.
-          </p>
-        </div>
+        <div class="space-y-6">
+          <div class="min-w-0 space-y-4 rounded-lg border bg-muted/20 p-4">
+            <div>
+              <p class="text-sm font-medium">
+                Catálogo documental y TRD
+              </p>
+              <p class="text-xs text-muted-foreground">
+                Ubicación del expediente en el catálogo TRD (serie y subserie). Los tipos documentales se definen en la pestaña Obligatorios.
+              </p>
+            </div>
 
-        <div class="grid min-w-0 gap-4 md:grid-cols-2">
-          <div class="min-w-0 space-y-2">
-            <Label for="file_type_org_unit">Área productora</Label>
-            <ArchivalCatalogSearchSelect
-              id="file_type_org_unit"
-              :model-value="form.org_unit_id || null"
-              :options="orgUnitSelectOptions"
-              placeholder="Buscar área…"
-              no-options-text="Sin áreas disponibles"
+            <div class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">
+              <div class="min-w-0 space-y-2">
+                <Label for="file_type_org_unit">Área productora</Label>
+                <ArchivalCatalogSearchSelect
+                  id="file_type_org_unit"
+                  :model-value="form.org_unit_id || null"
+                  :options="orgUnitSelectOptions"
+                  placeholder="Buscar área…"
+                  no-options-text="Sin áreas disponibles"
+                  :disabled="saving"
+                  @update:model-value="form.org_unit_id = $event ?? ''"
+                />
+              </div>
+
+              <div class="min-w-0 space-y-2">
+                <Label for="file_type_trd_table">Tabla TRD</Label>
+                <ArchivalCatalogSearchSelect
+                  id="file_type_trd_table"
+                  :model-value="form.trd_table_id || null"
+                  :options="trdTableSelectOptions"
+                  placeholder="Buscar tabla TRD…"
+                  no-options-text="Sin tablas para el área"
+                  :disabled="saving"
+                  @update:model-value="form.trd_table_id = $event ?? ''"
+                />
+              </div>
+            </div>
+
+            <div class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">
+              <div class="min-w-0 space-y-2">
+                <Label for="file_type_series">Serie *</Label>
+                <ArchivalCatalogSearchSelect
+                  id="file_type_series"
+                  :model-value="form.doc_series_id || null"
+                  :options="seriesSelectOptions"
+                  placeholder="Buscar serie…"
+                  no-options-text="Seleccione un área primero"
+                  :disabled="saving || !form.org_unit_id"
+                  @update:model-value="form.doc_series_id = $event ?? ''"
+                />
+              </div>
+
+              <div class="min-w-0 space-y-2">
+                <Label for="file_type_subseries">Subserie *</Label>
+                <ArchivalCatalogSearchSelect
+                  id="file_type_subseries"
+                  :model-value="form.doc_subseries_id || null"
+                  :options="subseriesSelectOptions"
+                  placeholder="Buscar subserie…"
+                  no-options-text="Seleccione una serie primero"
+                  :disabled="saving || !form.doc_series_id"
+                  @update:model-value="form.doc_subseries_id = $event ?? ''"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <Label>Esquema de metadatos</Label>
+            <Select
+              :model-value="form.archival_metadata_schema_id || undefined"
               :disabled="saving"
-              @update:model-value="form.org_unit_id = $event ?? ''"
-            />
-          </div>
-
-          <div class="min-w-0 space-y-2">
-            <Label for="file_type_trd_table">Tabla TRD</Label>
-            <ArchivalCatalogSearchSelect
-              id="file_type_trd_table"
-              :model-value="form.trd_table_id || null"
-              :options="trdTableSelectOptions"
-              placeholder="Buscar tabla TRD…"
-              no-options-text="Sin tablas para el área"
-              :disabled="saving"
-              @update:model-value="form.trd_table_id = $event ?? ''"
-            />
-          </div>
-        </div>
-
-        <div class="grid min-w-0 gap-4 md:grid-cols-2">
-          <div class="min-w-0 space-y-2">
-            <Label for="file_type_series">Serie *</Label>
-            <ArchivalCatalogSearchSelect
-              id="file_type_series"
-              :model-value="form.doc_series_id || null"
-              :options="seriesSelectOptions"
-              placeholder="Buscar serie…"
-              no-options-text="Seleccione un área primero"
-              :disabled="saving || !form.org_unit_id"
-              @update:model-value="form.doc_series_id = $event ?? ''"
-            />
-          </div>
-
-          <div class="min-w-0 space-y-2">
-            <Label for="file_type_subseries">Subserie *</Label>
-            <ArchivalCatalogSearchSelect
-              id="file_type_subseries"
-              :model-value="form.doc_subseries_id || null"
-              :options="subseriesSelectOptions"
-              placeholder="Buscar subserie…"
-              no-options-text="Seleccione una serie primero"
-              :disabled="saving || !form.doc_series_id"
-              @update:model-value="form.doc_subseries_id = $event ?? ''"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div class="space-y-2">
-        <Label>Esquema de metadatos</Label>
-        <Select
-          :model-value="form.archival_metadata_schema_id || undefined"
-          :disabled="saving"
-          @update:model-value="form.archival_metadata_schema_id = $event ? String($event) : ''"
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Opcional" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem
-              v-for="schema in filteredMetadataSchemas"
-              :key="schema.id"
-              :value="String(schema.id)"
+              @update:model-value="form.archival_metadata_schema_id = $event ? String($event) : ''"
             >
-              {{ schema.name }}
-              <span v-if="schema.version_number" class="text-muted-foreground"> v{{ schema.version_number }}</span>
-            </SelectItem>
-          </SelectContent>
-        </Select>
+              <SelectTrigger>
+                <SelectValue placeholder="Opcional" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="schema in filteredMetadataSchemas"
+                  :key="schema.id"
+                  :value="String(schema.id)"
+                >
+                  {{ schema.name }}
+                  <span v-if="schema.version_number" class="text-muted-foreground"> v{{ schema.version_number }}</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
-      <div class="flex flex-wrap justify-end gap-2">
+      <div class="flex flex-wrap justify-end gap-2 border-t pt-6">
         <Button
           v-if="!isCreate"
           type="button"
