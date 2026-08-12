@@ -22,6 +22,10 @@ import {
   type ArchivalManualUploadSource,
 } from '~/constants/archival-document-sources'
 import {
+  appendSingleDocumentFoliosToFormData,
+  validateDocumentAttachmentFolios,
+} from '~/utils/document-attachment-folio'
+import {
   archivalInputWarningClass,
   archivalMetadataFieldDomId,
   archivalSelectTriggerWarningClass,
@@ -55,6 +59,8 @@ const highlightedMetadataFieldCode = ref<string | null>(null)
 
 const selectedFile = ref<File | null>(null)
 const title = ref('')
+const folioStart = ref('')
+const folioEnd = ref('')
 const docDocumentTypeId = ref<number | null>(null)
 const archivalFileNodeId = ref<number | null>(null)
 const isMasterDocument = ref(false)
@@ -365,9 +371,7 @@ async function runOcrExtraction() {
   }
 }
 
-function onFileChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0] ?? null
+function onFileChange(file: File | null) {
   selectedFile.value = file
 
   if (file && !title.value.trim()) {
@@ -381,6 +385,8 @@ function onFileChange(event: Event) {
 function resetForm() {
   selectedFile.value = null
   title.value = ''
+  folioStart.value = ''
+  folioEnd.value = ''
   archivalFileNodeId.value = null
   isMasterDocument.value = false
   metadataValues.value = {}
@@ -419,6 +425,12 @@ async function handleSubmit() {
     return
   }
 
+  const folioError = validateDocumentAttachmentFolios(folioStart.value, folioEnd.value)
+  if (folioError) {
+    toast.error(folioError)
+    return
+  }
+
   const missingMetadata = findFirstMissingRequiredMetadataField(metadataFields.value, metadataValues.value)
   if (missingMetadata) {
     highlightedMetadataFieldCode.value = missingMetadata.code
@@ -442,6 +454,8 @@ async function handleSubmit() {
   if (title.value.trim()) {
     fd.append('title', title.value.trim())
   }
+
+  appendSingleDocumentFoliosToFormData(fd, folioStart.value, folioEnd.value)
 
   if (archivalFileNodeId.value) {
     fd.append('archival_file_node_id', String(archivalFileNodeId.value))
@@ -683,29 +697,20 @@ onMounted(() => {
       </Select>
     </div>
 
-    <div class="space-y-2">
-      <Label for="archival_upload_file">Archivo</Label>
-      <Input
-        id="archival_upload_file"
-        type="file"
-        :disabled="uploading"
-        :class="archivalInputWarningClass(submitAttempted && !selectedFile)"
-        @change="onFileChange"
-      />
-      <p v-if="selectedFile" class="text-xs text-muted-foreground">
-        {{ selectedFile.name }} ({{ Math.round(selectedFile.size / 1024) }} KB)
-      </p>
-    </div>
-
-    <div class="space-y-2">
-      <Label for="archival_upload_title">Título</Label>
-      <Input
-        id="archival_upload_title"
-        v-model="title"
-        :disabled="uploading"
-        placeholder="Nombre descriptivo del documento"
-      />
-    </div>
+    <DocumentsDocumentAttachmentUploadCard
+      label="Documento a adjuntar"
+      :title="title"
+      :folio-start="folioStart"
+      :folio-end="folioEnd"
+      :file="selectedFile"
+      :submit-attempted="submitAttempted"
+      :disabled="uploading"
+      file-input-id="archival_upload_file"
+      @update:title="title = $event"
+      @update:folio-start="folioStart = $event"
+      @update:folio-end="folioEnd = $event"
+      @update:file="onFileChange"
+    />
 
     <div v-if="allowsMasterDocuments" class="flex items-center gap-2">
       <Checkbox

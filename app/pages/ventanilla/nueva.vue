@@ -21,6 +21,12 @@ import {
 } from '~/utils/ventanilla-form-field-focus'
 import Multiselect from '@vueform/multiselect'
 import { toast } from 'vue-sonner'
+import {
+  appendDocumentFoliosToFormData,
+  createDocumentAttachmentRow,
+  type DocumentAttachmentRow,
+  validateDocumentAttachmentFolios,
+} from '~/utils/document-attachment-folio'
 
 interface VentanillaOrgUnitOption {
   id: number
@@ -79,7 +85,7 @@ const recipientStaffId = ref<number | null>(null)
 // Compat safety for hot-reload states that may still reference old array models.
 const senderStaffIds = computed(() => senderStaffId.value != null ? [senderStaffId.value] : [])
 const recipientStaffIds = computed(() => recipientStaffId.value != null ? [recipientStaffId.value] : [])
-const fileRows = ref<Array<{ file: File | null; title: string }>>([{ file: null, title: 'Documento principal' }])
+const fileRows = ref<DocumentAttachmentRow[]>([createDocumentAttachmentRow('Documento principal')])
 const trdPickerRef = ref<{ focusFirstMissingTrdField?: () => void } | null>(null)
 const metadataFieldsRef = ref<{
   findFirstMissingRequiredField?: () => { fieldCode: string; fieldIndex: number; message: string } | null
@@ -294,14 +300,6 @@ function multiselectErrorClass(field: VentanillaFilingFieldKey): string {
   return ventanillaMultiselectErrorClass(isMissing(field))
 }
 
-function fileInputErrorClass(index: number): string {
-  return ventanillaInputErrorClass(isMissing('file') && index === 0)
-}
-
-function fileRowBorderClass(index: number): string {
-  return isMissing('file') && index === 0 ? 'border-destructive' : ''
-}
-
 watch(functionalTypeKey, () => {
   requiresResponseOverride.value = null
 })
@@ -392,7 +390,7 @@ onMounted(async () => {
 })
 
 function addFileRow() {
-  fileRows.value.push({ file: null, title: '' })
+  fileRows.value.push(createDocumentAttachmentRow())
 }
 
 function removeFileRow(index: number) {
@@ -416,17 +414,24 @@ function toggleResponseOverride(value: boolean | 'indeterminate') {
     : null
 }
 
-function onFileChange(index: number, event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0] ?? null
-  const row = fileRows.value[index]
-  if (!row) {
-    return
+function validateFileAttachments(): VentanillaFilingValidationIssue | null {
+  const withFiles = fileRows.value.filter(row => row.file)
+  if (withFiles.length === 0) {
+    return { field: 'file', message: 'Adjunte al menos un archivo' }
   }
-  row.file = file
-  if (file && !row.title.trim()) {
-    row.title = file.name
+
+  for (const [index, row] of withFiles.entries()) {
+    if (!row.title.trim()) {
+      return { field: 'file', message: `Indique el título del documento ${index + 1}.` }
+    }
+
+    const folioError = validateDocumentAttachmentFolios(row.folioStart, row.folioEnd)
+    if (folioError) {
+      return { field: 'file', message: `${folioError} (documento ${index + 1})` }
+    }
   }
+
+  return null
 }
 
 function fullName(staff: OrgStaffListItem): string {
@@ -487,9 +492,17 @@ async function submit() {
     return
   }
 
+  const attachmentIssue = validateFileAttachments()
+  if (attachmentIssue) {
+    errorMessage.value = attachmentIssue.message
+    await focusValidationIssue(attachmentIssue)
+
+    return
+  }
+
   submitAttempted.value = false
 
-  const withFiles = fileRows.value.filter((r: { file: File | null; title: string }) => r.file)
+  const withFiles = fileRows.value.filter(row => row.file)
   const parties = computedFilingParties.value
 
   const fd = new FormData()
@@ -527,12 +540,13 @@ async function submit() {
     fd.append('metadata_values', JSON.stringify(metadataValues.value))
   }
 
-  withFiles.forEach((row: { file: File | null; title: string }, index: number) => {
+  withFiles.forEach((row, index) => {
     if (!row.file) {
       return
     }
     fd.append(`files[${index}][file]`, row.file)
     fd.append(`files[${index}][title]`, row.title.trim() || row.file.name)
+    appendDocumentFoliosToFormData(fd, index, row.folioStart, row.folioEnd)
     if (index === 0) {
       fd.append(`files[${index}][is_primary]`, '1')
     }
@@ -554,28 +568,17 @@ async function submit() {
 
 <template>
   <div class="mx-auto w-full max-w-7xl space-y-6 px-4 pb-8 md:px-6">
-    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div class="flex items-start gap-3">
-        <Button variant="ghost" size="icon" class="shrink-0" @click="router.push('/ventanilla')">
-          <Icon name="i-lucide-arrow-left" class="size-4" />
-        </Button>
-        <div>
-          <h1 class="text-2xl font-semibold tracking-tight">
-            Radicar documento
-          </h1>
-          <p class="text-sm text-muted-foreground">
-            Ventanilla única — registro manual
-          </p>
-        </div>
-      </div>
-
-      <div class="flex shrink-0 gap-2 sm:pt-1">
-        <Button type="button" variant="outline" @click="router.push('/ventanilla')">
-          Cancelar
-        </Button>
-        <Button type="button" :disabled="saving" @click="submit">
-          {{ saving ? 'Registrando…' : 'Registrar radicado' }}
-        </Button>
+    <div class="flex items-start gap-3">
+      <Button variant="ghost" size="icon" class="shrink-0" @click="router.push('/ventanilla')">
+        <Icon name="i-lucide-arrow-left" class="size-4" />
+      </Button>
+      <div>
+        <h1 class="text-2xl font-semibold tracking-tight">
+          Radicar documento
+        </h1>
+        <p class="text-sm text-muted-foreground">
+          Ventanilla única — registro manual
+        </p>
       </div>
     </div>
 
@@ -971,43 +974,30 @@ async function submit() {
               </Button>
             </CardHeader>
             <CardContent class="space-y-4">
-              <div
+              <DocumentsDocumentAttachmentUploadCard
                 v-for="(row, index) in (fileRows ?? [])"
                 :key="index"
-                class="grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end"
-                :class="fileRowBorderClass(index)"
-              >
-                <div class="min-w-0 space-y-2">
-                  <Label>Título *</Label>
-                  <Input v-model="row.title" />
-                </div>
-                <div class="min-w-0 space-y-2">
-                  <Label>Archivo</Label>
-                  <Input
-                    :id="index === 0 ? 'ventanilla_file_0' : undefined"
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                    :class="fileInputErrorClass(index)"
-                    @change="onFileChange(index, $event)"
-                  />
-                </div>
-                <Button
-                  v-if="(fileRows?.length ?? 0) > 1"
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  class="md:mb-0.5"
-                  @click="removeFileRow(index)"
-                >
-                  <Icon name="i-lucide-trash-2" class="size-4 text-destructive" />
-                </Button>
-              </div>
+                :label="index === 0 ? 'Documento principal' : `Anexo ${index}`"
+                :primary="index === 0"
+                :removable="(fileRows?.length ?? 0) > 1"
+                :submit-attempted="submitAttempted"
+                :file-input-id="index === 0 ? 'ventanilla_file_0' : undefined"
+                :title="row.title"
+                :folio-start="row.folioStart"
+                :folio-end="row.folioEnd"
+                :file="row.file"
+                @update:title="row.title = $event"
+                @update:folio-start="row.folioStart = $event"
+                @update:folio-end="row.folioEnd = $event"
+                @update:file="row.file = $event"
+                @remove="removeFileRow(index)"
+              />
             </CardContent>
           </Card>
       </div>
 
-      <Card class="lg:hidden">
-        <CardContent class="flex justify-end gap-3 p-4">
+      <Card>
+        <CardContent class="flex flex-col-reverse justify-end gap-3 p-4 sm:flex-row">
           <Button type="button" variant="outline" @click="router.push('/ventanilla')">
             Cancelar
           </Button>

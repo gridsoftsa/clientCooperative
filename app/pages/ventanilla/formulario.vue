@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { onDigitsOnlyInput, filterDigitsOnly } from '~/utils/digits-only-input'
 import { isDigitsOnlyIdentifier } from '~/utils/ventanilla-party-validation'
+import {
+  appendDocumentFoliosToFormData,
+  createDocumentAttachmentRow,
+  type DocumentAttachmentRow,
+  validateDocumentAttachmentFolios,
+} from '~/utils/document-attachment-folio'
 
 definePageMeta({
   layout: false,
@@ -15,7 +21,8 @@ const senderEmail = ref('')
 const senderIdentifier = ref('')
 const subject = ref('')
 const body = ref('')
-const fileRows = ref<Array<{ file: File | null; title: string }>>([{ file: null, title: 'Documento principal' }])
+const fileRows = ref<DocumentAttachmentRow[]>([createDocumentAttachmentRow('Documento principal')])
+const submitAttempted = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
 const receivedId = ref<number | null>(null)
@@ -30,7 +37,7 @@ onMounted(async () => {
 })
 
 function addFileRow() {
-  fileRows.value.push({ file: null, title: '' })
+  fileRows.value.push(createDocumentAttachmentRow())
 }
 
 function removeFileRow(index: number) {
@@ -40,22 +47,10 @@ function removeFileRow(index: number) {
   fileRows.value.splice(index, 1)
 }
 
-function onFileChange(index: number, event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0] ?? null
-  const row = fileRows.value[index]
-  if (!row) {
-    return
-  }
-  row.file = file
-  if (file && !row.title.trim()) {
-    row.title = file.name
-  }
-}
-
 async function submit() {
   errorMessage.value = ''
   receivedId.value = null
+  submitAttempted.value = true
 
   if (!senderName.value.trim() || !senderEmail.value.trim() || !subject.value.trim()) {
     errorMessage.value = 'Nombre, correo y asunto son obligatorios.'
@@ -70,11 +65,26 @@ async function submit() {
     return
   }
 
-  const withFiles = fileRows.value.filter((row: { file: File | null; title: string }) => row.file)
+  const withFiles = fileRows.value.filter(row => row.file)
   if (withFiles.length === 0) {
     errorMessage.value = 'Adjunte al menos un documento.'
     return
   }
+
+  for (const [index, row] of withFiles.entries()) {
+    if (!row.title.trim()) {
+      errorMessage.value = `Indique el título del documento ${index + 1}.`
+      return
+    }
+
+    const folioError = validateDocumentAttachmentFolios(row.folioStart, row.folioEnd)
+    if (folioError) {
+      errorMessage.value = `${folioError} (documento ${index + 1})`
+      return
+    }
+  }
+
+  submitAttempted.value = false
 
   const fd = new FormData()
   fd.append('sender_name', senderName.value.trim())
@@ -88,12 +98,13 @@ async function submit() {
     fd.append('functional_type_key', functionalTypeKey.value)
   }
 
-  withFiles.forEach((row: { file: File | null; title: string }, index: number) => {
+  withFiles.forEach((row, index) => {
     if (!row.file) {
       return
     }
     fd.append(`files[${index}][file]`, row.file)
     fd.append(`files[${index}][title]`, row.title.trim() || row.file.name)
+    appendDocumentFoliosToFormData(fd, index, row.folioStart, row.folioEnd)
   })
 
   saving.value = true
@@ -106,7 +117,7 @@ async function submit() {
     subject.value = ''
     body.value = ''
     functionalTypeKey.value = ''
-    fileRows.value = [{ file: null, title: 'Documento principal' }]
+    fileRows.value = [createDocumentAttachmentRow('Documento principal')]
   } catch (e: unknown) {
     const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
     const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
@@ -185,31 +196,37 @@ async function submit() {
           </div>
         </div>
 
-        <div class="space-y-3">
+        <div class="space-y-4">
           <div class="flex items-center justify-between gap-3">
-            <Label>Documentos anexos *</Label>
+            <div>
+              <Label>Documentos anexos *</Label>
+              <p class="text-xs text-muted-foreground">
+                Indique título, folios y archivo de cada documento.
+              </p>
+            </div>
             <Button type="button" variant="outline" size="sm" @click="addFileRow">
               <Icon name="i-lucide-plus" class="mr-1 size-4" />
               Agregar anexo
             </Button>
           </div>
-          <div
+
+          <DocumentsDocumentAttachmentUploadCard
             v-for="(row, index) in fileRows"
             :key="index"
-            class="grid gap-3 rounded-lg border p-3 md:grid-cols-[1fr_1fr_auto]"
-          >
-            <Input v-model="row.title" placeholder="Título del documento" />
-            <Input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.txt" @change="onFileChange(index, $event)" />
-            <Button
-              v-if="fileRows.length > 1"
-              type="button"
-              variant="ghost"
-              size="icon"
-              @click="removeFileRow(index)"
-            >
-              <Icon name="i-lucide-trash-2" class="size-4 text-destructive" />
-            </Button>
-          </div>
+            :label="index === 0 ? 'Documento principal' : `Anexo ${index}`"
+            :primary="index === 0"
+            :removable="fileRows.length > 1"
+            :submit-attempted="submitAttempted"
+            :title="row.title"
+            :folio-start="row.folioStart"
+            :folio-end="row.folioEnd"
+            :file="row.file"
+            @update:title="row.title = $event"
+            @update:folio-start="row.folioStart = $event"
+            @update:folio-end="row.folioEnd = $event"
+            @update:file="row.file = $event"
+            @remove="removeFileRow(index)"
+          />
         </div>
 
         <div class="flex justify-end">
