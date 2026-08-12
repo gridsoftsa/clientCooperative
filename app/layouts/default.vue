@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CommunicationAnnouncementHost from '~/components/communications/CommunicationAnnouncementHost.vue'
 </script>
 
 <template>

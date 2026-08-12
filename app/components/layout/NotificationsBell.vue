@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { InboxNotificationRow } from '~/composables/useInboxNotificationsApi'
+import {
+  inboxNotificationEventLabel,
+  inboxNotificationModuleLabel,
+} from '~/utils/inbox-notification-labels'
 
 const router = useRouter()
 const inboxApi = useInboxNotificationsApi()
@@ -136,6 +140,17 @@ defineExpose({ requestImmediateRefresh })
           <p v-if="row.message" class="line-clamp-2 text-xs text-muted-foreground">
             {{ row.message }}
           </p>
+          <div class="mt-1 flex flex-wrap items-center gap-1.5">
+            <span class="text-[10px] font-medium text-muted-foreground">
+              {{ inboxNotificationModuleLabel(row.module) }}
+            </span>
+            <span
+              v-if="inboxNotificationEventLabel(row.event_type)"
+              class="text-[10px] text-muted-foreground"
+            >
+              · {{ inboxNotificationEventLabel(row.event_type) }}
+            </span>
+          </div>
           <p class="text-[11px] text-muted-foreground">
             {{ formatDate(row.created_at) }}
           </p>

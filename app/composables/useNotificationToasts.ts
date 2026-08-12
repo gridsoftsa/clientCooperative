@@ -112,6 +112,7 @@ export function useNotificationToasts() {
       url: row.url,
       createdAt: row.created_at,
       important: row.module === 'comunicados'
+        || row.module === 'ventanilla'
         || title.toUpperCase().includes('TRD')
         || title.toLowerCase().includes('recordatorio'),
       source: 'inbox',

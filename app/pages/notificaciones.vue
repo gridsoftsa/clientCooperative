@@ -8,6 +8,7 @@ definePageMeta({
 
 const inboxApi = useInboxNotificationsApi()
 const router = useRouter()
+const route = useRoute()
 
 const loading = ref(true)
 const markingAll = ref(false)
@@ -15,6 +16,13 @@ const rows = ref<InboxNotificationRow[]>([])
 const unreadCount = ref(0)
 const moduleFilter = ref('all')
 const pagination = ref({ current_page: 1, last_page: 1, per_page: 15, total: 0 })
+
+function applyModuleFromQuery() {
+  const module = route.query.module
+  if (module === 'ventanilla' || module === 'comunicados') {
+    moduleFilter.value = module
+  }
+}
 
 async function load(page = pagination.value.current_page) {
   loading.value = true
@@ -82,29 +90,17 @@ async function markAllRead() {
   }
 }
 
-function formatDate(value?: string | null) {
-  if (!value) {
-    return '—'
-  }
-  return new Date(value).toLocaleString('es-CO')
-}
-
-function moduleLabel(module?: string | null) {
-  if (module === 'comunicados') {
-    return 'Comunicados'
-  }
-  if (module === 'ventanilla') {
-    return 'Ventanilla'
-  }
-  return 'Sistema'
-}
-
 watch(moduleFilter, () => {
   pagination.value.current_page = 1
   load(1)
 })
 
-onMounted(() => load())
+watch(() => route.query.module, () => applyModuleFromQuery())
+
+onMounted(() => {
+  applyModuleFromQuery()
+  load()
+})
 </script>
 
 <template>
@@ -166,34 +162,7 @@ onMounted(() => load())
             :unread="!row.read_at"
             @click="openNotification(row)"
           >
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <div class="flex min-w-0 flex-wrap items-center gap-2">
-                <p
-                  class="text-sm leading-snug"
-                  :class="!row.read_at ? 'font-semibold text-foreground' : 'font-medium text-muted-foreground'"
-                >
-                  {{ row.title || 'Notificación' }}
-                </p>
-                <Badge
-                  v-if="!row.read_at"
-                  variant="outline"
-                  class="h-5 border-primary/30 bg-primary/5 px-1.5 text-[10px] text-primary uppercase"
-                >
-                  Nueva
-                </Badge>
-              </div>
-              <span class="shrink-0 text-xs text-muted-foreground">{{ formatDate(row.created_at) }}</span>
-            </div>
-            <p
-              class="mt-1 text-sm leading-relaxed"
-              :class="!row.read_at ? 'text-foreground/90' : 'text-muted-foreground'"
-            >
-              {{ row.message }}
-            </p>
-            <p class="mt-1 text-xs text-muted-foreground">
-              {{ moduleLabel(row.module) }}
-              <span v-if="row.filing_number"> · Radicado {{ row.filing_number }}</span>
-            </p>
+            <NotificationsInboxNotificationRowContent :row="row" :unread="!row.read_at" />
           </NotificationsInboxNotificationListItem>
         </ul>
         <p v-else class="px-4 py-12 text-center text-sm text-muted-foreground">

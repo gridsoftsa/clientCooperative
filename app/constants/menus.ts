@@ -91,7 +91,7 @@ export const navMenu: NavMenu[] = [
           },
           {
             title: 'Notificaciones',
-            link: '/ventanilla/notificaciones',
+            link: '/notificaciones',
             permission: 'ventanilla_ver',
           },
           {
