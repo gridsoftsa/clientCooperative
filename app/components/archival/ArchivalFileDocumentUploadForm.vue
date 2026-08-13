@@ -25,6 +25,7 @@ import {
   appendSingleDocumentFoliosToFormData,
   validateDocumentAttachmentFolios,
 } from '~/utils/document-attachment-folio'
+import { ARCHIVAL_DOCUMENT_UPLOAD_CONSTRAINTS } from '~/utils/document-upload-constraints'
 import {
   archivalInputWarningClass,
   archivalMetadataFieldDomId,
@@ -705,6 +706,7 @@ onMounted(() => {
       :file="selectedFile"
       :submit-attempted="submitAttempted"
       :disabled="uploading"
+      :upload-constraints="ARCHIVAL_DOCUMENT_UPLOAD_CONSTRAINTS"
       file-input-id="archival_upload_file"
       @update:title="title = $event"
       @update:folio-start="folioStart = $event"

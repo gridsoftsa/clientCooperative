@@ -4,6 +4,7 @@ import {
   appendSingleDocumentFoliosToFormData,
   validateDocumentAttachmentFolios,
 } from '~/utils/document-attachment-folio'
+import { ARCHIVAL_DOCUMENT_UPLOAD_CONSTRAINTS } from '~/utils/document-upload-constraints'
 
 const props = defineProps<{
   orgUnitId: number
@@ -115,6 +116,7 @@ async function handleUpload() {
       :file="fileInput"
       :submit-attempted="submitAttempted"
       :disabled="uploading"
+      :upload-constraints="ARCHIVAL_DOCUMENT_UPLOAD_CONSTRAINTS"
       file-input-id="area-doc-file"
       @update:title="title = $event"
       @update:folio-start="folioStart = $event"

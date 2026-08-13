@@ -27,6 +27,10 @@ import {
   type DocumentAttachmentRow,
   validateDocumentAttachmentFolios,
 } from '~/utils/document-attachment-folio'
+import {
+  VENTANILLA_FILING_UPLOAD_CONSTRAINTS,
+  validateDocumentUploadFile,
+} from '~/utils/document-upload-constraints'
 
 interface VentanillaOrgUnitOption {
   id: number
@@ -86,6 +90,7 @@ const recipientStaffId = ref<number | null>(null)
 const senderStaffIds = computed(() => senderStaffId.value != null ? [senderStaffId.value] : [])
 const recipientStaffIds = computed(() => recipientStaffId.value != null ? [recipientStaffId.value] : [])
 const fileRows = ref<DocumentAttachmentRow[]>([createDocumentAttachmentRow('Documento principal')])
+const filingUploadConstraints = VENTANILLA_FILING_UPLOAD_CONSTRAINTS
 const trdPickerRef = ref<{ focusFirstMissingTrdField?: () => void } | null>(null)
 const metadataFieldsRef = ref<{
   findFirstMissingRequiredField?: () => { fieldCode: string; fieldIndex: number; message: string } | null
@@ -428,6 +433,13 @@ function validateFileAttachments(): VentanillaFilingValidationIssue | null {
     const folioError = validateDocumentAttachmentFolios(row.folioStart, row.folioEnd)
     if (folioError) {
       return { field: 'file', message: `${folioError} (documento ${index + 1})` }
+    }
+
+    if (row.file) {
+      const fileError = validateDocumentUploadFile(row.file, filingUploadConstraints)
+      if (fileError) {
+        return { field: 'file', message: `${fileError} (documento ${index + 1})` }
+      }
     }
   }
 
@@ -866,9 +878,6 @@ async function submit() {
           </div>
           <div class="space-y-2">
             <Label>Responsable asignado</Label>
-            <p class="text-muted-foreground text-xs">
-              Solo usuarios vinculados al área responsable del radicado.
-            </p>
             <Multiselect
               v-model="assignedUserId"
               mode="single"
@@ -884,6 +893,9 @@ async function submit() {
               no-results-text="Sin coincidencias"
               class="ventanilla-single-multiselect"
             />
+            <p class="text-muted-foreground text-xs">
+              Solo usuarios vinculados al área responsable del radicado.
+            </p>
             <p
               v-if="responsibleOrgUnitId && !loadingResponsibleUsers && !responsibleUsers.length"
               class="text-muted-foreground text-xs"
@@ -965,7 +977,7 @@ async function submit() {
                   Archivos *
                 </CardTitle>
                 <CardDescription>
-                  Documento principal y anexos del radicado.
+                  Documento principal y anexos del radicado. {{ filingUploadConstraints.pickerHint }}
                 </CardDescription>
               </div>
               <Button type="button" variant="outline" size="sm" @click="addFileRow">
@@ -981,6 +993,7 @@ async function submit() {
                 :primary="index === 0"
                 :removable="(fileRows?.length ?? 0) > 1"
                 :submit-attempted="submitAttempted"
+                :upload-constraints="filingUploadConstraints"
                 :file-input-id="index === 0 ? 'ventanilla_file_0' : undefined"
                 :title="row.title"
                 :folio-start="row.folioStart"

@@ -7,6 +7,10 @@ import {
   type DocumentAttachmentRow,
   validateDocumentAttachmentFolios,
 } from '~/utils/document-attachment-folio'
+import {
+  VENTANILLA_PUBLIC_INTAKE_UPLOAD_CONSTRAINTS,
+  validateDocumentUploadFile,
+} from '~/utils/document-upload-constraints'
 
 definePageMeta({
   layout: false,
@@ -22,6 +26,7 @@ const senderIdentifier = ref('')
 const subject = ref('')
 const body = ref('')
 const fileRows = ref<DocumentAttachmentRow[]>([createDocumentAttachmentRow('Documento principal')])
+const intakeUploadConstraints = VENTANILLA_PUBLIC_INTAKE_UPLOAD_CONSTRAINTS
 const submitAttempted = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
@@ -81,6 +86,14 @@ async function submit() {
     if (folioError) {
       errorMessage.value = `${folioError} (documento ${index + 1})`
       return
+    }
+
+    if (row.file) {
+      const fileError = validateDocumentUploadFile(row.file, intakeUploadConstraints)
+      if (fileError) {
+        errorMessage.value = `${fileError} (documento ${index + 1})`
+        return
+      }
     }
   }
 
@@ -201,7 +214,7 @@ async function submit() {
             <div>
               <Label>Documentos anexos *</Label>
               <p class="text-xs text-muted-foreground">
-                Indique título, folios y archivo de cada documento.
+                Indique título, folios y archivo de cada documento. {{ intakeUploadConstraints.pickerHint }}
               </p>
             </div>
             <Button type="button" variant="outline" size="sm" @click="addFileRow">
@@ -217,6 +230,7 @@ async function submit() {
             :primary="index === 0"
             :removable="fileRows.length > 1"
             :submit-attempted="submitAttempted"
+            :upload-constraints="intakeUploadConstraints"
             :title="row.title"
             :folio-start="row.folioStart"
             :folio-end="row.folioEnd"

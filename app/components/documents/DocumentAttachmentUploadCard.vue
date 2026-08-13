@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { formatFileSizeLabel } from '~/utils/document-attachment-folio'
+import {
+  type DocumentUploadConstraints,
+  VENTANILLA_FILING_UPLOAD_CONSTRAINTS,
+  validateDocumentUploadFile,
+} from '~/utils/document-upload-constraints'
 
 const props = withDefaults(defineProps<{
   title: string
@@ -12,12 +17,14 @@ const props = withDefaults(defineProps<{
   submitAttempted?: boolean
   disabled?: boolean
   fileInputId?: string
+  uploadConstraints?: DocumentUploadConstraints
 }>(), {
   label: 'Documento',
   primary: false,
   removable: false,
   submitAttempted: false,
   disabled: false,
+  uploadConstraints: () => VENTANILLA_FILING_UPLOAD_CONSTRAINTS,
 })
 
 const emit = defineEmits<{
@@ -29,6 +36,9 @@ const emit = defineEmits<{
 }>()
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const fileError = ref<string | null>(null)
+
+const uploadHint = computed(() => props.uploadConstraints.pickerHint)
 
 const folioStartMissing = computed(() => props.submitAttempted && !props.folioStart.trim())
 const folioEndMissing = computed(() => props.submitAttempted && !props.folioEnd.trim())
@@ -55,6 +65,19 @@ function openFilePicker() {
 function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement
   const nextFile = input.files?.[0] ?? null
+
+  if (nextFile) {
+    const validationError = validateDocumentUploadFile(nextFile, props.uploadConstraints)
+    if (validationError) {
+      fileError.value = validationError
+      emit('update:file', null)
+      input.value = ''
+
+      return
+    }
+  }
+
+  fileError.value = null
   emit('update:file', nextFile)
 
   if (nextFile && !props.title.trim()) {
@@ -79,7 +102,7 @@ function onFileChange(event: Event) {
           </Badge>
         </div>
         <p class="mt-1 text-xs text-muted-foreground">
-          Indique título, rango de folios y seleccione el archivo.
+          Indique título, rango de folios y seleccione el archivo. {{ uploadHint }}
         </p>
       </div>
       <Button
@@ -147,7 +170,7 @@ function onFileChange(event: Event) {
         ref="fileInputRef"
         type="file"
         class="sr-only"
-        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.webp,.tif,.tiff"
+        :accept="uploadConstraints.accept || undefined"
         :disabled="disabled"
         @change="onFileChange"
       >
@@ -176,8 +199,8 @@ function onFileChange(event: Event) {
           <p class="mt-0.5 text-xs text-muted-foreground">
             {{
               file
-                ? `${formatFileSizeLabel(file.size)} · PDF, imágenes u Office`
-                : 'Haga clic para buscar el documento en su equipo'
+                ? `${formatFileSizeLabel(file.size)} · ${uploadConstraints.typesLabel}`
+                : uploadHint
             }}
           </p>
         </div>
@@ -193,6 +216,9 @@ function onFileChange(event: Event) {
           Examinar
         </Button>
       </button>
+      <p v-if="fileError" class="mt-2 text-xs text-destructive">
+        {{ fileError }}
+      </p>
     </div>
   </div>
 </template>
