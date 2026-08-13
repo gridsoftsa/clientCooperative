@@ -8,6 +8,13 @@ import {
 } from '~/constants/ventanilla'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import { formatArchivalMetadataValue } from '~/utils/archival-metadata-display'
+import {
+  appendDocumentFoliosToFormData,
+  createDocumentAttachmentRow,
+  type DocumentAttachmentRow,
+  validateDocumentAttachmentFolios,
+} from '~/utils/document-attachment-folio'
+import { VENTANILLA_FILING_UPLOAD_CONSTRAINTS } from '~/utils/document-upload-constraints'
 import type { VentanillaCatalogData, VentanillaFilingDetail } from '~/types/ventanilla'
 
 definePageMeta({
@@ -40,6 +47,9 @@ const assignmentNote = ref('')
 const responseText = ref('')
 const closeReason = ref('')
 const voidReason = ref('')
+const workflowAttachment = ref<DocumentAttachmentRow>(createDocumentAttachmentRow())
+const workflowAttachmentAttempted = ref(false)
+const workflowAttachmentLoading = ref(false)
 
 type VentanillaDetailSection =
   | 'resumen'
@@ -70,6 +80,10 @@ const awaitsWorkflowAssignment = computed(() =>
 const isMyWorkflowTask = computed(() =>
   workflowOpenTask.value?.assignee?.id != null
   && workflowOpenTask.value.assignee.id === authUser.value?.id,
+)
+const canAttachWorkflowFiles = computed(() =>
+  canManage.value
+  && workflowOpenTask.value != null,
 )
 const metadataRows = computed(() => {
   const fields = filing.value?.archival_metadata_schema?.fields ?? []
@@ -243,6 +257,50 @@ async function runAction(action: string, callback: () => Promise<VentanillaFilin
     errorMessage.value = first ?? err.data?.message ?? 'No se pudo ejecutar la acción'
   } finally {
     actionLoading.value = ''
+  }
+}
+
+async function attachWorkflowFile() {
+  workflowAttachmentAttempted.value = true
+  errorMessage.value = ''
+
+  if (!workflowAttachment.value.file) {
+    errorMessage.value = 'Seleccione un archivo para adjuntar.'
+
+    return
+  }
+
+  const folioError = validateDocumentAttachmentFolios(
+    workflowAttachment.value.folioStart,
+    workflowAttachment.value.folioEnd,
+  )
+
+  if (folioError) {
+    errorMessage.value = folioError
+
+    return
+  }
+
+  const fd = new FormData()
+  fd.append('files[0][file]', workflowAttachment.value.file)
+  fd.append('files[0][title]', workflowAttachment.value.title.trim() || workflowAttachment.value.file.name)
+  appendDocumentFoliosToFormData(fd, 0, workflowAttachment.value.folioStart, workflowAttachment.value.folioEnd)
+
+  workflowAttachmentLoading.value = true
+
+  try {
+    filing.value = await ventanillaApi.attachFilingFiles(id.value, fd)
+    workflowAttachment.value = createDocumentAttachmentRow()
+    workflowAttachmentAttempted.value = false
+    actionMessage.value = 'Archivo adjuntado correctamente.'
+  }
+  catch (e: unknown) {
+    const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    errorMessage.value = first ?? err.data?.message ?? 'No se pudo adjuntar el archivo'
+  }
+  finally {
+    workflowAttachmentLoading.value = false
   }
 }
 
@@ -808,6 +866,37 @@ async function viewSticker() {
               <p v-else class="text-muted-foreground text-sm">
                 Sin archivos adjuntos.
               </p>
+
+              <div v-if="canAttachWorkflowFiles" class="mt-6 space-y-4 border-t pt-6">
+                <div>
+                  <p class="text-sm font-medium">
+                    Adjuntar archivo al radicado
+                  </p>
+                  <p class="text-muted-foreground text-xs">
+                    Disponible en cualquier etapa activa del workflow.
+                  </p>
+                </div>
+
+                <DocumentsDocumentAttachmentUploadCard
+                  v-model:title="workflowAttachment.title"
+                  v-model:folio-start="workflowAttachment.folioStart"
+                  v-model:folio-end="workflowAttachment.folioEnd"
+                  v-model:file="workflowAttachment.file"
+                  title="Nuevo adjunto"
+                  label="Documento"
+                  :submit-attempted="workflowAttachmentAttempted"
+                  :disabled="workflowAttachmentLoading"
+                  :upload-constraints="VENTANILLA_FILING_UPLOAD_CONSTRAINTS"
+                />
+
+                <Button
+                  class="w-full sm:w-auto"
+                  :disabled="workflowAttachmentLoading"
+                  @click="attachWorkflowFile"
+                >
+                  {{ workflowAttachmentLoading ? 'Subiendo…' : 'Adjuntar archivo' }}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 

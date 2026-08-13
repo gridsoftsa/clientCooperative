@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { WorkflowFilingContext, WorkflowTaskCard } from '~/types/workflow'
+import type { WorkflowTaskCard } from '~/types/workflow'
 
 definePageMeta({
   layout: 'default',
@@ -20,11 +20,6 @@ const statusFilter = ref<'open' | 'overdue' | 'due_soon' | 'completed'>('open')
 const definitions = ref<Array<{ id: number, key: string, name: string }>>([])
 const ALL_DEFINITIONS = 'all'
 const definitionId = ref<string>(ALL_DEFINITIONS)
-
-const users = ref<Array<{ id: number, name: string }>>([])
-const actionsOpen = ref(false)
-const selectedTask = ref<WorkflowTaskCard | null>(null)
-const taskContext = ref<WorkflowFilingContext | null>(null)
 
 const canManage = computed(() => hasPermission('workflow_gestionar'))
 const { ensureLoaded, labelFor } = useVentanillaFunctionalTypeLabels()
@@ -65,21 +60,11 @@ async function loadTasks(page = 1) {
   }
 }
 
-async function openManage(task: WorkflowTaskCard) {
-  selectedTask.value = task
-
-  if (task.subject?.id) {
-    taskContext.value = await workflowApi.fetchFilingContext(task.subject.id)
-  }
-  else {
-    taskContext.value = null
-  }
-
-  if (users.value.length === 0) {
-    users.value = await workflowApi.fetchAssignableUsers()
-  }
-
-  actionsOpen.value = true
+function openManage(task: WorkflowTaskCard) {
+  router.push({
+    path: `/workflow/tareas/${task.id}`,
+    query: { from: 'bandeja' },
+  })
 }
 
 function openFiling(task: WorkflowTaskCard) {
@@ -225,9 +210,9 @@ onMounted(async () => {
           <div
             v-for="task in tasks"
             :key="task.id"
-            class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-accent/30"
+            class="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
           >
-            <div class="min-w-0 flex-1 cursor-pointer" @click="openFiling(task)">
+            <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 text-sm">
                 <Icon name="i-lucide-circle" class="size-3" :class="trafficClass(task.traffic_light_status)" />
                 <span class="font-medium">{{ task.subject?.filing_number ?? `Tarea #${task.id}` }}</span>
@@ -247,12 +232,24 @@ onMounted(async () => {
                 <span v-if="task.days_overdue" class="text-destructive"> · {{ task.days_overdue }}d vencido</span>
               </p>
             </div>
-            <div class="flex gap-2">
-              <Button v-if="canManage" size="sm" variant="outline" @click="openManage(task)">
+            <div class="flex shrink-0 gap-2">
+              <Button
+                v-if="canManage"
+                size="sm"
+                variant="default"
+                @click="openManage(task)"
+              >
+                <Icon name="i-lucide-settings-2" class="mr-1 size-4" />
                 Gestionar
               </Button>
-              <Button size="sm" variant="ghost" @click="openFiling(task)">
-                Abrir
+              <Button
+                v-if="task.subject?.id"
+                size="sm"
+                variant="outline"
+                @click="openFiling(task)"
+              >
+                <Icon name="i-lucide-external-link" class="mr-1 size-4" />
+                Ventanilla
               </Button>
             </div>
           </div>
@@ -281,14 +278,5 @@ onMounted(async () => {
         </div>
       </CardContent>
     </Card>
-
-    <WorkflowTaskActionsSheet
-      v-if="actionsOpen && selectedTask"
-      v-model:open="actionsOpen"
-      :task="selectedTask"
-      :context="taskContext"
-      :users="users"
-      @changed="loadTasks(meta.current_page)"
-    />
   </div>
 </template>

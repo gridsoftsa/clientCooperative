@@ -7,6 +7,10 @@ export function inboxNotificationModuleLabel(module?: string | null): string {
     return 'Ventanilla'
   }
 
+  if (module === 'workflow') {
+    return 'Workflow'
+  }
+
   return 'Sistema'
 }
 
@@ -25,6 +29,7 @@ export function inboxNotificationEventLabel(eventType?: string | null): string |
     sla_reminder: 'Recordatorio SLA',
     escalated: 'Escalamiento',
     workflow_task_assigned: 'Tarea de workflow',
+    task_collaborator_invited: 'Colaboración solicitada',
     workflow_sla_alert: 'Alerta SLA de etapa',
     workflow_sla_reminder: 'Recordatorio SLA de etapa',
     workflow_escalated: 'Escalamiento de etapa',

@@ -159,6 +159,7 @@ export interface WorkflowFilingContext {
       id: number
       key: string
       name: string
+      ventanilla_role?: string | null
       allows_advance: boolean
       allows_return: boolean
       allows_reassign: boolean
@@ -180,6 +181,8 @@ export interface WorkflowFilingContext {
   warnings?: WorkflowContextWarning[]
   task_escalation?: WorkflowTaskEscalationSummary | null
   archival_file?: WorkflowArchivalFileContext | null
+  collaborators?: WorkflowCollaboratorsSummary
+  filing?: WorkflowFilingContextSummary | null
   sla_alerts?: Array<{
     id: number
     alert_type: string
@@ -187,6 +190,81 @@ export interface WorkflowFilingContext {
     message: string
     triggered_at: string | null
   }>
+}
+
+export interface WorkflowCollaboratorsSummary {
+  total: number
+  pending: number
+  all_responded: boolean
+  can_manage: boolean
+}
+
+export interface WorkflowFilingContextFile {
+  id: number
+  is_primary: boolean
+  title: string
+  folio_start: number | null
+  folio_end: number | null
+  original_name: string
+  mime_type: string | null
+  size_bytes: number | null
+  uploaded_by: { id: number, name: string } | null
+  created_at: string | null
+}
+
+export interface WorkflowFilingContextSummary {
+  id: number
+  filing_number: string
+  filing_type: string | null
+  functional_type_key: string | null
+  functional_type_label: string | null
+  status: string
+  subject: string
+  filed_at: string | null
+  requires_response: boolean
+  response_deadline_at: string | null
+  sender_name: string | null
+  sender_identifier: string | null
+  recipient_name: string | null
+  recipient_identifier: string | null
+  reception_medium: string | null
+  notes: string | null
+  org_unit_responsible: { id: number, name: string, code?: string } | null
+  producer_org_unit: { id: number, name: string, code?: string } | null
+  recipient_org_unit: { id: number, name: string, code?: string } | null
+  doc_document_type: { id: number, code: string, name: string } | null
+  assigned_user: { id: number, name: string } | null
+  files: WorkflowFilingContextFile[]
+}
+
+export interface WorkflowTaskCollaboratorRow {
+  id: number
+  workflow_task_id: number
+  status: 'pending' | 'responded'
+  response_note: string | null
+  responded_at: string | null
+  user: { id: number, name: string, email?: string | null } | null
+  org_unit: { id: number, name: string, code?: string } | null
+  org_position: { id: number, name: string, code?: string } | null
+  invited_by: { id: number, name: string } | null
+  files: Array<{
+    id: number
+    title: string
+    folio_start: number
+    folio_end: number
+    original_name: string
+    mime_type: string | null
+    size_bytes: number | null
+  }>
+  filing?: {
+    id: number
+    filing_number: string
+    subject: string
+  } | null
+  task?: {
+    id: number
+    stage: { name: string, key: string } | null
+  } | null
 }
 
 export interface WorkflowDefinitionPayload {

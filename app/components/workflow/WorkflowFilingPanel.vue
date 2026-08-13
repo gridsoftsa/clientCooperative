@@ -18,9 +18,6 @@ const workflowApi = useWorkflowApi()
 const loading = ref(false)
 const context = ref<WorkflowFilingContext | null>(null)
 const loadError = ref<string | null>(null)
-const users = ref<Array<{ id: number, name: string }>>([])
-const actionsOpen = ref(false)
-const loadingUsers = ref(false)
 
 const canView = computed(() => hasPermission('workflow_ver'))
 const canManage = computed(() => hasPermission('workflow_gestionar'))
@@ -29,27 +26,6 @@ const isMyOpenTask = computed(() =>
   && context.value.open_task.assignee.id === authUser.value?.id,
 )
 const canActOnOpenTask = computed(() => canManage.value && isMyOpenTask.value)
-
-const openTaskCard = computed(() => {
-  if (!context.value?.open_task)
-    return null
-
-  const task = context.value.open_task
-
-  return {
-    id: task.id,
-    status: task.status,
-    traffic_light_status: task.traffic_light_status,
-    started_at: task.started_at,
-    due_at: task.due_at,
-    days_overdue: task.days_overdue,
-    stage: task.stage,
-    assignee: task.assignee,
-    instance: context.value.instance ? { id: context.value.instance.id, status: context.value.instance.status } : null,
-    subject: null,
-    workflow: context.value.workflow,
-  }
-})
 
 const slaAlertMessage = computed(() => context.value?.sla_alerts?.[0]?.message ?? null)
 
@@ -73,31 +49,17 @@ async function load() {
   }
 }
 
-async function ensureAssignableUsers(): Promise<void> {
-  if (users.value.length > 0 || loadingUsers.value) {
-    return
-  }
-
-  loadingUsers.value = true
-  try {
-    users.value = await workflowApi.fetchAssignableUsers()
-  }
-  catch {
-    users.value = []
-  }
-  finally {
-    loadingUsers.value = false
-  }
-}
-
 async function openTaskActions() {
   await load()
   if (!context.value?.open_task) {
     toast.error('No hay tarea activa en este proceso. Actualice la vista.')
     return
   }
-  await ensureAssignableUsers()
-  actionsOpen.value = true
+
+  await navigateTo({
+    path: `/workflow/tareas/${context.value.open_task.id}`,
+    query: { from: `ventanilla/${props.filingId}` },
+  })
 }
 
 function eventLabel(type: string) {
@@ -318,14 +280,5 @@ defineExpose({ reload: load })
         </div>
       </template>
     </CardContent>
-
-    <WorkflowTaskActionsSheet
-      v-if="openTaskCard"
-      v-model:open="actionsOpen"
-      :task="openTaskCard"
-      :context="context"
-      :users="users"
-      @changed="load(); emit('changed')"
-    />
   </Card>
 </template>

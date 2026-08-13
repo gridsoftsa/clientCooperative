@@ -96,8 +96,7 @@ function functionalTypeLabel(task: WorkflowTaskCard) {
         <div
           v-for="task in col.tasks"
           :key="task.id"
-          class="cursor-pointer rounded-xl border bg-card px-3 py-2 shadow-sm transition-colors hover:bg-accent/50"
-          @click="emit('openTask', task)"
+          class="rounded-xl border bg-card px-3 py-2 shadow-sm"
         >
           <div class="flex items-start justify-between gap-2">
             <div class="flex items-center gap-2 text-xs text-muted-foreground">
@@ -117,7 +116,7 @@ function functionalTypeLabel(task: WorkflowTaskCard) {
               <DropdownMenuContent align="end" class="min-w-[10rem]">
                 <DropdownMenuItem @click="emit('openTask', task)">
                   <Icon name="lucide:external-link" class="size-4" />
-                  Abrir radicado
+                  Ventanilla
                 </DropdownMenuItem>
                 <DropdownMenuItem @click="emit('manage', task)">
                   <Icon name="lucide:settings-2" class="size-4" />

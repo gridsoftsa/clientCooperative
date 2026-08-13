@@ -245,7 +245,9 @@ export interface VentanillaFilingWorkflowOpenTask {
   traffic_light_status: VentanillaTrafficLightValue | null
   due_at: string | null
   days_overdue: number | null
+  stage_key?: string | null
   stage_name: string | null
+  ventanilla_role?: string | null
   assignee: { id: number; name: string } | null
   escalation?: {
     id: number

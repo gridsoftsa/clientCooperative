@@ -7,6 +7,8 @@ import type {
   WorkflowFunctionalTypeOption,
   WorkflowStagePayload,
   WorkflowTaskCard,
+  WorkflowTaskCollaboratorRow,
+  WorkflowCollaboratorsSummary,
 } from '~/types/workflow'
 
 export function useWorkflowApi() {
@@ -24,6 +26,12 @@ export function useWorkflowApi() {
     meta: { current_page: number, last_page: number, per_page: number, total: number }
   }> {
     return await api('/workflow/tasks', { query })
+  }
+
+  async function fetchTask(id: number): Promise<WorkflowTaskCard> {
+    const res = await api<{ data: WorkflowTaskCard }>(`/workflow/tasks/${id}`)
+
+    return res.data
   }
 
   async function advanceTask(id: number, note?: string) {
@@ -158,9 +166,48 @@ export function useWorkflowApi() {
     return res.data
   }
 
+  async function fetchTaskCollaborators(taskId: number): Promise<{
+    data: WorkflowTaskCollaboratorRow[]
+    meta: WorkflowCollaboratorsSummary
+  }> {
+    return await api(`/workflow/tasks/${taskId}/collaborators`)
+  }
+
+  async function inviteTaskCollaborator(
+    taskId: number,
+    payload: { user_id: number, org_unit_id?: number | null, org_position_id?: number | null },
+  ): Promise<WorkflowTaskCollaboratorRow> {
+    const res = await api<{ data: WorkflowTaskCollaboratorRow, message: string }>(
+      `/workflow/tasks/${taskId}/collaborators`,
+      { method: 'POST', body: payload },
+    )
+
+    return res.data
+  }
+
+  async function removeTaskCollaborator(taskId: number, collaboratorId: number): Promise<void> {
+    await api(`/workflow/tasks/${taskId}/collaborators/${collaboratorId}`, { method: 'DELETE' })
+  }
+
+  async function fetchCollaboration(id: number): Promise<WorkflowTaskCollaboratorRow> {
+    const res = await api<{ data: WorkflowTaskCollaboratorRow }>(`/workflow/collaborations/${id}`)
+
+    return res.data
+  }
+
+  async function respondCollaboration(id: number, formData: FormData): Promise<WorkflowTaskCollaboratorRow> {
+    const res = await api<{ data: WorkflowTaskCollaboratorRow, message: string }>(
+      `/workflow/collaborations/${id}/respond`,
+      { method: 'POST', body: formData },
+    )
+
+    return res.data
+  }
+
   return {
     fetchBoard,
     fetchTasks,
+    fetchTask,
     advanceTask,
     returnTask,
     reassignTask,
@@ -178,5 +225,10 @@ export function useWorkflowApi() {
     deleteStage,
     upsertBinding,
     fetchBindingsCoverage,
+    fetchTaskCollaborators,
+    inviteTaskCollaborator,
+    removeTaskCollaborator,
+    fetchCollaboration,
+    respondCollaboration,
   }
 }

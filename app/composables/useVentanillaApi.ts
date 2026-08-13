@@ -265,6 +265,15 @@ export function useVentanillaApi() {
     return res.data
   }
 
+  async function attachFilingFiles(id: number, formData: FormData): Promise<VentanillaFilingDetail> {
+    const res = await api<{ data: VentanillaFilingDetail; message: string }>(`/ventanilla/filings/${id}/files`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    return res.data
+  }
+
   async function voidFiling(id: number, voidReason: string): Promise<VentanillaFilingDetail> {
     const res = await api<{ data: VentanillaFilingDetail; message: string }>(`/ventanilla/filings/${id}/void`, {
       method: 'PATCH',
@@ -637,6 +646,7 @@ export function useVentanillaApi() {
     discardIntake,
     assignFiling,
     startFiling,
+    attachFilingFiles,
     respondFiling,
     closeFiling,
     voidFiling,

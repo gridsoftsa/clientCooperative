@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { WorkflowBoardData, WorkflowFilingContext, WorkflowTaskCard } from '~/types/workflow'
+import type { WorkflowBoardData, WorkflowTaskCard } from '~/types/workflow'
 
 definePageMeta({
   layout: 'default',
@@ -20,11 +20,6 @@ const definitionId = ref<string>(ALL_DEFINITIONS)
 const { scope, canViewTeam, canViewAllTasks } = useWorkflowInboxScope()
 const statusFilter = ref<'open' | 'overdue' | 'due_soon'>('open')
 const functionalTypeKey = ref<string>('')
-
-const users = ref<Array<{ id: number, name: string }>>([])
-const actionsOpen = ref(false)
-const selectedTask = ref<WorkflowTaskCard | null>(null)
-const taskContext = ref<WorkflowFilingContext | null>(null)
 
 const canManage = computed(() => hasPermission('workflow_gestionar'))
 const { ensureLoaded } = useVentanillaFunctionalTypeLabels()
@@ -69,21 +64,11 @@ function openTask(task: WorkflowTaskCard) {
     router.push(`/ventanilla/${task.subject.id}`)
 }
 
-async function openManage(task: WorkflowTaskCard) {
-  selectedTask.value = task
-
-  if (task.subject?.id) {
-    taskContext.value = await workflowApi.fetchFilingContext(task.subject.id)
-  }
-  else {
-    taskContext.value = null
-  }
-
-  if (users.value.length === 0) {
-    users.value = await workflowApi.fetchAssignableUsers()
-  }
-
-  actionsOpen.value = true
+function openManage(task: WorkflowTaskCard) {
+  router.push({
+    path: `/workflow/tareas/${task.id}`,
+    query: { from: 'board' },
+  })
 }
 
 watch([scope, statusFilter, functionalTypeKey, definitionId], () => {
@@ -198,14 +183,5 @@ onMounted(async () => {
         />
       </CardContent>
     </Card>
-
-    <WorkflowTaskActionsSheet
-      v-if="actionsOpen && selectedTask"
-      v-model:open="actionsOpen"
-      :task="selectedTask"
-      :context="taskContext"
-      :users="users"
-      @changed="loadBoard"
-    />
   </div>
 </template>

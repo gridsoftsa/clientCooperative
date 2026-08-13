@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { WorkflowBindingCoverageRow, WorkflowDefinition } from '~/types/workflow'
+import { coerceBoolean } from '~/utils/coerce-boolean'
 import { suggestWorkflowDefinitionKey } from '~/utils/workflow-technical-key'
 
 definePageMeta({
@@ -194,9 +195,9 @@ onMounted(() => {
               <div class="flex items-center gap-2 text-sm">
                 <Switch
                   :id="`workflow-active-${def.id}`"
-                  :checked="def.is_active"
+                  :model-value="coerceBoolean(def.is_active)"
                   :disabled="togglingId === def.id || (def.is_active && hasActiveProcesses(def))"
-                  @update:checked="setDefinitionActive(def, $event === true)"
+                  @update:model-value="setDefinitionActive(def, $event === true)"
                 />
                 <Label :for="`workflow-active-${def.id}`" class="cursor-pointer text-muted-foreground">
                   {{ def.is_active ? 'Activo' : 'Inactivo' }}
