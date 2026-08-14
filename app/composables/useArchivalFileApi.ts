@@ -143,9 +143,16 @@ export function useArchivalFileApi() {
     return res.data
   }
 
-  async function fetchFileTypesAdmin(activeOnly = false) {
+  async function fetchFileTypesAdmin(params: Record<string, string | number | boolean | undefined> = {}, activeOnly = false) {
+    const query: Record<string, string | number> = { active_only: activeOnly ? 1 : 0 }
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '' && value !== null) {
+        query[key] = value === true ? 1 : value === false ? 0 : value
+      }
+    })
+
     const res = await api<{ data: ArchivalFileType[] }>('/archival-files/types', {
-      query: { active_only: activeOnly ? 1 : 0 },
+      query,
     })
 
     return res.data

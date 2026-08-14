@@ -60,6 +60,31 @@ export interface InstitutionalLibraryListResponse {
   total: number
 }
 
+export interface InstitutionalLibrarySection {
+  category?: string | null
+  category_label?: string
+  category_icon?: string | null
+  org_unit?: { id: number, name: string } | null
+  title: string
+  documents: InstitutionalLibraryDocument[]
+  total: number
+}
+
+export interface InstitutionalLibraryOrgUnitCount {
+  id: number
+  name: string
+  count: number
+}
+
+export interface InstitutionalLibraryHome {
+  featured: InstitutionalLibraryDocument | null
+  categories: InstitutionalLibraryCategory[]
+  sections: InstitutionalLibrarySection[]
+  recent: InstitutionalLibraryDocument[]
+  most_viewed: InstitutionalLibraryDocument[]
+  org_units: InstitutionalLibraryOrgUnitCount[]
+}
+
 export interface PublishInstitutionalLibraryPayload {
   archival_file_id: number
   institutional_category?: InstitutionalLibraryCategoryValue

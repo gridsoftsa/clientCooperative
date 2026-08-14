@@ -427,6 +427,16 @@ onMounted(() => loadCatalogs())
               <p class="text-xs text-muted-foreground">
                 Ubicación del expediente en el catálogo TRD (serie y subserie). Los tipos documentales se definen en la pestaña Obligatorios.
               </p>
+              <p
+                v-if="form.model === 'org_area'"
+                class="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground"
+              >
+                Tipos <span class="font-medium text-foreground">por área</span> (repositorio, auditoría): la TRD aquí es
+                <span class="font-medium text-foreground">referencia por defecto</span> para el área seleccionada.
+                Cada expediente puede usar otra área productora; al adjuntar se usa la TRD del área del expediente.
+                Para biblioteca institucional suele bastar serie <span class="font-mono">005-54</span> / subserie
+                <span class="font-mono">54</span> cuando exista en esa área.
+              </p>
             </div>
 
             <div class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">

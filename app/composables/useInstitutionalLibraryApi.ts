@@ -2,6 +2,7 @@ import type {
   InstitutionalLibraryCategory,
   InstitutionalLibraryCategoryRow,
   InstitutionalLibraryDocument,
+  InstitutionalLibraryHome,
   InstitutionalLibraryListResponse,
   PublishInstitutionalLibraryPayload,
 } from '~/types/institutional-library'
@@ -9,6 +10,21 @@ import type {
 export function useInstitutionalLibraryApi() {
   const { $api } = useNuxtApp()
   const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promise<T>
+
+  async function fetchHome(params: Record<string, string | number | undefined> = {}) {
+    const query = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '' && value !== null) {
+        query.set(key, String(value))
+      }
+    })
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+
+    const res = await api<{ data: InstitutionalLibraryHome }>(
+      `/institutional-library/home${suffix}`,
+    )
+    return res.data
+  }
 
   async function fetchDocuments(params: Record<string, string | number | undefined> = {}) {
     const query = new URLSearchParams()
@@ -86,6 +102,7 @@ export function useInstitutionalLibraryApi() {
   }
 
   return {
+    fetchHome,
     fetchDocuments,
     fetchCategories,
     fetchCatalog,

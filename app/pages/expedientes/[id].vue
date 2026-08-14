@@ -513,12 +513,18 @@ onMounted(() => loadAll())
 
         <Card class="min-h-0 min-w-0 flex flex-col overflow-hidden lg:max-h-[calc(100vh-11rem)]">
           <Tabs v-model="workspaceTab" class="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div class="shrink-0 border-b px-2 pt-2">
-              <TabsList class="grid h-auto w-full grid-cols-2 gap-1 bg-transparent p-0 sm:grid-cols-3 lg:flex lg:flex-wrap lg:gap-1">
-                <TabsTrigger value="resumen" class="text-xs sm:text-sm">
+            <div class="shrink-0 border-b px-2 py-2">
+              <TabsList class="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-3 lg:flex lg:flex-wrap">
+                <TabsTrigger
+                  value="resumen"
+                  class="min-h-9 flex-1 px-2.5 text-xs data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground sm:text-sm"
+                >
                   Resumen
                 </TabsTrigger>
-                <TabsTrigger value="gestion" class="text-xs sm:text-sm">
+                <TabsTrigger
+                  value="gestion"
+                  class="min-h-9 flex-1 px-2.5 text-xs data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground sm:text-sm"
+                >
                   Gestión
                   <Badge
                     v-if="gestionAttentionCount > 0"
@@ -528,17 +534,23 @@ onMounted(() => loadAll())
                     {{ gestionAttentionCount }}
                   </Badge>
                 </TabsTrigger>
-                <TabsTrigger value="metadatos" class="text-xs sm:text-sm">
+                <TabsTrigger
+                  value="metadatos"
+                  class="min-h-9 flex-1 px-2.5 text-xs data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground sm:text-sm"
+                >
                   Metadatos
                 </TabsTrigger>
                 <TabsTrigger
                   v-if="canAttachDocument"
                   value="adjuntar"
-                  class="text-xs sm:text-sm"
+                  class="min-h-9 flex-1 px-2.5 text-xs data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground sm:text-sm"
                 >
                   Adjuntar
                 </TabsTrigger>
-                <TabsTrigger value="auditoria" class="text-xs sm:text-sm">
+                <TabsTrigger
+                  value="auditoria"
+                  class="min-h-9 flex-1 px-2.5 text-xs data-[state=active]:bg-background data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-sm data-[state=inactive]:text-muted-foreground sm:text-sm"
+                >
                   Auditoría
                 </TabsTrigger>
               </TabsList>

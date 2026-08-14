@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import InstitutionalLibraryBrowser from '~/components/archival/InstitutionalLibraryBrowser.vue'
-import type { InstitutionalLibraryCategory, InstitutionalLibraryDocument } from '~/types/institutional-library'
+import type {
+  InstitutionalLibraryCategory,
+  InstitutionalLibraryDocument,
+  InstitutionalLibraryHome,
+  InstitutionalLibrarySection,
+} from '~/types/institutional-library'
 
 const FILTER_ALL_ORG_UNITS = 'all'
 
@@ -15,23 +19,18 @@ const libraryApi = useInstitutionalLibraryApi()
 const archivalApi = useArchivalFileApi()
 const { viewDocumentInNewTab } = useArchivalDocumentBlob()
 const { hasPermission } = usePermissions()
-const { $api } = useNuxtApp()
-const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promise<T>
 
+const loading = ref(false)
+const listLoading = ref(false)
 const search = ref('')
 const selectedCategory = ref('')
 const selectedOrgUnitId = ref(FILTER_ALL_ORG_UNITS)
-const loading = ref(false)
-const page = ref(1)
+const viewMode = ref<'portal' | 'list'>('portal')
+const listPage = ref(1)
 
-const categories = ref<InstitutionalLibraryCategory[]>([])
-const documents = ref<InstitutionalLibraryDocument[]>([])
-const featured = ref<InstitutionalLibraryDocument | null>(null)
-const recent = ref<InstitutionalLibraryDocument[]>([])
-const mostViewed = ref<InstitutionalLibraryDocument[]>([])
-const orgUnits = ref<Array<{ id: number, name: string }>>([])
-
-const pagination = ref({ current_page: 1, last_page: 1, total: 0 })
+const home = ref<InstitutionalLibraryHome | null>(null)
+const listDocuments = ref<InstitutionalLibraryDocument[]>([])
+const listPagination = ref({ current_page: 1, last_page: 1, total: 0 })
 
 const detailOpen = ref(false)
 const previewing = ref(false)
@@ -40,45 +39,21 @@ const documentDetail = ref<InstitutionalLibraryDocument | null>(null)
 
 const canDownload = computed(() => hasPermission('expedientes_documentos_descargar'))
 
-async function loadOrgUnits() {
-  try {
-    const res = await api<{ data: Array<{ id: number, name: string }> }>('/organizational-structure/org-units')
-    orgUnits.value = res.data ?? []
-  }
-  catch {
-    orgUnits.value = []
+function homeQueryParams() {
+  return {
+    search: search.value || undefined,
+    category: selectedCategory.value || undefined,
+    org_unit_id: selectedOrgUnitId.value !== FILTER_ALL_ORG_UNITS
+      ? Number(selectedOrgUnitId.value)
+      : undefined,
   }
 }
 
-async function loadLibrary() {
+async function loadHome() {
   loading.value = true
-  try {
-    const [cats, list, feat, rec, viewed] = await Promise.all([
-      libraryApi.fetchCategories(),
-      libraryApi.fetchDocuments({
-        search: search.value || undefined,
-        category: selectedCategory.value || undefined,
-        org_unit_id: selectedOrgUnitId.value !== FILTER_ALL_ORG_UNITS
-          ? Number(selectedOrgUnitId.value)
-          : undefined,
-        page: page.value,
-        per_page: 12,
-      }),
-      libraryApi.fetchFeatured(),
-      libraryApi.fetchRecent(),
-      libraryApi.fetchMostViewed(),
-    ])
 
-    categories.value = cats
-    documents.value = list.data ?? []
-    pagination.value = {
-      current_page: list.current_page,
-      last_page: list.last_page,
-      total: list.total,
-    }
-    featured.value = feat
-    recent.value = rec
-    mostViewed.value = viewed
+  try {
+    home.value = await libraryApi.fetchHome(homeQueryParams())
   }
   catch {
     toast.error('No se pudo cargar la biblioteca institucional.')
@@ -86,6 +61,80 @@ async function loadLibrary() {
   finally {
     loading.value = false
   }
+}
+
+async function loadList() {
+  listLoading.value = true
+
+  try {
+    const list = await libraryApi.fetchDocuments({
+      ...homeQueryParams(),
+      page: listPage.value,
+      per_page: 12,
+    })
+
+    listDocuments.value = list.data ?? []
+    listPagination.value = {
+      current_page: list.current_page,
+      last_page: list.last_page,
+      total: list.total,
+    }
+  }
+  catch {
+    toast.error('No se pudieron cargar los documentos.')
+  }
+  finally {
+    listLoading.value = false
+  }
+}
+
+async function refreshLibrary() {
+  if (viewMode.value === 'list') {
+    await loadList()
+  }
+  else {
+    await loadHome()
+  }
+}
+
+function openCategoryList(category: InstitutionalLibraryCategory) {
+  selectedCategory.value = category.value
+  viewMode.value = 'list'
+  listPage.value = 1
+  void loadList()
+}
+
+function openSectionList(section: InstitutionalLibrarySection) {
+  selectedCategory.value = section.category ?? ''
+  if (section.org_unit?.id) {
+    selectedOrgUnitId.value = String(section.org_unit.id)
+  }
+  viewMode.value = 'list'
+  listPage.value = 1
+  void loadList()
+}
+
+function backToPortal() {
+  viewMode.value = 'portal'
+  selectedCategory.value = ''
+  listPage.value = 1
+  void loadHome()
+}
+
+async function onSearch() {
+  listPage.value = 1
+
+  if (viewMode.value === 'list') {
+    await loadList()
+  }
+  else {
+    await loadHome()
+  }
+}
+
+async function onListPage(page: number) {
+  listPage.value = page
+  await loadList()
 }
 
 async function openDocument(document: InstitutionalLibraryDocument) {
@@ -136,50 +185,46 @@ function formatDate(value?: string | null) {
   return new Date(value).toLocaleDateString('es-CO')
 }
 
-onMounted(async () => {
-  await loadOrgUnits()
-  await loadLibrary()
+watch(selectedOrgUnitId, () => {
+  listPage.value = 1
+  void refreshLibrary()
 })
+
+onMounted(() => loadHome())
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 class="text-2xl font-semibold tracking-tight">
-          Biblioteca institucional
-        </h1>
-        <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Consulte la documentación oficial publicada por categoría y área productora.
-          Use el panel izquierdo para navegar y el panel derecho para ver y descargar documentos.
-        </p>
-      </div>
+  <div class="mx-auto max-w-7xl space-y-6">
+    <div>
+      <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">
+        Biblioteca institucional
+      </h1>
+      <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
+        Documentación oficial por área y categoría. Filtre por área productora para ver políticas, formatos y procedimientos de cada dependencia.
+      </p>
     </div>
 
-    <Card>
-      <CardContent class="p-0 sm:p-0">
-        <InstitutionalLibraryBrowser
-          :loading="loading"
-          :categories="categories"
-          :documents="documents"
-          :featured="featured"
-          :recent="recent"
-          :most-viewed="mostViewed"
-          :org-units="orgUnits"
-          :org-unit-id="selectedOrgUnitId"
-          :search="search"
-          :selected-category="selectedCategory"
-          :pagination="pagination"
-          :can-download="canDownload"
-          @update:org-unit-id="selectedOrgUnitId = $event"
-          @update:search="search = $event"
-          @update:selected-category="selectedCategory = $event"
-          @update:page="page = $event"
-          @refresh="loadLibrary"
-          @view-document="openDocument"
-        />
-      </CardContent>
-    </Card>
+    <ArchivalInstitutionalLibraryPortal
+      :loading="loading"
+      :home="home"
+      :list-documents="listDocuments"
+      :list-loading="listLoading"
+      :list-pagination="listPagination"
+      :view-mode="viewMode"
+      :search="search"
+      :selected-org-unit-id="selectedOrgUnitId"
+      :selected-category="selectedCategory"
+      :can-download="canDownload"
+      @update:search="search = $event"
+      @update:selected-org-unit-id="selectedOrgUnitId = $event"
+      @update:selected-category="selectedCategory = $event"
+      @search="onSearch"
+      @view-document="openDocument"
+      @open-category="openCategoryList"
+      @open-section="openSectionList"
+      @back-to-portal="backToPortal"
+      @list-page="onListPage"
+    />
 
     <Dialog v-model:open="detailOpen">
       <DialogContent class="max-h-[90vh] max-w-3xl overflow-y-auto">

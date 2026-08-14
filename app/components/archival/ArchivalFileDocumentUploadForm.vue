@@ -6,6 +6,7 @@ import type {
   ArchivalFileRequiredDocumentsEvaluation,
   ArchivalFileTreeNode,
 } from '~/types/archival-file'
+import type { CatalogTreeSeries } from '~/types/archival-trd'
 import {
   flattenCatalogDocumentTypes,
   flattenFileFolderNodes,
@@ -27,9 +28,8 @@ import {
 } from '~/utils/document-attachment-folio'
 import { ARCHIVAL_DOCUMENT_UPLOAD_CONSTRAINTS } from '~/utils/document-upload-constraints'
 import {
-  archivalInputWarningClass,
   archivalMetadataFieldDomId,
-  archivalSelectTriggerWarningClass,
+  archivalMultiselectWarningClass,
   findFirstMissingRequiredMetadataField,
   focusArchivalFieldById,
 } from '~/utils/archival-form-validation'
@@ -79,7 +79,26 @@ const ocrEngine = ref<string | null>(null)
 const ocrNeedsReprocess = ref(false)
 
 const docTypeOptions = ref<ArchivalFileDocTypeOption[]>([])
+const catalogTree = ref<CatalogTreeSeries[]>([])
 const folderOptions = computed(() => flattenFileFolderNodes(props.tree))
+
+const lockedDocSeriesId = computed(() => {
+  if (props.file.org_unit_id !== props.file.file_type?.org_unit_id) {
+    return null
+  }
+
+  return props.file.file_type?.doc_series_id ?? null
+})
+const lockedDocSubseriesId = computed(() => {
+  if (props.file.org_unit_id !== props.file.file_type?.org_unit_id) {
+    return null
+  }
+
+  return props.file.file_type?.doc_subseries_id ?? null
+})
+const hasLockedTrdBranch = computed(() =>
+  lockedDocSeriesId.value != null && lockedDocSubseriesId.value != null,
+)
 
 const attachNonRequired = ref(false)
 
@@ -156,6 +175,20 @@ const ocrEngineLabel = computed(() => ocrEngineDisplayLabel(ocrEngine.value))
 
 const selectedDocTypeLabel = computed(() =>
   docTypeOptions.value.find((o: ArchivalFileDocTypeOption) => o.id === docDocumentTypeId.value)?.label ?? '',
+)
+
+const docTypeMultiselectOptions = computed(() =>
+  docTypeOptions.value.map(option => ({
+    value: option.id,
+    label: option.label,
+  })),
+)
+
+const requiredDocMultiselectOptions = computed(() =>
+  missingRequiredChoices.value.map(choice => ({
+    value: choice.docDocumentTypeId,
+    label: choice.requiredLabel,
+  })),
 )
 
 function setUploadSource(value: unknown) {
@@ -244,6 +277,7 @@ async function loadCatalog() {
   loadingCatalog.value = true
   try {
     const tree = await trdApi.fetchCatalogTree(props.file.org_unit_id, true)
+    catalogTree.value = tree
     docTypeOptions.value = flattenCatalogDocumentTypes(tree)
     preselectMissingDocType()
   }
@@ -593,27 +627,17 @@ onMounted(() => {
 
     <div v-if="showRequiredDocumentPicker" class="space-y-2">
       <Label for="archival_upload_required_doc">Documento obligatorio a adjuntar</Label>
-      <Select
-        :model-value="docDocumentTypeId != null ? String(docDocumentTypeId) : undefined"
+      <ArchivalSingleMultiselect
+        id="archival_upload_required_doc"
+        v-model="docDocumentTypeId"
+        :options="requiredDocMultiselectOptions"
         :disabled="uploading || loadingCatalog"
-        @update:model-value="docDocumentTypeId = $event ? Number($event) : null"
-      >
-        <SelectTrigger
-          id="archival_upload_required_doc"
-          :class="archivalSelectTriggerWarningClass(submitAttempted && !docDocumentTypeId)"
-        >
-          <SelectValue :placeholder="loadingCatalog ? 'Cargando…' : 'Seleccione el documento pendiente'" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem
-            v-for="choice in missingRequiredChoices"
-            :key="`req-${choice.docDocumentTypeId}`"
-            :value="String(choice.docDocumentTypeId)"
-          >
-            {{ choice.requiredLabel }}
-          </SelectItem>
-        </SelectContent>
-      </Select>
+        :placeholder="loadingCatalog ? 'Cargando…' : 'Busque o seleccione el documento pendiente'"
+        no-options-text="Sin documentos obligatorios pendientes"
+        no-results-text="Sin coincidencias"
+        coerce-number
+        :class="archivalMultiselectWarningClass(submitAttempted && !docDocumentTypeId)"
+      />
       <p v-if="selectedRequiredChoice" class="text-xs text-muted-foreground">
         Tipo documental en catálogo (TRD):
         <span class="text-foreground">{{ selectedRequiredChoice.catalogLabel }}</span>
@@ -650,30 +674,48 @@ onMounted(() => {
         </Button>
       </div>
       <Label v-else for="archival_upload_doc_type">Tipo documental</Label>
-      <Select
-        :model-value="docDocumentTypeId != null ? String(docDocumentTypeId) : undefined"
-        :disabled="uploading || loadingCatalog"
-        @update:model-value="docDocumentTypeId = $event ? Number($event) : null"
+      <div
+        id="archival_upload_doc_type"
+        class="space-y-2"
+        :class="archivalMultiselectWarningClass(submitAttempted && !docDocumentTypeId, 'rounded-md')"
       >
-        <SelectTrigger
-          id="archival_upload_doc_type"
-          :class="archivalSelectTriggerWarningClass(submitAttempted && !docDocumentTypeId)"
+        <ArchivalTrdCascadePicker
+          v-if="catalogTree.length > 0"
+          v-model="docDocumentTypeId"
+          :catalog-tree="catalogTree"
+          :disabled="uploading || loadingCatalog"
+          :locked-series-id="lockedDocSeriesId"
+          :locked-subseries-id="lockedDocSubseriesId"
+        />
+        <ArchivalSingleMultiselect
+          v-else
+          v-model="docDocumentTypeId"
+          :options="docTypeMultiselectOptions"
+          :disabled="uploading || loadingCatalog"
+          :placeholder="loadingCatalog ? 'Cargando catálogo…' : 'Busque o seleccione tipo documental'"
+          no-options-text="Sin tipos documentales en el catálogo"
+          no-results-text="Sin coincidencias"
+          coerce-number
+        />
+        <p v-if="hasLockedTrdBranch" class="text-xs text-muted-foreground">
+          Serie y subserie del tipo de expediente para
+          <span class="font-medium text-foreground">{{ props.file.org_unit?.name ?? 'esta área' }}</span>
+          ({{ props.file.file_type?.doc_series?.code }} / {{ props.file.file_type?.doc_subseries?.code }}).
+          Solo elija el tipo documental (políticas, formatos, procedimientos, etc.).
+        </p>
+        <p
+          v-else-if="props.file.file_type?.org_unit_id && props.file.org_unit_id !== props.file.file_type.org_unit_id"
+          class="text-xs text-muted-foreground"
         >
-          <SelectValue :placeholder="loadingCatalog ? 'Cargando catálogo…' : 'Seleccione tipo documental'" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem
-            v-for="opt in docTypeOptions"
-            :key="opt.id"
-            :value="String(opt.id)"
-          >
-            {{ opt.label }}
-          </SelectItem>
-        </SelectContent>
-      </Select>
-      <p v-if="selectedDocTypeLabel" class="text-xs text-muted-foreground">
-        {{ selectedDocTypeLabel }}
-      </p>
+          Este expediente es de
+          <span class="font-medium text-foreground">{{ props.file.org_unit?.name }}</span>,
+          distinta al área configurada en el tipo ({{ props.file.file_type.org_unit?.name }}).
+          Use serie, subserie y tipo de la TRD de esta área.
+        </p>
+        <p v-else-if="selectedDocTypeLabel" class="text-xs text-muted-foreground">
+          {{ selectedDocTypeLabel }}
+        </p>
+      </div>
     </div>
 
     <div v-if="folderOptions.length" class="space-y-2">
