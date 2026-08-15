@@ -2,6 +2,7 @@ import type {
   VentanillaCatalogData,
   VentanillaCatalogSettingsData,
   VentanillaClassificationRuleRow,
+  VentanillaFunctionalTypeTrdContextData,
   VentanillaEmailAccountRow,
   VentanillaColombiaHolidayImportResult,
   VentanillaColombiaHolidayPreviewData,
@@ -28,6 +29,18 @@ export function useVentanillaApi() {
 
   async function fetchCatalog(): Promise<VentanillaCatalogData> {
     const res = await api<{ data: VentanillaCatalogData }>('/ventanilla/catalog')
+
+    return res.data
+  }
+
+  async function fetchFunctionalTypeTrdContext(
+    functionalTypeKey: string,
+    orgUnitId: number,
+  ): Promise<VentanillaFunctionalTypeTrdContextData> {
+    const res = await api<{ data: VentanillaFunctionalTypeTrdContextData }>(
+      `/ventanilla/functional-types/${encodeURIComponent(functionalTypeKey)}/trd-context`,
+      { query: { org_unit_id: orgUnitId } },
+    )
 
     return res.data
   }
@@ -642,6 +655,7 @@ export function useVentanillaApi() {
 
   return {
     fetchCatalog,
+    fetchFunctionalTypeTrdContext,
     fetchPublicCatalog,
     fetchEmailAccount,
     updateEmailAccount,

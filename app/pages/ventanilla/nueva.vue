@@ -31,6 +31,11 @@ import {
   VENTANILLA_FILING_UPLOAD_CONSTRAINTS,
   validateDocumentUploadFile,
 } from '~/utils/document-upload-constraints'
+import {
+  configuredProducerAreasForFunctionalType,
+  clearInvalidOrgUnitSelectionsForFunctionalType,
+  filterOrgUnitsByFunctionalTypeAreas,
+} from '~/utils/ventanilla-functional-type-areas'
 
 interface VentanillaOrgUnitOption {
   id: number
@@ -161,6 +166,34 @@ const selectedFunctionalType = computed(() =>
   catalog.value?.functional_types.find((t: VentanillaFunctionalTypeRow) => t.key === functionalTypeKey.value),
 )
 
+const configuredProducerAreas = computed(() =>
+  configuredProducerAreasForFunctionalType(selectedFunctionalType.value),
+)
+
+const recipientOrgUnitOptions = computed(() =>
+  filterOrgUnitsByFunctionalTypeAreas(orgUnits.value, configuredProducerAreas.value),
+)
+
+const producerOrgUnitOptions = computed(() => {
+  if (configuredProducerAreas.value.length > 0) {
+    return filterOrgUnitsByFunctionalTypeAreas(orgUnits.value, configuredProducerAreas.value)
+  }
+
+  return producerAreaOptions.value
+})
+
+function clearInvalidOrgUnitSelections(): void {
+  const cleared = clearInvalidOrgUnitSelectionsForFunctionalType(
+    filingType.value,
+    producerOrgUnitId.value,
+    recipientOrgUnitId.value,
+    configuredProducerAreas.value,
+  )
+
+  producerOrgUnitId.value = cleared.producerOrgUnitId
+  recipientOrgUnitId.value = cleared.recipientOrgUnitId
+}
+
 const selectableFunctionalTypes = computed(() =>
   (catalog.value?.functional_types ?? []).filter(
     (t: VentanillaFunctionalTypeRow) => t.has_active_workflow_binding !== false,
@@ -195,14 +228,14 @@ function syncFunctionalTypeSelection(): void {
 }
 
 const orgUnitSelectOptions = computed(() =>
-  orgUnits.value.map((u: VentanillaOrgUnitOption) => ({
+  recipientOrgUnitOptions.value.map((u: VentanillaOrgUnitOption) => ({
     value: u.id,
     label: `${u.code} — ${u.name}`,
   })),
 )
 
 const producerAreaSelectOptions = computed(() =>
-  producerAreaOptions.value.map((u: VentanillaOrgUnitOption) => ({
+  producerOrgUnitOptions.value.map((u: VentanillaOrgUnitOption) => ({
     value: u.id,
     label: `${u.code} — ${u.name}`,
   })),
@@ -307,18 +340,42 @@ function multiselectErrorClass(field: VentanillaFilingFieldKey): string {
 
 watch(functionalTypeKey, () => {
   requiresResponseOverride.value = null
+  docDocumentTypeId.value = null
+  clearInvalidOrgUnitSelections()
 })
 
 watch(filingType, (nextType) => {
   senderStaffId.value = null
   recipientStaffId.value = null
   assignedUserId.value = null
+  docDocumentTypeId.value = null
+
   if (nextType === 'incoming') {
     producerOrgUnitId.value = null
   }
   if (nextType === 'outgoing') {
     recipientOrgUnitId.value = null
   }
+
+  clearInvalidOrgUnitSelections()
+})
+
+watch(producerOrgUnitId, () => {
+  if (filingType.value !== 'incoming') {
+    docDocumentTypeId.value = null
+  }
+
+  senderStaffId.value = null
+  applyStaffToPartyFields(null, senderName, senderIdentifier)
+})
+
+watch(recipientOrgUnitId, () => {
+  if (filingType.value === 'incoming') {
+    docDocumentTypeId.value = null
+  }
+
+  recipientStaffId.value = null
+  applyStaffToPartyFields(null, recipientName, recipientIdentifier)
 })
 
 watch(responsibleOrgUnitId, async (orgUnitId) => {
@@ -339,16 +396,6 @@ function applyStaffToPartyFields(
   nameRef.value = buildSelectedStaffText(staffRow)
   identifierRef.value = filterDigitsOnly(staffRow.document_number?.trim() ?? '')
 }
-
-watch(producerOrgUnitId, () => {
-  senderStaffId.value = null
-  applyStaffToPartyFields(null, senderName, senderIdentifier)
-})
-
-watch(recipientOrgUnitId, () => {
-  recipientStaffId.value = null
-  applyStaffToPartyFields(null, recipientName, recipientIdentifier)
-})
 
 watch(senderStaffId, (id) => {
   if (filingType.value === 'incoming') {
@@ -746,7 +793,7 @@ async function submit() {
               value-prop="value"
               label="label"
               :searchable="true"
-              :can-clear="false"
+              :can-clear="true"
               placeholder="Seleccione área"
               no-options-text="Sin áreas disponibles"
               no-results-text="Sin coincidencias"
@@ -764,7 +811,7 @@ async function submit() {
               value-prop="value"
               label="label"
               :searchable="true"
-              :can-clear="false"
+              :can-clear="true"
               placeholder="Seleccione área"
               no-options-text="Sin áreas productoras"
               no-results-text="Sin coincidencias"
@@ -782,7 +829,7 @@ async function submit() {
               value-prop="value"
               label="label"
               :searchable="true"
-              :can-clear="false"
+              :can-clear="true"
               placeholder="Seleccione área destino"
               no-options-text="Sin áreas disponibles"
               no-results-text="Sin coincidencias"
@@ -933,13 +980,54 @@ async function submit() {
                 Clasificación archivística (TRD)
               </CardTitle>
               <CardDescription>
-                Según la TRD vigente del área productora (en interna y salida) o del área destinataria (en entrada).
+                Seleccione primero el área correspondiente. La TRD se carga según el tipo de expediente vinculado al tipo funcional.
+                En interna se muestra la clasificación del remitente (registro) y del destinatario (referencia).
               </CardDescription>
             </CardHeader>
             <CardContent class="min-w-0">
+              <template v-if="filingType === 'internal'">
+                <div class="space-y-6">
+                  <div class="space-y-3">
+                    <div>
+                      <p class="text-sm font-medium">
+                        Área remitente (productora)
+                      </p>
+                      <p class="text-xs text-muted-foreground">
+                        Clasificación archivística que se registrará en el radicado.
+                      </p>
+                    </div>
+                    <VentanillaTrdPicker
+                      ref="trdPickerRef"
+                      :org-unit-id="producerOrgUnitId"
+                      :functional-type-key="functionalTypeKey"
+                      org-unit-role-label="el área remitente"
+                      :submit-attempted="submitAttempted"
+                      v-model:doc-document-type-id="docDocumentTypeId"
+                    />
+                  </div>
+                  <div class="space-y-3 border-t pt-6">
+                    <div>
+                      <p class="text-sm font-medium">
+                        Área destinataria
+                      </p>
+                      <p class="text-xs text-muted-foreground">
+                        TRD configurada para el área de destino.
+                      </p>
+                    </div>
+                    <VentanillaTrdPicker
+                      :org-unit-id="recipientOrgUnitId"
+                      :functional-type-key="functionalTypeKey"
+                      org-unit-role-label="el área destinataria"
+                      readonly
+                    />
+                  </div>
+                </div>
+              </template>
               <VentanillaTrdPicker
+                v-else
                 ref="trdPickerRef"
                 :org-unit-id="responsibleOrgUnitId"
+                :functional-type-key="functionalTypeKey"
                 :org-unit-role-label="trdOrgUnitRoleLabel"
                 :submit-attempted="submitAttempted"
                 v-model:doc-document-type-id="docDocumentTypeId"

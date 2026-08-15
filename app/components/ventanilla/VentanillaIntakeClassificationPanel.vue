@@ -7,6 +7,11 @@ import {
   ventanillaIntakeReceiptCode,
   ventanillaIntakeSourceLabel,
 } from '~/utils/ventanilla-intake-display'
+import {
+  configuredProducerAreasForFunctionalType,
+  clearInvalidOrgUnitSelectionsForFunctionalType,
+  filterOrgUnitsByFunctionalTypeAreas,
+} from '~/utils/ventanilla-functional-type-areas'
 import type {
   VentanillaCatalogData,
   VentanillaFilingTypeValue,
@@ -83,6 +88,34 @@ const selectedFunctionalType = computed(() =>
   props.catalog?.functional_types.find((type: VentanillaFunctionalTypeRow) => type.key === functionalTypeKey.value),
 )
 
+const configuredProducerAreas = computed(() =>
+  configuredProducerAreasForFunctionalType(selectedFunctionalType.value),
+)
+
+const recipientOrgUnitOptions = computed(() =>
+  filterOrgUnitsByFunctionalTypeAreas(props.orgUnits, configuredProducerAreas.value),
+)
+
+const producerOrgUnitOptions = computed(() => {
+  if (configuredProducerAreas.value.length > 0) {
+    return filterOrgUnitsByFunctionalTypeAreas(props.orgUnits, configuredProducerAreas.value)
+  }
+
+  return producerOrgUnits.value
+})
+
+function clearInvalidOrgUnitSelections(): void {
+  const cleared = clearInvalidOrgUnitSelectionsForFunctionalType(
+    filingType.value,
+    producerOrgUnitId.value,
+    recipientOrgUnitId.value,
+    configuredProducerAreas.value,
+  )
+
+  producerOrgUnitId.value = cleared.producerOrgUnitId
+  recipientOrgUnitId.value = cleared.recipientOrgUnitId
+}
+
 function resolvedFunctionalTypeKey(): string {
   return functionalTypeKey.value ?? ''
 }
@@ -158,6 +191,13 @@ watch(responsibleOrgUnitId, async (orgUnitId) => {
 
 watch(filingType, () => {
   assignedUserId.value = null
+  docDocumentTypeId.value = null
+  clearInvalidOrgUnitSelections()
+})
+
+watch(functionalTypeKey, () => {
+  docDocumentTypeId.value = null
+  clearInvalidOrgUnitSelections()
 })
 
 async function classifyIntake(): Promise<void> {
@@ -340,7 +380,7 @@ async function discardIntake(): Promise<void> {
           >
             <SelectTrigger><SelectValue placeholder="Seleccione área" /></SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="unit in orgUnits" :key="unit.id" :value="String(unit.id)">
+              <SelectItem v-for="unit in recipientOrgUnitOptions" :key="unit.id" :value="String(unit.id)">
                 {{ unit.code }} — {{ unit.name }}
               </SelectItem>
             </SelectContent>
@@ -352,7 +392,7 @@ async function discardIntake(): Promise<void> {
           >
             <SelectTrigger><SelectValue placeholder="Seleccione área" /></SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="unit in producerOrgUnits" :key="unit.id" :value="String(unit.id)">
+              <SelectItem v-for="unit in producerOrgUnitOptions" :key="unit.id" :value="String(unit.id)">
                 {{ unit.code }} — {{ unit.name }}
               </SelectItem>
             </SelectContent>
@@ -367,7 +407,7 @@ async function discardIntake(): Promise<void> {
           >
             <SelectTrigger><SelectValue placeholder="Seleccione área destino" /></SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="unit in orgUnits" :key="`int-${unit.id}`" :value="String(unit.id)">
+              <SelectItem v-for="unit in recipientOrgUnitOptions" :key="`int-${unit.id}`" :value="String(unit.id)">
                 {{ unit.code }} — {{ unit.name }}
               </SelectItem>
             </SelectContent>
@@ -433,8 +473,37 @@ async function discardIntake(): Promise<void> {
         </template>
       </div>
 
+      <template v-if="filingType === 'internal'">
+        <div class="space-y-6">
+          <div class="space-y-3">
+            <p class="text-sm font-medium">
+              TRD — área remitente (productora)
+            </p>
+            <VentanillaTrdPicker
+              :org-unit-id="producerOrgUnitId"
+              :functional-type-key="functionalTypeKey"
+              org-unit-role-label="el área remitente"
+              :submit-attempted="submitAttempted"
+              v-model:doc-document-type-id="docDocumentTypeId"
+            />
+          </div>
+          <div class="space-y-3 border-t pt-4">
+            <p class="text-sm font-medium">
+              TRD — área destinataria
+            </p>
+            <VentanillaTrdPicker
+              :org-unit-id="recipientOrgUnitId"
+              :functional-type-key="functionalTypeKey"
+              org-unit-role-label="el área destinataria"
+              readonly
+            />
+          </div>
+        </div>
+      </template>
       <VentanillaTrdPicker
+        v-else
         :org-unit-id="responsibleOrgUnitId"
+        :functional-type-key="functionalTypeKey"
         v-model:doc-document-type-id="docDocumentTypeId"
       />
 

@@ -10,6 +10,14 @@ export type VentanillaIntakeSourceValue = 'web_form' | 'email'
 
 export type VentanillaIntakeStatusValue = 'pending_classification' | 'classified' | 'discarded'
 
+export interface VentanillaFunctionalTypeProducerArea {
+  org_unit_id: number
+  doc_series_id?: number
+  doc_subseries_id?: number
+  doc_document_type_id?: number | null
+  org_unit?: { id: number; name: string; code?: string } | null
+}
+
 export interface VentanillaFunctionalTypeRow {
   key: string
   label: string
@@ -24,6 +32,27 @@ export interface VentanillaFunctionalTypeRow {
     type_key: string
     name: string
   } | null
+  producer_areas?: VentanillaFunctionalTypeProducerArea[]
+}
+
+export interface VentanillaFunctionalTypeTrdContextData {
+  source: 'functional_type_area' | 'org_unit'
+  trd_table: { id: number; org_unit_id: number } | null
+  version: { id: number; trd_table_id: number; version_number: number; status: string } | null
+  catalog_tree: import('~/types/archival-trd').TrdConsultSeriesNode[]
+  effective_retention_by_document_type: Record<number, import('~/types/archival-trd').EffectiveRetentionPayload | null>
+  summary: {
+    document_types_count: number
+    with_effective_rule: number
+    without_effective_rule: number
+  } | null
+  defaults: {
+    doc_series_id: number | null
+    doc_subseries_id: number | null
+    doc_document_type_id: number | null
+  }
+  producer_area: VentanillaFunctionalTypeProducerArea | null
+  message: string | null
 }
 
 export interface VentanillaReceptionMediumRow {

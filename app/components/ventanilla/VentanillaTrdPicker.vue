@@ -6,18 +6,22 @@ import { ventanillaMultiselectErrorClass } from '~/utils/ventanilla-form-field-f
 
 const props = defineProps<{
   orgUnitId: number | null
+  functionalTypeKey?: string | null
   orgUnitRoleLabel?: string
   submitAttempted?: boolean
+  readonly?: boolean
 }>()
 
 const docDocumentTypeId = defineModel<number | null>('docDocumentTypeId', { default: null })
 
-const trdApi = useTrdApi()
+const ventanillaApi = useVentanillaApi()
 const catalogTree = ref<CatalogTreeSeries[]>([])
 const loading = ref(false)
 const loadError = ref<string | null>(null)
+const trdSource = ref<'functional_type_area' | 'org_unit' | null>(null)
 const seriesId = ref<number | null>(null)
 const subseriesId = ref<number | null>(null)
+const applyingDefaults = ref(false)
 
 const seriesOptions = computed(() =>
   catalogTree.value.map(s => ({ value: s.id, label: `${s.code} — ${s.name}` })),
@@ -42,46 +46,112 @@ const typeOptions = computed(() => {
   }))
 })
 
-watch(() => props.orgUnitId, async (id) => {
+const trdContextHint = computed(() => {
+  if (trdSource.value === 'functional_type_area') {
+    return 'TRD del tipo de expediente vinculado al tipo funcional para el área seleccionada.'
+  }
+
+  return null
+})
+
+function resetTrdSelection(): void {
   seriesId.value = null
   subseriesId.value = null
   docDocumentTypeId.value = null
+}
+
+function applyTrdDefaults(defaults: {
+  doc_series_id: number | null
+  doc_subseries_id: number | null
+  doc_document_type_id: number | null
+}): void {
+  applyingDefaults.value = true
+  seriesId.value = defaults.doc_series_id
+  subseriesId.value = defaults.doc_subseries_id
+  docDocumentTypeId.value = defaults.doc_document_type_id
+
+  nextTick(() => {
+    if (docDocumentTypeId.value == null && typeOptions.value.length === 1) {
+      docDocumentTypeId.value = typeOptions.value[0]?.value ?? null
+    }
+
+    applyingDefaults.value = false
+  })
+}
+
+async function loadTrdContext(): Promise<void> {
+  resetTrdSelection()
   catalogTree.value = []
   loadError.value = null
+  trdSource.value = null
 
-  if (id == null || id < 1) {
+  const orgUnitId = props.orgUnitId
+  if (orgUnitId == null || orgUnitId < 1 || !props.functionalTypeKey) {
     return
   }
 
   loading.value = true
+
   try {
-    const res = await trdApi.fetchActiveVersion(id)
-    if (res.data == null) {
-      catalogTree.value = []
-      loadError.value = res.message ?? 'No hay TRD vigente para el área seleccionada.'
+    const context = await ventanillaApi.fetchFunctionalTypeTrdContext(props.functionalTypeKey, orgUnitId)
+    trdSource.value = context.source
+
+    if (context.message && context.catalog_tree.length === 0) {
+      loadError.value = context.message
       return
     }
 
-    catalogTree.value = res.data.catalog_tree ?? []
+    catalogTree.value = context.catalog_tree ?? []
     if (catalogTree.value.length === 0) {
-      loadError.value = 'La TRD vigente no tiene tipos documentales asociados. Revise la configuración en Archivo → TRD.'
+      loadError.value = context.message ?? 'La TRD vigente no tiene tipos documentales asociados. Revise la configuración en Archivo → TRD.'
+      return
     }
-  } catch {
+
+    applyTrdDefaults(context.defaults)
+  }
+  catch {
     catalogTree.value = []
     loadError.value = 'No se pudo cargar la TRD vigente.'
     toast.error('No se pudo cargar la clasificación archivística (TRD)')
-  } finally {
+  }
+  finally {
     loading.value = false
   }
-}, { immediate: true })
+}
 
-watch(seriesId, () => {
+watch(
+  () => [props.orgUnitId, props.functionalTypeKey] as const,
+  () => {
+    void loadTrdContext()
+  },
+  { immediate: true },
+)
+
+watch(seriesId, (next, previous) => {
+  if (applyingDefaults.value || next === previous) {
+    return
+  }
+
   subseriesId.value = null
   docDocumentTypeId.value = null
 })
 
-watch(subseriesId, () => {
+watch(subseriesId, (next, previous) => {
+  if (applyingDefaults.value || next === previous) {
+    return
+  }
+
   docDocumentTypeId.value = null
+})
+
+watch(typeOptions, (options) => {
+  if (applyingDefaults.value || props.readonly || !subseriesId.value || docDocumentTypeId.value != null) {
+    return
+  }
+
+  if (options.length === 1) {
+    docDocumentTypeId.value = options[0]?.value ?? null
+  }
 })
 
 watch(docDocumentTypeId, (id) => {
@@ -105,7 +175,7 @@ watch(docDocumentTypeId, (id) => {
   }
 })
 
-const showTrdValidation = computed(() => Boolean(props.submitAttempted && props.orgUnitId))
+const showTrdValidation = computed(() => Boolean(!props.readonly && props.submitAttempted && props.orgUnitId))
 
 const seriesMissing = computed(() => showTrdValidation.value && !seriesId.value)
 const subseriesMissing = computed(() => showTrdValidation.value && Boolean(seriesId.value) && !subseriesId.value)
@@ -165,7 +235,7 @@ defineExpose({
         label="label"
         :searchable="true"
         :can-clear="false"
-        :disabled="loading || !orgUnitId || seriesOptions.length === 0"
+        :disabled="readonly || loading || !orgUnitId || seriesOptions.length === 0"
         placeholder="Seleccione serie"
         no-options-text="Sin series en la TRD"
         no-results-text="Sin coincidencias"
@@ -184,7 +254,7 @@ defineExpose({
         label="label"
         :searchable="true"
         :can-clear="false"
-        :disabled="!seriesId || subseriesOptions.length === 0"
+        :disabled="readonly || !seriesId || subseriesOptions.length === 0"
         placeholder="Seleccione subserie"
         no-options-text="Sin subseries"
         no-results-text="Sin coincidencias"
@@ -203,7 +273,7 @@ defineExpose({
         label="label"
         :searchable="true"
         :can-clear="false"
-        :disabled="!subseriesId || typeOptions.length === 0"
+        :disabled="readonly || !subseriesId || typeOptions.length === 0"
         placeholder="Seleccione tipo"
         no-options-text="Sin tipos documentales"
         no-results-text="Sin coincidencias"
@@ -216,8 +286,14 @@ defineExpose({
     <p v-else-if="!orgUnitId" class="md:col-span-3 text-xs text-muted-foreground">
       Seleccione primero {{ orgUnitRoleLabel ?? 'el área' }} para cargar la TRD.
     </p>
+    <p v-else-if="!functionalTypeKey" class="md:col-span-3 text-xs text-muted-foreground">
+      Seleccione el tipo funcional para aplicar la TRD del tipo de expediente vinculado.
+    </p>
     <p v-else-if="loadError" class="md:col-span-3 text-xs text-destructive">
       {{ loadError }}
+    </p>
+    <p v-else-if="trdContextHint" class="md:col-span-3 text-xs text-muted-foreground">
+      {{ trdContextHint }}
     </p>
   </div>
 </template>
