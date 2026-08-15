@@ -15,7 +15,7 @@ definePageMeta({
 
 const { $api, $csrf } = useNuxtApp()
 const config = useRuntimeConfig()
-const { refreshBranding, institutionalColors, setInstitutionalColors, applyThemeAfterInstitutionalSave } = useCompanyBranding()
+const { refreshBranding, institutionalColors, setInstitutionalColors, applyThemeAfterInstitutionalSave, resolvedLogoUrl } = useCompanyBranding()
 
 const company = ref<Company | null>(null)
 const loading = ref(false)
@@ -32,6 +32,14 @@ const form = ref({
 
 const previewPrimary = computed(() => normalizeHexColor(institutionalColors.value.primary, DEFAULT_COMPANY_PRIMARY_COLOR))
 const previewSecondary = computed(() => normalizeHexColor(institutionalColors.value.secondary, DEFAULT_COMPANY_SECONDARY_COLOR))
+
+const displayLogoPreview = computed(() => {
+  if (logoFile.value && logoPreview.value?.startsWith('blob:')) {
+    return logoPreview.value
+  }
+
+  return resolvedLogoUrl.value ?? logoPreview.value
+})
 
 async function fetchCompany() {
   loading.value = true
@@ -213,8 +221,8 @@ onMounted(() => {
                 class="flex min-h-[200px] items-center justify-center rounded-xl border border-dashed border-muted-foreground/35 bg-muted/25 p-6"
               >
                 <img
-                  v-if="logoPreview"
-                  :src="logoPreview"
+                  v-if="displayLogoPreview"
+                  :src="displayLogoPreview"
                   alt="Logo"
                   class="max-h-32 w-full max-w-[280px] object-contain"
                 >
@@ -234,7 +242,7 @@ onMounted(() => {
                   class="flex h-9 min-w-[220px] flex-1 rounded-md border border-input bg-transparent px-3 py-1 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium"
                   @change="onLogoChange"
                 >
-                <Button v-if="logoPreview" type="button" variant="outline" size="sm" @click="clearLogo">
+                <Button v-if="displayLogoPreview" type="button" variant="outline" size="sm" @click="clearLogo">
                   Quitar selección
                 </Button>
               </div>

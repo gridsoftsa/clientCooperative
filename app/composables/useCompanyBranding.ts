@@ -10,6 +10,7 @@ import {
   clearCompanyBrandingColors,
   hasConfiguredCompanyBrandColors,
   resolveBrandingColors,
+  resolveCompanyLogoUrl,
 } from '~/utils/company-branding'
 import type { CompanyBranding } from '~/types/company'
 
@@ -152,20 +153,7 @@ export function useCompanyBranding() {
   const displayName = computed(() => branding.value?.name?.trim() || 'Cooperativa')
   const logoUrl = computed(() => branding.value?.logo_url || null)
 
-  const resolvedLogoUrl = computed(() => {
-    const url = logoUrl.value
-    if (!url) {
-      return null
-    }
-
-    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
-      return url
-    }
-
-    const base = String(config.public.apiBase || 'http://localhost:8585').replace(/\/$/, '')
-
-    return url.startsWith('/') ? `${base}${url}` : `${base}/${url}`
-  })
+  const resolvedLogoUrl = computed(() => resolveCompanyLogoUrl(logoUrl.value, String(config.public.apiBase || 'http://localhost:8585')))
 
   return {
     branding,

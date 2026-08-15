@@ -21,6 +21,28 @@ const BRANDING_CSS_PROPERTIES = [
   '--vis-primary-color',
 ] as const
 
+export function resolveCompanyLogoUrl(
+  logoUrl: string | null | undefined,
+  apiBase: string,
+): string | null {
+  if (!logoUrl) {
+    return null
+  }
+
+  if (
+    logoUrl.startsWith('http://')
+    || logoUrl.startsWith('https://')
+    || logoUrl.startsWith('data:')
+    || logoUrl.startsWith('blob:')
+  ) {
+    return logoUrl
+  }
+
+  const base = apiBase.replace(/\/$/, '')
+
+  return logoUrl.startsWith('/') ? `${base}${logoUrl}` : `${base}/${logoUrl}`
+}
+
 export function normalizeHexColor(value: string | null | undefined, fallback: string): string {
   if (!value || !/^#[0-9A-Fa-f]{6}$/.test(value)) {
     return fallback.toUpperCase()
