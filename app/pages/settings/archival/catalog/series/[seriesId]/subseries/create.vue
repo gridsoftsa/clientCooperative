@@ -17,6 +17,16 @@ const catalogApi = useArchivalCatalogApi()
 
 const seriesId = computed(() => Number(route.params.seriesId))
 
+const returnToPath = computed(() => catalogApi.returnToPath(route))
+
+function cancelPath(): string {
+  if (returnToPath.value) {
+    return returnToPath.value
+  }
+
+  return catalogApi.subseriesListPath(seriesId.value)
+}
+
 const series = ref<DocSeriesRow | null>(null)
 const form = ref({
   code: '',
@@ -72,12 +82,11 @@ async function submit() {
       },
     })
     toast.success('Subserie creada')
-    const returnTo = typeof route.query.return_to === 'string' ? route.query.return_to : ''
-    if (returnTo.startsWith('/settings/archival/trd/')) {
-      await router.push(returnTo)
-      return
-    }
-    await router.push(catalogApi.subseriesListPath(seriesId.value))
+    await catalogApi.navigateAfterCatalogSave(
+      router,
+      route,
+      catalogApi.subseriesListPath(seriesId.value),
+    )
   } catch (e: any) {
     toast.error(e?.data?.message || 'No se pudo crear la subserie')
   } finally {
@@ -103,7 +112,7 @@ onMounted(loadSeries)
         <Button
           variant="outline"
           class="shrink-0"
-          @click="router.push(catalogApi.subseriesListPath(seriesId))"
+          @click="router.push(cancelPath())"
         >
           Volver
         </Button>

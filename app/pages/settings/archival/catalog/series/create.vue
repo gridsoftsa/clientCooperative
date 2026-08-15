@@ -19,6 +19,7 @@ interface OrgUnitOption {
 const { $api } = useNuxtApp()
 const router = useRouter()
 const route = useRoute()
+const catalogApi = useArchivalCatalogApi()
 
 const units = ref<OrgUnitOption[]>([])
 const loadingUnits = ref(false)
@@ -38,7 +39,27 @@ const selectedUnit = computed(() =>
   units.value.find(u => u.id === form.value.org_unit_id) ?? null,
 )
 
+const queryOrgUnitId = computed(() => {
+  const raw = Number(route.query.org_unit_id)
+  return Number.isFinite(raw) && raw > 0 ? raw : null
+})
+
+const returnToPath = computed(() => catalogApi.returnToPath(route))
+
+/** Área fijada por query (p. ej. al crear serie desde la TRD de un área). */
+const isOrgUnitLocked = computed(() => queryOrgUnitId.value != null)
+
 const orgUnitCodePrefix = computed(() => selectedUnit.value?.code ?? '')
+
+function cancelPath(): string {
+  if (returnToPath.value) {
+    return returnToPath.value
+  }
+
+  return form.value.org_unit_id != null
+    ? `/settings/archival/catalog/series?org_unit_id=${form.value.org_unit_id}`
+    : '/settings/archival/catalog/series'
+}
 
 async function fetchProducerUnits() {
   loadingUnits.value = true
@@ -47,8 +68,8 @@ async function fetchProducerUnits() {
       query: { per_page: 200, is_active: true },
     })
     units.value = (res.data ?? []).filter(u => u.is_document_producer)
-    const fromQuery = Number(route.query.org_unit_id)
-    if (Number.isFinite(fromQuery) && units.value.some(u => u.id === fromQuery)) {
+    const fromQuery = queryOrgUnitId.value
+    if (fromQuery != null && units.value.some(u => u.id === fromQuery)) {
       form.value.org_unit_id = fromQuery
     }
   } catch {
@@ -83,13 +104,12 @@ async function submit() {
       },
     })
     toast.success('Serie creada')
-    const returnTo = typeof route.query.return_to === 'string' ? route.query.return_to : ''
-    if (returnTo.startsWith('/settings/archival/trd/')) {
-      await router.push(returnTo)
-      return
-    }
     const listQuery = form.value.org_unit_id != null ? `?org_unit_id=${form.value.org_unit_id}` : ''
-    await router.push(`/settings/archival/catalog/series${listQuery}`)
+    await catalogApi.navigateAfterCatalogSave(
+      router,
+      route,
+      `/settings/archival/catalog/series${listQuery}`,
+    )
   } catch (e: any) {
     toast.error(e?.data?.message || 'No se pudo crear la serie')
   } finally {
@@ -113,7 +133,7 @@ onMounted(fetchProducerUnits)
             Ejemplo: área <span class="font-mono">045</span> → serie <span class="font-mono">045-02</span> → subserie <span class="font-mono">045-02-02</span> → tipo <span class="font-mono">045-02-02-01</span>.
           </p>
         </div>
-        <Button variant="outline" class="shrink-0" @click="router.push('/settings/archival/catalog/series')">
+        <Button variant="outline" class="shrink-0" @click="router.push(cancelPath())">
           Volver
         </Button>
       </div>
@@ -122,7 +142,27 @@ onMounted(fetchProducerUnits)
         <CardContent class="pt-6 space-y-4 max-w-xl">
           <div class="space-y-2">
             <Label>Área productora *</Label>
-            <Select v-model="form.org_unit_id" :disabled="loadingUnits">
+            <template v-if="isOrgUnitLocked">
+              <div
+                v-if="selectedUnit"
+                class="rounded-md border bg-muted/30 px-3 py-2.5 text-sm"
+              >
+                <span class="font-medium">{{ selectedUnit.name }}</span>
+                <span class="text-muted-foreground"> ({{ selectedUnit.code }})</span>
+              </div>
+              <p v-else-if="loadingUnits" class="text-xs text-muted-foreground">
+                Cargando área…
+              </p>
+              <p class="text-xs text-muted-foreground">
+                <template v-if="returnToPath?.startsWith('/settings/archival/trd/')">
+                  Área fija según la TRD que está configurando.
+                </template>
+                <template v-else>
+                  Área definida desde el catálogo; no se puede cambiar en esta pantalla.
+                </template>
+              </p>
+            </template>
+            <Select v-else v-model="form.org_unit_id" :disabled="loadingUnits">
               <SelectTrigger>
                 <SelectValue placeholder="Seleccione área…" />
               </SelectTrigger>
@@ -181,7 +221,7 @@ onMounted(fetchProducerUnits)
             </div>
           </div>
           <div class="flex gap-2 justify-end">
-            <Button type="button" variant="outline" @click="router.back()">
+            <Button type="button" variant="outline" @click="router.push(cancelPath())">
               Cancelar
             </Button>
             <Button :disabled="saving" @click="submit">

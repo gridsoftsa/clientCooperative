@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import ArchivalFileWorkflowUploadPanel from '~/components/workflow/ArchivalFileWorkflowUploadPanel.vue'
 import WorkflowTaskCollaboratorsPanel from '~/components/workflow/WorkflowTaskCollaboratorsPanel.vue'
+import WorkflowTaskFilingAssignPanel from '~/components/workflow/WorkflowTaskFilingAssignPanel.vue'
 import WorkflowTaskFilingAttachmentsPanel from '~/components/workflow/WorkflowTaskFilingAttachmentsPanel.vue'
 import WorkflowTaskFilingSummaryPanel from '~/components/workflow/WorkflowTaskFilingSummaryPanel.vue'
 import WorkflowTaskHistoryTimeline from '~/components/workflow/WorkflowTaskHistoryTimeline.vue'
@@ -49,6 +50,14 @@ const showFilingTab = computed(() => Boolean(props.context?.filing?.id))
 const collaboratorsPending = computed(() => props.context?.collaborators?.pending ?? 0)
 const canManage = computed(() => hasPermission('workflow_gestionar'))
 const canReassign = computed(() => hasPermission('workflow_reasignar'))
+const canAssignFiling = computed(() => hasPermission('ventanilla_asignar'))
+const showFilingAssignment = computed(() =>
+  canAssignFiling.value
+  && props.context?.is_active !== false
+  && props.context?.open_task?.stage?.ventanilla_role === 'assignment'
+  && props.context?.filing?.status === 'registered'
+  && Boolean(props.context?.filing?.id),
+)
 
 const stageRules = computed(() => props.context?.open_task?.stage ?? props.task.stage ?? null)
 const returnableStages = computed(() => props.context?.returnable_stages ?? [])
@@ -230,6 +239,15 @@ function refreshContext() {
             <Textarea v-model="note" rows="3" placeholder="Motivo o comentario de la acción" />
           </div>
 
+          <Alert v-if="showFilingAssignment" class="border-primary/40 bg-primary/5">
+            <Icon name="i-lucide-user-check" class="size-4" />
+            <AlertTitle>Etapa de asignación</AlertTitle>
+            <AlertDescription>
+              Complete la asignación del responsable al final de esta pantalla.
+              Esa acción cierra la etapa «{{ context?.open_task?.stage?.name ?? 'Asignación' }}» y avanza el flujo.
+            </AlertDescription>
+          </Alert>
+
           <Alert v-if="advanceGuidance" class="border-primary/40 bg-primary/5">
             <Icon name="i-lucide-info" class="size-4" />
             <AlertTitle>Cierre desde ventanilla</AlertTitle>
@@ -320,6 +338,16 @@ function refreshContext() {
       >
         {{ saving ? 'Procesando…' : 'Avanzar etapa' }}
       </Button>
+
+      <WorkflowTaskFilingAssignPanel
+        v-if="showFilingAssignment && context?.filing"
+        :filing-id="context.filing.id"
+        :org-unit-id="context.filing.org_unit_responsible?.id"
+        :org-unit-name="context.filing.org_unit_responsible?.name"
+        :initial-assigned-user-id="context.filing.assigned_user?.id"
+        :stage-name="context.open_task?.stage?.name"
+        @assigned="refreshContext"
+      />
     </TabsContent>
 
     <TabsContent v-if="showFilingTab && context?.filing" value="filing" class="mt-6">

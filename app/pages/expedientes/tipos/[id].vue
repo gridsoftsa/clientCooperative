@@ -25,10 +25,13 @@ const fileType = ref<ArchivalFileType | null>(null)
 const requiredDraft = ref<RequiredDocumentDraft[]>([])
 
 function mapRequiredToDraft(items: ArchivalFileType['required_documents']): RequiredDocumentDraft[] {
-  return (items ?? []).map((item, index) => {
+  return (items ?? [])
+    .filter(item => !item.workflow_stage_key?.trim())
+    .map((item, index) => {
     const docType = item.doc_document_type
     const subseries = docType?.subseries
     const docTypeId = item.doc_document_type_id ?? docType?.id ?? null
+    const orgUnitId = item.org_unit_id ?? item.org_unit?.id
 
     const catalogHierarchyHint =
       subseries?.doc_series_id && docType?.doc_subseries_id
@@ -42,14 +45,14 @@ function mapRequiredToDraft(items: ArchivalFileType['required_documents']): Requ
         : null
 
     return {
+      org_unit_id: orgUnitId ?? 0,
       doc_document_type_id: docTypeId,
       label: item.label ?? '',
-      workflow_stage_key: item.workflow_stage_key ?? '',
       is_required: item.is_required,
       sort_order: item.sort_order ?? index,
       catalogHierarchyHint,
     }
-  })
+  }).filter(row => row.org_unit_id > 0)
 }
 
 async function load() {
@@ -77,6 +80,15 @@ async function onGeneralSaved(type: ArchivalFileType) {
   catch {
     fileType.value = type
   }
+
+  const allowedOrgUnitIds = new Set(
+    (fileType.value?.producer_areas ?? [])
+      .filter(area => area.org_unit_id && area.doc_series_id && area.doc_subseries_id)
+      .map(area => area.org_unit_id),
+  )
+  requiredDraft.value = mapRequiredToDraft(fileType.value?.required_documents).filter(
+    row => allowedOrgUnitIds.has(row.org_unit_id),
+  )
 }
 
 async function saveRequiredDocuments() {
@@ -84,14 +96,18 @@ async function saveRequiredDocuments() {
     return
   }
 
-  const invalid = requiredDraft.value.find(row => !row.doc_document_type_id)
+  const invalid = requiredDraft.value.find(row => !row.doc_document_type_id || !row.org_unit_id)
   if (invalid) {
-    toast.error('Seleccione el tipo documental en todas las filas.')
+    toast.error('Seleccione el tipo documental en todas las filas de cada área.')
     return
   }
 
-  if (!fileType.value.doc_series_id || !fileType.value.doc_subseries_id) {
-    toast.error('Configure serie y subserie en General y TRD antes de guardar obligatorios.')
+  const hasProducerTrd = (fileType.value.producer_areas ?? []).some(
+    area => area.doc_series_id && area.doc_subseries_id,
+  )
+
+  if (!hasProducerTrd && (!fileType.value.doc_series_id || !fileType.value.doc_subseries_id)) {
+    toast.error('Configure al menos un área productora con serie y subserie en General y TRD antes de guardar obligatorios.')
     activeTab.value = 'general'
     return
   }
@@ -102,9 +118,10 @@ async function saveRequiredDocuments() {
     const res = await archivalApi.syncRequiredDocuments(
       fileType.value.id,
       requiredDraft.value.map((row, index) => ({
+        org_unit_id: row.org_unit_id,
         doc_document_type_id: Number(row.doc_document_type_id),
         label: row.label.trim() || null,
-        workflow_stage_key: row.workflow_stage_key.trim() || null,
+        workflow_stage_key: null,
         is_required: row.is_required,
         sort_order: index,
       })),
@@ -219,9 +236,7 @@ onMounted(() => load())
             <CardContent class="min-w-0 pt-6">
               <ArchivalFileTypeRequiredDocumentsEditor
                 v-model="requiredDraft"
-                :org-unit-id="fileType.org_unit_id"
-                :doc-series-id="fileType.doc_series_id"
-                :doc-subseries-id="fileType.doc_subseries_id"
+                :producer-areas="fileType.producer_areas ?? []"
               />
             </CardContent>
           </Card>

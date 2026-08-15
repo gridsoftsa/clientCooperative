@@ -181,6 +181,7 @@ export function useArchivalFileApi() {
   async function syncRequiredDocuments(
     id: number,
     items: Array<{
+      org_unit_id: number
       doc_document_type_id: number
       label?: string | null
       workflow_stage_key?: string | null

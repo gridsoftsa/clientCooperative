@@ -133,7 +133,7 @@ async function inviteCollaborator() {
       org_unit_id: selectedOrgUnitId.value ? Number(selectedOrgUnitId.value) : null,
       org_position_id: selectedPositionId.value ? Number(selectedPositionId.value) : null,
     })
-    toast.success('Colaborador agregado y notificado.')
+    toast.success('Colaborador agregado. Se le notificó para que ingrese a colaborar.')
     selectedStaffId.value = ''
     await loadCollaborators()
     emit('changed')
@@ -171,6 +171,15 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
       <AlertTitle>Respuestas pendientes</AlertTitle>
       <AlertDescription>
         {{ summary.pending }} colaborador(es) aún no han subido su aporte. No podrá avanzar de etapa hasta que todos respondan.
+      </AlertDescription>
+    </Alert>
+
+    <Alert>
+      <Icon name="i-lucide-bell-ring" class="size-4" />
+      <AlertTitle>Notificación al colaborador</AlertTitle>
+      <AlertDescription>
+        Al agregar un colaborador se le notifica en la bandeja del sistema y, si el correo está habilitado,
+        por email. Podrá ingresar a <strong>Colaboración</strong> para adjuntar documentos y registrar su aporte.
       </AlertDescription>
     </Alert>
 

@@ -27,6 +27,7 @@ const reportToStaffChoiceId = ref<number | null>(null)
 const loading = ref(true)
 
 const chargesSelectedArea = ref<OrgYesNoChoice>('no')
+const unitManagerReference = ref('')
 
 const form = ref({
   org_unit_id: null as number | null,
@@ -41,6 +42,34 @@ const form = ref({
 })
 
 const saving = ref(false)
+
+const areaManagerConflict = computed(() => {
+  if (chargesSelectedArea.value !== 'yes' || !unitManagerReference.value) {
+    return null
+  }
+
+  const positionName = form.value.name.trim()
+  if (!positionName || unitManagerReference.value === positionName) {
+    return null
+  }
+
+  return unitManagerReference.value
+})
+
+async function loadUnitManagerReference(orgUnitId: number | null): Promise<void> {
+  if (orgUnitId == null) {
+    unitManagerReference.value = ''
+    return
+  }
+
+  try {
+    const res = await $api<{ data: OrgUnitRow }>(`/organizational-structure/org-units/${orgUnitId}`)
+    unitManagerReference.value = res.data.manager_position_name?.trim() ?? ''
+  }
+  catch {
+    unitManagerReference.value = ''
+  }
+}
 
 function onPositionActiveChange(value: boolean) {
   form.value.is_active = value
@@ -138,6 +167,8 @@ watch(() => form.value.org_unit_id, async (id: number | null, prev: number | nul
     peerPositions.value = []
     reportToStaffOptions.value = []
   }
+
+  await loadUnitManagerReference(id)
 })
 
 watch(reportToOrgUnitId, async (id: number | null) => {
@@ -177,6 +208,7 @@ async function loadPosition() {
     const mgrName = p.org_unit?.manager_position_name?.trim() ?? ''
     const posName = p.name.trim()
     chargesSelectedArea.value = mgrName !== '' && mgrName === posName ? 'yes' : 'no'
+    await loadUnitManagerReference(p.org_unit_id)
     await hydrateReportToFromSaved(p.reports_to_position)
   } catch {
     toast.error('No se encontró el cargo')
@@ -191,6 +223,11 @@ async function handleSubmit() {
     toast.error('Área, nombre y código son obligatorios')
     return
   }
+  if (areaManagerConflict.value) {
+    toast.error(`El área ya tiene el cargo «${areaManagerConflict.value}» como referencia de jefe.`)
+    return
+  }
+
   saving.value = true
   try {
     await $api(`/organizational-structure/org-positions/${positionId.value}`, {
@@ -208,7 +245,7 @@ async function handleSubmit() {
         sync_manager_position_name_to_unit: chargesSelectedArea.value === 'yes',
       },
     })
-    toast.success('Cargo actualizado')
+    toast.success('Cargo actualizado. Si marcó «a cargo del área», revise en el área el jefe (funcionario) y el nombre del cargo de referencia.')
     router.push('/settings/organizational-structure/positions')
   } catch (e: any) {
     toast.error(e?.data?.message || 'Error al guardar')
@@ -280,10 +317,23 @@ onMounted(() => {
                     v-model="chargesSelectedArea"
                     input-id="position_edit_charges_area_ms"
                     label="¿Este cargo está a cargo del área elegida?"
-                    helper-text="Si elige Sí, al guardar se actualiza la referencia de jefe del área con el nombre de este cargo."
+                    helper-text="Si elige Sí, al guardar se actualiza en el área el «Nombre del cargo de jefe de área (referencia)» y, si hay un funcionario vigente en ese cargo, también el «Jefe del área — funcionario»."
                     :disabled="form.org_unit_id == null"
                   />
                 </div>
+
+                <Alert
+                  v-if="areaManagerConflict"
+                  variant="destructive"
+                  class="md:col-span-2"
+                >
+                  <Icon name="i-lucide-triangle-alert" class="size-4" />
+                  <AlertTitle>Ya hay un cargo de referencia en el área</AlertTitle>
+                  <AlertDescription>
+                    El área ya tiene «{{ areaManagerConflict }}» como cargo de jefe.
+                    No puede marcar otro cargo hasta quitar esa referencia en el cargo anterior o en la edición del área.
+                  </AlertDescription>
+                </Alert>
 
                 <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6">
                   <div class="space-y-3">

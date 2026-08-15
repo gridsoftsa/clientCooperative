@@ -478,6 +478,26 @@ html.dark .multiselect-municipality .multiselect-search,
   --ms-border-color-active: color-mix(in srgb, var(--primary) 48%, var(--border));
 }
 
+/* Al abrir en modo searchable, la etiqueta no debe tapar el input de búsqueda */
+.archival-single-multiselect.multiselect.is-open .multiselect-single-label,
+.archival-single-multiselect.multiselect.is-active .multiselect-single-label,
+.archival-single-multiselect.multiselect.is-open .multiselect-placeholder,
+.archival-single-multiselect.multiselect.is-active .multiselect-placeholder {
+  display: none !important;
+}
+
+.archival-single-multiselect.multiselect.is-open .multiselect-search,
+.archival-single-multiselect.multiselect.is-active .multiselect-search {
+  display: block !important;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-width: 0;
+  padding-left: 0.75rem;
+  padding-right: 2.75rem;
+  line-height: 2.75rem;
+}
+
 html.dark .archival-single-multiselect.multiselect,
 .dark .archival-single-multiselect.multiselect {
   --ms-bg: color-mix(in srgb, var(--input) 30%, transparent);

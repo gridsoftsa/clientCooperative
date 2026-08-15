@@ -5,12 +5,17 @@ import type {
   VentanillaClassificationRuleRow,
   VentanillaEmailAccountRow,
 } from '~/types/ventanilla'
+import { VENTANILLA_AUTOMATIC_CHANNELS_ENABLED } from '~/constants/ventanilla'
 
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
   permissions: 'ventanilla_sla_configurar',
 })
+
+if (!VENTANILLA_AUTOMATIC_CHANNELS_ENABLED) {
+  throw createError({ statusCode: 404, statusMessage: 'Página no encontrada' })
+}
 
 const api = useVentanillaApi()
 const loading = ref(true)

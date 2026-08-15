@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import type { ProducerAreaDraft } from '~/components/archival/ArchivalFileTypeProducerAreasEditor.vue'
 import { ARCHIVAL_FILE_MODEL_LABELS } from '~/constants/archival-file'
 import { suggestArchivalFileTypeKey } from '~/utils/archival-file-type-key'
 import type { ArchivalMetadataSchemaRow } from '~/composables/useArchivalMetadataApi'
 import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
-import type { DocSeriesRow, DocSubseriesRow } from '~/types/archival-catalog'
 import type { ArchivalFileModel, ArchivalFileType } from '~/types/archival-file'
 import type { TrdTableRow } from '~/types/archival-trd'
 import {
@@ -23,7 +23,6 @@ const emit = defineEmits<{
 }>()
 
 const archivalApi = useArchivalFileApi()
-const catalogApi = useArchivalCatalogApi()
 const trdApi = useTrdApi()
 const metaApi = useArchivalMetadataApi()
 const orgApi = useOrgStructureApi()
@@ -31,24 +30,18 @@ const orgApi = useOrgStructureApi()
 const loading = ref(true)
 const saving = ref(false)
 const submitAttempted = ref(false)
-/** Evita que los watchers de cascada borren subserie/tipo tras `applyInitial` (cola de watchers post-async). */
-const suppressCascadeWatch = ref(false)
+const producerAreasEditorRef = ref<{ hydrateAllRows: () => Promise<void> } | null>(null)
 
 const orgUnits = ref<OrgUnitRow[]>([])
 const trdTables = ref<TrdTableRow[]>([])
 const metadataSchemas = ref<ArchivalMetadataSchemaRow[]>([])
-const seriesList = ref<DocSeriesRow[]>([])
-const subseriesList = ref<DocSubseriesRow[]>([])
+const producerAreas = ref<ProducerAreaDraft[]>([])
 
 const form = reactive({
   type_key: '',
   name: '',
   description: '',
   model: 'entity_case' as ArchivalFileModel,
-  org_unit_id: '',
-  doc_series_id: '',
-  doc_subseries_id: '',
-  trd_table_id: '',
   archival_metadata_schema_id: '',
   allows_master_documents: false,
   is_active: true,
@@ -63,14 +56,6 @@ const effectiveTypeKey = computed(() => {
   }
 
   return form.type_key.trim()
-})
-
-const filteredTrdTables = computed(() => {
-  if (!form.org_unit_id) {
-    return trdTables.value
-  }
-
-  return trdTables.value.filter(table => String(table.org_unit_id) === form.org_unit_id)
 })
 
 const filteredMetadataSchemas = computed(() => {
@@ -89,83 +74,19 @@ const filteredMetadataSchemas = computed(() => {
   })
 })
 
-const orgUnitSelectOptions = computed(() =>
-  orgUnits.value.map(unit => ({
-    value: String(unit.id),
-    label: unit.name,
-  })),
-)
-
-const trdTableSelectOptions = computed(() =>
-  filteredTrdTables.value.map(table => ({
-    value: String(table.id),
-    label: table.org_unit?.name ?? `Tabla #${table.id}`,
-  })),
-)
-
-const seriesSelectOptions = computed(() =>
-  ensureSeriesInList(seriesList.value).map(series => ({
-    value: String(series.id),
-    label: `${series.code} — ${series.name}`,
-  })),
-)
-
-function ensureSeriesInList(list: DocSeriesRow[]): DocSeriesRow[] {
-  const initialSeries = props.initial?.doc_series
-  const selectedId = nullableId(form.doc_series_id)
-
-  if (
-    initialSeries
-    && selectedId === initialSeries.id
-    && !list.some(row => row.id === initialSeries.id)
-  ) {
-    return [
-      ...list,
-      {
-        id: initialSeries.id,
-        org_unit_id: nullableId(form.org_unit_id) ?? 0,
-        code: initialSeries.code,
-        name: initialSeries.name,
-        is_active: true,
-      } as DocSeriesRow,
-    ]
-  }
-
-  return list
-}
-
-function ensureSubseriesInList(list: DocSubseriesRow[]): DocSubseriesRow[] {
-  const initialSub = props.initial?.doc_subseries
-  const selectedId = nullableId(form.doc_subseries_id)
-
-  if (
-    initialSub
-    && selectedId === initialSub.id
-    && !list.some(row => row.id === initialSub.id)
-  ) {
-    return [
-      ...list,
-      {
-        id: initialSub.id,
-        doc_series_id: initialSub.doc_series_id ?? nullableId(form.doc_series_id) ?? 0,
-        code: initialSub.code,
-        name: initialSub.name,
-      } as DocSubseriesRow,
-    ]
-  }
-
-  return list
-}
-
-const subseriesSelectOptions = computed(() =>
-  ensureSubseriesInList(subseriesList.value).map(sub => ({
-    value: String(sub.id),
-    label: `${sub.code} — ${sub.name}`,
-  })),
-)
-
-function nullableId(value: string): number | null {
-  return value ? Number(value) : null
+function mapProducerAreasFromType(type: ArchivalFileType | null | undefined): ProducerAreaDraft[] {
+  return (type?.producer_areas ?? []).map((area, index) => ({
+    org_unit_id: area.org_unit_id,
+    trd_table_id: area.trd_table_id ?? null,
+    doc_series_id: area.doc_series_id ?? null,
+    doc_subseries_id: area.doc_subseries_id ?? null,
+    doc_document_type_id: area.doc_document_type_id ?? null,
+    sort_order: area.sort_order ?? index,
+    org_unit: area.org_unit ?? null,
+    doc_series: area.doc_series ?? null,
+    doc_subseries: area.doc_subseries ?? null,
+    doc_document_type: area.doc_document_type ?? null,
+  }))
 }
 
 function applyInitial(type: ArchivalFileType | null | undefined) {
@@ -173,37 +94,11 @@ function applyInitial(type: ArchivalFileType | null | undefined) {
   form.name = type?.name ?? ''
   form.description = type?.description ?? ''
   form.model = type?.model ?? 'entity_case'
-  form.org_unit_id = type?.org_unit_id ? String(type.org_unit_id) : ''
-  form.doc_series_id = type?.doc_series_id ? String(type.doc_series_id) : ''
-  form.doc_subseries_id = type?.doc_subseries_id ? String(type.doc_subseries_id) : ''
-  form.trd_table_id = type?.trd_table_id ? String(type.trd_table_id) : ''
   form.archival_metadata_schema_id = type?.archival_metadata_schema_id ? String(type.archival_metadata_schema_id) : ''
   form.allows_master_documents = type?.allows_master_documents ?? false
   form.is_active = type?.is_active ?? true
   form.sort_order = type?.sort_order ?? 0
-}
-
-async function loadSeries() {
-  const orgUnitId = nullableId(form.org_unit_id)
-  seriesList.value = await catalogApi.fetchSeries(300, orgUnitId ?? undefined)
-}
-
-async function loadSubseries() {
-  const seriesId = nullableId(form.doc_series_id)
-  subseriesList.value = seriesId ? await catalogApi.fetchSubseries(seriesId) : []
-}
-
-async function hydrateCatalogCascade() {
-  suppressCascadeWatch.value = true
-
-  try {
-    await loadSeries()
-    await loadSubseries()
-  }
-  finally {
-    await nextTick()
-    suppressCascadeWatch.value = false
-  }
+  producerAreas.value = mapProducerAreasFromType(type)
 }
 
 async function loadCatalogs() {
@@ -221,7 +116,8 @@ async function loadCatalogs() {
     metadataSchemas.value = schemas
 
     applyInitial(props.initial)
-    await hydrateCatalogCascade()
+    await nextTick()
+    await producerAreasEditorRef.value?.hydrateAllRows()
   }
   catch {
     toast.error('No se pudieron cargar los catálogos.')
@@ -236,12 +132,17 @@ function buildPayload(): Record<string, unknown> {
     name: form.name.trim(),
     description: form.description.trim() || null,
     model: form.model,
-    org_unit_id: nullableId(form.org_unit_id),
-    doc_series_id: nullableId(form.doc_series_id),
-    doc_subseries_id: nullableId(form.doc_subseries_id),
-    doc_document_type_id: null,
-    trd_table_id: nullableId(form.trd_table_id),
-    archival_metadata_schema_id: nullableId(form.archival_metadata_schema_id),
+    producer_areas: producerAreas.value
+      .filter(row => row.org_unit_id != null && row.doc_series_id != null && row.doc_subseries_id != null)
+      .map((row, index) => ({
+        org_unit_id: row.org_unit_id,
+        trd_table_id: row.trd_table_id,
+        doc_series_id: row.doc_series_id,
+        doc_subseries_id: row.doc_subseries_id,
+        doc_document_type_id: row.doc_document_type_id,
+        sort_order: index,
+      })),
+    archival_metadata_schema_id: form.archival_metadata_schema_id ? Number(form.archival_metadata_schema_id) : null,
     allows_master_documents: form.allows_master_documents,
     is_active: form.is_active,
     sort_order: Number(form.sort_order) || 0,
@@ -254,6 +155,19 @@ function buildPayload(): Record<string, unknown> {
   return payload
 }
 
+function validateProducerAreas(): boolean {
+  const incomplete = producerAreas.value.find(
+    row => row.org_unit_id == null || row.doc_series_id == null || row.doc_subseries_id == null,
+  )
+
+  if (incomplete) {
+    toast.error('Complete área, serie y subserie en cada fila de áreas productoras, o elimine la fila incompleta.')
+    return false
+  }
+
+  return true
+}
+
 async function submit() {
   submitAttempted.value = true
 
@@ -264,8 +178,7 @@ async function submit() {
     return
   }
 
-  if (!form.doc_series_id || !form.doc_subseries_id) {
-    toast.error('Seleccione la serie y la subserie del catálogo TRD.')
+  if (!validateProducerAreas()) {
     return
   }
 
@@ -293,40 +206,14 @@ async function submit() {
   }
 }
 
-watch(() => form.org_unit_id, async () => {
-  if (loading.value || suppressCascadeWatch.value) {
-    return
-  }
-
-  if (
-    form.trd_table_id
-    && !filteredTrdTables.value.some(table => String(table.id) === form.trd_table_id)
-  ) {
-    form.trd_table_id = ''
-  }
-
-  form.doc_series_id = ''
-  form.doc_subseries_id = ''
-  await loadSeries()
-  subseriesList.value = []
-})
-
-watch(() => form.doc_series_id, async () => {
-  if (loading.value || suppressCascadeWatch.value) {
-    return
-  }
-
-  form.doc_subseries_id = ''
-  await loadSubseries()
-})
-
 watch(() => props.initial, async (value) => {
   if (loading.value) {
     return
   }
 
   applyInitial(value)
-  await hydrateCatalogCascade()
+  await nextTick()
+  await producerAreasEditorRef.value?.hydrateAllRows()
 })
 
 onMounted(() => loadCatalogs())
@@ -416,85 +303,6 @@ onMounted(() => loadCatalogs())
               <Label for="file_type_master" class="font-normal">Permite documentos maestros</Label>
             </div>
           </div>
-        </div>
-
-        <div class="space-y-6">
-          <div class="min-w-0 space-y-4 rounded-lg border bg-muted/20 p-4">
-            <div>
-              <p class="text-sm font-medium">
-                Catálogo documental y TRD
-              </p>
-              <p class="text-xs text-muted-foreground">
-                Ubicación del expediente en el catálogo TRD (serie y subserie). Los tipos documentales se definen en la pestaña Obligatorios.
-              </p>
-              <p
-                v-if="form.model === 'org_area'"
-                class="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground"
-              >
-                Tipos <span class="font-medium text-foreground">por área</span> (repositorio, auditoría): la TRD aquí es
-                <span class="font-medium text-foreground">referencia por defecto</span> para el área seleccionada.
-                Cada expediente puede usar otra área productora; al adjuntar se usa la TRD del área del expediente.
-                Para biblioteca institucional suele bastar serie <span class="font-mono">005-54</span> / subserie
-                <span class="font-mono">54</span> cuando exista en esa área.
-              </p>
-            </div>
-
-            <div class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">
-              <div class="min-w-0 space-y-2">
-                <Label for="file_type_org_unit">Área productora</Label>
-                <ArchivalCatalogSearchSelect
-                  id="file_type_org_unit"
-                  :model-value="form.org_unit_id || null"
-                  :options="orgUnitSelectOptions"
-                  placeholder="Buscar área…"
-                  no-options-text="Sin áreas disponibles"
-                  :disabled="saving"
-                  @update:model-value="form.org_unit_id = $event ?? ''"
-                />
-              </div>
-
-              <div class="min-w-0 space-y-2">
-                <Label for="file_type_trd_table">Tabla TRD</Label>
-                <ArchivalCatalogSearchSelect
-                  id="file_type_trd_table"
-                  :model-value="form.trd_table_id || null"
-                  :options="trdTableSelectOptions"
-                  placeholder="Buscar tabla TRD…"
-                  no-options-text="Sin tablas para el área"
-                  :disabled="saving"
-                  @update:model-value="form.trd_table_id = $event ?? ''"
-                />
-              </div>
-            </div>
-
-            <div class="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-1">
-              <div class="min-w-0 space-y-2">
-                <Label for="file_type_series">Serie *</Label>
-                <ArchivalCatalogSearchSelect
-                  id="file_type_series"
-                  :model-value="form.doc_series_id || null"
-                  :options="seriesSelectOptions"
-                  placeholder="Buscar serie…"
-                  no-options-text="Seleccione un área primero"
-                  :disabled="saving || !form.org_unit_id"
-                  @update:model-value="form.doc_series_id = $event ?? ''"
-                />
-              </div>
-
-              <div class="min-w-0 space-y-2">
-                <Label for="file_type_subseries">Subserie *</Label>
-                <ArchivalCatalogSearchSelect
-                  id="file_type_subseries"
-                  :model-value="form.doc_subseries_id || null"
-                  :options="subseriesSelectOptions"
-                  placeholder="Buscar subserie…"
-                  no-options-text="Seleccione una serie primero"
-                  :disabled="saving || !form.doc_series_id"
-                  @update:model-value="form.doc_subseries_id = $event ?? ''"
-                />
-              </div>
-            </div>
-          </div>
 
           <div class="space-y-2">
             <Label>Esquema de metadatos</Label>
@@ -518,6 +326,23 @@ onMounted(() => loadCatalogs())
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        <div class="min-w-0 space-y-4 rounded-lg border bg-muted/20 p-4">
+          <ArchivalFileTypeProducerAreasEditor
+            ref="producerAreasEditorRef"
+            v-model="producerAreas"
+            :org-units="orgUnits"
+            :trd-tables="trdTables"
+            :disabled="saving"
+          />
+          <p
+            v-if="form.model === 'org_area'"
+            class="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground"
+          >
+            Tipos <span class="font-medium text-foreground">por área</span>: configure la TRD de cada dependencia que
+            usará este tipo. Al adjuntar documentos se aplicará la fila que coincida con el área del expediente.
+          </p>
         </div>
       </div>
 

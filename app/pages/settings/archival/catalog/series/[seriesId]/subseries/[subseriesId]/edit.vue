@@ -18,6 +18,16 @@ const { $api } = useNuxtApp()
 const seriesId = computed(() => Number(route.params.seriesId))
 const subseriesId = computed(() => Number(route.params.subseriesId))
 
+const returnToPath = computed(() => catalogApi.returnToPath(route))
+
+function cancelPath(): string {
+  if (returnToPath.value) {
+    return returnToPath.value
+  }
+
+  return catalogApi.subseriesListPath(seriesId.value)
+}
+
 const series = ref<DocSeriesRow | null>(null)
 const form = ref({ code: '', name: '', description: '', is_active: true })
 const initialIsActive = ref(true)
@@ -75,7 +85,11 @@ async function persist(cascadeDeactivateChildren: boolean) {
       },
     })
     toast.success('Subserie actualizada')
-    await router.push(catalogApi.subseriesListPath(seriesId.value))
+    await catalogApi.navigateAfterCatalogSave(
+      router,
+      route,
+      catalogApi.subseriesListPath(seriesId.value),
+    )
   }
   catch (e: unknown) {
     const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
@@ -121,7 +135,7 @@ onMounted(load)
             Serie <span class="font-mono">{{ series.code }}</span> — {{ series.name }}
           </p>
         </div>
-        <Button variant="outline" @click="router.push(catalogApi.subseriesListPath(seriesId))">
+        <Button variant="outline" @click="router.push(cancelPath())">
           Volver
         </Button>
       </div>

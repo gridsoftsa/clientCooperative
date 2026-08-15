@@ -39,8 +39,10 @@ const summary = computed(() => {
     active: rows.filter(type => type.is_active).length,
     inactive: rows.filter(type => !type.is_active).length,
     orgArea: rows.filter(type => type.model === 'org_area').length,
-    trdPending: rows.filter(type => !type.doc_series_id || !type.doc_subseries_id).length,
-    withoutOrgUnit: rows.filter(type => !type.org_unit_id).length,
+    trdPending: rows.filter(type =>
+      !(type.producer_areas ?? []).some(area => area.doc_series_id && area.doc_subseries_id)
+      && (!type.doc_series_id || !type.doc_subseries_id)).length,
+    withoutOrgUnit: rows.filter(type => !(type.producer_areas?.length)).length,
   }
 })
 
@@ -49,11 +51,17 @@ const orgUnitPills = computed(() => {
   let withoutArea = 0
 
   for (const type of summaryTypes.value) {
-    if (type.org_unit_id) {
-      counts.set(type.org_unit_id, (counts.get(type.org_unit_id) ?? 0) + 1)
-    }
-    else {
+    const areas = type.producer_areas ?? []
+
+    if (areas.length === 0) {
       withoutArea += 1
+      continue
+    }
+
+    for (const area of areas) {
+      if (area.org_unit_id) {
+        counts.set(area.org_unit_id, (counts.get(area.org_unit_id) ?? 0) + 1)
+      }
     }
   }
 
@@ -73,12 +81,24 @@ const groupedByArea = computed(() => {
   const groups = new Map<string, { key: string, label: string, types: ArchivalFileType[] }>()
 
   for (const type of types.value) {
-    const key = type.org_unit_id ? String(type.org_unit_id) : ORG_UNIT_NONE
-    const label = type.org_unit?.name ?? 'Sin área productora'
+    const areas = type.producer_areas ?? []
 
-    const group = groups.get(key) ?? { key, label, types: [] }
-    group.types.push(type)
-    groups.set(key, group)
+    if (areas.length === 0) {
+      const key = ORG_UNIT_NONE
+      const label = 'Sin área productora'
+      const group = groups.get(key) ?? { key, label, types: [] }
+      group.types.push(type)
+      groups.set(key, group)
+      continue
+    }
+
+    for (const area of areas) {
+      const key = String(area.org_unit_id)
+      const label = area.org_unit?.name ?? `Área #${area.org_unit_id}`
+      const group = groups.get(key) ?? { key, label, types: [] }
+      group.types.push(type)
+      groups.set(key, group)
+    }
   }
 
   return Array.from(groups.values()).sort((a, b) => {
@@ -109,11 +129,14 @@ function fileTypePayload(type: ArchivalFileType, overrides: Partial<Record<strin
     name: type.name,
     description: type.description ?? null,
     model: type.model,
-    org_unit_id: type.org_unit_id ?? null,
-    doc_series_id: type.doc_series_id ?? null,
-    doc_subseries_id: type.doc_subseries_id ?? null,
-    doc_document_type_id: type.doc_document_type_id ?? null,
-    trd_table_id: type.trd_table_id ?? null,
+    producer_areas: (type.producer_areas ?? []).map((area, index) => ({
+      org_unit_id: area.org_unit_id,
+      trd_table_id: area.trd_table_id ?? null,
+      doc_series_id: area.doc_series_id ?? null,
+      doc_subseries_id: area.doc_subseries_id ?? null,
+      doc_document_type_id: area.doc_document_type_id ?? null,
+      sort_order: area.sort_order ?? index,
+    })),
     archival_metadata_schema_id: type.archival_metadata_schema_id ?? null,
     allows_master_documents: type.allows_master_documents,
     is_active: type.is_active,
@@ -245,19 +268,53 @@ function requiredCount(type: ArchivalFileType): number {
   return type.required_documents?.length ?? 0
 }
 
+function producerAreasLabel(type: ArchivalFileType): string | null {
+  const areas = type.producer_areas ?? []
+
+  if (areas.length === 0) {
+    return null
+  }
+
+  return areas
+    .map(area => area.org_unit?.name ?? `Área #${area.org_unit_id}`)
+    .join(', ')
+}
+
 function catalogSummary(type: ArchivalFileType): string {
-  if (type.doc_series && type.doc_subseries) {
-    return `${type.doc_series.code} — ${type.doc_subseries.code}`
+  const areas = type.producer_areas ?? []
+
+  if (areas.length === 0) {
+    if (type.doc_series && type.doc_subseries) {
+      return `${type.doc_series.code} — ${type.doc_subseries.code}`
+    }
+
+    return 'Sin TRD'
   }
 
-  if (type.doc_series) {
-    return type.doc_series.code
+  if (areas.length === 1 && areas[0]?.doc_series && areas[0]?.doc_subseries) {
+    return `${areas[0].doc_series.code} — ${areas[0].doc_subseries.code}`
   }
 
-  return 'Sin TRD'
+  const configured = areas.filter(area => area.doc_series && area.doc_subseries).length
+
+  return `${configured} área${configured === 1 ? '' : 's'} con TRD`
 }
 
 function catalogDetail(type: ArchivalFileType): string | null {
+  const areas = type.producer_areas ?? []
+
+  if (areas.length === 1 && areas[0]?.doc_series && areas[0]?.doc_subseries) {
+    return `${areas[0].doc_series.name} / ${areas[0].doc_subseries.name}`
+  }
+
+  if (areas.length > 1) {
+    return areas
+      .filter(area => area.org_unit && area.doc_series && area.doc_subseries)
+      .map(area => `${area.org_unit?.name}: ${area.doc_series?.code}/${area.doc_subseries?.code}`)
+      .join(' · ')
+      || null
+  }
+
   if (type.doc_series && type.doc_subseries) {
     return `${type.doc_series.name} / ${type.doc_subseries.name}`
   }
@@ -483,8 +540,8 @@ onMounted(async () => {
                       Sistema
                     </Badge>
                   </div>
-                  <p v-if="type.org_unit" class="text-xs text-muted-foreground">
-                    {{ type.org_unit.name }}
+                  <p v-if="producerAreasLabel(type)" class="text-xs text-muted-foreground">
+                    {{ producerAreasLabel(type) }}
                   </p>
                 </div>
               </TableCell>

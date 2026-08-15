@@ -23,6 +23,16 @@ const seriesId = computed(() => Number(route.params.seriesId))
 const subseriesId = computed(() => Number(route.params.subseriesId))
 const typeId = computed(() => Number(route.params.typeId))
 
+const returnToPath = computed(() => catalogApi.returnToPath(route))
+
+function cancelPath(): string {
+  if (returnToPath.value) {
+    return returnToPath.value
+  }
+
+  return catalogApi.documentTypesListPath(seriesId.value, subseriesId.value)
+}
+
 const subseries = ref<DocSubseriesRow | null>(null)
 const allowedSupportSelected = ref<string[]>([])
 
@@ -82,7 +92,11 @@ async function submit() {
       },
     })
     toast.success('Tipo documental actualizado')
-    await router.push(catalogApi.documentTypesListPath(seriesId.value, subseriesId.value))
+    await catalogApi.navigateAfterCatalogSave(
+      router,
+      route,
+      catalogApi.documentTypesListPath(seriesId.value, subseriesId.value),
+    )
   } catch (e: unknown) {
     const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
     const first = err.data?.errors?.is_active?.[0]
@@ -110,7 +124,7 @@ onMounted(load)
             Subserie <span class="font-mono">{{ subseries.code }}</span> — {{ subseries.name }}
           </p>
         </div>
-        <Button variant="outline" @click="router.push(catalogApi.documentTypesListPath(seriesId, subseriesId))">
+        <Button variant="outline" @click="router.push(cancelPath())">
           Volver
         </Button>
       </div>

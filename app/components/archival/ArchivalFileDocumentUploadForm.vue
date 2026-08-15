@@ -82,20 +82,14 @@ const docTypeOptions = ref<ArchivalFileDocTypeOption[]>([])
 const catalogTree = ref<CatalogTreeSeries[]>([])
 const folderOptions = computed(() => flattenFileFolderNodes(props.tree))
 
-const lockedDocSeriesId = computed(() => {
-  if (props.file.org_unit_id !== props.file.file_type?.org_unit_id) {
-    return null
-  }
+const fileTypeProducerArea = computed(() =>
+  props.file.file_type?.producer_areas?.find(
+    area => area.org_unit_id === props.file.org_unit_id,
+  ) ?? null,
+)
 
-  return props.file.file_type?.doc_series_id ?? null
-})
-const lockedDocSubseriesId = computed(() => {
-  if (props.file.org_unit_id !== props.file.file_type?.org_unit_id) {
-    return null
-  }
-
-  return props.file.file_type?.doc_subseries_id ?? null
-})
+const lockedDocSeriesId = computed(() => fileTypeProducerArea.value?.doc_series_id ?? null)
+const lockedDocSubseriesId = computed(() => fileTypeProducerArea.value?.doc_subseries_id ?? null)
 const hasLockedTrdBranch = computed(() =>
   lockedDocSeriesId.value != null && lockedDocSubseriesId.value != null,
 )
@@ -662,7 +656,7 @@ onMounted(() => {
 
     <div v-else class="space-y-2">
       <div v-if="missingRequiredChoices.length" class="flex flex-wrap items-center justify-between gap-2">
-        <Label for="archival_upload_doc_type">Tipo documental</Label>
+        <Label v-if="catalogTree.length === 0" for="archival_upload_doc_type">Tipo documental</Label>
         <Button
           type="button"
           variant="link"
@@ -673,7 +667,7 @@ onMounted(() => {
           Volver a obligatorios pendientes
         </Button>
       </div>
-      <Label v-else for="archival_upload_doc_type">Tipo documental</Label>
+      <Label v-else-if="catalogTree.length === 0" for="archival_upload_doc_type">Tipo documental</Label>
       <div
         id="archival_upload_doc_type"
         class="space-y-2"
@@ -700,16 +694,17 @@ onMounted(() => {
         <p v-if="hasLockedTrdBranch" class="text-xs text-muted-foreground">
           Serie y subserie del tipo de expediente para
           <span class="font-medium text-foreground">{{ props.file.org_unit?.name ?? 'esta área' }}</span>
-          ({{ props.file.file_type?.doc_series?.code }} / {{ props.file.file_type?.doc_subseries?.code }}).
+          ({{ fileTypeProducerArea?.doc_series?.code }} / {{ fileTypeProducerArea?.doc_subseries?.code }}).
           Solo elija el tipo documental (políticas, formatos, procedimientos, etc.).
         </p>
         <p
-          v-else-if="props.file.file_type?.org_unit_id && props.file.org_unit_id !== props.file.file_type.org_unit_id"
+          v-else-if="(props.file.file_type?.producer_areas?.length ?? 0) > 0 && !fileTypeProducerArea"
           class="text-xs text-muted-foreground"
         >
           Este expediente es de
           <span class="font-medium text-foreground">{{ props.file.org_unit?.name }}</span>,
-          distinta al área configurada en el tipo ({{ props.file.file_type.org_unit?.name }}).
+          distinta a las áreas productoras configuradas en el tipo
+          ({{ props.file.file_type?.producer_areas?.map(area => area.org_unit?.name).filter(Boolean).join(', ') }}).
           Use serie, subserie y tipo de la TRD de esta área.
         </p>
         <p v-else-if="selectedDocTypeLabel" class="text-xs text-muted-foreground">

@@ -127,7 +127,7 @@ function resolvePartyValidationIssue(
 export function resolveFirstVentanillaFilingValidationIssue(
   values: ResolveVentanillaFilingValidationInput,
 ): VentanillaFilingValidationIssue | null {
-  if (!values.functionalTypeKey.trim()) {
+  if (!values.functionalTypeKey?.trim()) {
     return { field: 'functional_type', message: 'Seleccione el tipo funcional' }
   }
 
@@ -220,7 +220,7 @@ export function isVentanillaFilingFieldMissing(
 
   switch (field) {
     case 'functional_type':
-      return !values.functionalTypeKey.trim()
+      return !values.functionalTypeKey?.trim()
     case 'recipient_org_unit':
       return (values.filingType === 'incoming' || values.filingType === 'internal') && !values.recipientOrgUnitId
     case 'producer_org_unit':
@@ -270,7 +270,7 @@ export function isVentanillaFilingFieldMissing(
  * Validación de campos obligatorios alineada con StoreVentanillaFilingRequest / ClassifyVentanillaIntakeRequest (API).
  */
 export function validateVentanillaCoreFilingForm(values: VentanillaCoreFilingFormValues): string | null {
-  if (!values.functionalTypeKey.trim()) {
+  if (!values.functionalTypeKey?.trim()) {
     return 'Seleccione el tipo funcional'
   }
   if (!values.subject.trim()) {

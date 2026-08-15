@@ -19,6 +19,9 @@ export const VENTANILLA_FILING_STATUS_LABELS: Record<VentanillaFilingStatusValue
 
 export const VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY = 'informative'
 
+/** IMAP / ingesta automática por correo (pantalla `/ventanilla/canales`). */
+export const VENTANILLA_AUTOMATIC_CHANNELS_ENABLED = false
+
 export const VENTANILLA_INFORMATIVE_TYPE_HINT
   = 'Documento informativo: no aplica SLA ni obligación de respuesta. Puede cerrarse desde la gestión del radicado.'
 

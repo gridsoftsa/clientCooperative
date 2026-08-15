@@ -13,6 +13,7 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const { $api } = useNuxtApp()
+const catalogApi = useArchivalCatalogApi()
 
 const id = computed(() => Number(route.params.id))
 const series = ref<DocSeriesRow | null>(null)
@@ -24,14 +25,34 @@ const form = ref({
   publishable_to_institutional_library: false,
 })
 const initialIsActive = ref(true)
-const activeSubseriesCount = ref(0)
+const subseriesCount = ref(0)
 const loading = ref(true)
 const saving = ref(false)
-const cascadeDialogOpen = ref(false)
 
 const orgUnitCodePrefix = computed(() => series.value?.org_unit?.code ?? '')
 
 const isDeactivating = computed(() => initialIsActive.value && form.value.is_active === false)
+
+const seriesDeactivationBlockReason = computed(() => {
+  if (subseriesCount.value > 0) {
+    return 'No se puede inactivar la serie mientras tenga subseries. Quite o inactivé primero sus subseries y tipos documentales.'
+  }
+
+  return null
+})
+
+const returnToPath = computed(() => catalogApi.returnToPath(route))
+
+function cancelPath(): string {
+  if (returnToPath.value) {
+    return returnToPath.value
+  }
+
+  const orgUnitId = series.value?.org_unit_id
+  const listQuery = orgUnitId != null ? `?org_unit_id=${orgUnitId}` : ''
+
+  return `/settings/archival/catalog/series${listQuery}`
+}
 
 async function load() {
   loading.value = true
@@ -46,7 +67,7 @@ async function load() {
       publishable_to_institutional_library: res.data.publishable_to_institutional_library ?? false,
     }
     initialIsActive.value = res.data.is_active
-    activeSubseriesCount.value = res.data.active_subseries_count ?? 0
+    subseriesCount.value = res.data.subseries_count ?? 0
   }
   catch {
     toast.error('Serie no encontrada')
@@ -57,7 +78,13 @@ async function load() {
   }
 }
 
-async function persist(cascadeDeactivateChildren: boolean) {
+async function persist() {
+  if (isDeactivating.value && seriesDeactivationBlockReason.value) {
+    toast.error(seriesDeactivationBlockReason.value)
+    form.value.is_active = true
+    return
+  }
+
   saving.value = true
   try {
     const code = catalogCodeSuffix(orgUnitCodePrefix.value, form.value.code)
@@ -69,43 +96,32 @@ async function persist(cascadeDeactivateChildren: boolean) {
         description: form.value.description.trim() || undefined,
         is_active: form.value.is_active,
         publishable_to_institutional_library: form.value.publishable_to_institutional_library,
-        ...(isDeactivating.value && cascadeDeactivateChildren
-          ? { cascade_deactivate_active_children: true }
-          : {}),
       },
     })
     toast.success('Serie actualizada')
-    const orgUnitId = series.value?.org_unit_id
-    const listQuery = orgUnitId != null ? `?org_unit_id=${orgUnitId}` : ''
-    await router.push(`/settings/archival/catalog/series${listQuery}`)
+    await catalogApi.navigateAfterCatalogSave(router, route, cancelPath())
   }
   catch (e: unknown) {
     const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
     const first = err.data?.errors?.is_active?.[0]
     toast.error(first ?? err.data?.message ?? 'No se pudo guardar')
+    if (isDeactivating.value) {
+      form.value.is_active = true
+    }
   }
   finally {
     saving.value = false
-    cascadeDialogOpen.value = false
   }
 }
 
-function submit() {
-  if (isDeactivating.value && activeSubseriesCount.value > 0) {
-    cascadeDialogOpen.value = true
+function onActiveToggle(active: boolean) {
+  if (!active && seriesDeactivationBlockReason.value) {
+    toast.error(seriesDeactivationBlockReason.value)
+    form.value.is_active = true
     return
   }
 
-  void persist(false)
-}
-
-function confirmCascadeDeactivation() {
-  void persist(true)
-}
-
-function cancelCascadeDialog() {
-  cascadeDialogOpen.value = false
-  form.value.is_active = true
+  form.value.is_active = active
 }
 
 onMounted(load)
@@ -125,7 +141,7 @@ onMounted(load)
         </div>
         <Button
           variant="outline"
-          @click="router.push(series?.org_unit_id ? `/settings/archival/catalog/series?org_unit_id=${series.org_unit_id}` : '/settings/archival/catalog/series')"
+          @click="router.push(cancelPath())"
         >
           Volver
         </Button>
@@ -154,9 +170,19 @@ onMounted(load)
             <Textarea v-model="form.description" rows="3" />
           </div>
           <div class="flex items-center gap-2">
-            <Switch id="active" v-model="form.is_active" />
+            <Switch
+              id="active"
+              :checked="form.is_active"
+              @update:checked="onActiveToggle($event === true)"
+            />
             <Label for="active" class="font-normal">{{ form.is_active ? 'Activa' : 'Inactiva' }}</Label>
           </div>
+          <p
+            v-if="subseriesCount > 0 && form.is_active"
+            class="text-xs text-amber-700 dark:text-amber-400"
+          >
+            {{ subseriesCount }} subserie(s) registrada(s). Para inactivar la serie, quite o inactivé primero todas sus subseries y tipos documentales.
+          </p>
           <div class="rounded-md border bg-muted/20 p-3">
             <div class="flex items-start gap-2">
               <Checkbox
@@ -176,45 +202,16 @@ onMounted(load)
               </div>
             </div>
           </div>
-          <p
-            v-if="activeSubseriesCount > 0 && form.is_active"
-            class="text-xs text-muted-foreground"
-          >
-            {{ activeSubseriesCount }} subserie(s) activa(s).
-            Al inactivar la serie se le preguntará si desea inactivar también sus subseries y tipos documentales activos.
-          </p>
           <div class="flex justify-end gap-2">
             <Button variant="outline" @click="router.back()">
               Cancelar
             </Button>
-            <Button :disabled="saving" @click="submit">
+            <Button :disabled="saving" @click="persist">
               Guardar
             </Button>
           </div>
         </CardContent>
       </Card>
     </div>
-
-    <AlertDialog v-model:open="cascadeDialogOpen">
-      <AlertDialogContent class="max-w-md">
-        <AlertDialogHeader>
-          <AlertDialogTitle>Inactivar serie</AlertDialogTitle>
-          <AlertDialogDescription>
-            Esta serie tiene
-            <strong>{{ activeSubseriesCount }}</strong>
-            subserie(s) activa(s), que pueden incluir tipos documentales activos.
-            ¿Desea inactivar también esas subseries y sus tipos documentales antes de inactivar la serie?
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter class="flex-col gap-2 sm:flex-row sm:justify-end">
-          <AlertDialogCancel :disabled="saving" @click="cancelCascadeDialog">
-            Cancelar
-          </AlertDialogCancel>
-          <Button :disabled="saving" @click="confirmCascadeDeactivation">
-            Inactivar todo y serie
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   </SettingsLayout>
 </template>

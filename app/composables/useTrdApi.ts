@@ -1,4 +1,5 @@
 import { normalizeTrdVersionShowResponse } from '~/utils/archival-trd-version'
+import { trdVersionPathWithTab, type TrdVersionTab } from '~/utils/archival-trd-navigation'
 import type {
   CatalogTreeSeries,
   TrdRetentionRuleRow,
@@ -57,8 +58,8 @@ export function useTrdApi() {
     return `/settings/archival/trd/${tableId}`
   }
 
-  function versionPath(tableId: number, versionId: number): string {
-    return `/settings/archival/trd/${tableId}/versions/${versionId}`
+  function versionPath(tableId: number, versionId: number, tab: TrdVersionTab = 'general'): string {
+    return trdVersionPathWithTab(tableId, versionId, tab)
   }
 
   function versionCreatePath(tableId: number): string {

@@ -1,4 +1,5 @@
 import type { NavMenu, NavMenuItems } from '~/types/nav'
+import { VENTANILLA_AUTOMATIC_CHANNELS_ENABLED } from '~/constants/ventanilla'
 
 export const navMenu: NavMenu[] = [
   {
@@ -99,11 +100,13 @@ export const navMenu: NavMenu[] = [
             link: '/ventanilla/sla',
             permission: 'ventanilla_sla_configurar',
           },
-          {
-            title: 'Canales automáticos',
-            link: '/ventanilla/canales',
-            permission: 'ventanilla_sla_configurar',
-          },
+          ...(VENTANILLA_AUTOMATIC_CHANNELS_ENABLED
+            ? [{
+              title: 'Canales automáticos',
+              link: '/ventanilla/canales',
+              permission: 'ventanilla_sla_configurar',
+            }]
+            : []),
         ],
       },
       {

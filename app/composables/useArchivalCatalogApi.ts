@@ -4,6 +4,8 @@ import type {
   DocSeriesRow,
   DocSubseriesRow,
 } from '~/types/archival-catalog'
+import { isTrdVersionReturnPath } from '~/utils/archival-trd-navigation'
+import type { RouteLocationNormalizedLoaded } from 'vue-router'
 
 export function useArchivalCatalogApi() {
   const { $api } = useNuxtApp()
@@ -65,8 +67,60 @@ export function useArchivalCatalogApi() {
     return `/settings/archival/catalog/series/${seriesId}/subseries/${subseriesId}/document-types`
   }
 
-  function documentTypesCreatePath(seriesId: number, subseriesId: number): string {
-    return `/settings/archival/catalog/series/${seriesId}/subseries/${subseriesId}/document-types/create`
+  function documentTypesCreatePath(seriesId: number, subseriesId: number, returnTo?: string | null): string {
+    return withReturnTo(
+      `/settings/archival/catalog/series/${seriesId}/subseries/${subseriesId}/document-types/create`,
+      returnTo,
+    )
+  }
+
+  function subseriesEditPath(seriesId: number, subseriesId: number, returnTo?: string | null): string {
+    return withReturnTo(
+      `/settings/archival/catalog/series/${seriesId}/subseries/${subseriesId}/edit`,
+      returnTo,
+    )
+  }
+
+  function documentTypeEditPath(
+    seriesId: number,
+    subseriesId: number,
+    typeId: number,
+    returnTo?: string | null,
+  ): string {
+    return withReturnTo(
+      `/settings/archival/catalog/series/${seriesId}/subseries/${subseriesId}/document-types/${typeId}/edit`,
+      returnTo,
+    )
+  }
+
+  function withReturnTo(path: string, returnTo?: string | null): string {
+    if (!returnTo) {
+      return path
+    }
+
+    return `${path}?return_to=${encodeURIComponent(returnTo)}`
+  }
+
+  function returnToPath(route: RouteLocationNormalizedLoaded): string | null {
+    const raw = route.query.return_to
+
+    return typeof raw === 'string' && raw.startsWith('/') ? raw : null
+  }
+
+  async function navigateAfterCatalogSave(
+    router: ReturnType<typeof useRouter>,
+    route: RouteLocationNormalizedLoaded,
+    defaultPath: string,
+  ): Promise<void> {
+    const returnTo = returnToPath(route)
+
+    if (returnTo && isTrdVersionReturnPath(returnTo)) {
+      await router.push(returnTo)
+
+      return
+    }
+
+    await router.push(defaultPath)
   }
 
   return {
@@ -80,5 +134,9 @@ export function useArchivalCatalogApi() {
     subseriesCreatePath,
     documentTypesListPath,
     documentTypesCreatePath,
+    subseriesEditPath,
+    documentTypeEditPath,
+    returnToPath,
+    navigateAfterCatalogSave,
   }
 }

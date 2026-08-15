@@ -25,6 +25,35 @@ const reportToPositionChoiceId = ref<number | null>(null)
 const reportToStaffChoiceId = ref<number | null>(null)
 
 const chargesSelectedArea = ref<OrgYesNoChoice>('no')
+const unitManagerReference = ref('')
+
+const areaManagerConflict = computed(() => {
+  if (chargesSelectedArea.value !== 'yes' || !unitManagerReference.value) {
+    return null
+  }
+
+  const positionName = form.value.name.trim()
+  if (!positionName || unitManagerReference.value === positionName) {
+    return null
+  }
+
+  return unitManagerReference.value
+})
+
+async function loadUnitManagerReference(orgUnitId: number | null): Promise<void> {
+  if (orgUnitId == null) {
+    unitManagerReference.value = ''
+    return
+  }
+
+  try {
+    const res = await $api<{ data: OrgUnitRow }>(`/organizational-structure/org-units/${orgUnitId}`)
+    unitManagerReference.value = res.data.manager_position_name?.trim() ?? ''
+  }
+  catch {
+    unitManagerReference.value = ''
+  }
+}
 
 const form = ref({
   org_unit_id: null as number | null,
@@ -105,8 +134,10 @@ watch(() => form.value.org_unit_id, async (id: number | null) => {
   if (id == null) {
     peerPositions.value = []
     reportToStaffOptions.value = []
+    unitManagerReference.value = ''
     return
   }
+  await loadUnitManagerReference(id)
   if (reportToOrgUnitId.value === id) {
     await loadReportToCandidates(id)
   }
@@ -141,6 +172,10 @@ watch([reportToTargetType, reportToPositionChoiceId, reportToStaffChoiceId], () 
 async function handleSubmit() {
   if (form.value.org_unit_id == null || !form.value.name.trim() || !form.value.code.trim()) {
     toast.error('Área, nombre y código son obligatorios')
+    return
+  }
+  if (areaManagerConflict.value) {
+    toast.error(`El área ya tiene el cargo «${areaManagerConflict.value}» como referencia de jefe.`)
     return
   }
   saving.value = true
@@ -226,10 +261,23 @@ onMounted(() => {
                     v-model="chargesSelectedArea"
                     input-id="position_charges_area_ms"
                     label="¿Este cargo está a cargo del área elegida?"
-                    helper-text="Si elige Sí, al guardar se actualiza la referencia de jefe del área con el nombre de este cargo."
+                    helper-text="Si elige Sí, al guardar se actualiza en el área el «Nombre del cargo de jefe de área (referencia)» y, si hay un funcionario vigente en ese cargo, también el «Jefe del área — funcionario»."
                     :disabled="form.org_unit_id == null"
                   />
                 </div>
+
+                <Alert
+                  v-if="areaManagerConflict"
+                  variant="destructive"
+                  class="md:col-span-2"
+                >
+                  <Icon name="i-lucide-triangle-alert" class="size-4" />
+                  <AlertTitle>Ya hay un cargo de referencia en el área</AlertTitle>
+                  <AlertDescription>
+                    El área ya tiene «{{ areaManagerConflict }}» como cargo de jefe.
+                    No puede marcar otro cargo hasta quitar esa referencia en el cargo anterior o en la edición del área.
+                  </AlertDescription>
+                </Alert>
 
                 <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6">
                   <div class="space-y-3">

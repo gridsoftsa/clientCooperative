@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import { TRD_VERSION_STATUS_LABELS } from '~/constants/archival-trd'
+import { formatIsoDateForDisplay } from '~/utils/dateInputValue'
 import type { TrdTableRow, TrdVersionRow } from '~/types/archival-trd'
 
 definePageMeta({
@@ -22,6 +23,22 @@ const loading = ref(false)
 
 function statusLabel(status: string): string {
   return TRD_VERSION_STATUS_LABELS[status] ?? status
+}
+
+function formatTrdDate(value?: string | null): string {
+  return formatIsoDateForDisplay(value)
+}
+
+function formatTrdDateRange(from?: string | null, to?: string | null): string {
+  if (!from && !to) {
+    return '—'
+  }
+
+  if (from && to) {
+    return `${formatTrdDate(from)} → ${formatTrdDate(to)}`
+  }
+
+  return formatTrdDate(from ?? to)
 }
 
 async function load() {
@@ -108,9 +125,9 @@ onMounted(load)
                     {{ statusLabel(v.status) }}
                   </Badge>
                 </TableCell>
-                <TableCell>{{ v.approved_at ?? '—' }}</TableCell>
+                <TableCell>{{ formatTrdDate(v.approved_at) }}</TableCell>
                 <TableCell class="text-sm text-muted-foreground">
-                  {{ v.effective_from ?? '—' }} → {{ v.effective_to ?? '—' }}
+                  {{ formatTrdDateRange(v.effective_from, v.effective_to) }}
                 </TableCell>
                 <TableCell>
                   <Button

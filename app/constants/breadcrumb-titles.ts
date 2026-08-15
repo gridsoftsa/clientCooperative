@@ -55,6 +55,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'unauthorized': 'No autorizado',
   'units': 'Áreas y dependencias',
   'ventanilla': 'Ventanilla',
+  'bandeja': 'Bandeja de clasificación',
   'ventanilla-unica': 'Ventanilla única',
   'functional-types': 'Tipos funcionales',
   'reception-media': 'Medios de recepción',

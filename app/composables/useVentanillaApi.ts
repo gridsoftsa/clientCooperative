@@ -22,6 +22,10 @@ export function useVentanillaApi() {
   const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promise<T>
   const config = useRuntimeConfig()
 
+  function resolveApiBase(): string {
+    return String(config.public.apiBase || 'http://localhost:8585').replace(/\/$/, '')
+  }
+
   async function fetchCatalog(): Promise<VentanillaCatalogData> {
     const res = await api<{ data: VentanillaCatalogData }>('/ventanilla/catalog')
 
@@ -29,7 +33,7 @@ export function useVentanillaApi() {
   }
 
   async function fetchPublicCatalog(): Promise<{ functional_types: Array<{ key: string; label: string }> }> {
-    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const base = resolveApiBase()
     const res = await $fetch<{ data: { functional_types: Array<{ key: string; label: string }> } }>(
       `${base}/api/ventanilla/public-catalog`,
     )
@@ -181,13 +185,32 @@ export function useVentanillaApi() {
     return res.data
   }
 
-  async function createPublicIntake(formData: FormData): Promise<{ id: number; status: string; received_at: string }> {
-    const res = await api<{ data: { id: number; status: string; received_at: string }; message: string }>('/ventanilla/public-intakes', {
+  async function createPublicIntake(formData: FormData): Promise<{
+    id: number
+    receipt_code: string
+    status: string
+    received_at: string
+    confirmation_email_sent: boolean
+    message?: string
+  }> {
+    const res = await api<{
+      data: {
+        id: number
+        receipt_code: string
+        status: string
+        received_at: string
+        confirmation_email_sent: boolean
+      }
+      message: string
+    }>('/ventanilla/public-intakes', {
       method: 'POST',
       body: formData,
     })
 
-    return res.data
+    return {
+      ...res.data,
+      message: res.message,
+    }
   }
 
   async function fetchIntakes(query: Record<string, string | number> = {}): Promise<{
@@ -298,7 +321,7 @@ export function useVentanillaApi() {
   }
 
   async function downloadMetadataReportExport(query: Record<string, string | number> = {}): Promise<void> {
-    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const base = resolveApiBase()
     const params = new URLSearchParams()
     for (const [key, value] of Object.entries(query)) {
       if (value !== '' && value != null && key !== 'page' && key !== 'per_page') {
@@ -320,7 +343,7 @@ export function useVentanillaApi() {
   }
 
   async function downloadSlaDashboardExport(query: Record<string, string | number> = {}): Promise<void> {
-    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const base = resolveApiBase()
     const params = new URLSearchParams()
     for (const [key, value] of Object.entries(query)) {
       if (value !== '' && value != null) {
@@ -461,37 +484,37 @@ export function useVentanillaApi() {
   }
 
   function filingFileViewUrl(filingId: number, fileId: number): string {
-    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const base = resolveApiBase()
 
     return `${base}/api/ventanilla/filings/${filingId}/files/${fileId}/view`
   }
 
   function filingFileDownloadUrl(filingId: number, fileId: number): string {
-    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const base = resolveApiBase()
 
     return `${base}/api/ventanilla/filings/${filingId}/files/${fileId}/download`
   }
 
   function filingReceiptUrl(filingId: number): string {
-    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const base = resolveApiBase()
 
     return `${base}/api/ventanilla/filings/${filingId}/receipt`
   }
 
   function filingStickerUrl(filingId: number): string {
-    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const base = resolveApiBase()
 
     return `${base}/api/ventanilla/filings/${filingId}/sticker`
   }
 
   function intakeFileViewUrl(intakeId: number, fileId: number): string {
-    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const base = resolveApiBase()
 
     return `${base}/api/ventanilla/intakes/${intakeId}/files/${fileId}/view`
   }
 
   function intakeFileDownloadUrl(intakeId: number, fileId: number): string {
-    const base = String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, '')
+    const base = resolveApiBase()
 
     return `${base}/api/ventanilla/intakes/${intakeId}/files/${fileId}/download`
   }
@@ -526,7 +549,7 @@ export function useVentanillaApi() {
     if (!token) {
       try {
         await $fetch('/sanctum/csrf-cookie', {
-          baseURL: String(config.public.apiBase || 'http://localhost:8000').replace(/\/$/, ''),
+          baseURL: resolveApiBase(),
           credentials: 'include',
         })
       } catch {

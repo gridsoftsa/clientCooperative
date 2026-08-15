@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import Multiselect from '@vueform/multiselect'
 import { toast } from 'vue-sonner'
 import {
-  TRD_DISPOSITION_OPTIONS,
   TRD_INHERITED_FROM_LABELS,
   TRD_RETENTION_APPLICATION_OPTIONS,
   TRD_RETENTION_LEVEL_HELP,
@@ -14,6 +12,7 @@ import {
 } from '~/constants/archival-trd'
 import { coerceBoolean } from '~/utils/coerce-boolean'
 import { resolveEffectiveRetentionFromRules } from '~/utils/archival-trd-version'
+import { isTrdVersionTab, trdVersionPathWithTab } from '~/utils/archival-trd-navigation'
 import type { DocDocumentTypeRow } from '~/types/archival-catalog'
 import type { CatalogTreeSeries, EffectiveRetentionPayload, TrdRetentionRuleRow, TrdTestingOptions, TrdVersionRow } from '~/types/archival-trd'
 
@@ -27,6 +26,7 @@ const route = useRoute()
 const router = useRouter()
 const { $api } = useNuxtApp()
 const trdApi = useTrdApi()
+const catalogApi = useArchivalCatalogApi()
 const { hasPermission } = usePermissions()
 
 const tableId = computed(() => Number(route.params.tableId))
@@ -70,7 +70,10 @@ const META_DATE_LABELS: Record<MetaDateField, string> = {
 }
 
 const metaValidationVisible = ref(false)
-const activeTab = ref('general')
+const activeTab = ref(
+  isTrdVersionTab(route.query.tab) ? route.query.tab : 'general',
+)
+let syncingTabFromRoute = false
 
 const showRuleForm = ref(false)
 const editingRuleId = ref<number | null>(null)
@@ -95,7 +98,7 @@ const canManageCatalog = computed(() => hasPermission('trd_catalogo_editar'))
 const producerOrgUnitId = computed(() => table.value?.org_unit_id ?? null)
 
 const catalogReturnTo = computed(() =>
-  trdApi.versionPath(tableId.value, versionId.value),
+  trdVersionPathWithTab(tableId.value, versionId.value, 'catalog'),
 )
 
 const catalogCreateSeriesPath = computed(() => {
@@ -121,7 +124,53 @@ async function reloadCatalogTree() {
     catalogTree.value = []
     return
   }
-  catalogTree.value = await trdApi.fetchCatalogTree(producerOrgUnitId.value, true)
+  catalogTree.value = await trdApi.fetchCatalogTree(producerOrgUnitId.value, false)
+}
+
+const catalogRowActionClass = 'h-8 gap-1.5 px-2 text-xs'
+
+const savingSeriesActiveId = ref<number | null>(null)
+
+function serieDeactivationBlockReason(serie: CatalogTreeSeries): string | null {
+  if (serie.subseries.length > 0) {
+    return 'Quite o inactivé primero las subseries y sus tipos documentales.'
+  }
+
+  return null
+}
+
+function canDeactivateSeries(serie: CatalogTreeSeries): boolean {
+  return serieDeactivationBlockReason(serie) === null
+}
+
+async function setSeriesActive(serie: CatalogTreeSeries, isActive: boolean) {
+  if (!canManageCatalog.value) {
+    return
+  }
+
+  if (!isActive && !canDeactivateSeries(serie)) {
+    toast.error(serieDeactivationBlockReason(serie) ?? 'No se puede inactivar la serie.')
+    return
+  }
+
+  savingSeriesActiveId.value = serie.id
+
+  try {
+    await $api(`/archival/catalog/series/${serie.id}`, {
+      method: 'PUT',
+      body: { is_active: isActive },
+    })
+    toast.success(isActive ? 'Serie activada.' : 'Serie inactivada.')
+    await reloadCatalogTree()
+  }
+  catch (e: unknown) {
+    const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors?.is_active?.[0]
+    toast.error(first ?? err.data?.message ?? 'No se pudo actualizar el estado de la serie.')
+  }
+  finally {
+    savingSeriesActiveId.value = null
+  }
 }
 
 const savingSeriesLibraryId = ref<number | null>(null)
@@ -1046,6 +1095,9 @@ async function activateVersion() {
       metaValidationVisible.value = true
       activeTab.value = 'general'
     }
+    if (errors?.retention_rules?.[0]) {
+      activeTab.value = 'rules'
+    }
     const msg = errors?.retention_rules?.[0]
       ?? errors?.approved_at?.[0]
       ?? errors?.effective_from?.[0]
@@ -1129,10 +1181,45 @@ onActivated(async () => {
 })
 
 watch(
+  () => route.query.tab,
+  (tab) => {
+    const resolved = isTrdVersionTab(tab) ? tab : 'general'
+    if (activeTab.value === resolved) {
+      return
+    }
+
+    syncingTabFromRoute = true
+    activeTab.value = resolved
+    syncingTabFromRoute = false
+  },
+)
+
+watch(activeTab, (tab) => {
+  if (syncingTabFromRoute) {
+    return
+  }
+
+  const currentTab = isTrdVersionTab(route.query.tab) ? route.query.tab : 'general'
+  if (tab === currentTab) {
+    return
+  }
+
+  const query = { ...route.query }
+  if (tab === 'general') {
+    delete query.tab
+  }
+  else {
+    query.tab = tab
+  }
+
+  void router.replace({ path: route.path, query })
+})
+
+watch(
   () => route.fullPath,
   async (path, previousPath) => {
     if (
-      path === catalogReturnTo.value
+      path.startsWith(trdApi.versionPath(tableId.value, versionId.value))
       && previousPath?.includes('/settings/archival/catalog/')
       && table.value
       && !loading.value
@@ -1472,12 +1559,22 @@ watch(
                   Limpiar filtros
                 </Button>
               </div>
-              <div v-for="serie in filteredCatalogTree" :key="serie.id" class="border rounded-lg p-4 space-y-3">
+              <div
+                v-for="serie in filteredCatalogTree"
+                :key="serie.id"
+                class="border rounded-lg p-4 space-y-3"
+                :class="{ 'opacity-70': serie.is_active === false }"
+              >
                 <div class="flex flex-wrap items-center justify-between gap-2">
                   <div class="min-w-0 space-y-2">
-                    <p class="font-medium font-mono text-sm">
-                      {{ serie.code }} — {{ serie.name }}
-                    </p>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <p class="font-medium font-mono text-sm">
+                        {{ serie.code }} — {{ serie.name }}
+                      </p>
+                      <Badge v-if="serie.is_active === false" variant="secondary" class="text-xs">
+                        Inactiva
+                      </Badge>
+                    </div>
                     <div class="flex flex-wrap items-center gap-3">
                       <div
                         v-if="canManageCatalog"
@@ -1507,33 +1604,69 @@ watch(
                       </Badge>
                     </div>
                   </div>
-                  <div class="flex flex-wrap items-center gap-2">
+                  <div class="flex flex-wrap items-center justify-end gap-1">
                     <PermissionGate permission="trd_catalogo_editar">
                       <Button
-                        variant="ghost"
+                        variant="warning"
                         size="sm"
+                        :class="catalogRowActionClass"
                         @click="router.push(`/settings/archival/catalog/series/${serie.id}/edit?return_to=${encodeURIComponent(catalogReturnTo)}`)"
                       >
-                        Editar serie
+                        <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
+                        Editar
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
+                        :class="catalogRowActionClass"
                         @click="router.push(`/settings/archival/catalog/series/${serie.id}/subseries/create?return_to=${encodeURIComponent(catalogReturnTo)}`)"
                       >
+                        <Icon name="i-lucide-plus" class="size-4 shrink-0" />
                         Nueva subserie
+                      </Button>
+                      <Button
+                        v-if="serie.is_active !== false && canDeactivateSeries(serie)"
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        :class="catalogRowActionClass"
+                        :disabled="savingSeriesActiveId === serie.id"
+                        @click="setSeriesActive(serie, false)"
+                      >
+                        <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                        Inactivar
+                      </Button>
+                      <Button
+                        v-else-if="serie.is_active === false"
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        :class="catalogRowActionClass"
+                        :disabled="savingSeriesActiveId === serie.id"
+                        @click="setSeriesActive(serie, true)"
+                      >
+                        <Icon name="i-lucide-check" class="size-4 shrink-0" />
+                        Activar
                       </Button>
                     </PermissionGate>
                   </div>
                 </div>
+                <p
+                  v-if="serie.is_active !== false && !canDeactivateSeries(serie)"
+                  class="text-xs text-amber-700 dark:text-amber-400 pl-1"
+                >
+                  {{ serieDeactivationBlockReason(serie) }}
+                </p>
                 <p v-if="serie.subseries.length === 0" class="text-sm text-muted-foreground pl-1">
                   Sin subseries.
                   <PermissionGate permission="trd_catalogo_editar">
                     <Button
-                      variant="link"
-                      class="h-auto p-0 text-sm"
+                      variant="outline"
+                      size="sm"
+                      :class="[catalogRowActionClass, 'ml-2 inline-flex']"
                       @click="router.push(`/settings/archival/catalog/series/${serie.id}/subseries/create?return_to=${encodeURIComponent(catalogReturnTo)}`)"
                     >
+                      <Icon name="i-lucide-plus" class="size-4 shrink-0" />
                       Crear subserie
                     </Button>
                   </PermissionGate>
@@ -1552,11 +1685,21 @@ watch(
                     <span class="text-sm font-mono">{{ sub.code }} — {{ sub.name }}</span>
                     <PermissionGate permission="trd_catalogo_editar">
                       <Button
-                        variant="ghost"
+                        variant="warning"
                         size="sm"
-                        class="h-7 text-xs"
-                        @click="router.push(`/settings/archival/catalog/series/${serie.id}/subseries/${sub.id}/document-types/create?return_to=${encodeURIComponent(catalogReturnTo)}`)"
+                        :class="catalogRowActionClass"
+                        @click="router.push(catalogApi.subseriesEditPath(serie.id, sub.id, catalogReturnTo))"
                       >
+                        <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
+                        Editar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        :class="catalogRowActionClass"
+                        @click="router.push(catalogApi.documentTypesCreatePath(serie.id, sub.id, catalogReturnTo))"
+                      >
+                        <Icon name="i-lucide-plus" class="size-4 shrink-0" />
                         Nuevo tipo
                       </Button>
                     </PermissionGate>
@@ -1567,7 +1710,7 @@ watch(
                   <label
                     v-for="tipo in sub.document_types"
                     :key="tipo.id"
-                    class="pl-6 flex items-center gap-2"
+                    class="pl-6 flex flex-wrap items-center gap-2"
                     :class="canEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'"
                   >
                     <input
@@ -1578,6 +1721,18 @@ watch(
                       @change="onTypeCheckboxChange(tipo.id, $event)"
                     >
                     <span class="text-sm select-none">{{ tipo.code }} — {{ tipo.name }}</span>
+                    <PermissionGate permission="trd_catalogo_editar">
+                      <Button
+                        type="button"
+                        variant="warning"
+                        size="sm"
+                        :class="catalogRowActionClass"
+                        @click.stop="router.push(catalogApi.documentTypeEditPath(serie.id, sub.id, tipo.id, catalogReturnTo))"
+                      >
+                        <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
+                        Editar
+                      </Button>
+                    </PermissionGate>
                   </label>
                 </div>
               </div>
@@ -1740,25 +1895,14 @@ watch(
                 </div>
               </div>
               <div class="space-y-2">
-                <Label>Disposición final</Label>
+                <Label for="rule-final-disposition">Disposición final</Label>
                 <p class="text-xs text-muted-foreground">
                   Puede seleccionar una o varias opciones.
                 </p>
-                <div class="catalog-trd-disposition-ms w-full max-w-xl">
-                  <Multiselect
-                    v-model="finalDispositionSelected"
-                    mode="tags"
-                    :object="false"
-                    :options="[...TRD_DISPOSITION_OPTIONS]"
-                    value-prop="value"
-                    label="label"
-                    :searchable="false"
-                    :close-on-select="false"
-                    placeholder="Seleccione disposición…"
-                    no-options-text="Sin opciones"
-                    class="multiselect-trd-disposition w-full"
-                  />
-                </div>
+                <ArchivalTrdFinalDispositionField
+                  id="rule-final-disposition"
+                  v-model="finalDispositionSelected"
+                />
               </div>
               <div class="space-y-2">
                 <Label>Procedimiento</Label>
@@ -1847,7 +1991,9 @@ watch(
                     <TableHead>Gestión</TableHead>
                     <TableHead>Central</TableHead>
                     <TableHead>Disposición</TableHead>
-                    <TableHead />
+                    <TableHead class="text-right w-[1%] whitespace-nowrap">
+                      Acciones
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1858,12 +2004,27 @@ watch(
                     <TableCell>{{ rule.years_management }} a</TableCell>
                     <TableCell>{{ rule.years_central }} a</TableCell>
                     <TableCell>{{ dispositionLabel(rule.final_disposition) }}</TableCell>
-                    <TableCell>
-                      <div v-if="canEdit" class="flex gap-1">
-                        <Button variant="ghost" size="sm" @click="openEditRule(rule)">
+                    <TableCell class="text-right">
+                      <div v-if="canEdit" class="flex flex-nowrap items-center justify-end gap-1">
+                        <Button
+                          type="button"
+                          variant="warning"
+                          size="sm"
+                          :class="catalogRowActionClass"
+                          @click="openEditRule(rule)"
+                        >
+                          <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
                           Editar
                         </Button>
-                        <Button variant="ghost" size="sm" @click="removeRule(rule.id)">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          :class="catalogRowActionClass"
+                          :disabled="saving"
+                          @click="removeRule(rule.id)"
+                        >
+                          <Icon name="i-lucide-trash-2" class="size-4 shrink-0 text-destructive" />
                           Quitar
                         </Button>
                       </div>
@@ -2027,18 +2188,3 @@ watch(
     </div>
   </SettingsLayout>
 </template>
-
-<style src="@vueform/multiselect/themes/default.css"></style>
-<style scoped>
-.catalog-trd-disposition-ms :deep(.multiselect-trd-disposition) {
-  --ms-font-size: 0.875rem;
-  --ms-line-height: 1.375rem;
-  --ms-radius: 0.375rem;
-  --ms-border-color: hsl(var(--input));
-  --ms-bg: hsl(var(--background));
-  --ms-py: 0.5rem;
-  --ms-px: 0.75rem;
-  min-height: 3rem;
-  width: 100%;
-}
-</style>

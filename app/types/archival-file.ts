@@ -12,6 +12,21 @@ export type ArchivalFileStatus =
 
 export type ArchivalFileModel = 'entity_case' | 'org_area'
 
+export interface ArchivalFileTypeProducerArea {
+  id?: number
+  org_unit_id: number
+  trd_table_id?: number | null
+  doc_series_id?: number | null
+  doc_subseries_id?: number | null
+  sort_order?: number
+  org_unit?: { id: number, name: string, code?: string } | null
+  doc_series?: { id: number, code: string, name: string } | null
+  doc_subseries?: { id: number, code: string, name: string, doc_series_id?: number } | null
+  doc_document_type_id?: number | null
+  doc_document_type?: { id: number, code: string, name: string, doc_subseries_id?: number } | null
+  trd_table?: { id: number, org_unit_id?: number, org_unit?: { id: number, name: string, code?: string } } | null
+}
+
 export interface ArchivalFileType {
   id: number
   type_key: string
@@ -21,7 +36,6 @@ export interface ArchivalFileType {
   doc_series_id?: number | null
   doc_subseries_id?: number | null
   doc_document_type_id?: number | null
-  org_unit_id?: number | null
   trd_table_id?: number | null
   archival_metadata_schema_id?: number | null
   allows_master_documents: boolean
@@ -29,7 +43,7 @@ export interface ArchivalFileType {
   is_active: boolean
   sort_order: number
   required_documents?: ArchivalFileTypeRequiredDocument[]
-  org_unit?: { id: number, name: string, code?: string } | null
+  producer_areas?: ArchivalFileTypeProducerArea[]
   doc_series?: { id: number, code: string, name: string } | null
   doc_subseries?: { id: number, code: string, name: string, doc_series_id?: number } | null
   doc_document_type?: { id: number, code: string, name: string, doc_subseries_id?: number } | null
@@ -54,11 +68,13 @@ export interface ArchivalFileType {
 
 export interface ArchivalFileTypeRequiredDocument {
   id?: number
+  org_unit_id?: number | null
   doc_document_type_id: number
   label?: string | null
   workflow_stage_key?: string | null
   is_required: boolean
   sort_order: number
+  org_unit?: { id: number, name: string, code?: string } | null
   doc_document_type?: {
     id: number
     code: string

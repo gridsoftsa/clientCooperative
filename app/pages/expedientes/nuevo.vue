@@ -55,11 +55,31 @@ const typeSelectOptions = computed(() =>
   })),
 )
 
-const orgUnitSelectOptions = computed(() =>
-  orgUnits.value.map(unit => ({
+const configuredProducerAreas = computed(() => {
+  const areas = selectedTypeDetail.value?.producer_areas
+    ?? selectedType.value?.producer_areas
+    ?? []
+
+  return areas.filter(area => area.org_unit_id)
+})
+
+const orgUnitSelectOptions = computed(() => {
+  if (configuredProducerAreas.value.length > 0) {
+    return configuredProducerAreas.value.map(area => ({
+      value: area.org_unit_id,
+      label: area.org_unit?.name ?? `Área #${area.org_unit_id}`,
+    }))
+  }
+
+  return orgUnits.value.map(unit => ({
     value: unit.id,
     label: unit.name,
-  })),
+  }))
+})
+
+const orgUnitSelectDisabled = computed(() =>
+  !form.archival_file_type_id
+  || loadingTypeSchema.value,
 )
 
 async function loadTypeMetadataSchema(typeId: number | null) {
@@ -84,13 +104,23 @@ async function loadTypeMetadataSchema(typeId: number | null) {
 }
 
 watch(() => form.archival_file_type_id, (typeId) => {
-  const type = types.value.find(item => item.id === typeId)
+  form.org_unit_id = null
+  void loadTypeMetadataSchema(typeId)
+})
 
-  if (type?.org_unit_id) {
-    form.org_unit_id = type.org_unit_id
+watch(configuredProducerAreas, (areas) => {
+  if (!form.archival_file_type_id) {
+    return
   }
 
-  void loadTypeMetadataSchema(typeId)
+  if (areas.length === 0) {
+    return
+  }
+
+  const allowedIds = new Set(areas.map(area => area.org_unit_id))
+  if (form.org_unit_id == null || !allowedIds.has(form.org_unit_id)) {
+    form.org_unit_id = areas[0]?.org_unit_id ?? null
+  }
 })
 
 async function loadMeta() {
@@ -126,6 +156,14 @@ async function submit() {
 
   if (!form.org_unit_id) {
     toast.error('Seleccione el área responsable.')
+    await nextTick()
+    focusArchivalFieldById('archival_new_org_unit')
+    return
+  }
+
+  const allowedOrgUnitIds = new Set(configuredProducerAreas.value.map(area => area.org_unit_id))
+  if (configuredProducerAreas.value.length > 0 && !allowedOrgUnitIds.has(form.org_unit_id)) {
+    toast.error('El área seleccionada no corresponde a este tipo de expediente.')
     await nextTick()
     focusArchivalFieldById('archival_new_org_unit')
     return
@@ -217,21 +255,22 @@ onMounted(() => loadMeta())
               id="archival_new_org_unit"
               v-model="form.org_unit_id"
               :options="orgUnitSelectOptions"
+              :disabled="orgUnitSelectDisabled"
               placeholder="Seleccione área"
-              no-options-text="Sin áreas disponibles"
+              no-options-text="Sin áreas disponibles para este tipo"
               coerce-number
               :class="archivalMultiselectWarningClass(submitAttempted && !form.org_unit_id)"
             />
-            <p v-if="selectedType?.org_unit" class="text-xs text-muted-foreground">
-              Se sugiere según el tipo «{{ selectedType.name }}»: {{ selectedType.org_unit.name }}.
-              Puede cambiarla si el expediente corresponde a otra área.
+            <p v-if="configuredProducerAreas.length > 0" class="text-xs text-muted-foreground">
+              Solo se listan las áreas productoras configuradas para «{{ selectedType?.name }}».
+              Elija la que custodiará este expediente.
             </p>
-            <p v-else-if="selectedType && !selectedType.org_unit_id" class="text-xs text-amber-600 dark:text-amber-500">
+            <p v-else-if="selectedType && !loadingTypeSchema" class="text-xs text-amber-600 dark:text-amber-500">
               El tipo «{{ selectedType.name }}» no tiene área productora configurada.
-              Selecciónela manualmente o configúrela en Tipos de expediente.
+              Seleccione el área manualmente o configúrela en Tipos de expediente.
             </p>
             <p v-else class="text-xs text-muted-foreground">
-              Área que custodia el expediente. Al elegir el tipo se completará sola si el tipo tiene área productora.
+              Seleccione primero el tipo de expediente para ver las áreas disponibles.
             </p>
           </div>
 

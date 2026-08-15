@@ -283,7 +283,10 @@ onMounted(() => {
               </div>
 
               <div class="space-y-3">
-                <Label for="mgr_e" class="leading-snug">Jefe del área (opcional)</Label>
+                <Label for="mgr_e" class="leading-snug">Jefe del área — funcionario (opcional)</Label>
+                <p class="text-xs text-muted-foreground leading-relaxed">
+                  Persona que encabeza el área. Se asigna automáticamente si hay un funcionario vigente en el cargo marcado «a cargo del área»; también puede elegirlo manualmente.
+                </p>
                 <OrgUnitManagerStaffMultiselect
                   ref="managerStaffSelectRef"
                   v-model="form.manager_staff_id"
