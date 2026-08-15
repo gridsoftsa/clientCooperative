@@ -8,6 +8,8 @@ import 'vue-sonner/style.css'
 const colorMode = useColorMode()
 const color = computed(() => colorMode.value === 'dark' ? '#09090b' : '#ffffff')
 const { theme } = useAppSettings()
+const { displayName } = useCompanyBranding()
+const appTitle = computed(() => displayName.value)
 
 useHead({
   meta: [
@@ -24,19 +26,19 @@ useHead({
   bodyAttrs: {
     class: computed(() => `color-${theme.value?.color || DEFAULT_THEME_COLOR} theme-${theme.value?.type || 'default'}`),
   },
+  title: appTitle,
 })
 
-const title = 'Coopersvivélez'
-const description = 'Cooperativa de ahorro y crédito'
+const description = computed(() => `Portal de gestión de ${displayName.value}`)
 
 useSeoMeta({
-  title,
+  title: appTitle,
   description,
-  ogTitle: title,
+  ogTitle: appTitle,
   ogDescription: description,
   ogUrl: 'https://dashboard.dianprata.com',
   ogImage: 'https://nuxt-shadcn-dashboard.vercel.app/social-card.png',
-  twitterTitle: title,
+  twitterTitle: appTitle,
   twitterDescription: description,
   twitterImage: 'https://nuxt-shadcn-dashboard.vercel.app/social-card.png',
   twitterCard: 'summary_large_image',

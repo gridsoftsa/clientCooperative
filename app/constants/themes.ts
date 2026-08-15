@@ -8,6 +8,10 @@ export const THEME_COLORS = [
     value: '#125ead',
   },
   {
+    name: 'personalizado',
+    value: '#125ead',
+  },
+  {
     name: 'blue',
     value: 'oklch(0.623 0.214 259.815)',
   },

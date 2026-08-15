@@ -13,7 +13,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'assign': 'Asignar',
   'audits': 'Auditoría',
   'audit': 'Auditoría',
-  'company': 'Empresa',
+  'company': 'Empresa e identidad visual',
   'components': 'Componentes',
   'create': 'Crear',
   'credits': 'Créditos',

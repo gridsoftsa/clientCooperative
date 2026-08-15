@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import type { ThemeColor, ThemeType } from '@/constants/themes'
 import { DEFAULT_THEME_COLOR, THEME_COLORS, THEME_TYPE } from '@/constants/themes'
+import { COMPANY_CUSTOM_THEME_COLOR, useCompanyBranding } from '~/composables/useCompanyBranding'
+import { resolveBrandingColors } from '~/utils/company-branding'
 
 const { theme, updateAppSettings } = useAppSettings()
+const { branding, syncInstitutionalColorsFromTheme } = useCompanyBranding()
 
 const allColors: ThemeColor[] = THEME_COLORS.map(color => color.name)
 const allTypes: ThemeType[] = THEME_TYPE
@@ -30,6 +33,10 @@ function setClassType() {
 }
 
 function backgroundColor(color: ThemeColor) {
+  if (color === COMPANY_CUSTOM_THEME_COLOR) {
+    return resolveBrandingColors(branding.value).primary
+  }
+
   const bg = THEME_COLORS.find(theme => theme.name === color)
   return bg?.value
 }
@@ -39,6 +46,7 @@ const colorMode = useColorMode()
 const themeColorLabelEs: Record<string, string> = {
   default: 'Por defecto',
   cooperative: 'Empresarial',
+  personalizado: 'Personalizado',
   blue: 'Azul',
   green: 'Verde',
   red: 'Rojo',
@@ -63,6 +71,7 @@ function colorLabel(name: string): string {
 const themeColorLabelFull: Record<string, string> = {
   default: 'Predeterminado (gris)',
   cooperative: 'Empresarial (identidad cooperativa)',
+  personalizado: 'Personalizado (colores de la empresa)',
   blue: 'Azul',
   green: 'Verde',
   red: 'Rojo',
@@ -80,6 +89,12 @@ function colorLabelFull(name: string): string {
 function typeLabel(name: string): string {
   return themeTypeLabelEs[name] ?? name
 }
+
+function selectThemeColor(color: ThemeColor): void {
+  updateAppSettings({ theme: { color } })
+  syncInstitutionalColorsFromTheme(color)
+  setClassColor()
+}
 </script>
 
 <template>
@@ -93,7 +108,7 @@ function typeLabel(name: string): string {
             variant="outline"
             :class="{ '!border-primary border-2 !bg-primary/10': theme?.color === col }"
             :title="colorLabelFull(col)"
-            @click="updateAppSettings({ theme: { color: col } })"
+            @click="selectThemeColor(col)"
           >
             <span class="mx-auto flex h-6 w-6 shrink-0 items-center justify-center self-center rounded-full border border-white shadow-sm" :style="{ backgroundColor: backgroundColor(col) }">
               <Icon v-if="col === theme?.color" name="i-radix-icons-check" size="14" class="text-white drop-shadow" />

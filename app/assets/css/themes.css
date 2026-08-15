@@ -208,6 +208,44 @@ html.dark body.color-cooperative [data-slot="button"][data-variant="outline"]:ho
   background-color: color-mix(in srgb, #fbac18 22%, var(--background));
 }
 
+/* Colores institucionales configurados en /settings/company */
+body.company-branding-active [data-slot="button"][data-variant="outline"],
+body.color-personalizado [data-slot="button"][data-variant="outline"] {
+  border-color: var(--secondary);
+}
+
+body.company-branding-active [data-slot="button"][data-variant="outline"]:hover,
+body.color-personalizado [data-slot="button"][data-variant="outline"]:hover {
+  background-color: color-mix(in srgb, var(--secondary) 20%, var(--background));
+}
+
+html.dark body.company-branding-active [data-slot="button"][data-variant="outline"]:hover,
+html.dark body.color-personalizado [data-slot="button"][data-variant="outline"]:hover {
+  background-color: color-mix(in srgb, var(--secondary) 22%, var(--background));
+}
+
+body.company-branding-active .app-header [data-slot="breadcrumb-list"],
+body.color-personalizado .app-header [data-slot="breadcrumb-list"] {
+  color: color-mix(in srgb, var(--header-foreground) 78%, var(--header));
+}
+
+body.company-branding-active .app-header [data-slot="breadcrumb-page"],
+body.color-personalizado .app-header [data-slot="breadcrumb-page"] {
+  color: var(--header-foreground);
+}
+
+body.company-branding-active .app-header [data-slot="breadcrumb-link"],
+body.company-branding-active .app-header [data-slot="breadcrumb-link"] a,
+body.color-personalizado .app-header [data-slot="breadcrumb-link"],
+body.color-personalizado .app-header [data-slot="breadcrumb-link"] a {
+  color: color-mix(in srgb, var(--header-foreground) 90%, var(--header));
+}
+
+body.company-branding-active .app-header [data-slot="sidebar-trigger"],
+body.color-personalizado .app-header [data-slot="sidebar-trigger"] {
+  color: var(--header-foreground);
+}
+
 /* Cabecera con ruta: contraste sobre azul #125EAD (solo Cooperative) */
 body.color-cooperative .app-header [data-slot="breadcrumb-list"] {
   color: color-mix(in srgb, var(--header-foreground) 78%, var(--header));

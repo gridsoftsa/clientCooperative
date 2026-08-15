@@ -8,6 +8,13 @@ const props = defineProps<{
 }>()
 
 const activeTeam = computed(() => props.teams[0]!)
+
+function isImageLogo(logo: string): boolean {
+  return logo.startsWith('/')
+    || logo.startsWith('http://')
+    || logo.startsWith('https://')
+    || logo.startsWith('data:')
+}
 </script>
 
 <template>
@@ -16,7 +23,7 @@ const activeTeam = computed(() => props.teams[0]!)
       <SidebarMenuButton size="lg" class="cursor-default">
         <div class="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-transparent p-0.5">
           <img
-            v-if="activeTeam.logo.startsWith('/')"
+            v-if="isImageLogo(activeTeam.logo)"
             :src="activeTeam.logo"
             :alt="activeTeam.name"
             class="h-full w-full object-contain"
@@ -31,7 +38,3 @@ const activeTeam = computed(() => props.teams[0]!)
     </SidebarMenuItem>
   </SidebarMenu>
 </template>
-
-<style scoped>
-
-</style>

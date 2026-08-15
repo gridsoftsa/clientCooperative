@@ -400,7 +400,7 @@ export const navMenu: NavMenu[] = [
             permission: 'apariencia_ver',
           },
           {
-            title: 'Empresa principal',
+            title: 'Empresa e identidad visual',
             icon: 'i-lucide-building',
             link: '/settings/company',
             permission: 'empresa_ver',

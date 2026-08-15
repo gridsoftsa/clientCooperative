@@ -9,17 +9,15 @@ function resolveNavItemComponent(item: NavLink | NavGroup | NavSectionTitle): an
   return resolveComponent('LayoutSidebarNavLink')
 }
 
-const teams: {
-  name: string
-  logo: string
-  plan: string
-}[] = [
+const { displayName, resolvedLogoUrl } = useCompanyBranding()
+
+const teams = computed(() => [
   {
-    name: 'Coopservivelez',
-    logo: '/Logo-coop-1.ico',
+    name: displayName.value,
+    logo: resolvedLogoUrl.value ?? '/Logo-coop-1.ico',
     plan: 'Empresarial',
   },
-]
+])
 
 const { sidebar } = useAppSettings()
 const { user: authUser } = useAuth()

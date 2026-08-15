@@ -2,6 +2,8 @@
 defineProps<{
   reverse?: boolean
 }>()
+
+const { displayName } = useCompanyBranding()
 </script>
 
 <template>
@@ -32,7 +34,7 @@ defineProps<{
             Cooperativa de ahorro y crédito
           </p>
           <p class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-            CoopserviVélez
+            {{ displayName }}
           </p>
         </div>
 
