@@ -22,12 +22,16 @@ export interface InstitutionalLibraryDocument {
   title: string
   version_number: number
   mime_type?: string | null
+  is_institutional_published?: boolean
   institutional_category?: InstitutionalLibraryCategoryValue | null
   institutional_category_label?: string | null
   institutional_category_icon?: string | null
   effective_from?: string | null
   effective_to?: string | null
   is_effective?: boolean
+  is_featured?: boolean
+  featured_until?: string | null
+  is_currently_featured?: boolean
   published_at?: string | null
   org_unit?: { id: number, name: string } | null
   doc_document_type?: { id: number, code: string, name: string } | null
@@ -78,6 +82,7 @@ export interface InstitutionalLibraryOrgUnitCount {
 
 export interface InstitutionalLibraryHome {
   featured: InstitutionalLibraryDocument | null
+  featured_documents: InstitutionalLibraryDocument[]
   categories: InstitutionalLibraryCategory[]
   sections: InstitutionalLibrarySection[]
   recent: InstitutionalLibraryDocument[]
@@ -90,4 +95,6 @@ export interface PublishInstitutionalLibraryPayload {
   institutional_category?: InstitutionalLibraryCategoryValue
   effective_from?: string
   effective_to?: string | null
+  is_featured?: boolean
+  featured_until?: string | null
 }

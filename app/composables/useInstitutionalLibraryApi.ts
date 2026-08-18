@@ -49,8 +49,8 @@ export function useInstitutionalLibraryApi() {
   }
 
   async function fetchFeatured() {
-    const res = await api<{ data: InstitutionalLibraryDocument | null }>('/institutional-library/featured')
-    return res.data
+    const res = await api<{ data: InstitutionalLibraryDocument[] }>('/institutional-library/featured')
+    return res.data ?? []
   }
 
   async function fetchRecent() {

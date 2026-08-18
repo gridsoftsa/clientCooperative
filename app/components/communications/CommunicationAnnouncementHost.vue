@@ -101,7 +101,7 @@ onMounted(() => {
         </p>
       </div>
 
-      <DialogFooter class="gap-2 sm:gap-0">
+      <DialogFooter class="gap-3 sm:justify-end">
         <Button variant="outline" @click="open = false">
           Cerrar
         </Button>

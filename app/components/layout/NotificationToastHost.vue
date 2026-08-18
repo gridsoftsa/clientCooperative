@@ -82,7 +82,7 @@ function formatDate(value?: string | null) {
               {{ formatDate(toast.createdAt) }}
             </p>
 
-            <div class="mt-3 flex items-center gap-2">
+            <div class="mt-3 flex flex-wrap items-center gap-3">
               <Button size="sm" class="h-8" @click="openToast(toast)">
                 Ver detalle
               </Button>

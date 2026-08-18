@@ -41,7 +41,15 @@ const archivalApi = useArchivalFileApi()
 
 const categories = computed(() => props.home?.categories ?? [])
 const sections = computed(() => props.home?.sections ?? [])
-const featured = computed(() => props.home?.featured ?? null)
+const featuredDocuments = computed(() => {
+  const list = props.home?.featured_documents ?? []
+  if (list.length > 0) {
+    return list
+  }
+
+  const single = props.home?.featured
+  return single ? [single] : []
+})
 const recent = computed(() => props.home?.recent ?? [])
 const mostViewed = computed(() => props.home?.most_viewed ?? [])
 const orgUnitsWithCounts = computed(() => props.home?.org_units ?? [])
@@ -215,38 +223,11 @@ function applySearch() {
       </div>
 
       <template v-else>
-        <section
-          v-if="featured"
-          class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-primary/90 to-sky-700 px-6 py-8 text-primary-foreground shadow-lg sm:px-8 sm:py-10"
-        >
-          <div class="relative z-10 max-w-2xl space-y-4">
-            <Badge class="bg-white/20 text-white hover:bg-white/20">
-              Destacado
-            </Badge>
-            <div class="space-y-2">
-              <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">
-                {{ featured.title }}
-              </h2>
-              <p class="text-sm text-primary-foreground/85">
-                Versión {{ featured.version_number }}
-                <span v-if="featured.effective_from"> · Vigente desde {{ formatDate(featured.effective_from) }}</span>
-              </p>
-              <p v-if="featured.org_unit" class="text-sm text-primary-foreground/75">
-                {{ featured.org_unit.name }}
-              </p>
-            </div>
-            <Button
-              variant="secondary"
-              class="bg-white text-primary hover:bg-white/90"
-              @click="emit('view-document', featured)"
-            >
-              Ver documento
-            </Button>
-          </div>
-          <div class="pointer-events-none absolute -right-6 -bottom-8 opacity-30 sm:right-4 sm:bottom-0 sm:opacity-40">
-            <Icon name="i-lucide-shield-check" class="size-40 sm:size-52" />
-          </div>
-        </section>
+        <ArchivalInstitutionalLibraryFeaturedShowcase
+          v-if="featuredDocuments.length"
+          :documents="featuredDocuments"
+          @view-document="emit('view-document', $event)"
+        />
 
         <section class="space-y-4">
           <h2 class="text-sm font-semibold uppercase tracking-wide text-muted-foreground">

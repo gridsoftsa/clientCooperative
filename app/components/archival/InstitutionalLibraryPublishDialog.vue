@@ -24,6 +24,8 @@ const form = ref({
   institutional_category: '' as InstitutionalLibraryCategoryValue | '',
   effective_from: new Date().toISOString().slice(0, 10),
   effective_to: '' as string,
+  is_featured: false,
+  featured_until: '' as string,
 })
 
 watch(() => props.open, async (isOpen) => {
@@ -41,6 +43,8 @@ watch(() => props.open, async (isOpen) => {
   form.value.institutional_category = props.defaultCategory ?? categories.value[0]?.value ?? ''
   form.value.effective_from = new Date().toISOString().slice(0, 10)
   form.value.effective_to = ''
+  form.value.is_featured = false
+  form.value.featured_until = ''
 }, { immediate: true })
 
 async function submit() {
@@ -54,6 +58,11 @@ async function submit() {
     return
   }
 
+  if (form.value.is_featured && !form.value.featured_until.trim()) {
+    toast.error('Indique hasta qué fecha debe mostrarse como destacado.')
+    return
+  }
+
   loading.value = true
   try {
     await libraryApi.publishDocument(props.documentId, {
@@ -61,6 +70,8 @@ async function submit() {
       institutional_category: form.value.institutional_category,
       effective_from: form.value.effective_from,
       effective_to: form.value.effective_to || null,
+      is_featured: form.value.is_featured,
+      featured_until: form.value.is_featured ? form.value.featured_until : null,
     })
     toast.success('Documento publicado en la biblioteca institucional.')
     emit('update:open', false)
@@ -124,6 +135,33 @@ async function submit() {
           <div class="space-y-2">
             <Label>Vigente hasta (opcional)</Label>
             <Input v-model="form.effective_to" type="date" />
+          </div>
+        </div>
+
+        <div class="rounded-lg border bg-muted/20 p-4 space-y-3">
+          <div class="flex items-start gap-3">
+            <Checkbox
+              id="library-featured"
+              v-model="form.is_featured"
+              bare
+            />
+            <div class="space-y-1">
+              <Label for="library-featured" class="cursor-pointer">
+                Destacar en biblioteca
+              </Label>
+              <p class="text-xs text-muted-foreground leading-relaxed">
+                El documento aparecerá en el banner principal de la biblioteca institucional.
+              </p>
+            </div>
+          </div>
+          <div v-if="form.is_featured" class="space-y-2 sm:max-w-xs">
+            <Label for="library-featured-until">Destacado hasta *</Label>
+            <Input
+              id="library-featured-until"
+              v-model="form.featured_until"
+              type="date"
+              :min="form.effective_from"
+            />
           </div>
         </div>
       </div>
