@@ -27,6 +27,11 @@ const isMyOpenTask = computed(() =>
 )
 const canActOnOpenTask = computed(() => canManage.value && isMyOpenTask.value)
 
+const bandejaLink = computed(() => ({
+  path: '/workflow/bandeja',
+  query: { ventanilla_filing_id: String(props.filingId) },
+}))
+
 const slaAlertMessage = computed(() => context.value?.sla_alerts?.[0]?.message ?? null)
 
 const displayStageName = computed(() => {
@@ -125,7 +130,7 @@ defineExpose({ reload: load })
       </div>
       <NuxtLink
         v-if="hasPermission('workflow_ver')"
-        to="/workflow/bandeja"
+        :to="bandejaLink"
         class="shrink-0"
       >
         <Button variant="outline" size="sm" class="gap-1.5">
@@ -197,6 +202,15 @@ defineExpose({ reload: load })
                 :status="context.open_task.traffic_light_status"
                 scope-label="SLA etapa"
               />
+              <Button
+                v-if="canActOnOpenTask && context.open_task"
+                size="sm"
+                class="gap-1.5"
+                @click="openTaskActions"
+              >
+                <Icon name="i-lucide-settings-2" class="size-4" />
+                Gestionar
+              </Button>
             </div>
           </div>
 
@@ -277,11 +291,11 @@ defineExpose({ reload: load })
                 Bandeja de tareas
               </p>
               <p class="text-xs text-muted-foreground leading-relaxed">
-                Revise pendientes, vencidas y tareas completadas del workflow.
+                Revise pendientes, vencidas y tareas completadas del workflow para este radicado.
               </p>
             </div>
           </div>
-          <NuxtLink to="/workflow/bandeja" class="shrink-0">
+          <NuxtLink :to="bandejaLink" class="shrink-0">
             <Button variant="secondary" size="sm" class="w-full gap-1.5 sm:w-auto">
               Ir a bandeja
               <Icon name="i-lucide-arrow-right" class="size-4" />
@@ -289,35 +303,16 @@ defineExpose({ reload: load })
           </NuxtLink>
         </div>
 
-        <div
-          v-if="isMyOpenTask"
-          class="flex flex-col gap-4 rounded-lg border border-primary/25 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between"
+        <Alert
+          v-if="context.open_task && canManage && !isMyOpenTask && stageSpotlightActive"
+          class="border-dashed"
         >
-          <div class="flex min-w-0 items-start gap-3">
-            <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <Icon name="i-lucide-clipboard-check" class="size-5" />
-            </div>
-            <div class="min-w-0 space-y-1">
-              <p class="text-sm font-medium leading-snug">
-                Tiene la tarea activa de este radicado
-              </p>
-              <p class="text-xs text-muted-foreground leading-relaxed">
-                Puede gestionarla aquí o revisar todas sus pendientes en la bandeja.
-              </p>
-            </div>
-          </div>
-          <div class="flex shrink-0 flex-wrap gap-2">
-            <Button
-              v-if="canActOnOpenTask && context.open_task"
-              size="sm"
-              class="gap-1.5"
-              @click="openTaskActions"
-            >
-              <Icon name="i-lucide-arrow-right" class="size-4" />
-              Gestionar tarea
-            </Button>
-          </div>
-        </div>
+          <Icon name="i-lucide-info" class="size-4" />
+          <AlertTitle>Solo lectura</AlertTitle>
+          <AlertDescription>
+            Solo el responsable asignado puede ejecutar acciones sobre esta tarea.
+          </AlertDescription>
+        </Alert>
 
         <Alert
           v-if="context.task_escalation"
@@ -353,25 +348,6 @@ defineExpose({ reload: load })
           :archival-context="context.archival_file"
           @uploaded="load(); emit('changed')"
         />
-
-        <div v-if="context.open_task && (canActOnOpenTask || (canManage && !isMyOpenTask))" class="rounded-lg border border-dashed p-3">
-          <p
-            v-if="canManage && context.open_task && !isMyOpenTask"
-            class="text-xs text-muted-foreground"
-          >
-            Solo el responsable asignado puede ejecutar acciones sobre esta tarea.
-          </p>
-          <Button
-            v-if="canActOnOpenTask && context.open_task"
-            size="sm"
-            variant="outline"
-            class="mt-2 gap-1.5"
-            @click="openTaskActions"
-          >
-            <Icon name="i-lucide-arrow-right" class="size-4" />
-            Abrir gestión de tarea
-          </Button>
-        </div>
 
         <div v-if="context.events.length" class="space-y-2">
           <p class="text-sm font-medium">

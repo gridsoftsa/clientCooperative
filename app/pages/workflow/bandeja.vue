@@ -9,6 +9,7 @@ definePageMeta({
 })
 
 const router = useRouter()
+const route = useRoute()
 const { hasPermission } = usePermissions()
 const workflowApi = useWorkflowApi()
 
@@ -20,9 +21,45 @@ const statusFilter = ref<'open' | 'overdue' | 'due_soon' | 'completed'>('open')
 const definitions = ref<Array<{ id: number, key: string, name: string }>>([])
 const ALL_DEFINITIONS = 'all'
 const definitionId = ref<string>(ALL_DEFINITIONS)
+const filterVentanillaFilingId = ref<number | null>(null)
 
 const canManage = computed(() => hasPermission('workflow_gestionar'))
 const { ensureLoaded, labelFor } = useVentanillaFunctionalTypeLabels()
+
+function parseVentanillaFilingIdFromRoute(): number | null {
+  const raw = route.query.ventanilla_filing_id
+
+  if (typeof raw === 'string' && /^\d+$/.test(raw)) {
+    return Number(raw)
+  }
+
+  return null
+}
+
+function applyVentanillaFilingFilterFromRoute(): void {
+  const filingId = parseVentanillaFilingIdFromRoute()
+  filterVentanillaFilingId.value = filingId
+
+  if (!filingId) {
+    return
+  }
+
+  if (canViewAllTasks.value) {
+    scope.value = 'all'
+  }
+  else if (canViewTeam.value) {
+    scope.value = 'area'
+  }
+}
+
+function clearVentanillaFilingFilter(): void {
+  filterVentanillaFilingId.value = null
+
+  const nextQuery = { ...route.query }
+  delete nextQuery.ventanilla_filing_id
+
+  router.replace({ query: nextQuery })
+}
 
 async function loadDefinitions() {
   try {
@@ -48,6 +85,10 @@ async function loadTasks(page = 1) {
       query.workflow_definition_id = Number(definitionId.value)
     }
 
+    if (filterVentanillaFilingId.value) {
+      query.ventanilla_filing_id = filterVentanillaFilingId.value
+    }
+
     const result = await workflowApi.fetchTasks(query)
     tasks.value = result.data
     meta.value = result.meta
@@ -61,9 +102,15 @@ async function loadTasks(page = 1) {
 }
 
 function openManage(task: WorkflowTaskCard) {
+  const query: Record<string, string> = { from: 'bandeja' }
+
+  if (filterVentanillaFilingId.value) {
+    query.ventanilla_filing_id = String(filterVentanillaFilingId.value)
+  }
+
   router.push({
     path: `/workflow/tareas/${task.id}`,
-    query: { from: 'bandeja' },
+    query,
   })
 }
 
@@ -92,7 +139,13 @@ function trafficClass(status: WorkflowTaskCard['traffic_light_status']) {
 
 watch([scope, statusFilter, definitionId], () => loadTasks(1))
 
+watch(() => route.query.ventanilla_filing_id, () => {
+  applyVentanillaFilingFilterFromRoute()
+  loadTasks(1)
+})
+
 onMounted(async () => {
+  applyVentanillaFilingFilterFromRoute()
   await Promise.all([ensureLoaded(), loadDefinitions()])
   await loadTasks()
 })
@@ -107,9 +160,28 @@ onMounted(async () => {
         </h1>
         <p class="text-sm text-muted-foreground">
           Vista en lista — {{ meta.total }} tarea(s)
+          <span v-if="filterVentanillaFilingId">
+            · filtrado por radicado #{{ filterVentanillaFilingId }}
+          </span>
         </p>
       </div>
       <div class="flex gap-2">
+        <Button
+          v-if="filterVentanillaFilingId"
+          variant="outline"
+          size="sm"
+          @click="clearVentanillaFilingFilter"
+        >
+          Quitar filtro de radicado
+        </Button>
+        <NuxtLink
+          v-if="filterVentanillaFilingId"
+          :to="`/ventanilla/${filterVentanillaFilingId}`"
+        >
+          <Button variant="outline" size="sm">
+            Ver radicado
+          </Button>
+        </NuxtLink>
         <NuxtLink to="/workflow">
           <Button variant="outline" size="sm">
             Tablero

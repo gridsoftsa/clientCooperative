@@ -459,7 +459,7 @@ async function viewSticker() {
         <div class="ml-auto flex flex-wrap gap-2">
           <NuxtLink
             v-if="hasPermission('workflow_ver') && filing.workflow?.is_active"
-            to="/workflow/bandeja"
+            :to="{ path: '/workflow/bandeja', query: { ventanilla_filing_id: String(id) } }"
           >
             <Button variant="outline" size="sm">
               <Icon name="i-lucide-inbox" class="mr-1 size-4" />

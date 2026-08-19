@@ -34,6 +34,12 @@ const backUrl = computed(() => {
     }
 
     if (from === 'bandeja') {
+      const filingId = route.query.ventanilla_filing_id
+
+      if (typeof filingId === 'string' && filingId !== '') {
+        return `/workflow/bandeja?ventanilla_filing_id=${filingId}`
+      }
+
       return '/workflow/bandeja'
     }
   }
