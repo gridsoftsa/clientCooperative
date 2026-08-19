@@ -47,6 +47,8 @@ const assignmentNote = ref('')
 const responseText = ref('')
 const closeReason = ref('')
 const voidReason = ref('')
+const voidDialogOpen = ref(false)
+const voidAttempted = ref(false)
 const workflowAttachment = ref<DocumentAttachmentRow>(createDocumentAttachmentRow())
 const workflowAttachmentAttempted = ref(false)
 const workflowAttachmentLoading = ref(false)
@@ -337,6 +339,8 @@ async function closeFiling() {
 }
 
 async function voidCurrentFiling() {
+  voidAttempted.value = true
+
   if (!voidReason.value.trim()) {
     errorMessage.value = 'Ingrese el motivo de anulación'
     return
@@ -344,6 +348,14 @@ async function voidCurrentFiling() {
 
   await runAction('void', () => ventanillaApi.voidFiling(id.value, voidReason.value.trim()))
   voidReason.value = ''
+  voidAttempted.value = false
+  voidDialogOpen.value = false
+}
+
+function openVoidDialog() {
+  voidReason.value = ''
+  voidAttempted.value = false
+  voidDialogOpen.value = true
 }
 
 async function refreshSla() {
@@ -810,15 +822,67 @@ async function viewSticker() {
                   </div>
                 </div>
 
-                <div v-if="canVoid" class="space-y-2 rounded-lg border border-destructive/30 p-3">
-                  <Label>Motivo de anulación</Label>
-                  <Textarea v-model="voidReason" rows="3" placeholder="Obligatorio para anular" />
-                  <Button variant="destructive" :disabled="actionLoading === 'void'" @click="voidCurrentFiling">
-                    {{ actionLoading === 'void' ? 'Anulando…' : 'Anular radicado' }}
+                <div v-if="canVoid" class="border-t pt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    class="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    :disabled="actionLoading === 'void'"
+                    @click="openVoidDialog"
+                  >
+                    Anular
                   </Button>
                 </div>
               </CardContent>
             </Card>
+
+            <Dialog v-model:open="voidDialogOpen">
+              <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Anular radicado</DialogTitle>
+                  <DialogDescription>
+                    El radicado quedará anulado y no podrá gestionarse. Indique el motivo para conservar trazabilidad.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div class="space-y-2">
+                  <Label for="ventanilla_void_reason">Motivo de anulación *</Label>
+                  <Textarea
+                    id="ventanilla_void_reason"
+                    v-model="voidReason"
+                    rows="4"
+                    placeholder="Describa el motivo de la anulación"
+                    :disabled="actionLoading === 'void'"
+                    :class="voidAttempted && !voidReason.trim() ? 'border-destructive' : ''"
+                  />
+                  <p
+                    v-if="voidAttempted && !voidReason.trim()"
+                    class="text-destructive text-xs"
+                  >
+                    El motivo es obligatorio.
+                  </p>
+                </div>
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    :disabled="actionLoading === 'void'"
+                    @click="voidDialogOpen = false"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    :disabled="actionLoading === 'void'"
+                    @click="voidCurrentFiling"
+                  >
+                    {{ actionLoading === 'void' ? 'Anulando…' : 'Anular' }}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
 
           <div v-show="activeSection === 'workflow'">

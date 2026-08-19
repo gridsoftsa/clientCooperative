@@ -557,7 +557,7 @@ async function discardIntake(): Promise<void> {
             />
           </div>
 
-          <DialogFooter class="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"
