@@ -14,6 +14,11 @@ import {
 } from '~/utils/applicant-dates'
 import { documentNumberLengthHint, validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 import {
+  PASTED_PLAIN_TEXT_MAX_LENGTH,
+  clampPastedPlainText,
+  pastedPlainTextFromClipboardEvent,
+} from '~/utils/sanitize-pasted-plain-text'
+import {
   RADICACION_JOB_POSITION_OPTIONS_FALLBACK,
   RADICACION_OCCUPATION_OPTIONS_FALLBACK,
 } from '~/constants/radicacion-form-catalog-fallbacks'
@@ -168,6 +173,44 @@ const financial = computed({
 
 function setFinancial<K extends keyof FinancialInfoForm>(key: K, value: FinancialInfoForm[K]) {
   financial.value = { ...financial.value, [key]: value }
+}
+
+function setIncomeDescription(value: string) {
+  setFinancial('income', { ...(financial.value.income || {}), description: value })
+}
+
+function setExpensesDescription(value: string) {
+  setFinancial('expenses', { ...(financial.value.expenses || {}), description: value })
+}
+
+function onPasteIncomeDescription(e: ClipboardEvent) {
+  if (personalReadOnly.value) {
+    return
+  }
+  e.preventDefault()
+  setIncomeDescription(pastedPlainTextFromClipboardEvent(e, financial.value.income?.description ?? ''))
+}
+
+function onBlurIncomeDescription() {
+  if (personalReadOnly.value) {
+    return
+  }
+  setIncomeDescription(clampPastedPlainText(financial.value.income?.description ?? ''))
+}
+
+function onPasteExpensesDescription(e: ClipboardEvent) {
+  if (personalReadOnly.value) {
+    return
+  }
+  e.preventDefault()
+  setExpensesDescription(pastedPlainTextFromClipboardEvent(e, financial.value.expenses?.description ?? ''))
+}
+
+function onBlurExpensesDescription() {
+  if (personalReadOnly.value) {
+    return
+  }
+  setExpensesDescription(clampPastedPlainText(financial.value.expenses?.description ?? ''))
 }
 
 /** Misma clave `value` que en parametrización (`actividad-economica` / checklist auxiliar). */
@@ -1431,8 +1474,16 @@ function formatFileSize(bytes: number): string {
             class="mt-1 flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             placeholder="Detalle de ingresos (negocio, cultivos, etc.)"
             rows="2"
-            @input="setFinancial('income', { ...(financial.income || {}), description: ($event.target as HTMLTextAreaElement).value })"
+            :readonly="personalReadOnly"
+            :maxlength="PASTED_PLAIN_TEXT_MAX_LENGTH"
+            @paste="onPasteIncomeDescription"
+            @blur="onBlurIncomeDescription"
+            @input="setIncomeDescription(($event.target as HTMLTextAreaElement).value)"
           />
+          <p class="mt-1 text-[11px] text-muted-foreground">
+            Al pegar desde Word se limpian espacios extra y caracteres especiales.
+            {{ (financial.income?.description ?? '').length }}/{{ PASTED_PLAIN_TEXT_MAX_LENGTH }}
+          </p>
         </div>
           </div>
         </div>
@@ -1568,8 +1619,16 @@ function formatFileSize(bytes: number): string {
             class="mt-1 flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             placeholder="Detalle de gastos del hogar"
             rows="2"
-            @input="setFinancial('expenses', { ...(financial.expenses || {}), description: ($event.target as HTMLTextAreaElement).value })"
+            :readonly="personalReadOnly"
+            :maxlength="PASTED_PLAIN_TEXT_MAX_LENGTH"
+            @paste="onPasteExpensesDescription"
+            @blur="onBlurExpensesDescription"
+            @input="setExpensesDescription(($event.target as HTMLTextAreaElement).value)"
           />
+          <p class="mt-1 text-[11px] text-muted-foreground">
+            Al pegar desde Word se limpian espacios extra y caracteres especiales.
+            {{ (financial.expenses?.description ?? '').length }}/{{ PASTED_PLAIN_TEXT_MAX_LENGTH }}
+          </p>
         </div>
           </div>
         </div>

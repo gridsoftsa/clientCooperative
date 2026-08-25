@@ -39,6 +39,12 @@ import {
 import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
 import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
 import {
+  PASTED_PLAIN_TEXT_MAX_LENGTH,
+  clampPastedPlainText,
+  pastedPlainTextFromClipboardEvent,
+  sanitizeApplicantPlainTextFields,
+} from '~/utils/sanitize-pasted-plain-text'
+import {
   isDebtorWithoutActivityTemplate,
   setDebtorWithoutActivityTemplateFlag,
 } from '~/utils/radicacion-debtor-activity-template'
@@ -1009,11 +1015,27 @@ function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
   const privileged = form.value.is_privileged === true
   return {
     ...rest,
-    debtor: debtorWithoutDocs,
-    co_debtors: coDebtorsWithoutDocs,
+    destination_description: clampPastedPlainText(form.value.destination_description ?? ''),
+    debtor: sanitizeApplicantPlainTextFields(debtorWithoutDocs),
+    co_debtors: coDebtorsWithoutDocs.map(co => sanitizeApplicantPlainTextFields(co)),
     status,
     privileged_justification: privileged ? String(form.value.privileged_justification ?? '').trim() : null,
   }
+}
+
+function onPasteDestinationDescription(e: ClipboardEvent) {
+  if (documentsOnlyEditMode.value) {
+    return
+  }
+  e.preventDefault()
+  form.value.destination_description = pastedPlainTextFromClipboardEvent(
+    e,
+    form.value.destination_description ?? '',
+  )
+}
+
+function onBlurDestinationDescription() {
+  form.value.destination_description = clampPastedPlainText(form.value.destination_description ?? '')
 }
 
 /** Para «Guardar borrador»: defaults de monto, plazo y sucursal si el formulario aún no los tiene. */
@@ -2298,7 +2320,14 @@ onMounted(() => {
                   placeholder="Describa en detalle el uso que se le dará al crédito"
                   rows="4"
                   :readonly="documentsOnlyEditMode"
+                  :maxlength="PASTED_PLAIN_TEXT_MAX_LENGTH"
+                  @paste="onPasteDestinationDescription"
+                  @blur="onBlurDestinationDescription"
                 />
+                <p class="text-[11px] text-muted-foreground">
+                  Al pegar desde Word se limpian espacios extra y caracteres especiales.
+                  {{ (form.destination_description ?? '').length }}/{{ PASTED_PLAIN_TEXT_MAX_LENGTH }}
+                </p>
               </div>
               <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
                 <div class="max-w-md space-y-1.5">

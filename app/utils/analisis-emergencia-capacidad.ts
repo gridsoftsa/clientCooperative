@@ -1,24 +1,12 @@
-import { parsePesosInput } from '~/composables/usePesosFormat'
+import { parseMontoCOPConSigno } from '~/composables/usePesosFormat'
 import type { EmergenciaCapacidadBloque } from '~/constants/analisis-score-emergencia'
-import { parseMontoCop } from '~/utils/analisis-emergencia-cuota'
 
 /**
- * Mismo criterio que `AnalisisEmergenciaForm`: texto en COP (radicación o análisis).
+ * Texto en COP (radicación o análisis), **con signo**.
+ * `parsePesosInput` descarta el minus; sin signo el saldo queda positivo si ingresos disponibles es negativo.
  */
 export function parsePesosFlexibleAnalisis(s: string | undefined | null): number {
-  if (s == null) {
-    return 0
-  }
-  const t = String(s).trim()
-  if (!t) {
-    return 0
-  }
-  const p = parsePesosInput(t)
-  if (p !== undefined) {
-    return p
-  }
-  const m = parseMontoCop(t)
-  return m ?? 0
+  return parseMontoCOPConSigno(s)
 }
 
 /** Suma las cuotas mensuales declaradas en «Cuota entidades financieras» para esa persona. */

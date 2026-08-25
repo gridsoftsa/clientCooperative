@@ -32,6 +32,7 @@ import {
   totalActivosGlobalDesdeBloque,
 } from '~/utils/radicacion-financial-activos'
 import {
+  parsePesosFlexibleAnalisis,
   sumCuotasFinEmergencia,
   totalGastosCapacidadConCuotasFin,
 } from '~/utils/analisis-emergencia-capacidad'
@@ -220,23 +221,9 @@ function codeudorEnSolicitud(idx: number) {
   return list[idx] ?? null
 }
 
-/**
- * Acepta texto con formato de pesos (radicación) o con símbolo COP / miles analisis.
- */
+/** Acepta texto COP con signo (ingresos disponibles / saldo pueden ser negativos). */
 function parsePesosFlexible(s: string | undefined | null): number {
-  if (s == null) {
-    return 0
-  }
-  const t = String(s).trim()
-  if (!t) {
-    return 0
-  }
-  const p = parsePesosInput(t)
-  if (p !== undefined) {
-    return p
-  }
-  const m = parseMontoCop(t)
-  return m ?? 0
+  return parsePesosFlexibleAnalisis(s)
 }
 
 /** Muestra valor almacenado con miles, decimales y prefijo $ (COP) en UI. */
@@ -337,8 +324,8 @@ function syncAllIngresosDisponiblesCapacidad() {
 }
 
 /**
- * Reserva = ingresos disponibles × (% ING / 100). Parametrización deudor vs codeudor.
- * Solo se escribe vía `watch`.
+ * Reserva = |ingresos disponibles| × (% ING / 100). Siempre es una detracción (línea «(-) % ing.»).
+ * Si ingresos disponibles es negativo, el saldo sigue restando esta reserva (no la “devuelve”).
  */
 function syncReservaSobreIngresoBloque(b: EmergenciaCapacidadBloque, pct: number) {
   const p = Number.isFinite(pct) && pct >= 0 ? pct : 0
@@ -347,7 +334,7 @@ function syncReservaSobreIngresoBloque(b: EmergenciaCapacidadBloque, pct: number
     return
   }
   const id = parsePesosFlexible(b.ingDisponibles)
-  const val = id * (p / 100)
+  const val = Math.abs(id) * (p / 100)
   b.reservaSobreIngreso = formatPesosDiferencia(val)
 }
 
@@ -373,8 +360,8 @@ function syncValorCuotaDesdeCredito() {
 }
 
 /**
- * Saldo = ingresos disponibles − reserva ING (fila) − valor de cuota (Vr. cuota var.).
- * Sólo se escribe vía `watch`.
+ * Saldo = ingresos disponibles (con signo) − reserva ING − valor de cuota.
+ * Si ingresos disponibles es negativo, el saldo también queda negativo.
  */
 function syncSaldoBloque(b: EmergenciaCapacidadBloque) {
   if (!String(b.ingDisponibles ?? '').trim()) {
