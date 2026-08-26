@@ -35,6 +35,9 @@ const formData = ref({
 const permissions = ref<Permission[]>([])
 const loading = ref(false)
 const saving = ref(false)
+const { manageableDomains } = useRoleAssignmentScope()
+
+const visiblePermissionDomains = computed(() => manageableDomains.value)
 
 const fetchPermissions = async () => {
   loading.value = true
@@ -135,6 +138,7 @@ onMounted(() => fetchPermissions())
                 v-model="formData.permissions"
                 :permissions="permissions"
                 :loading="loading"
+                :visible-domains="visiblePermissionDomains"
               />
             </CardContent>
           </Card>

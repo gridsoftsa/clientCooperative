@@ -12,6 +12,7 @@ export interface UserCreateDraft {
     sucursal_id: number | null
     org_staff_id: number | null
     allowed_sucursal_ids: number[]
+    admin_application_domains: string[]
     roles: string[]
   }
   accountStatus: UserAccountStatus

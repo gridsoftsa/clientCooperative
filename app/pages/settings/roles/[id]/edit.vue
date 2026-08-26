@@ -12,6 +12,7 @@ const { $api } = useNuxtApp()
 const route = useRoute()
 const router = useRouter()
 const { refetchUserSilently } = useAuth()
+const { manageableDomains } = useRoleAssignmentScope()
 const roleId = route.params.id as string
 
 const formData = ref({
@@ -23,6 +24,8 @@ const role = ref<Role | null>(null)
 const permissions = ref<Permission[]>([])
 const loading = ref(false)
 const saving = ref(false)
+
+const visiblePermissionDomains = computed(() => manageableDomains.value)
 
 function normalizePermissionNames(raw: unknown): string[] {
   if (!Array.isArray(raw)) {
@@ -149,6 +152,7 @@ onMounted(async () => {
               <SettingsRolePermissionsPicker
                 v-model="formData.permissions"
                 :permissions="permissions"
+                :visible-domains="visiblePermissionDomains"
               />
             </CardContent>
           </Card>

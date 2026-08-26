@@ -10,7 +10,8 @@ const ROLE_DISPLAY_LABELS: Record<string, string> = {
   analista: 'Analista',
   director_agencia: 'Director de agencia',
   director_credito: 'Director de crédito',
-  revision_documentos: 'Revisión de documentos',
+  gestor_documental: 'Gestor documental',
+  jefe_area: 'Jefe de área',
 }
 
 export function getRoleDisplayLabel(name: string): string {

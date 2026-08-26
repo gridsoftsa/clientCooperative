@@ -98,17 +98,15 @@ function onChange(event: Event): void {
       <slot />
     </span>
   </label>
-  <label
+  <span
     v-else
-    :for="inputId"
-    class="inline-flex shrink-0 cursor-pointer"
-    :class="{ 'cursor-not-allowed opacity-50': disabled }"
+    class="relative inline-flex size-4 shrink-0 cursor-pointer"
   >
     <input
       :id="inputId"
       ref="inputRef"
       type="checkbox"
-      class="sr-only"
+      class="absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0"
       :checked="isChecked"
       :disabled="disabled"
       @change="onChange"
@@ -116,5 +114,5 @@ function onChange(event: Event): void {
     <span :class="boxClass" aria-hidden="true">
       <Check v-if="isChecked" class="size-3.5" :stroke-width="3" />
     </span>
-  </label>
+  </span>
 </template>

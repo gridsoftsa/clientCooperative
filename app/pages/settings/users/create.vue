@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import type { Role } from '~/types/role'
 import type { UserAccountStatus } from '~/types/user'
+import { requiresOrgStaffLink, type ApplicationDomain } from '~/constants/application-domains'
 import { ACCOUNT_STATUS_FORM_OPTIONS } from '~/utils/accountStatus'
 import {
   isStaffUserCreateReturnPath,
@@ -25,6 +26,7 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const router = useRouter()
 const route = useRoute()
+const { mapRoleSelectOptions } = useRoleAssignmentScope()
 
 const returnTo = computed(() => {
   const value = route.query.returnTo
@@ -46,6 +48,7 @@ const form = ref({
   sucursal_id: null as number | null,
   org_staff_id: null as number | null,
   allowed_sucursal_ids: [] as number[],
+  admin_application_domains: ['creditos', 'gestion_documental'] as ApplicationDomain[],
   roles: [] as string[],
 })
 
@@ -53,12 +56,7 @@ const roles = ref<Role[]>([])
 const selectedRole = ref<string | null>(null)
 
 /** Opciones para multiselect de roles (value = nombre del rol en API) */
-const roleSelectOptions = computed(() =>
-  roles.value.map((r) => ({
-    value: r.name,
-    label: r.name === 'admin' ? `${r.name} (Sistema)` : r.name,
-  })),
-)
+const roleSelectOptions = computed(() => mapRoleSelectOptions(roles.value))
 
 const sucursales = ref<Array<{ id: number; name: string; code: string | null; is_main?: boolean }>>([])
 const loading = ref(false)
@@ -72,6 +70,14 @@ const sucursalSelectOptions = computed(() =>
 )
 
 const showAllowedSucursales = computed(() => selectedRole.value === 'admin')
+const showAdminApplicationDomains = computed(() => selectedRole.value === 'admin')
+
+const requiresOrgStaff = computed(() =>
+  requiresOrgStaffLink(
+    form.value.roles,
+    selectedRole.value === 'admin' ? form.value.admin_application_domains : undefined,
+  ),
+)
 
 const accountStatus = ref<UserAccountStatus>('active')
 
@@ -215,8 +221,8 @@ const handleSubmit = async () => {
     return
   }
 
-  if (!fromStaffFlow.value && form.value.org_staff_id == null) {
-    toast.error('Debe seleccionar el funcionario organizacional')
+  if (!fromStaffFlow.value && requiresOrgStaff.value && form.value.org_staff_id == null) {
+    toast.error('Debe seleccionar el funcionario organizacional para este tipo de usuario')
     return
   }
 
@@ -235,6 +241,11 @@ const handleSubmit = async () => {
     return
   }
 
+  if (selectedRole.value === 'admin' && form.value.admin_application_domains.length === 0) {
+    toast.error('Selecciona al menos un módulo administrable para el rol admin')
+    return
+  }
+
   saving.value = true
   try {
     const res = await $api<{ data: { id: number } }>('/users', {
@@ -250,6 +261,9 @@ const handleSubmit = async () => {
         sucursal_id: form.value.sucursal_id,
         ...(form.value.org_staff_id != null ? { org_staff_id: form.value.org_staff_id } : {}),
         allowed_sucursal_ids: form.value.allowed_sucursal_ids,
+        ...(selectedRole.value === 'admin'
+          ? { admin_application_domains: form.value.admin_application_domains }
+          : {}),
         roles: form.value.roles,
       },
     })
@@ -290,6 +304,7 @@ watch(selectedRole, (role) => {
   form.value.roles = role ? [role] : []
   if (role !== 'admin') {
     form.value.allowed_sucursal_ids = []
+    form.value.admin_application_domains = ['creditos', 'gestion_documental']
   }
 }, { immediate: true })
 </script>
@@ -399,9 +414,18 @@ watch(selectedRole, (role) => {
                 </div>
 
                 <div v-if="!fromStaffFlow" class="space-y-3 md:col-span-2">
-                  <Label for="org_staff" class="leading-snug">Funcionario organizacional *</Label>
+                  <Label for="org_staff" class="leading-snug">
+                    Funcionario organizacional
+                    <span v-if="requiresOrgStaff">*</span>
+                    <span v-else class="font-normal text-muted-foreground">(opcional)</span>
+                  </Label>
                   <p class="text-sm text-muted-foreground leading-relaxed">
-                    Cada usuario debe corresponder a un funcionario del módulo de estructura organizacional (solo aparecen los que aún no tienen cuenta).
+                    <template v-if="requiresOrgStaff">
+                      Obligatorio para roles de ventanilla, workflow y gestión documental (debe existir en estructura organizacional).
+                    </template>
+                    <template v-else>
+                      Para roles de crédito puede crear la cuenta sin vínculo y asociar el funcionario después en estructura organizacional.
+                    </template>
                   </p>
                   <Multiselect
                     id="org_staff"
@@ -412,7 +436,7 @@ watch(selectedRole, (role) => {
                     value-prop="value"
                     label="label"
                     :searchable="true"
-                    :can-clear="false"
+                    :can-clear="!requiresOrgStaff"
                     placeholder="Seleccione funcionario…"
                     no-options-text="No hay funcionarios sin usuario — cree uno en Estructura organizacional"
                     no-results-text="Sin coincidencias"
@@ -496,6 +520,12 @@ watch(selectedRole, (role) => {
               />
             </CardContent>
           </Card>
+
+          <SettingsAdminApplicationDomainsCard
+            v-if="showAdminApplicationDomains"
+            :domains="form.admin_application_domains"
+            @update:domains="form.admin_application_domains = $event"
+          />
 
           <Card>
             <CardHeader class="gap-2">

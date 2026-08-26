@@ -16,6 +16,7 @@ export interface User {
   sucursal_id?: number | null
   sucursal?: { id: number; name: string; code: string | null } | null
   allowed_sucursal_ids?: number[]
+  admin_application_domains?: string[]
   org_staff_id?: number | null
   org_staff?: { id: number; full_name: string; email?: string | null } | null
   roles?: string[]

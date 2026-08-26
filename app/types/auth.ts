@@ -13,4 +13,5 @@ export interface AuthUser {
   sucursal?: { id: number; name: string; code: string | null } | null
   roles?: string[]
   permissions?: string[]
+  admin_application_domains?: string[]
 }
