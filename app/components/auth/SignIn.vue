@@ -22,6 +22,12 @@ async function onSubmit(event: Event) {
       email: email.value,
       password: password.value
     })
+
+    if (auth.user.value?.must_change_password) {
+      await navigateTo('/change-password')
+      return
+    }
+
     const { hasPermission } = usePermissions()
     const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
     await navigateTo(target)

@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { getLocalTimeZone, today } from '@internationalized/date'
 import { toast } from 'vue-sonner'
+import {
+  REPORT_CONSOLIDATION_MODE_OPTIONS,
+  REPORT_MODE_CONSOLIDATED,
+  REPORT_MODE_DETAIL,
+  type ReportConsolidationMode,
+} from '~/constants/report-consolidation-mode'
 
 definePageMeta({
   middleware: 'permission',
@@ -32,6 +38,10 @@ interface TramitadasRow {
   by_period: Record<string, PeriodCellData>
   total_count: number
   total_amount_sum: string
+  transfers?: {
+    sent_count: number
+    received_count: number
+  }
 }
 
 interface TramitadasResponse {
@@ -40,6 +50,7 @@ interface TramitadasResponse {
       created_from: string
       created_to: string
       sucursal_id: number | null
+      mode: ReportConsolidationMode
     }
     periods: PeriodColumn[]
     rows: TramitadasRow[]
@@ -47,6 +58,20 @@ interface TramitadasResponse {
       count: number
       amount_sum: string
     }
+    methodology_note?: string | null
+    detail_rows?: Array<{
+      code: string | null
+      numero_radicado_externo: string | null
+      status: string
+      status_label: string
+      amount_requested: string
+      created_at_local: string | null
+      sucursal: { id: number, name: string, code?: string | null } | null
+      sucursal_actual?: { id: number, name: string, code?: string | null } | null
+      was_transferred?: boolean
+      adviser: { id: number, name: string, email?: string | null } | null
+      debtor: { name?: string | null, document_number?: string | null } | null
+    }>
   }
 }
 
@@ -70,6 +95,7 @@ const sucursalesSorted = computed(() => {
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
 const sucursalId = ref<number | null>(null)
+const reportMode = ref<ReportConsolidationMode>(REPORT_MODE_CONSOLIDATED)
 
 const skipDateFilterWatch = ref(false)
 let reportDateDebounce: ReturnType<typeof setTimeout> | null = null
@@ -132,6 +158,7 @@ function buildReportQuery(): Record<string, string | number> {
   if (sucursalId.value != null) {
     q.sucursal_id = sucursalId.value
   }
+  q.mode = reportMode.value
   return q
 }
 
@@ -233,6 +260,14 @@ watch(sucursalId, () => {
   fetchReport()
 })
 
+watch(reportMode, () => {
+  fetchReport()
+})
+
+function onReportModeChange(value: unknown): void {
+  reportMode.value = String(value) === REPORT_MODE_DETAIL ? REPORT_MODE_DETAIL : REPORT_MODE_CONSOLIDATED
+}
+
 function clearDateFilters() {
   if (reportDateDebounce) {
     clearTimeout(reportDateDebounce)
@@ -283,7 +318,13 @@ onUnmounted(() => {
         Solicitudes tramitadas por sucursal
       </h2>
       <p class="text-sm text-muted-foreground">
-        Entre fechas: cantidad de radicaciones generadas y suma de los montos solicitados en cada una, agrupados por mes calendario y por sucursal en que quedó registrada la radicación. Elija una sucursal o todas.
+        Entre fechas: cantidad de radicaciones generadas y suma de montos, agrupados por mes y por la sucursal donde se radicó originalmente (no cambia si luego se traslada). Las columnas de traslado indican cuántas salieron o entraron por cambio de sucursal en el mismo rango.
+      </p>
+      <p
+        v-if="reportData?.methodology_note"
+        class="mt-2 text-xs text-muted-foreground"
+      >
+        {{ reportData.methodology_note }}
       </p>
     </div>
 
@@ -349,7 +390,7 @@ onUnmounted(() => {
               Limpiar fechas
             </Button>
             <div class="w-full space-y-1.5 lg:w-72 lg:shrink-0">
-              <Label for="report-sucursal">Sucursal de la radicación</Label>
+              <Label for="report-sucursal">Sucursal de radicación</Label>
               <Select
                 :model-value="sucursalId == null ? 'all' : String(sucursalId)"
                 :disabled="loadingSucursales"
@@ -368,6 +409,26 @@ onUnmounted(() => {
                     :value="String(s.id)"
                   >
                     {{ s.name }}{{ s.code ? ` (${s.code})` : '' }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="w-full space-y-1.5 lg:w-64 lg:shrink-0">
+              <Label for="report-mode">Vista</Label>
+              <Select
+                :model-value="reportMode"
+                @update:model-value="onReportModeChange"
+              >
+                <SelectTrigger id="report-mode" class="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="opt in REPORT_CONSOLIDATION_MODE_OPTIONS"
+                    :key="opt.value"
+                    :value="opt.value"
+                  >
+                    {{ opt.label }}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -405,10 +466,13 @@ onUnmounted(() => {
             </Card>
           </div>
 
-          <div v-if="reportData.periods.length === 0" class="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
+          <div
+            v-if="reportMode === REPORT_MODE_CONSOLIDATED && reportData.periods.length === 0"
+            class="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground"
+          >
             El rango no incluye ningún mes calendario.
           </div>
-          <div v-else class="overflow-hidden rounded-lg border">
+          <div v-else-if="reportMode === REPORT_MODE_CONSOLIDATED" class="overflow-hidden rounded-lg border">
             <div class="max-h-[65vh] overflow-auto">
               <Table>
                 <TableHeader class="sticky top-0 z-10 bg-card">
@@ -425,6 +489,12 @@ onUnmounted(() => {
                     </TableHead>
                     <TableHead class="min-w-[150px]">
                       Total
+                    </TableHead>
+                    <TableHead class="min-w-[100px]">
+                      Trasl. enviadas
+                    </TableHead>
+                    <TableHead class="min-w-[100px]">
+                      Trasl. recibidas
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -460,6 +530,65 @@ onUnmounted(() => {
                       <div class="text-xs text-muted-foreground">
                         {{ formatCurrency(amountFromString(row.total_amount_sum)) }}
                       </div>
+                    </TableCell>
+                    <TableCell class="align-top text-sm">
+                      {{ row.transfers?.sent_count ?? 0 }}
+                    </TableCell>
+                    <TableCell class="align-top text-sm">
+                      {{ row.transfers?.received_count ?? 0 }}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+          <div v-else class="overflow-hidden rounded-lg border">
+            <div class="max-h-[70vh] overflow-auto">
+              <Table>
+                <TableHeader class="sticky top-0 z-10 bg-card">
+                  <TableRow>
+                    <TableHead>Código</TableHead>
+                    <TableHead>Rad. externo</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Deudor</TableHead>
+                    <TableHead>Asesor</TableHead>
+                    <TableHead>Sucursal radicación</TableHead>
+                    <TableHead>Sucursal actual</TableHead>
+                    <TableHead>Fecha creación</TableHead>
+                    <TableHead class="text-right">Monto</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow
+                    v-for="row in reportData.detail_rows ?? []"
+                    :key="`${row.code}-${row.created_at_local}`"
+                  >
+                    <TableCell class="font-mono text-xs">{{ row.code ?? '—' }}</TableCell>
+                    <TableCell>{{ row.numero_radicado_externo || '—' }}</TableCell>
+                    <TableCell>{{ row.status_label }}</TableCell>
+                    <TableCell>
+                      <div>{{ row.debtor?.name || '—' }}</div>
+                      <div v-if="row.debtor?.document_number" class="text-xs text-muted-foreground">
+                        {{ row.debtor.document_number }}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div>{{ row.adviser?.name || '—' }}</div>
+                      <div v-if="row.adviser?.email" class="text-xs text-muted-foreground">
+                        {{ row.adviser.email }}
+                      </div>
+                    </TableCell>
+                    <TableCell>{{ row.sucursal?.name || '—' }}</TableCell>
+                    <TableCell>
+                      <span v-if="row.was_transferred && row.sucursal_actual?.name">{{ row.sucursal_actual.name }}</span>
+                      <span v-else class="text-muted-foreground">—</span>
+                    </TableCell>
+                    <TableCell>{{ row.created_at_local || '—' }}</TableCell>
+                    <TableCell class="text-right">{{ formatCurrency(amountFromString(row.amount_requested)) }}</TableCell>
+                  </TableRow>
+                  <TableRow v-if="(reportData.detail_rows ?? []).length === 0">
+                    <TableCell colspan="9" class="text-center text-muted-foreground py-8">
+                      No hay radicaciones para los filtros actuales.
                     </TableCell>
                   </TableRow>
                 </TableBody>

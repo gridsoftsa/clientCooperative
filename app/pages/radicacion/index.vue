@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import TransferCreditApplicationSucursalDialog from '~/components/radicacion/TransferCreditApplicationSucursalDialog.vue'
 import {
   creditApplicationStatusFilterOptions as statusFilterOptions,
   getCreditApplicationStatusBadgeVariant as getStatusBadgeVariant,
   getCreditApplicationStatusLabel as getStatusLabel,
   isCreditApplicationTerminalImmutable,
+  isCreditApplicationAdviserEditableStatus,
 } from '~/constants/credit-application-status'
 import { toast } from 'vue-sonner'
 
@@ -14,24 +16,72 @@ definePageMeta({
 })
 
 const router = useRouter()
-const { $api } = useNuxtApp()
-const { hasAnyPermission, hasRole } = usePermissions()
+const { $api, $csrf } = useNuxtApp()
+const { hasAnyPermission, hasRole, hasPermission } = usePermissions()
 /** Editar / continuar borrador: crear o editar (nueva solo exige crear) */
 const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
 const isDirectorAgencia = computed(() => hasRole('director_agencia'))
 const isDirectorCredito = computed(() => hasRole('director_credito'))
 const isRevisionDocumentos = computed(() => hasRole('revision_documentos'))
+
+/** Revisión documentos: enlace al detalle en revisión documental o fuera de ella si la solicitud requiere asegurabilidad (p. ej. subir checklist en análisis). */
+function revisionRadicacionDetailLinkEligible(app: { status?: string, documentation_insurability_required?: boolean }): boolean {
+  if (!isRevisionDocumentos.value) {
+    return false
+  }
+  if (String(app.status ?? '') === 'Documentation_Review') {
+    return true
+  }
+  return Boolean(app.documentation_insurability_required)
+    && !isCreditApplicationTerminalImmutable(app.status)
+    && hasPermission('radicacion_insurability_ver')
+}
+
+/** Botón «Ver»: el rol revisión usa «Revisión documentos» en Documentation_Review; en otros estados solo si aplica seguimiento de asegurabilidad. */
+function showVerRadicacionListButton(app: { status?: string, documentation_insurability_required?: boolean }): boolean {
+  if (isDirectorAgencia.value) {
+    return false
+  }
+  if (isDirectorCredito.value && app.status === 'Credit_Director_Review') {
+    return false
+  }
+  if (isRevisionDocumentos.value) {
+    if (String(app.status ?? '') === 'Documentation_Review') {
+      return false
+    }
+    return Boolean(app.documentation_insurability_required)
+      && !isCreditApplicationTerminalImmutable(app.status)
+      && hasPermission('radicacion_insurability_ver')
+  }
+  return true
+}
+
+/** Icono «pila de archivos» cuando el detalle implica adjuntos destacados (revisión documental o asegurabilidad). */
+function verRadicacionListPrefersDocumentActionsIcon(app: { status?: string, documentation_insurability_required?: boolean }): boolean {
+  if (String(app.status ?? '') === 'Documentation_Review' && canOpenDraftForm.value && !isRevisionDocumentos.value) {
+    return true
+  }
+  if (isRevisionDocumentos.value && Boolean(app.documentation_insurability_required) && String(app.status ?? '') !== 'Documentation_Review') {
+    return true
+  }
+  return false
+}
 const isAnalista = computed(() => hasRole('analista'))
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
+const transferringId = ref<number | null>(null)
+const transferDialogOpen = ref(false)
+const pendingTransferApp = ref<{
+  id: number
+  status?: string
+  sucursal_id?: number | null
+  sucursal?: { id?: number; name?: string; code?: string | null } | null
+} | null>(null)
+const transferSucursales = ref<Array<{ id: number; name: string; code?: string | null }>>([])
 
 const applications = ref<any[]>([])
 const loading = ref(false)
-const movingToAnalysisId = ref<number | null>(null)
-const toAnalysisRadicado = ref('')
-const toAnalysisDialogOpen = ref(false)
-const applicationToMove = ref<{ id: number; code?: string } | null>(null)
 const pagination = ref({
   current_page: 1,
   last_page: 1,
@@ -57,26 +107,6 @@ function buildListQuery(): Record<string, string | number> {
   const q: Record<string, string | number> = {
     per_page: pagination.value.per_page,
     page: pagination.value.current_page,
-  }
-  if (isDirectorAgencia.value) {
-    if (filterStatus.value !== 'all') {
-      q.status = filterStatus.value
-    }
-    return q
-  }
-  if (isDirectorCredito.value) {
-    if (filterStatus.value !== 'all') {
-      q.status = filterStatus.value
-    }
-    return q
-  }
-  if (isRevisionDocumentos.value) {
-    q.status = filterStatus.value !== 'all' ? filterStatus.value : 'Documentation_Review'
-    return q
-  }
-  if (isAnalista.value) {
-    q.status = filterStatus.value !== 'all' ? filterStatus.value : 'In_Analysis'
-    return q
   }
   if (filterStatus.value !== 'all') {
     q.status = filterStatus.value
@@ -209,40 +239,90 @@ async function onDeactivateConfirm(reason: string) {
   }
 }
 
-function openToAnalysisDialog(app: { id: number; code?: string }) {
-  applicationToMove.value = app
-  toAnalysisRadicado.value = ''
-  toAnalysisDialogOpen.value = true
+function sucursalLabelForApp(app: { sucursal?: { name?: string; code?: string | null } | null }): string | null {
+  const s = app.sucursal
+  if (!s?.name) {
+    return null
+  }
+  return s.code ? `${s.name} (${s.code})` : s.name
 }
 
-function closeToAnalysisDialog() {
-  applicationToMove.value = null
-  toAnalysisRadicado.value = ''
-  toAnalysisDialogOpen.value = false
+const pendingTransferCurrentSucursalLabel = computed(() => {
+  if (!pendingTransferApp.value) {
+    return null
+  }
+  return sucursalLabelForApp(pendingTransferApp.value)
+})
+
+const pendingTransferCurrentSucursalId = computed(() => {
+  if (!pendingTransferApp.value) {
+    return null
+  }
+  return pendingTransferApp.value.sucursal_id ?? pendingTransferApp.value.sucursal?.id ?? null
+})
+
+async function fetchTransferSucursales() {
+  const res = await $api<{ data: typeof transferSucursales.value }>('/catalogs/sucursales')
+  transferSucursales.value = res.data ?? []
 }
 
-async function confirmMoveToAnalysis() {
-  const app = applicationToMove.value
-  if (!app || !toAnalysisRadicado.value?.trim()) {
-    toast.error('Ingresa el número de radicado externo')
+async function openTransferDialog(app: {
+  id: number
+  status?: string
+  sucursal_id?: number | null
+  sucursal?: { id?: number; name?: string; code?: string | null } | null
+}) {
+  if (transferringId.value) {
     return
   }
-  movingToAnalysisId.value = app.id
+  if (isCreditApplicationTerminalImmutable(app.status)) {
+    toast.error('Las solicitudes en desembolso, rechazadas o canceladas no se pueden trasladar.')
+    return
+  }
   try {
-    const { $api, $csrf } = useNuxtApp()
+    if (transferSucursales.value.length === 0) {
+      await fetchTransferSucursales()
+    }
+    const currentId = app.sucursal_id ?? app.sucursal?.id
+    const hasDestination = transferSucursales.value.some(s => currentId == null || s.id !== currentId)
+    if (!hasDestination) {
+      toast.error('No hay otras sucursales activas disponibles para el traslado.')
+      return
+    }
+    pendingTransferApp.value = app
+    transferDialogOpen.value = true
+  } catch {
+    toast.error('No se pudieron cargar las sucursales de destino.')
+  }
+}
+
+async function onTransferConfirm(payload: { sucursalId: number; reason: string }) {
+  const app = pendingTransferApp.value
+  if (!app || transferringId.value) {
+    return
+  }
+  transferringId.value = app.id
+  try {
     await $csrf()
-    await $api(`/credit-applications/${app.id}/to-analysis`, {
-      method: 'PATCH',
-      body: { numero_radicado_externo: toAnalysisRadicado.value.trim() },
-    })
-    toast.success('Solicitud pasada a análisis correctamente')
-    closeToAnalysisDialog()
+    const res = await $api<{ message?: string }>(
+      `/credit-applications/${app.id}/transfer-sucursal`,
+      {
+        method: 'PATCH',
+        body: {
+          sucursal_id: payload.sucursalId,
+          reason: payload.reason,
+        },
+      },
+    )
+    transferDialogOpen.value = false
+    pendingTransferApp.value = null
+    toast.success(res.message ?? 'Solicitud trasladada a otra sucursal', { duration: 5000 })
     await fetchApplications()
   } catch (e: any) {
-    console.error('Error pasando a análisis:', e)
-    toast.error(e?.data?.message ?? 'No se pudo pasar a análisis')
+    console.error('Error trasladando sucursal:', e)
+    toast.error(e?.data?.message ?? 'No se pudo trasladar la solicitud.')
   } finally {
-    movingToAnalysisId.value = null
+    transferringId.value = null
   }
 }
 
@@ -276,6 +356,12 @@ onUnmounted(() => {
 watch(deactivateDialogOpen, (v) => {
   if (!v)
     pendingDeactivateApp.value = null
+})
+
+watch(transferDialogOpen, (v) => {
+  if (!v) {
+    pendingTransferApp.value = null
+  }
 })
 </script>
 
@@ -381,7 +467,7 @@ watch(deactivateDialogOpen, (v) => {
               <TableRow v-for="app in applications" :key="app.id">
                 <TableCell class="font-medium">
                   <NuxtLink
-                    v-if="(app.status === 'Draft' || app.status === 'Returned') && canOpenDraftForm"
+                    v-if="isCreditApplicationAdviserEditableStatus(app.status) && canOpenDraftForm"
                     :to="`/radicacion/editar/${app.id}`"
                     class="font-medium text-primary hover:underline"
                     title="Abrir formulario editable"
@@ -407,13 +493,33 @@ watch(deactivateDialogOpen, (v) => {
                     {{ app.code || '-' }}
                     <span class="text-xs text-muted-foreground ml-1">(concepto final)</span>
                   </NuxtLink>
+                  <NuxtLink
+                    v-else-if="revisionRadicacionDetailLinkEligible(app)"
+                    :to="`/radicacion/${app.id}`"
+                    class="font-medium text-primary hover:underline"
+                    :title="app.status === 'Documentation_Review' ? 'Revisión y concepto de documentación' : 'Detalle: documentos de asegurabilidad (la solicitud requiere asegurabilidad).'"
+                  >
+                    {{ app.code || '-' }}
+                    <span class="text-xs text-muted-foreground ml-1">{{
+                      app.status === 'Documentation_Review' ? '(revisión documental)' : '(asegurabilidad)'
+                    }}</span>
+                  </NuxtLink>
+                  <NuxtLink
+                    v-else-if="app.status === 'Documentation_Review' && canOpenDraftForm && !isRevisionDocumentos"
+                    :to="`/radicacion/${app.id}`"
+                    class="font-medium text-primary hover:underline"
+                    title="Abrir el detalle de la solicitud: mientras está en revisión documental puede consultar datos y adjuntar o reemplazar archivos (no es lo mismo que «devuelta»: aún está en cola del revisor)."
+                  >
+                    {{ app.code || '-' }}
+                    <span class="text-xs text-muted-foreground ml-1">(detalle y adjuntos)</span>
+                  </NuxtLink>
                   <span v-else>{{ app.code || '-' }}</span>
                 </TableCell>
                 <TableCell class="font-mono text-sm">{{ app.numero_radicado_externo || '-' }}</TableCell>
                 <TableCell>{{ formatCurrency(Number(app.amount_requested)) }}</TableCell>
                 <TableCell>{{ app.term_months }} meses</TableCell>
                 <TableCell>
-                  <Badge :variant="getStatusBadgeVariant(app.status) as any">
+                  <Badge :variant="getStatusBadgeVariant(app.status)">
                     {{ getStatusLabel(app.status, {
                       skipNextDirectorReview: app.skip_next_director_review,
                       resubmitToAnalystAfterReturn: app.resubmit_to_analyst_after_return,
@@ -494,19 +600,6 @@ watch(deactivateDialogOpen, (v) => {
                         <span>Revisión documentos</span>
                       </Button>
                     </PermissionGate>
-                    <PermissionGate permission="radicacion_enviar_analisis">
-                      <Button
-                        v-if="app.status === 'Draft'"
-                        variant="default"
-                        size="sm"
-                        class="gap-1.5"
-                        title="Pasar a análisis"
-                        @click="openToAnalysisDialog(app)"
-                      >
-                        <Icon name="i-lucide-send" class="h-3.5 w-3.5 shrink-0" />
-                        Enviar
-                      </Button>
-                    </PermissionGate>
                     <PermissionGate permission="radicacion_descargar_pdf">
                       <Button
                         variant="outline"
@@ -526,7 +619,7 @@ watch(deactivateDialogOpen, (v) => {
                     </PermissionGate>
                     <PermissionGate :any-permission="['radicacion_crear', 'radicacion_editar']">
                       <Button
-                        v-if="app.status === 'Draft' || app.status === 'Returned'"
+                        v-if="isCreditApplicationAdviserEditableStatus(app.status)"
                         variant="warning"
                         size="sm"
                         class="gap-1.5"
@@ -541,15 +634,40 @@ watch(deactivateDialogOpen, (v) => {
                     </PermissionGate>
                     <PermissionGate permission="radicacion_ver">
                       <Button
-                        v-if="!isDirectorAgencia && !isRevisionDocumentos && !(isDirectorCredito && app.status === 'Credit_Director_Review')"
+                        v-if="showVerRadicacionListButton(app)"
                         variant="outline"
                         size="sm"
                         class="gap-1.5"
-                        title="Ver solo lectura (no permite cambiar datos)"
+                        :title="verRadicacionListPrefersDocumentActionsIcon(app)
+                          ? (isRevisionDocumentos && app.documentation_insurability_required && app.status !== 'Documentation_Review'
+                            ? 'Abrir el detalle para gestionar documentos de asegurabilidad.'
+                            : 'Abrir el detalle: puede adjuntar o reemplazar documentos mientras la solicitud está en revisión documental (el revisor aún no ha emitido concepto).')
+                          : 'Ver detalle de la solicitud'"
                         @click="router.push(`/radicacion/${app.id}`)"
                       >
-                        <Icon name="i-lucide-eye" class="h-3.5 w-3.5 shrink-0" />
-                        Ver
+                        <Icon
+                          :name="verRadicacionListPrefersDocumentActionsIcon(app) ? 'i-lucide-file-stack' : 'i-lucide-eye'"
+                          class="h-3.5 w-3.5 shrink-0"
+                        />
+                        {{ verRadicacionListPrefersDocumentActionsIcon(app) ? (isRevisionDocumentos ? 'Asegurabilidad' : 'Abrir solicitud') : 'Ver' }}
+                      </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="radicacion_trasladar_sucursal">
+                      <Button
+                        v-if="!isCreditApplicationTerminalImmutable(app.status)"
+                        variant="outline"
+                        size="sm"
+                        class="gap-1.5"
+                        title="Trasladar a otra sucursal"
+                        :disabled="transferringId === app.id"
+                        @click="openTransferDialog(app)"
+                      >
+                        <Icon
+                          :name="transferringId === app.id ? 'i-lucide-loader-2' : 'i-lucide-building-2'"
+                          class="h-3.5 w-3.5 shrink-0"
+                          :class="{ 'animate-spin': transferringId === app.id }"
+                        />
+                        Trasladar
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_desactivar">
@@ -609,42 +727,13 @@ watch(deactivateDialogOpen, (v) => {
       @confirm="onDeactivateConfirm"
     />
 
-    <Dialog :open="toAnalysisDialogOpen" @update:open="(v) => { if (!v) closeToAnalysisDialog() }">
-      <DialogContent class="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Pasar a análisis</DialogTitle>
-          <DialogDescription>
-            Ingresa el número de radicado que devolvió el sistema externo (Finagro, etc.) al enviar la solicitud. La solicitud pasará de Borrador a En análisis.
-          </DialogDescription>
-        </DialogHeader>
-        <div class="space-y-4 py-2">
-          <div v-if="applicationToMove" class="rounded-md bg-muted/50 px-3 py-2 text-sm">
-            Solicitud: <strong>{{ applicationToMove.code }}</strong>
-          </div>
-          <div class="space-y-2">
-            <Label for="to-analysis-radicado">Número de radicado externo *</Label>
-            <Input
-              id="to-analysis-radicado"
-              v-model="toAnalysisRadicado"
-              placeholder="Ej: RAD-EXT-2025-001234"
-              class="font-mono"
-              @keyup.enter="confirmMoveToAnalysis"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" @click="closeToAnalysisDialog">
-            Cancelar
-          </Button>
-          <Button
-            :disabled="!toAnalysisRadicado?.trim() || movingToAnalysisId !== null"
-            @click="confirmMoveToAnalysis"
-          >
-            <Icon v-if="movingToAnalysisId" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-            Pasar a análisis
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <TransferCreditApplicationSucursalDialog
+      v-model:open="transferDialogOpen"
+      :current-sucursal-label="pendingTransferCurrentSucursalLabel"
+      :current-sucursal-id="pendingTransferCurrentSucursalId"
+      :sucursales="transferSucursales"
+      :loading="transferringId !== null"
+      @confirm="onTransferConfirm"
+    />
   </div>
 </template>

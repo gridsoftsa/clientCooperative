@@ -5,17 +5,28 @@ import {
   type AnalisisScorePerfilValue,
 } from '~/constants/analisis-score'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     /** Texto opcional bajo el selector (p. ej. en paso 2 para corregir perfil). */
     hint?: string
+    /** Solo consulta (p. ej. radicación fuera de «En análisis»). */
+    disabled?: boolean
   }>(),
-  { hint: '' },
+  { hint: '', disabled: false },
 )
 
 const perfil = defineModel<AnalisisScorePerfilValue | undefined>({ required: true })
 
 const open = ref(false)
+
+watch(
+  () => props.disabled,
+  (d) => {
+    if (d) {
+      open.value = false
+    }
+  },
+)
 
 const triggerLabel = computed(() => {
   if (perfil.value == null) {
@@ -37,6 +48,7 @@ function cerrarAlElegir(): void {
         <Button
           variant="outline"
           role="combobox"
+          :disabled="props.disabled"
           :aria-expanded="open"
           class="h-10 w-full min-w-0 justify-between text-left font-normal"
         >
@@ -69,8 +81,8 @@ function cerrarAlElegir(): void {
         </RadioGroup>
       </PopoverContent>
     </Popover>
-    <p v-if="hint" class="text-xs text-muted-foreground">
-      {{ hint }}
+    <p v-if="props.hint" class="text-xs text-muted-foreground">
+      {{ props.hint }}
     </p>
   </div>
 </template>

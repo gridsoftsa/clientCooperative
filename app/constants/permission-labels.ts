@@ -23,6 +23,7 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
   display: 'Visualización',
   sucursales: 'Sucursales',
   empresa: 'Empresa',
+  seguridad: 'Seguridad',
   plantillas: 'Plantillas',
   plantilla: 'Plantilla SCORE',
   /** Corto: se usa en chips/listados («Ver Radicación», «Ver Solicitantes»). */
@@ -77,6 +78,7 @@ export const PERMISSION_CATEGORY_ORDER: string[] = [
   'notificaciones',
   'display',
   'empresa',
+  'seguridad',
   'sucursales',
   'estructura',
   'grupos',
@@ -118,7 +120,7 @@ export interface PermissionLike {
 
 /**
  * Subsecciones dentro del bloque «Radicación» en crear/editar rol.
- * Orden: operación general → documentos → análisis → dirección → catálogos → otros (nuevos permisos sin clasificar).
+ * Orden: operación general → documentos → análisis → dirección → catálogos → asegurabilidad / sucursal (prefijo) → otros.
  */
 export interface RadicacionPermissionSubgroup {
   key: string
@@ -132,12 +134,15 @@ const RADICACION_SUBGROUP_DEFINITIONS: Array<{ key: string; label: string; names
     label: 'Operación de solicitudes',
     names: new Set([
       'radicacion_ver',
+      'radicacion_ver_todas_sucursales',
       'radicacion_crear',
       'radicacion_editar',
       'radicacion_desactivar',
       'radicacion_descargar_pdf',
       'radicacion_enviar_analisis',
       'radicacion_ver_resumen_financiero',
+      'radicacion_marcar_privilegiado',
+      'radicacion_trasladar_sucursal',
     ]),
   },
   {
@@ -165,6 +170,7 @@ const RADICACION_SUBGROUP_DEFINITIONS: Array<{ key: string; label: string; names
     names: new Set([
       'radicacion_director_decidir',
       'radicacion_director_credito_decidir',
+      'radicacion_cancelar',
     ]),
   },
   {
@@ -177,6 +183,18 @@ const RADICACION_SUBGROUP_DEFINITIONS: Array<{ key: string; label: string; names
   },
 ]
 
+/**
+ * Subgrupos por prefijo (`radicacion_insurability_*`, etc.) para no mezclarlos en «Otros».
+ * Orden: después de los bloques con lista fija en {@link RADICACION_SUBGROUP_DEFINITIONS}.
+ */
+const RADICACION_PREFIX_SUBGROUPS: ReadonlyArray<{ key: string; label: string; prefix: string }> = [
+  { key: 'insurability', label: 'Asegurabilidad', prefix: 'radicacion_insurability_' },
+  { key: 'fng', label: 'FNG (revisión documental)', prefix: 'radicacion_fng_' },
+  { key: 'credit_mortgage', label: 'Clasificación hipotecaria', prefix: 'radicacion_credit_mortgage_' },
+  { key: 'approver_entity', label: 'Ente aprobador (director de crédito)', prefix: 'radicacion_approver_entity_' },
+  { key: 'sucursal_solicitud', label: 'Sucursal de la solicitud', prefix: 'radicacion_sucursal_' },
+]
+
 /** Acciones traducidas (primera letra mayúscula) */
 const ACTION_LABELS: Record<string, string> = {
   ver: 'Ver',
@@ -184,6 +202,37 @@ const ACTION_LABELS: Record<string, string> = {
   editar: 'Editar',
   eliminar: 'Eliminar',
   acceso: 'Acceso',
+  guardar: 'Guardar',
+  subir: 'Subir',
+  decidir: 'Decidir',
+  cancelar: 'Cancelar',
+  desactivar: 'Desactivar',
+  trasladar: 'Trasladar',
+  marcar: 'Marcar',
+  descargar: 'Descargar',
+}
+
+/** Verbo reconocido como último segmento en `radicacion_<recurso>_<verbo>`. */
+const RADICACION_TRAILING_ACTIONS = new Set(Object.keys(ACTION_LABELS))
+
+/**
+ * Recurso intermedio (snake entre `radicacion` y la acción) → texto UI en español.
+ * Evita etiquetas duplicadas tipo «Insurability Radicación» para `radicacion_insurability_ver`, etc.
+ */
+const PERMISSION_RESOURCE_LABELS: Record<string, string> = {
+  insurability: 'asegurabilidad',
+  insurability_documentos: 'documentos de asegurabilidad',
+  /** Variante con segmento en inglés (`documents`) que aún pueda existir en BD. */
+  insurability_documents: 'documentos de asegurabilidad',
+  insurability_status: 'estado de asegurabilidad',
+  insurability_form: 'formato de asegurabilidad',
+  fng: 'FNG',
+  fng_documentos: 'documentos FNG',
+  credit_mortgage: 'crédito hipotecario',
+  approver_entity: 'ente aprobador',
+  approver_entity_ver: 'documentos del ente aprobador (solo lectura)',
+  approver_entity_documentos: 'documentos del ente aprobador',
+  sucursal: 'sucursal de la solicitud',
 }
 
 /** Capitaliza primera letra de cada palabra */
@@ -197,8 +246,7 @@ function capitalizeWords(str: string): string {
 /**
  * Obtener etiqueta legible para un nombre de permiso.
  * Orden español latinoamericano: acción + categoría.
- * Ej: plantillas_ver → "Ver Configuración de plantillas"
- * Ej: usuarios_crear → "Crear Usuarios"
+ * Etiquetas fijas en {@link PERMISSION_LABEL_OVERRIDES} cuando el nombre en varias partes no basta.
  */
 /** Prefijos `modulo_submodulo` + acción CRUD al final (ej. grupos_trabajo_ver). */
 const PERMISSION_PREFIX_LABELS: Record<string, string> = {
@@ -212,16 +260,33 @@ const CRUD_ACTION_SUFFIX = /^(ver|crear|editar|eliminar)$/
 const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   settings_ver: 'Ver configuración',
   radicacion_enviar_analisis: 'Enviar solicitud a análisis',
+  radicacion_ver_todas_sucursales: 'Ver radicaciones de todas las sucursales',
   radicacion_ver_resumen_financiero: 'Ver resumen financiero (deudor)',
   radicacion_analisis_ver: 'Ver análisis y SCORE',
   radicacion_analisis_guardar: 'Guardar análisis y SCORE',
   radicacion_director_decidir: 'Decidir como director de agencia',
   radicacion_director_credito_decidir: 'Decisión director de crédito',
+  radicacion_cancelar: 'Cancelar solicitud de radicación',
+  radicacion_trasladar_sucursal: 'Trasladar radicación a otra sucursal',
+  radicacion_marcar_privilegiado: 'Marcar privilegiado',
   radicacion_documentos_decidir: 'Decidir revisión documental',
   radicacion_descargar_documentos: 'Ver y descargar adjuntos',
   radicacion_documentos_subir: 'Subir adjuntos',
   radicacion_documentos_editar: 'Editar títulos de adjuntos',
-  radicacion_documentos_eliminar: 'Eliminar adjuntos',
+  radicacion_insurability_ver: 'Ver asegurabilidad',
+  radicacion_approver_entity_ver: 'Ver documentos del ente aprobador',
+  radicacion_insurability_documentos_subir: 'Subir documentos de asegurabilidad',
+  radicacion_insurability_documentos_editar: 'Editar títulos de documentos de asegurabilidad',
+  radicacion_insurability_documentos_eliminar: 'Eliminar documentos de asegurabilidad',
+  radicacion_insurability_status_editar: 'Actualizar estado de asegurabilidad (plantilla: director de crédito; no analista ni revisión documental)',
+  radicacion_fng_ver: 'Ver documentos FNG',
+  radicacion_fng_documentos_subir: 'Subir documentos FNG',
+  radicacion_fng_documentos_editar: 'Editar títulos de documentos FNG',
+  radicacion_fng_documentos_eliminar: 'Eliminar documentos FNG',
+  radicacion_credit_mortgage_classify: 'Indicar si el crédito es hipotecario (revisión documental)',
+  radicacion_approver_entity_documentos_subir: 'Subir documentos del ente aprobador',
+  radicacion_approver_entity_documentos_editar: 'Editar títulos de documentos del ente aprobador',
+  radicacion_approver_entity_documentos_eliminar: 'Eliminar documentos del ente aprobador',
   reportes_ver: 'Ver reportes',
   radicacion_catalogos_ver: 'Ver catálogos',
   radicacion_catalogos_editar: 'Editar catálogos',
@@ -292,6 +357,19 @@ export function getPermissionLabel(name: string): string {
 
   const parts = name.split('_')
   const category = parts[0] ?? ''
+
+  if (category === 'radicacion' && parts.length >= 3) {
+    const last = parts[parts.length - 1] ?? ''
+    if (RADICACION_TRAILING_ACTIONS.has(last)) {
+      const resourceKey = parts.slice(1, -1).join('_')
+      const actionLabel = ACTION_LABELS[last] ?? capitalizeWords(last)
+      const resourceLabel
+        = PERMISSION_RESOURCE_LABELS[resourceKey]
+          ?? capitalizeWords(parts.slice(1, -1).join(' '))
+      return `${actionLabel} ${resourceLabel}`
+    }
+  }
+
   const action = parts[1] ?? ''
 
   const categoryLabel = PERMISSION_CATEGORY_LABELS[category] ?? capitalizeWords(category)
@@ -313,6 +391,9 @@ export function groupRadicacionPermissions(list: PermissionLike[]): RadicacionPe
   for (const def of RADICACION_SUBGROUP_DEFINITIONS) {
     buckets.set(def.key, [])
   }
+  for (const psg of RADICACION_PREFIX_SUBGROUPS) {
+    buckets.set(psg.key, [])
+  }
   buckets.set('otros', [])
 
   for (const p of list) {
@@ -322,6 +403,15 @@ export function groupRadicacionPermissions(list: PermissionLike[]): RadicacionPe
         buckets.get(def.key)!.push(p)
         placed = true
         break
+      }
+    }
+    if (!placed) {
+      for (const psg of RADICACION_PREFIX_SUBGROUPS) {
+        if (p.name.startsWith(psg.prefix)) {
+          buckets.get(psg.key)!.push(p)
+          placed = true
+          break
+        }
       }
     }
     if (!placed) {
@@ -338,6 +428,18 @@ export function groupRadicacionPermissions(list: PermissionLike[]): RadicacionPe
     out.push({
       key: def.key,
       label: def.label,
+      items: sortPermissionsByLabelEs(items),
+    })
+  }
+
+  for (const psg of RADICACION_PREFIX_SUBGROUPS) {
+    const items = buckets.get(psg.key) ?? []
+    if (items.length === 0) {
+      continue
+    }
+    out.push({
+      key: psg.key,
+      label: psg.label,
       items: sortPermissionsByLabelEs(items),
     })
   }

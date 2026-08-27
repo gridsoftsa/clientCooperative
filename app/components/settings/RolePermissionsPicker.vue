@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<{
 })
 
 const permissionSearch = ref('')
+const showOnlySelected = ref(false)
 const openCategories = ref<Record<string, boolean>>({})
 const activeDomainTab = ref<ApplicationDomain>('creditos')
 
@@ -59,10 +60,20 @@ function matchesSearch(
   })
 }
 
+function isVisiblePermission(permission: Permission): boolean {
+  if (showOnlySelected.value && !selectedPermissions.value.includes(permission.name)) {
+    return false
+  }
+
+  return true
+}
+
 const filteredGroupedPermissions = computed(() => {
   const groups: Record<string, Permission[]> = {}
   for (const [category, list] of Object.entries(groupedPermissions.value)) {
-    const filtered = list.filter(permission => matchesSearch(permission, category))
+    const filtered = list.filter(permission =>
+      isVisiblePermission(permission) && matchesSearch(permission, category),
+    )
     if (filtered.length > 0) {
       groups[category] = filtered
     }
@@ -76,7 +87,8 @@ const filteredRadicacionSubgroups = computed(() =>
     .map(subgroup => ({
       ...subgroup,
       items: subgroup.items.filter(permission =>
-        matchesSearch(permission, 'radicacion', subgroup.label),
+        isVisiblePermission(permission)
+        && matchesSearch(permission, 'radicacion', subgroup.label),
       ),
     }))
     .filter(subgroup => subgroup.items.length > 0),
@@ -126,6 +138,7 @@ const domainTabCounts = computed(() => {
 })
 
 const hasSearchQuery = computed(() => permissionSearch.value.trim().length > 0)
+const hasActiveFilters = computed(() => hasSearchQuery.value || showOnlySelected.value)
 
 const activeDomainHasResults = computed(() =>
   visibleCategoryKeysForDomain(activeDomainTab.value).length > 0,
@@ -149,7 +162,7 @@ const getCategoryLabel = (key: string) =>
   PERMISSION_CATEGORY_SECTION_TITLES[key] ?? PERMISSION_CATEGORY_LABELS[key] ?? key
 
 function isCategoryOpen(category: string): boolean {
-  if (hasSearchQuery.value) {
+  if (hasActiveFilters.value) {
     return true
   }
 
@@ -166,8 +179,15 @@ function collapseAll() {
   )
 }
 
+function expandAll() {
+  openCategories.value = Object.fromEntries(
+    Object.keys(groupedPermissions.value).map(category => [category, true]),
+  )
+}
+
 function clearSearch() {
   permissionSearch.value = ''
+  showOnlySelected.value = false
 }
 
 function togglePermission(name: string, checked: boolean) {
@@ -179,6 +199,10 @@ function togglePermission(name: string, checked: boolean) {
   }
 
   selectedPermissions.value = selectedPermissions.value.filter(permission => permission !== name)
+}
+
+function onPermissionChecked(name: string, value: boolean | 'indeterminate') {
+  togglePermission(name, value === true)
 }
 
 function permissionsForCategory(category: string): Permission[] {
@@ -243,19 +267,49 @@ function isCategoryFullySelected(category: string): boolean {
           size="icon"
           class="absolute top-1/2 right-1 size-7 -translate-y-1/2"
           aria-label="Limpiar búsqueda"
-          @click="clearSearch"
+          @click="permissionSearch = ''"
         >
           <Icon name="i-lucide-x" class="size-4" />
         </Button>
       </div>
-      <Button type="button" variant="outline" size="sm" class="shrink-0" @click="collapseAll">
-        <Icon name="i-lucide-chevrons-up-down" class="mr-2 size-4" />
-        Contraer todo
-      </Button>
+      <div class="flex flex-wrap items-center gap-2 shrink-0">
+        <Button
+          type="button"
+          size="sm"
+          :variant="showOnlySelected ? 'default' : 'outline'"
+          @click="showOnlySelected = !showOnlySelected"
+        >
+          <Icon name="i-lucide-filter" class="mr-1.5 size-4" />
+          Solo seleccionados
+        </Button>
+        <Button
+          v-if="hasActiveFilters"
+          type="button"
+          size="sm"
+          variant="ghost"
+          @click="clearSearch"
+        >
+          Limpiar filtros
+        </Button>
+        <Button type="button" variant="outline" size="sm" @click="expandAll">
+          <Icon name="i-lucide-chevrons-down" class="mr-1.5 size-4" />
+          Expandir
+        </Button>
+        <Button type="button" variant="outline" size="sm" @click="collapseAll">
+          <Icon name="i-lucide-chevrons-up" class="mr-1.5 size-4" />
+          Contraer
+        </Button>
+      </div>
     </div>
 
-    <p v-if="hasSearchQuery" class="text-muted-foreground text-sm">
-      Coincidencias por palabras (en cualquier orden) dentro de cada sección. {{ visibleCategoryKeys.length }} sección(es) con resultados.
+    <p v-if="hasActiveFilters" class="text-muted-foreground text-sm">
+      <template v-if="hasSearchQuery">
+        Coincidencias por palabras (en cualquier orden) dentro de cada sección.
+        {{ visibleCategoryKeys.length }} sección(es) con resultados.
+      </template>
+      <template v-else>
+        Mostrando solo permisos seleccionados.
+      </template>
     </p>
 
     <div v-if="loading" class="flex items-center justify-center py-8">
@@ -335,15 +389,21 @@ function isCategoryFullySelected(category: string): boolean {
                       <div
                         v-for="permission in sub.items"
                         :key="permission.id"
-                        class="flex items-center space-x-2"
+                        class="flex items-start gap-2 rounded-md border border-transparent px-2 py-1.5 hover:border-border hover:bg-muted/30"
                       >
                         <Checkbox
                           :id="`permission-${permission.id}`"
+                          class="mt-0.5"
                           :model-value="selectedPermissions.includes(permission.name)"
-                          @update:model-value="(value: boolean | 'indeterminate') => togglePermission(permission.name, value === true)"
+                          @update:model-value="onPermissionChecked(permission.name, $event)"
                         />
-                        <Label :for="`permission-${permission.id}`" class="cursor-pointer text-sm font-normal">
-                          {{ formatPermissionDisplayName(permission.name) }}
+                        <Label :for="`permission-${permission.id}`" class="min-w-0 cursor-pointer space-y-0.5 font-normal">
+                          <span class="block text-sm leading-snug">
+                            {{ formatPermissionDisplayName(permission.name) }}
+                          </span>
+                          <span class="block text-xs text-muted-foreground">
+                            {{ permission.name }}
+                          </span>
                         </Label>
                       </div>
                     </div>
@@ -353,15 +413,21 @@ function isCategoryFullySelected(category: string): boolean {
                   <div
                     v-for="permission in filteredGroupedPermissions[category] ?? []"
                     :key="permission.id"
-                    class="flex items-center space-x-2"
+                    class="flex items-start gap-2 rounded-md border border-transparent px-2 py-1.5 hover:border-border hover:bg-muted/30"
                   >
                     <Checkbox
                       :id="`permission-${permission.id}`"
+                      class="mt-0.5"
                       :model-value="selectedPermissions.includes(permission.name)"
-                      @update:model-value="(value: boolean | 'indeterminate') => togglePermission(permission.name, value === true)"
+                      @update:model-value="onPermissionChecked(permission.name, $event)"
                     />
-                    <Label :for="`permission-${permission.id}`" class="cursor-pointer text-sm font-normal">
-                      {{ formatPermissionDisplayName(permission.name) }}
+                    <Label :for="`permission-${permission.id}`" class="min-w-0 cursor-pointer space-y-0.5 font-normal">
+                      <span class="block text-sm leading-snug">
+                        {{ formatPermissionDisplayName(permission.name) }}
+                      </span>
+                      <span class="block text-xs text-muted-foreground">
+                        {{ permission.name }}
+                      </span>
                     </Label>
                   </div>
                 </div>
@@ -372,8 +438,8 @@ function isCategoryFullySelected(category: string): boolean {
               v-if="!activeDomainHasResults && permissions.length > 0"
               class="py-8 text-center text-muted-foreground"
             >
-              <template v-if="hasSearchQuery">
-                No se encontraron permisos para «{{ permissionSearch.trim() }}» en este módulo.
+              <template v-if="hasActiveFilters">
+                No se encontraron permisos{{ hasSearchQuery ? ` para «${permissionSearch.trim()}»` : '' }} en este módulo.
               </template>
               <template v-else>
                 No hay permisos en este módulo.
@@ -387,8 +453,8 @@ function isCategoryFullySelected(category: string): boolean {
         v-if="!loading && visibleCategoryKeys.length === 0 && permissions.length > 0"
         class="py-4 text-center text-muted-foreground"
       >
-        <template v-if="hasSearchQuery">
-          No se encontraron permisos para «{{ permissionSearch.trim() }}».
+        <template v-if="hasActiveFilters">
+          No se encontraron permisos{{ hasSearchQuery ? ` para «${permissionSearch.trim()}»` : '' }}.
         </template>
         <template v-else>
           No hay permisos disponibles.

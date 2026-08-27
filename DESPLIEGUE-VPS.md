@@ -183,10 +183,12 @@ Copiar las configuraciones del repo a Nginx:
 
 ```bash
 sudo cp clientCooperative/vps-nginx/apicooperative.tecnologicaslf.com.conf /etc/nginx/sites-available/
+sudo cp clientCooperative/vps-nginx/api-gd.tecnologicaslf.com.conf /etc/nginx/sites-available/
 sudo cp clientCooperative/vps-nginx/cooperative.tecnologicaslf.com.conf /etc/nginx/sites-available/
 sudo cp clientCooperative/vps-nginx/s3.tecnologicaslf.com.conf /etc/nginx/sites-available/
 
 sudo ln -s /etc/nginx/sites-available/apicooperative.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/api-gd.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
 sudo ln -s /etc/nginx/sites-available/cooperative.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
 sudo ln -s /etc/nginx/sites-available/s3.tecnologicaslf.com.conf /etc/nginx/sites-enabled/
 ```
@@ -197,6 +199,8 @@ Comprobar y recargar Nginx:
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+> **Si al guardar borrador o enviar al director aparece `Failed to fetch` al subir documentos** (`POST .../credit-applications/{id}/documents`): el Nginx del VPS suele tener por defecto `client_max_body_size` de **1 MB**. Los adjuntos de radicación permiten hasta **10 MB**. En el `server` del dominio de la API (`api-gd` o `apicooperative`) debe existir `client_max_body_size 12M;` (ya incluido en los `.conf` de `vps-nginx/`). Tras copiar el archivo, ejecute `sudo nginx -t && sudo systemctl reload nginx`. Verifique también MinIO/S3 (`AWS_*` en `apiCooperative/.env`).
 
 Comprueba en el navegador (aún en HTTP):
 
@@ -252,6 +256,70 @@ docker compose -f clientCooperative/docker-compose.yml restart api
 | PostgreSQL | 5435              | solo local (no exponer a internet) |
 
 Nginx escucha 80/443 y hace proxy a 8585, 3535 y 9000 (MinIO API).
+
+---
+
+## 10. Copias de seguridad de PostgreSQL → MinIO
+
+El backup **va en el repo de la API** y se instala solo al desplegar.
+
+| Qué | Dónde |
+| --- | ----- |
+| Script dump + subida | `apiCooperative/scripts/backup-db-to-minio.sh` |
+| Instalador de cron | `apiCooperative/scripts/install-db-backup-cron.sh` |
+| Se ejecuta en | `apiCooperative/deploy.sh` (al final, tras `/up` OK) |
+
+| Parámetro | Valor |
+| --------- | ----- |
+| Frecuencia | **3 veces al día** (06:00, 14:00, 22:00) |
+| Retención | **5 días** |
+| Bucket MinIO | `cooperative-db-backups` / `postgresql/` |
+| Binario en el VPS | `/usr/local/bin/cooperative-backup-db-to-minio` |
+| Log | `/var/log/cooperative/db-backup.log` |
+
+### Despliegue (recomendado)
+
+En el VPS, como siempre:
+
+```bash
+cd ~/www/apiCooperative   # o la raíz del monorepo
+git pull
+./deploy.sh               # o ./apiCooperative/deploy.sh desde el monorepo
+```
+
+Al terminar el deploy:
+
+1. Copia el script a `/usr/local/bin/cooperative-backup-db-to-minio`
+2. Registra el crontab del usuario (3 horarios)
+3. Deja listo el log en `/var/log/cooperative/`
+
+### Primera vez / prueba manual
+
+```bash
+# Solo instalar cron (sin redeploy completo)
+./apiCooperative/scripts/install-db-backup-cron.sh --run-now
+
+# O solo un backup ahora
+/usr/local/bin/cooperative-backup-db-to-minio
+```
+
+Credenciales: el script las lee de los contenedores `cooperative_postgres` y `cooperative_minio`.  
+Opcional: `/etc/cooperative/backup-db.env` (plantilla `apiCooperative/scripts/backup-db.env.example`).
+
+### Verificar
+
+1. [Consola MinIO](https://minio-console.tecnologicaslf.com/) → bucket `cooperative-db-backups` → `postgresql/`
+2. `crontab -l | grep cooperative-db-backup`
+3. `tail -f /var/log/cooperative/db-backup.log`
+
+### Restaurar (ejemplo)
+
+```bash
+gunzip -c cooperative_YYYYMMDD_HHMMSS.sql.gz \
+  | docker exec -i cooperative_postgres psql -U cooperative -d cooperative
+```
+
+> Restaurar sobreescribe datos: preferible en mantenimiento o sobre una BD temporal.
 
 ---
 

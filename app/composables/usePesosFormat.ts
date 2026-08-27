@@ -47,11 +47,12 @@ export function parseMontoCOPConSigno(s: string | undefined | null): number {
     return 0
   }
   let t = String(s).trim()
-  t = t.replace(/^\$?\s*/u, '').replace(/COP/ig, '').replace(/[\s\u00a0\u202f]+/g, '').trim()
-  const neg = t.startsWith('-')
+  t = t.replace(/COP/ig, '').replace(/[\s\u00a0\u202f]+/g, '').trim()
+  const neg = /^[\-\u2212\u2013\u2014]/.test(t)
   if (neg) {
     t = t.slice(1).trim()
   }
+  t = t.replace(/^\$\s*/u, '').trim()
   const p = parsePesosInput(t)
   if (p === undefined) {
     return 0

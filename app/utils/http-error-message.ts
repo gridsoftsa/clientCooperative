@@ -16,7 +16,16 @@ export function messageFromFetchError(error: unknown, fallback: string): string 
     if (typeof nestedMessage === 'string' && nestedMessage.trim() !== '') {
       return nestedMessage
     }
+    if (data?.errors && typeof data.errors === 'object') {
+      const flat = Object.values(data.errors as Record<string, string[]>).flat().filter(Boolean)
+      if (flat.length) {
+        return flat.join(', ')
+      }
+    }
     const msg = e.message
+    if (typeof msg === 'string' && /failed to fetch|networkerror|load failed/i.test(msg)) {
+      return 'No hubo respuesta del servidor al subir el archivo. Suele deberse al límite de tamaño en Nginx del VPS (client_max_body_size 12M), archivos mayores a 10 MB, o MinIO/S3 no disponible. Revise con el administrador del servidor.'
+    }
     if (typeof msg === 'string' && msg.trim() !== '') {
       return msg
     }
@@ -33,6 +42,9 @@ export function messageFromFetchError(error: unknown, fallback: string): string 
     }
     if (statusCode === 419) {
       return 'Sesión expirada (CSRF). Actualice la página e intente de nuevo.'
+    }
+    if (statusCode === 413) {
+      return 'El archivo supera el límite permitido en el servidor (máx. 10 MB por adjunto).'
     }
     if (statusCode != null && statusCode >= 400) {
       return `${fallback} (HTTP ${statusCode})`

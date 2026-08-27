@@ -1,19 +1,35 @@
 <script setup lang="ts">
 /**
  * Ingresos y Gastos Operacionales (plantilla comercial).
- * Tabla: ARRIENDO, GASTOS SERVICIOS, GASTOS IMPREVISTOS, GASTOS EMPLEADOS,
- * TOTAL GASTOS DEL NEGOCIO, TOTAL INGRESOS NETOS NEGOCIO.
+ * Columna concepto (detalle): caja de texto editable.
+ * Columna valor: caja de texto money editable.
+ * Totales: calculados.
  */
+import { formatPesosConSimbolo, onKeydownPesosOnly, parsePesosInput } from '~/composables/usePesosFormat'
+
+const GASTOS_OPERACIONALES_ROWS = [
+  { key: 'arriendo', conceptoDefault: 'Arriendo' },
+  { key: 'gastos_servicios', conceptoDefault: 'Gastos servicios' },
+  { key: 'gastos_imprevistos', conceptoDefault: 'Gastos imprevistos' },
+  { key: 'gastos_empleados', conceptoDefault: 'Gastos empleados' },
+] as const
+
+type GastoOperacionalKey = (typeof GASTOS_OPERACIONALES_ROWS)[number]['key']
+
+/** Clave en formData donde se guardan los conceptos editables. */
+const GASTOS_OPERACIONALES_CONCEPTOS_KEY = 'gastos_operacionales_conceptos'
 
 const props = withDefaults(
   defineProps<{
     formData: Record<string, unknown>
     invalidFieldKeys?: string[]
     fieldDomIdPrefix?: string
+    disabled?: boolean
   }>(),
   {
     invalidFieldKeys: () => [],
     fieldDomIdPrefix: '',
+    disabled: false,
   },
 )
 
@@ -33,19 +49,80 @@ const emit = defineEmits<{
 }>()
 
 function setField(key: string, value: unknown) {
+  if (props.disabled) {
+    return
+  }
   emit('update:field', { key, value })
 }
 
-const gastosRows = [
-  { key: 'arriendo', label: 'Arriendo' },
-  { key: 'gastos_servicios', label: 'Gastos servicios' },
-  { key: 'gastos_imprevistos', label: 'Gastos imprevistos' },
-  { key: 'gastos_empleados', label: 'Gastos empleados' },
-]
+function conceptosMap(): Record<string, string> {
+  const raw = props.formData[GASTOS_OPERACIONALES_CONCEPTOS_KEY]
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      out[k] = String(v ?? '')
+    }
+    return out
+  }
+  return {}
+}
+
+function conceptoDisplay(key: GastoOperacionalKey, conceptoDefault: string): string {
+  const map = conceptosMap()
+  if (Object.prototype.hasOwnProperty.call(map, key)) {
+    return map[key] ?? ''
+  }
+  return conceptoDefault
+}
+
+function setConcepto(key: GastoOperacionalKey, value: string) {
+  const next = { ...conceptosMap() }
+  // Asegurar defaults para las demás filas la primera vez que se edita
+  for (const row of GASTOS_OPERACIONALES_ROWS) {
+    if (!Object.prototype.hasOwnProperty.call(next, row.key)) {
+      next[row.key] = row.conceptoDefault
+    }
+  }
+  next[key] = value
+  setField(GASTOS_OPERACIONALES_CONCEPTOS_KEY, next)
+}
+
+function moneyDisplay(key: string): string {
+  const raw = props.formData[key]
+  if (raw === null || raw === undefined || raw === '') {
+    return ''
+  }
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return ''
+  }
+  return formatPesosConSimbolo(n)
+}
+
+function onMoneyInput(key: string, event: Event) {
+  if (props.disabled) {
+    return
+  }
+  const el = event.target as HTMLInputElement
+  const parsed = parsePesosInput(el.value)
+  setField(key, parsed ?? null)
+}
+
+function onMoneyBlur(key: string, event: Event) {
+  if (props.disabled) {
+    return
+  }
+  const el = event.target as HTMLInputElement
+  const parsed = parsePesosInput(el.value)
+  setField(key, parsed ?? null)
+  nextTick(() => {
+    el.value = moneyDisplay(key)
+  })
+}
 
 const totalGastosNegocio = computed(() => {
   let sum = 0
-  for (const row of gastosRows) {
+  for (const row of GASTOS_OPERACIONALES_ROWS) {
     const v = Number(props.formData[row.key] ?? 0) || 0
     sum += v
   }
@@ -57,9 +134,7 @@ const ingresosOperacionales = computed(() =>
 )
 
 const totalIngresosNetosNegocio = computed(() => {
-  const ing = ingresosOperacionales.value
-  const gast = totalGastosNegocio.value
-  const val = ing - gast
+  const val = ingresosOperacionales.value - totalGastosNegocio.value
   return Number.isFinite(val) ? val : 0
 })
 
@@ -72,60 +147,86 @@ function formatMoney(value: number | null | undefined): string {
     maximumFractionDigits: 0,
   }).format(value)
 }
+
+const inputClass = (invalid: boolean) => [
+  'h-9 w-full rounded border bg-white px-2 py-1 text-sm shadow-xs',
+  props.disabled ? 'cursor-not-allowed opacity-50 bg-muted/40' : '',
+  invalid && !props.disabled
+    ? 'border-destructive ring-2 ring-destructive/50'
+    : 'border-input',
+]
 </script>
 
 <template>
-  <div class="overflow-x-auto rounded-lg border border-border shadow-sm">
-    <table class="w-full min-w-[380px] table-fixed border-collapse text-sm">
+  <div class="overflow-x-auto">
+    <p class="mb-2 text-xs text-muted-foreground">
+      Edite el <strong>concepto</strong> (detalle del gasto) y el <strong>valor</strong> en cada fila. No vienen de la parametrización.
+    </p>
+    <table class="w-full min-w-[420px] border-collapse text-sm">
       <colgroup>
         <col>
         <col style="width: 12rem">
       </colgroup>
       <thead>
         <tr>
-          <th
-            colspan="2"
-            class="border border-border bg-[#f4d03f] px-4 py-3 text-left font-bold uppercase tracking-wide text-black"
-          >
-            Gastos operacionales
+          <th class="border border-black bg-[#f4d03f] px-3 py-2 text-left font-bold uppercase text-black">
+            Concepto / detalle
+          </th>
+          <th class="border border-black bg-[#f4d03f] px-3 py-2 text-center font-bold uppercase text-black">
+            Valor
           </th>
         </tr>
       </thead>
       <tbody>
         <tr
-          v-for="row in gastosRows"
+          v-for="row in GASTOS_OPERACIONALES_ROWS"
           :key="row.key"
-          class="bg-background transition-colors hover:bg-muted/20"
+          class="bg-white"
         >
-          <td class="border border-border px-4 py-2.5 font-medium text-foreground">
-            {{ row.label }}
+          <td class="border border-black p-1">
+            <input
+              :id="domFieldId(`${row.key}_concepto`)"
+              type="text"
+              autocomplete="off"
+              :value="conceptoDisplay(row.key, row.conceptoDefault)"
+              :placeholder="row.conceptoDefault"
+              :disabled="disabled"
+              :class="inputClass(false)"
+              @input="setConcepto(row.key, ($event.target as HTMLInputElement).value)"
+            >
           </td>
-          <td class="border border-border p-1.5">
-            <CreditsBaseMoneyInput
-              :model-value="(props.formData[row.key] as number | null) ?? null"
-              placeholder="0"
-              class="w-full"
-              :input-id="domFieldId(row.key)"
-              :invalid="isInvalidKey(row.key)"
-              @update:model-value="setField(row.key, $event)"
-            />
+          <td class="border border-black p-1">
+            <input
+              :id="domFieldId(row.key)"
+              type="text"
+              inputmode="decimal"
+              autocomplete="off"
+              :value="moneyDisplay(row.key)"
+              placeholder="-"
+              :disabled="disabled"
+              :aria-invalid="isInvalidKey(row.key) && !disabled"
+              :class="[...inputClass(isInvalidKey(row.key)), 'text-right tabular-nums']"
+              @keydown="onKeydownPesosOnly"
+              @input="onMoneyInput(row.key, $event)"
+              @blur="onMoneyBlur(row.key, $event)"
+            >
           </td>
         </tr>
-        <tr class="bg-muted/50">
-          <td class="border border-border px-4 py-2.5 font-semibold text-foreground">
+        <tr class="bg-muted/40">
+          <td class="border border-black px-3 py-2 font-semibold text-black">
             Total gastos del negocio
           </td>
-          <td class="border border-border px-4 py-2.5 text-right tabular-nums font-semibold text-foreground">
+          <td class="border border-black px-3 py-2 text-right tabular-nums font-semibold text-black">
             {{ formatMoney(totalGastosNegocio) }}
           </td>
         </tr>
       </tbody>
       <tfoot>
         <tr class="bg-[#f4d03f]">
-          <td class="border border-border px-4 py-3 font-bold uppercase text-black">
+          <td class="border border-black px-3 py-2 font-bold uppercase text-black">
             Total ingresos netos negocio
           </td>
-          <td class="border border-border px-4 py-3 text-right tabular-nums font-bold text-black">
+          <td class="border border-black px-3 py-2 text-right tabular-nums font-bold text-black">
             {{ formatMoney(totalIngresosNetosNegocio) }}
           </td>
         </tr>

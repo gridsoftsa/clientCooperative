@@ -10,6 +10,10 @@ export function normalizeFinancialInfoAliases(fi: ApplicantForm['financial_info'
     next.auxiliaryDocuments = next.documentos_auxiliar
     delete next.documentos_auxiliar
   }
+  if (next.auxiliaryDocuments === undefined && next.auxiliary_documents !== undefined) {
+    next.auxiliaryDocuments = next.auxiliary_documents
+    delete next.auxiliary_documents
+  }
   return next as ApplicantForm['financial_info']
 }
 

@@ -131,8 +131,16 @@ export const sectorsConfig: SectorConfig[] = [
       { value: 'tipo-vivienda', label: 'Tipo de vivienda' },
       { value: 'actividad-economica', label: 'Tipo de actividad económica' },
       { value: 'estado-civil', label: 'Estado civil' },
+      { value: 'occupation', label: 'Ocupación' },
+      { value: 'job-position', label: 'Cargo' },
+      { value: 'credit-destination', label: 'Destino del crédito' },
       { value: 'aprobadores', label: 'Aprobadores' },
+      { value: 'credit-director-approver-documents', label: 'Documentos del ente aprobador (director de crédito)' },
+      { value: 'excepciones', label: 'Excepciones' },
       { value: 'auxiliary-documents', label: 'Documentos (módulo auxiliar)' },
+      { value: 'documentation-insurability-documents', label: 'Asegurabilidad (revisión documental)' },
+      { value: 'documentation-fng-documents', label: 'FNG — documentos (asesor y revisión documental)' },
+      { value: 'insurability-status', label: 'Estado asegurabilidad' },
       { value: 'bancos', label: 'Bancos' },
       { value: 'ing', label: 'ING' },
     ],
@@ -142,7 +150,10 @@ export const sectorsConfig: SectorConfig[] = [
 const SECTOR_RADICACION_KEY = 'radicacion'
 
 /** Plantillas agrupadas bajo «Aprobadores» en /parametrizacion/radicacion. */
-const RADICACION_APROBADORES_TEMPLATE_VALUES = new Set<string>(['aprobadores'])
+const RADICACION_APROBADORES_TEMPLATE_VALUES = new Set<string>(['aprobadores', 'credit-director-approver-documents'])
+
+/** Plantillas agrupadas bajo «Excepciones» en /parametrizacion/radicacion. */
+const RADICACION_EXCEPCIONES_TEMPLATE_VALUES = new Set<string>(['excepciones'])
 
 /** Plantillas agrupadas bajo «Análisis y Score» en /parametrizacion/radicacion. */
 const RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES = new Set<string>(['bancos', 'ing'])
@@ -158,7 +169,7 @@ export function sectorsForActivityTemplates(): SectorConfig[] {
 }
 
 /**
- * Parametrización de radicación: Solicitante, Aprobadores y Análisis y Score.
+ * Parametrización de radicación: Solicitante, Aprobadores, Excepciones y Análisis y Score.
  */
 export function sectorsForParametrizacionRadicacion(): SectorConfig[] {
   const r = sectorsConfig.find(s => s.value === SECTOR_RADICACION_KEY)
@@ -167,10 +178,14 @@ export function sectorsForParametrizacionRadicacion(): SectorConfig[] {
   }
   const solicitanteTemplates = r.templates.filter(
     t => !RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES.has(t.value)
-      && !RADICACION_APROBADORES_TEMPLATE_VALUES.has(t.value),
+      && !RADICACION_APROBADORES_TEMPLATE_VALUES.has(t.value)
+      && !RADICACION_EXCEPCIONES_TEMPLATE_VALUES.has(t.value),
   )
   const aprobadoresTemplates = r.templates.filter(
     t => RADICACION_APROBADORES_TEMPLATE_VALUES.has(t.value),
+  )
+  const excepcionesTemplates = r.templates.filter(
+    t => RADICACION_EXCEPCIONES_TEMPLATE_VALUES.has(t.value),
   )
   const analisisTemplates = r.templates.filter(
     t => RADICACION_ANALISIS_SCORE_TEMPLATE_VALUES.has(t.value),
@@ -178,6 +193,7 @@ export function sectorsForParametrizacionRadicacion(): SectorConfig[] {
   return [
     { value: SECTOR_RADICACION_KEY, label: 'Solicitante', templates: solicitanteTemplates },
     { value: 'radicacion-aprobadores', label: 'Aprobadores', templates: aprobadoresTemplates },
+    { value: 'radicacion-excepciones', label: 'Excepciones', templates: excepcionesTemplates },
     { value: 'radicacion-analisis-score', label: 'Análisis y Score', templates: analisisTemplates },
   ]
 }
@@ -3568,12 +3584,44 @@ export function validateActivityTemplate(
 }
 
 /**
+ * Opciones para {@link validateAllActivityTemplates}.
+ */
+export type ValidateAllActivityTemplatesOptions = {
+  /**
+   * Si es true, exige al menos una fila con sector y plantilla (actividad económica del deudor, paso 2).
+   * Para codeudores use false: la actividad económica es opcional; si hay filas, deben estar completas.
+   * Si es false u omitido, una lista vacía es válida (p. ej. plantillas de referencia del destino, paso 4).
+   */
+  requireAtLeastOne?: boolean
+}
+
+/**
  * Valida todas las plantillas de actividad con sector y plantilla elegidos (p. ej. antes de guardar borrador).
  * Omite entradas totalmente vacías; marca error si hay sector sin plantilla o viceversa.
  */
 export function validateAllActivityTemplates(
   templates: Array<{ sector?: string; template?: string; product?: string | null; data?: Record<string, unknown> }>,
+  options?: ValidateAllActivityTemplatesOptions,
 ): ValidateTemplateResult {
+  const requireAtLeastOne = options?.requireAtLeastOne === true
+  if (requireAtLeastOne) {
+    const meaningful = templates.filter(
+      (t) =>
+        t
+        && typeof t === 'object'
+        && Boolean(String(t.sector ?? '').trim())
+        && Boolean(String(t.template ?? '').trim()),
+    )
+    if (meaningful.length === 0) {
+      return {
+        valid: false,
+        errors: [
+          'Agregue al menos una plantilla de actividad económica (sector y tipo de plantilla) en el paso «Actividad económica».',
+        ],
+        invalidFieldKeys: [],
+      }
+    }
+  }
   const errors: string[] = []
   for (let i = 0; i < templates.length; i++) {
     const item = templates[i]
@@ -3600,29 +3648,13 @@ export function validateAllActivityTemplates(
 }
 
 /**
- * Plantillas de referencia del destino del crédito (paso 4): exige al menos una fila con sector y plantilla;
- * luego aplica {@link validateAllActivityTemplates} al listado completo.
+ * Plantillas de referencia del destino del crédito: opcionales; si hay filas, deben ser coherentes
+ * (misma regla que {@link validateAllActivityTemplates}: sin sector/plantilla a medias).
  */
 export function validateDestinationReferenceActivityTemplates(
   templates: Array<{ sector?: string; template?: string; product?: string | null; data?: Record<string, unknown> }>,
 ): ValidateTemplateResult {
-  const meaningful = templates.filter(
-    (t) =>
-      t
-      && typeof t === 'object'
-      && Boolean(String(t.sector ?? '').trim())
-      && Boolean(String(t.template ?? '').trim()),
-  )
-  if (meaningful.length === 0) {
-    return {
-      valid: false,
-      errors: [
-        'Agregue al menos una plantilla de actividad en «Actividades económicas del destino (referencia)».',
-      ],
-      invalidFieldKeys: [],
-    }
-  }
-  return validateAllActivityTemplates(templates)
+  return validateAllActivityTemplates(templates, { requireAtLeastOne: false })
 }
 
 /** formulaKey de utilidad mensual por plantilla (para sincronizar con Ingreso cultivos/negocio) */

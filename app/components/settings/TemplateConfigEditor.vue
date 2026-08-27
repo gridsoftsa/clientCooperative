@@ -445,6 +445,26 @@ function onAuxiliaryDocumentsChecklistField(payload: { key: string, value: unkno
             @update:field="onAuxiliaryDocumentsChecklistField"
           />
         </div>
+        <div
+          v-else-if="section.layout === 'documentationInsurabilityDocumentsChecklist'"
+          class="space-y-3"
+        >
+          <h5 v-if="section.title" class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {{ section.title }}
+          </h5>
+          <SettingsDocumentationInsurabilityDocumentsConfig
+            :edited-data="editedData"
+            :editing="editing"
+            :can-edit="canEdit"
+            :fng-checklist-grouped-ui="record.template_key === 'documentation-fng-documents'"
+            :help-paragraph="record.template_key === 'credit-director-approver-documents'
+              ? 'Documentos que el director de crédito puede adjuntar al registrar la aprobación con ente aprobador (misma estructura de checklist que asegurabilidad). Claves técnicas en inglés; textos visibles en español.'
+              : record.template_key === 'documentation-fng-documents'
+                ? 'Checklist FNG cuando la solicitud tiene garantía FNG. Use los dos bloques: paquete del asesor (borrador y devolución) frente a filas que solo carga revisión documental (columna «Ámbito» o bloque inferior). Se guardan en carpeta FNG en el repositorio. Claves técnicas en inglés; textos visibles en español.'
+                : null"
+            @update:field="onAuxiliaryDocumentsChecklistField"
+          />
+        </div>
         <!-- Tabla FINAGRO (cultivo-permanente) -->
         <div v-else-if="section.layout === 'cultivoPermanenteFinagroTable'" class="space-y-3">
           <h5 v-if="section.title" class="text-xs font-medium text-muted-foreground uppercase tracking-wider">

@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import {
+  RADICACION_JOB_POSITION_OPTIONS_FALLBACK,
+  RADICACION_OCCUPATION_OPTIONS_FALLBACK,
+} from '~/constants/radicacion-form-catalog-fallbacks'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
+
 const props = defineProps<{
   applicant: any
   documents?: any[]
@@ -8,7 +14,14 @@ const props = defineProps<{
 }>()
 
 const { formatPesosConSimbolo } = usePesosFormat()
-const { viewDocumentInNewTab } = useDocumentDownload()
+const {
+  open: inlinePreviewOpen,
+  loading: inlinePreviewLoading,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  previewApplicationDocument,
+} = useDocumentInlinePreview()
 const downloadingId = ref<number | null>(null)
 
 function fullName(a: any): string {
@@ -21,7 +34,7 @@ function cityName(a: any): string {
 }
 
 async function handleViewDocument(doc: { id: number; title?: string; original_name?: string }) {
-  if (downloadingId.value) return
+  if (inlinePreviewLoading.value || downloadingId.value) return
   const docId = Number(doc?.id)
   if (!Number.isFinite(docId) || docId < 1) {
     const { toast } = await import('vue-sonner')
@@ -30,12 +43,11 @@ async function handleViewDocument(doc: { id: number; title?: string; original_na
   }
   downloadingId.value = doc.id
   try {
-    await viewDocumentInNewTab(props.applicationId, doc.id)
-  } catch (e) {
-    console.error('Error abriendo documento:', e)
-    const { toast } = await import('vue-sonner')
-    const msg = e instanceof Error && e.message ? e.message : 'No se pudo abrir el documento. Verifica tu sesión.'
-    toast.error(msg)
+    await previewApplicationDocument(
+      props.applicationId,
+      docId,
+      doc.title || doc.original_name,
+    )
   } finally {
     downloadingId.value = null
   }
@@ -107,6 +119,14 @@ const { labelForValue: economicActivityLabel, fetchOptions: fetchEconomicActivit
   { value: 'Pensionado', label: 'Pensionado' },
   { value: 'agropecuario', label: 'Agropecuario' },
 ])
+const { labelForValue: occupationLabel, fetchOptions: fetchOccupationOptions } = useTemplateFlatCatalogOptions(
+  'occupation',
+  RADICACION_OCCUPATION_OPTIONS_FALLBACK,
+)
+const { labelForValue: jobPositionLabel, fetchOptions: fetchJobPositionOptions } = useTemplateFlatCatalogOptions(
+  'job-position',
+  RADICACION_JOB_POSITION_OPTIONS_FALLBACK,
+)
 
 onMounted(() => {
   void Promise.all([
@@ -115,6 +135,8 @@ onMounted(() => {
     fetchResidenceTypeOptions(),
     fetchMaritalStatusOptions(),
     fetchEconomicActivityOptions(),
+    fetchOccupationOptions(),
+    fetchJobPositionOptions(),
   ])
 })
 </script>
@@ -218,7 +240,7 @@ onMounted(() => {
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Ocupación</p>
-          <p>{{ applicant.occupation || '-' }}</p>
+          <p>{{ occupationLabel(props.applicant.occupation) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Empresa</p>
@@ -226,7 +248,7 @@ onMounted(() => {
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Cargo</p>
-          <p>{{ applicant.position || '-' }}</p>
+          <p>{{ jobPositionLabel(props.applicant.position) }}</p>
         </div>
         <div :class="fieldClass">
           <p :class="labelClass">Tipo contrato</p>
@@ -410,28 +432,40 @@ onMounted(() => {
 
     <section :class="sectionClass">
       <h3 :class="sectionTitleClass">Documentos adjuntos</h3>
-      <div v-if="documents?.length" class="flex flex-wrap gap-2">
+      <div v-if="documents?.length" class="flex min-w-0 flex-wrap gap-2">
         <Button
           v-for="doc in documents"
           :key="doc.id"
           variant="outline"
           size="sm"
-          class="h-auto gap-2 py-2"
+          class="h-auto min-w-0 max-w-full w-full justify-start gap-2 whitespace-normal py-2 text-left [&>span]:text-left"
           :disabled="downloadingId === doc.id"
           @click="handleViewDocument(doc)"
         >
           <Icon
             :name="downloadingId === doc.id ? 'i-lucide-loader-2' : 'i-lucide-file-text'"
-            class="h-4 w-4 shrink-0"
+            class="mt-0.5 h-4 w-4 shrink-0"
             :class="{ 'animate-spin': downloadingId === doc.id }"
           />
-          {{ doc.title || doc.original_name || 'Documento' }}
-          <Icon name="i-lucide-external-link" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span
+            class="min-w-0 flex-1 text-left text-sm font-medium leading-snug break-words [overflow-wrap:anywhere]"
+          >
+            {{ doc.title || doc.original_name || 'Documento' }}
+          </span>
+          <Icon name="i-lucide-eye" class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </Button>
       </div>
       <p v-else class="text-sm text-muted-foreground">
         Ningún documento adjunto
       </p>
     </section>
+
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :loading="inlinePreviewLoading"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>

@@ -1,6 +1,14 @@
 <script setup lang="ts">
-import { formatPesosConSimboloDesdeTexto } from '~/composables/usePesosFormat'
+import { computed } from 'vue'
+import {
+  formatPesosConSimbolo,
+  formatPesosConSimboloDesdeTexto,
+} from '~/composables/usePesosFormat'
 import type { EmergenciaCapacidadBloque } from '~/constants/analisis-score-emergencia'
+import {
+  sumCuotasFinEmergencia,
+  totalGastosCapacidadConCuotasFin,
+} from '~/utils/analisis-emergencia-capacidad'
 
 const props = withDefaults(
   defineProps<{
@@ -11,23 +19,34 @@ const props = withDefaults(
   { lock: true },
 )
 
-/** Mismo aspecto que Ingresos / Total ingresos; ancho acotado para montos COP. */
+/** Mismo aspecto que Ingresos / Total ingresos; el ancho lo acota el contenedor `max-w-md`. */
 const roClass
-  = 'h-8 w-full max-w-[15rem] min-w-0 text-right font-mono cursor-default bg-muted/50 text-foreground read-only:opacity-100'
+  = 'h-8 w-full min-w-0 text-right font-mono cursor-default bg-muted/50 text-foreground read-only:opacity-100'
 
-const editableMontoClass = 'h-8 w-full max-w-[15rem] min-w-0 font-mono'
+const editableMontoClass = 'h-8 w-full min-w-0 font-mono'
 
 function displayPesosStored(s: string | undefined | null): string {
   return formatPesosConSimboloDesdeTexto(s)
 }
+
+/** Total gastos radicación + suma de cuotas en «Cuota entidades financieras» (paso 2). */
+const totalGastosCapacidadVista = computed(() => {
+  const n = totalGastosCapacidadConCuotasFin(props.bloque)
+  const baseVacío = !String(props.bloque.totalEgresos ?? '').trim()
+  const sinCuotas = sumCuotasFinEmergencia(props.bloque) === 0
+  if (n === 0 && baseVacío && sinCuotas) {
+    return ''
+  }
+  return formatPesosConSimbolo(n)
+})
 </script>
 
 <template>
-  <div class="space-y-2">
+  <div class="w-full max-w-md space-y-2 sm:max-w-lg">
     <p v-if="lock" class="text-xs text-muted-foreground">
       Gastos (mismo criterio que el paso 3 de radicación — solo lectura)
     </p>
-    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <div class="grid grid-cols-2 gap-x-2 gap-y-2">
       <div v-if="lock" class="space-y-1">
         <Label class="text-xs">Gastos personales</Label>
         <Input
@@ -58,7 +77,7 @@ function displayPesosStored(s: string | undefined | null): string {
         <Input v-model="bloque.alimentacion" :class="editableMontoClass" />
       </div>
 
-      <div class="sm:col-span-2" :class="lock ? 'space-y-1' : 'space-y-1'">
+      <div class="col-span-2" :class="lock ? 'space-y-1' : 'space-y-1'">
         <Label class="text-xs">Gastos servicios / arriendo</Label>
         <Input
           v-if="lock"
@@ -134,14 +153,12 @@ function displayPesosStored(s: string | undefined | null): string {
     <div class="space-y-1">
       <Label class="text-xs">Total gastos</Label>
       <Input
-        v-if="lock"
-        :model-value="displayPesosStored(bloque.totalEgresos)"
+        :model-value="totalGastosCapacidadVista"
         readonly
         :class="roClass"
         :tabindex="-1"
-        title="Desde Datos financieros de la radicación. No editable."
+        title="Suma de gastos del paso 3 de radicación más las cuotas registradas arriba en «Cuota entidades financieras». No editable."
       />
-      <Input v-else v-model="bloque.totalEgresos" :class="editableMontoClass" />
     </div>
   </div>
 </template>

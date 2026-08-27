@@ -6,7 +6,7 @@ import RadicacionResumenFinancieroDeudor from '~/components/radicacion/Radicacio
 import {
   defaultEmergenciaState,
   emergenciaStateToSnapshotObject,
-  mergeEmergenciaFromSnapshot,
+  mergeEmergenciaSnapshotOverBase,
 } from '~/constants/analisis-score-emergencia'
 import type { EmergenciaState } from '~/constants/analisis-score-emergencia'
 import type { ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
@@ -44,6 +44,10 @@ import {
 import { totalIngresosRadicacionFormatted } from '~/utils/radicacion-financial-totals'
 import { aplicarEgresosCapacidadBloqueDesdeFinancialInfo } from '~/utils/radicacion-financial-egresos'
 import { aplicarActivosEmergenciaDesdeSolicitud } from '~/utils/radicacion-financial-activos'
+import {
+  buildResumenFinancieroDeudorAnalisisPersistido,
+  mergeFinancialInfoResumenAnalisisDeudor,
+} from '~/utils/analisis-resumen-financiero-merge'
 import type { Company } from '~/types/company'
 import { useAuth } from '~/composables/useAuth'
 import { isCreditApplicationTerminalImmutable } from '~/constants/credit-application-status'
@@ -84,6 +88,10 @@ const scoreCabecera = ref({
 const observacionesScore = ref('')
 /** Concepto final del analista (paso 4); se persiste en el snapshot. */
 const conceptoAnalista = ref('')
+
+/** Tras «Guardar cierre»: análisis persistido pero envío a director de crédito bloqueado por documentos de asegurabilidad. */
+const envioDirectorCreditoPendiente = ref(false)
+const pendienteEnvioDirectorCreditoLabels = ref<string[]>([])
 
 const emergenciaState = ref(defaultEmergenciaState())
 
@@ -137,6 +145,11 @@ function actualizarResumenFinancieroDeudorDesdeSolicitud(data: Record<string, un
   resumenDeudorFinancialInfo.value = d && typeof d === 'object' ? parseJsonFieldSolicitud(d.financial_info) : {}
   resumenMontoSolicitado.value = Number(data.amount_requested) || 0
 }
+
+/** Base radicación + ajustes del analista en EMERGENCIA (solo vista; no escribe la solicitud). */
+const resumenFinancieroDeudorAnalisis = computed(() =>
+  mergeFinancialInfoResumenAnalisisDeudor(resumenDeudorFinancialInfo.value, emergenciaState.value),
+)
 
 /** % ING desde parametrización (template `ing`); reserva = ingresos disponibles × %/100. */
 const pctIngDeudor = ref(30)
@@ -349,6 +362,35 @@ function aplicarVistaFinancieraDesdeSolicitud(data: Record<string, unknown>): vo
   sincronizarGarantiaConPlantilla()
 }
 
+/**
+ * Tras aplicar montos/ingresos/egresos/activos desde la radicación, fusiona el EMERGENCIA persistido
+ * en `analisis_score_snapshot` (mismo orden que la carga inicial). Sin esto, al volver del paso Score
+ * al Análisis solo quedaba la radicación y se perdían los valores guardados del analista.
+ */
+function reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data: Record<string, unknown>): void {
+  const snap = data.analisis_score_snapshot as Record<string, unknown> | null | undefined
+  emergenciaState.value = mergeEmergenciaSnapshotOverBase(
+    emergenciaState.value,
+    snap && typeof snap === 'object' ? (snap as { emergencia?: unknown }).emergencia : undefined,
+  )
+  const dPre = data.debtor as Record<string, unknown> | null | undefined
+  if (dPre && typeof dPre === 'object') {
+    if (!emergenciaState.value.deudorCodeudor.deudor.trim()) {
+      emergenciaState.value.deudorCodeudor.deudor = debtorDisplayName(dPre)
+    }
+    if (!emergenciaState.value.deudorCodeudor.documento.trim()) {
+      emergenciaState.value.deudorCodeudor.documento = cedulaDesdeSolicitante(dPre)
+    }
+  }
+  if (!emergenciaState.value.deudorCodeudor.fechaAnalisis.trim() && scoreCabecera.value.fecha) {
+    emergenciaState.value.deudorCodeudor.fechaAnalisis = scoreCabecera.value.fecha
+  }
+  aplicarCabeceraALineaEmergenciaDeudor()
+  sincronizarTasaEfectivaDesdeNominal()
+  sincronizarVrCuotaVarFormula()
+  sincronizarGarantiaConPlantilla()
+}
+
 const sincronizandoPaso3Radicacion = ref(false)
 
 /** Relee la solicitud y aplica monto, ingresos, egresos y activos. `true` si la petición tuvo éxito. */
@@ -369,6 +411,7 @@ async function refrescarVistaFinancieraDesdeSolicitudApi(): Promise<boolean> {
       ? String(data.analyst_review_approved_at)
       : null
     aplicarVistaFinancieraDesdeSolicitud(data)
+    reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data)
     return true
   }
   catch (e) {
@@ -598,6 +641,8 @@ function resetVistaAnalisisScoreParaSolicitud(): void {
   resumenMontoSolicitado.value = 0
   solicitudStatus.value = null
   analystReviewApprovedAt.value = null
+  envioDirectorCreditoPendiente.value = false
+  pendienteEnvioDirectorCreditoLabels.value = []
 }
 
 type LoadSolicitudParaAnalisisOptions = {
@@ -665,9 +710,12 @@ async function loadSolicitudParaAnalisis(
       perfilDeudor.value = snap.perfil_deudor
     }
 
-    emergenciaState.value = mergeEmergenciaFromSnapshot(
-      snap && typeof snap === 'object' ? (snap as { emergencia?: unknown }).emergencia : undefined,
-    )
+    /**
+     * Hidratar EMERGENCIA: primero paso 3 / solicitud (activos, ingresos, egresos, monto), luego snapshot encima.
+     * Si se aplica el snapshot antes y luego `aplicarVistaFinancieraDesdeSolicitud`, los activos del análisis guardado
+     * se sobrescribían con `financial_info` de la radicación (la central de riesgos no vive ahí y por eso parecía «guardarse bien»).
+     */
+    emergenciaState.value = defaultEmergenciaState()
 
     variableRowsForIndep.value = mergeRowsFromSnapshot(
       IMPRIMIR_INDEPENDIENTE_VARIABLES,
@@ -695,20 +743,9 @@ async function loadSolicitudParaAnalisis(
       && snap.variable_rows.length > 0,
     )
 
-    const dPre = data.debtor as Record<string, unknown> | null | undefined
-    if (dPre && typeof dPre === 'object') {
-      if (!emergenciaState.value.deudorCodeudor.deudor.trim()) {
-        emergenciaState.value.deudorCodeudor.deudor = debtorDisplayName(dPre)
-      }
-      if (!emergenciaState.value.deudorCodeudor.documento.trim()) {
-        emergenciaState.value.deudorCodeudor.documento = cedulaDesdeSolicitante(dPre)
-      }
-    }
-    if (!emergenciaState.value.deudorCodeudor.fechaAnalisis.trim() && scoreCabecera.value.fecha) {
-      emergenciaState.value.deudorCodeudor.fechaAnalisis = scoreCabecera.value.fecha
-    }
     aplicarVistaFinancieraDesdeSolicitud(data)
-    aplicarCabeceraALineaEmergenciaDeudor()
+    reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data)
+
     if (pasoAlExito != null) {
       currentStep.value = pasoAlExito
       scrollVistaAnalisisAlInicio()
@@ -843,33 +880,37 @@ function goToStep(num: number): void {
     return
   }
   if (num === 3) {
-    const v = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
-    if (!v.ok) {
-      onValidacionCreditoFallida(v)
-      return
+    if (!analisisScoreVistaSoloLectura.value) {
+      const v = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
+      if (!v.ok) {
+        onValidacionCreditoFallida(v)
+        return
+      }
     }
     currentStep.value = 3
     scrollVistaAnalisisAlInicio()
     return
   }
   if (num === 4) {
-    if (currentStep.value < 3) {
-      toast.error('Avance al paso Score y complete el formulario de puntajes antes de concepto del analista.')
-      return
-    }
     if (vistaImprimirScore.value == null) {
       toast.error('Seleccione un perfil en el paso 1 para cargar la hoja de score.')
       return
     }
-    const v = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
-    if (!v.ok) {
-      onValidacionCreditoFallida(v)
+    if (!analisisScoreVistaSoloLectura.value && currentStep.value < 3) {
+      toast.error('Avance al paso Score y complete el formulario de puntajes antes de concepto del analista.')
       return
     }
-    if (currentStep.value === 3) {
-      if (!arePuntajesCompletos()) {
-        toast.error('Debe completar todos los puntajes de la hoja SCORE antes de continuar.')
+    if (!analisisScoreVistaSoloLectura.value) {
+      const v = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
+      if (!v.ok) {
+        onValidacionCreditoFallida(v)
         return
+      }
+      if (currentStep.value === 3) {
+        if (!arePuntajesCompletos()) {
+          toast.error('Debe completar todos los puntajes de la hoja SCORE antes de continuar.')
+          return
+        }
       }
     }
     currentStep.value = 4
@@ -883,19 +924,23 @@ function nextStep(): void {
       toast.error('Selecciona un perfil del deudor para continuar.')
       return
     }
-    const t = validarTipoValorCuotaPaso1(emergenciaState.value.credito.tipoValorCuota)
-    if (!t.ok) {
-      toast.error(t.mensaje)
-      return
+    if (!analisisScoreVistaSoloLectura.value) {
+      const t = validarTipoValorCuotaPaso1(emergenciaState.value.credito.tipoValorCuota)
+      if (!t.ok) {
+        toast.error(t.mensaje)
+        return
+      }
     }
     currentStep.value = 2
     return
   }
   if (currentStep.value === 2) {
-    const v = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
-    if (!v.ok) {
-      onValidacionCreditoFallida(v)
-      return
+    if (!analisisScoreVistaSoloLectura.value) {
+      const v = validarCreditoEmergenciaCompleto(emergenciaState.value.credito)
+      if (!v.ok) {
+        onValidacionCreditoFallida(v)
+        return
+      }
     }
     currentStep.value = 3
     scrollVistaAnalisisAlInicio()
@@ -906,7 +951,7 @@ function nextStep(): void {
       toast.error('Seleccione un perfil en el paso 1 para cargar la hoja de score.')
       return
     }
-    if (!arePuntajesCompletos()) {
+    if (!analisisScoreVistaSoloLectura.value && !arePuntajesCompletos()) {
       toast.error('Debe completar todos los puntajes de la hoja SCORE antes de continuar.')
       return
     }
@@ -952,14 +997,34 @@ const solicitudEsSoloLecturaPorEstado = computed(() =>
   isCreditApplicationTerminalImmutable(solicitudStatus.value),
 )
 
-/** API solo permite guardar en borrador o en análisis; tras envío a director de crédito no debe intentarse persistir desde aquí. */
-const solicitudPermitePersistirAnalisisScore = computed(() => {
-  const s = solicitudStatus.value
-  if (s == null) {
+/**
+ * Fuera de «En análisis»: consulta del análisis/SCORE y PDF, sin editar (p. ej. analista u otro rol con radicacion_analisis_ver).
+ * Mientras carga la solicitud se bloquea edición hasta conocer el estado.
+ */
+const analisisScoreVistaSoloLectura = computed(() => {
+  if (solicitudEsSoloLecturaPorEstado.value) {
     return true
   }
+  if (!solicitudId.value) {
+    return false
+  }
+  if (loadingSolicitud.value) {
+    return true
+  }
+  return solicitudStatus.value !== 'In_Analysis'
+})
 
-  return s === 'Draft' || s === 'In_Analysis'
+/** Solo con radicación en análisis (y no cerrada) puede persistir desde esta pantalla. El API ya no acepta borrador aquí como flujo principal del analista. */
+const solicitudPermitePersistirAnalisisScore = computed(() => {
+  if (solicitudEsSoloLecturaPorEstado.value || loadingSolicitud.value) {
+    return false
+  }
+  const s = solicitudStatus.value
+  if (s == null) {
+    return false
+  }
+
+  return s === 'In_Analysis'
 })
 
 /** Solo analista (y roles con radicacion_analisis_guardar). No persistir si la solicitud está cerrada. */
@@ -1011,6 +1076,11 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
         nivel_riesgo: classifyNivelRiesgo(total),
         observaciones: observacionesScore.value.trim() === '' ? null : observacionesScore.value,
         emergencia: emergenciaStateToSnapshotObject(emergenciaState.value),
+        resumen_financiero_deudor_analisis: buildResumenFinancieroDeudorAnalisisPersistido(
+          resumenDeudorFinancialInfo.value,
+          emergenciaState.value,
+          resumenMontoSolicitado.value,
+        ),
       },
     })
     toast.success('Análisis guardado con la solicitud.')
@@ -1032,7 +1102,11 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
 }
 
 type ScorePanelExpose = {
-  guardarAnalisisScore: (options?: { conceptoAnalista?: string | null }) => Promise<{ sentToCreditDirectorReview: boolean }>
+  guardarAnalisisScore: (options?: { conceptoAnalista?: string | null }) => Promise<{
+    sentToCreditDirectorReview: boolean
+    pendingSendToCreditDirector?: boolean
+    missingInsurabilityLabels?: string[]
+  }>
   guardandoScore: boolean
   puedeGuardarScore: boolean
   arePuntajesCompletos: () => boolean
@@ -1082,8 +1156,18 @@ async function ejecutarGuardarScore(): Promise<void> {
 async function ejecutarGuardarCierreAnalista(): Promise<void> {
   const r = await scorePanelRef.value?.guardarAnalisisScore({ conceptoAnalista: conceptoAnalista.value })
   if (r?.sentToCreditDirectorReview) {
+    envioDirectorCreditoPendiente.value = false
+    pendienteEnvioDirectorCreditoLabels.value = []
     await router.push('/radicacion')
+    return
   }
+  if (r?.pendingSendToCreditDirector) {
+    envioDirectorCreditoPendiente.value = true
+    pendienteEnvioDirectorCreditoLabels.value = r.missingInsurabilityLabels ?? []
+    return
+  }
+  envioDirectorCreditoPendiente.value = false
+  pendienteEnvioDirectorCreditoLabels.value = []
 }
 
 async function ejecutarDescargaScorePdf(): Promise<void> {
@@ -1147,10 +1231,18 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
         Esta solicitud está en <strong>desembolso</strong> o <strong>rechazada</strong>: el análisis es solo consulta; no se puede guardar ni modificar.
       </p>
       <p
-        v-else-if="solicitudStatus === 'Credit_Director_Review' && !loadingSolicitud"
-        class="rounded-md border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-sm text-sky-950 dark:text-sky-50"
+        v-else-if="analisisScoreVistaSoloLectura && !loadingSolicitud && !solicitudEsSoloLecturaPorEstado"
+        class="rounded-md border border-sky-500/35 bg-sky-500/10 px-3 py-2 text-sm text-sky-950 dark:text-sky-50 space-y-2"
       >
-        Esta radicación ya fue enviada a <strong>revisión del director de crédito</strong>. Por eso no aparece en su listado predeterminado (solo muestra «En análisis»). Use el filtro de estado «Revisión director de crédito» si necesita abrirla de nuevo.
+        <span class="block">
+          Esta radicación <strong>no está en análisis</strong>: puede revisar el análisis y el SCORE en <strong>solo consulta</strong> y abrir el PDF; no puede guardar cambios.
+        </span>
+        <span
+          v-if="solicitudStatus === 'Credit_Director_Review'"
+          class="block text-sky-900/95 dark:text-sky-100/95"
+        >
+          Ya fue enviada a <strong>revisión del director de crédito</strong>, por eso no aparece en su listado predeterminado (solo muestra «En análisis»). Use el filtro de estado «Revisión director de crédito» si necesita abrirla de nuevo.
+        </span>
       </p>
     </div>
     <div
@@ -1227,8 +1319,14 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
           v-if="currentStep === 1"
           class="grid min-w-0 grid-cols-1 items-start gap-4 sm:grid-cols-2 sm:items-stretch"
         >
-          <RadicacionAnalisisScorePerfilPicker v-model="perfilDeudor" />
-          <RadicacionAnalisisTipoValorCuotaPicker v-model="emergenciaState.credito.tipoValorCuota" />
+          <RadicacionAnalisisScorePerfilPicker
+            v-model="perfilDeudor"
+            :disabled="analisisScoreVistaSoloLectura"
+          />
+          <RadicacionAnalisisTipoValorCuotaPicker
+            v-model="emergenciaState.credito.tipoValorCuota"
+            :disabled="analisisScoreVistaSoloLectura"
+          />
         </div>
 
         <div v-else-if="currentStep === 2" class="space-y-4">
@@ -1238,13 +1336,15 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
             strict
           >
             <RadicacionResumenFinancieroDeudor
-              :financial-info="resumenDeudorFinancialInfo"
+              :financial-info="resumenFinancieroDeudorAnalisis"
               :amount-requested="resumenMontoSolicitado"
+              analysis-adjusted
             />
           </PermissionGate>
           <AnalisisEmergenciaForm
             ref="emergenciaFormRef"
             v-model="emergenciaState"
+            :read-only="analisisScoreVistaSoloLectura"
             :lock-deudor-fields="true"
             :lock-gastos-desde-radicacion="true"
             :lock-vr-cuota-var="isVrCuotaVarBloqueada"
@@ -1273,8 +1373,11 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
               :credit-application-id="solicitudId"
               :perfil-deudor="perfilDeudor"
               :emergencia="emergenciaState"
+              :debtor-financial-info-baseline="resumenDeudorFinancialInfo"
+              :amount-requested="resumenMontoSolicitado"
               :company="companyPrincipal"
               :loading-company="loadingCompany"
+              :read-only="analisisScoreVistaSoloLectura"
               @saved="onScoreGuardado"
               @credit-validation-failed="onValidacionCreditoFallida"
             />
@@ -1290,8 +1393,11 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
               :credit-application-id="solicitudId"
               :perfil-deudor="perfilDeudor"
               :emergencia="emergenciaState"
+              :debtor-financial-info-baseline="resumenDeudorFinancialInfo"
+              :amount-requested="resumenMontoSolicitado"
               :company="companyPrincipal"
               :loading-company="loadingCompany"
+              :read-only="analisisScoreVistaSoloLectura"
               @saved="onScoreGuardado"
               @credit-validation-failed="onValidacionCreditoFallida"
             />
@@ -1350,6 +1456,8 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
                 v-model="conceptoAnalista"
                 rows="8"
                 class="min-h-44 w-full resize-y"
+                :readonly="analisisScoreVistaSoloLectura"
+                :disabled="analisisScoreVistaSoloLectura"
                 placeholder="Escriba el concepto o decisión final del análisis (visible en el PDF)…"
               />
               <p class="text-xs text-muted-foreground">
@@ -1361,6 +1469,53 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
                 </template>
               </p>
             </div>
+
+            <Alert
+              v-if="envioDirectorCreditoPendiente && solicitudId && solicitudStatus === 'In_Analysis'"
+              class="border-amber-500/50 bg-amber-500/10"
+            >
+              <Icon name="i-lucide-file-warning" class="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
+              <AlertTitle>Envío al director de crédito pendiente</AlertTitle>
+              <AlertDescription class="mt-2 space-y-3 text-sm">
+                <p>
+                  El análisis y el SCORE <strong>ya están guardados</strong>. Falta documentación de asegurabilidad del deudor en la radicación; cuando la complete, use <strong>Reintentar envío</strong> o <strong>Guardar cierre</strong>.
+                </p>
+                <ul
+                  v-if="pendienteEnvioDirectorCreditoLabels.length > 0"
+                  class="list-inside list-disc space-y-1 text-foreground/90"
+                >
+                  <li v-for="(lab, idx) in pendienteEnvioDirectorCreditoLabels" :key="idx">
+                    {{ lab }}
+                  </li>
+                </ul>
+                <div class="flex flex-wrap gap-2 pt-1">
+                  <Button variant="outline" size="sm" as-child>
+                    <NuxtLink :to="`/radicacion/${solicitudId}`" class="inline-flex items-center gap-2">
+                      <Icon name="i-lucide-upload" class="h-4 w-4 shrink-0" />
+                      Abrir radicación
+                    </NuxtLink>
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    :disabled="!solicitudId || scorePanelRef?.guardandoScore"
+                    @click="ejecutarGuardarCierreAnalista"
+                  >
+                    <Icon
+                      v-if="scorePanelRef?.guardandoScore"
+                      name="i-lucide-loader-2"
+                      class="mr-2 h-4 w-4 animate-spin"
+                    />
+                    <Icon
+                      v-else
+                      name="i-lucide-send"
+                      class="mr-2 h-4 w-4"
+                    />
+                    Reintentar envío al director de crédito
+                  </Button>
+                </div>
+              </AlertDescription>
+            </Alert>
           </div>
         </div>
 

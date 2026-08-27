@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Company } from '~/types/company'
 import { emergenciaStateToSnapshotObject, type EmergenciaState } from '~/constants/analisis-score-emergencia'
+import { buildResumenFinancieroDeudorAnalisisPersistido } from '~/utils/analisis-resumen-financiero-merge'
 import type { AnalisisScorePerfilValue } from '~/constants/analisis-score'
 import type { ImprimirMeta, ImprimirVariableRow } from '~/constants/analisis-score-imprimir'
 import type { ScoreMatrixLine } from '~/constants/analisis-score-matrix'
@@ -34,9 +35,15 @@ const props = defineProps<{
   perfilDeudor?: AnalisisScorePerfilValue
   /** Hoja análisis EMERGENCIA (mismo guardado en snapshot) */
   emergencia?: EmergenciaState | null
+  /** `financial_info` base del deudor (radicación); para `resumen_financiero_deudor_analisis` en el snapshot. */
+  debtorFinancialInfoBaseline?: Record<string, unknown> | null
+  /** Monto solicitado de la solicitud (coherente con el resumen financiero). */
+  amountRequested?: number | null
   /** Empresa principal (misma fuente que Configuración → Empresa) */
   company?: Company | null
   loadingCompany?: boolean
+  /** Solo consulta: no editar cabecera, puntajes ni observaciones. */
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -194,33 +201,42 @@ const puedeGuardarScore = computed(() => hasPermission('radicacion_analisis_guar
 
 const guardandoScore = ref(false)
 
-async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null }): Promise<{ sentToCreditDirectorReview: boolean }> {
+type GuardarAnalisisScoreResult = {
+  sentToCreditDirectorReview: boolean
+  pendingSendToCreditDirector?: boolean
+  missingInsurabilityLabels?: string[]
+}
+
+async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null }): Promise<GuardarAnalisisScoreResult> {
+  if (props.readOnly) {
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
+  }
   if (!puedeGuardarScore.value) {
     toast.error('No tienes permiso para guardar análisis y SCORE.')
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   const id = props.creditApplicationId?.trim()
   if (!id) {
     toast.error('Abre el análisis SCORE desde el listado de radicación para vincular una solicitud.')
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   if (!props.perfilDeudor) {
     toast.error('Selecciona el perfil del deudor en el paso 1.')
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   if (props.emergencia == null) {
     toast.error('Faltan datos de la hoja de análisis (EMERGENCIA). Vuelva al paso 2 o recargue la solicitud.')
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   const valCred = validarCreditoEmergenciaCompleto(props.emergencia.credito)
   if (!valCred.ok) {
     emit('credit-validation-failed', valCred)
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   if (!puntajesFormularioValido.value) {
     erroresValidacionVisibles.value = true
     toast.error('Completa el puntaje en todas las variables antes de guardar.')
-    return { sentToCreditDirectorReview: false }
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
 
   guardandoScore.value = true
@@ -241,6 +257,17 @@ async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null
         ? emergenciaStateToSnapshotObject(props.emergencia)
         : null,
     }
+    if (
+      props.debtorFinancialInfoBaseline != null
+      && props.emergencia != null
+      && props.amountRequested != null
+    ) {
+      body.resumen_financiero_deudor_analisis = buildResumenFinancieroDeudorAnalisisPersistido(
+        props.debtorFinancialInfoBaseline,
+        props.emergencia,
+        Number(props.amountRequested) || 0,
+      )
+    }
     if (options && 'conceptoAnalista' in options) {
       const c = options.conceptoAnalista
       const t = c == null ? '' : String(c).trim()
@@ -250,11 +277,20 @@ async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null
       data?: { analisis_score_snapshot?: Record<string, unknown> | null }
       message?: string
       sent_to_credit_director_review?: boolean
+      pending_send_to_credit_director?: boolean
+      missing_insurability_documents?: { key?: string, label?: string }[]
     }>(`/credit-applications/${id}/analisis-score`, {
       method: 'PUT',
       body,
     })
     const sent = Boolean(res?.sent_to_credit_director_review)
+    const pending = Boolean(res?.pending_send_to_credit_director)
+    const missingRows = Array.isArray(res?.missing_insurability_documents)
+      ? res.missing_insurability_documents
+      : []
+    const missingLabels = missingRows
+      .map((row: { label?: string, key?: string }) => String(row?.label ?? row?.key ?? '').trim())
+      .filter(Boolean)
     if (sent) {
       toast.success(res?.message ?? 'Solicitud enviada a revisión de director de crédito.', {
         description:
@@ -262,15 +298,36 @@ async function guardarAnalisisScore(options?: { conceptoAnalista?: string | null
         duration: 11000,
       })
     }
+    else if (pending) {
+      const maxLines = 3
+      let desc: string | undefined
+      if (missingLabels.length > 0) {
+        const lines = missingLabels.slice(0, maxLines).map(l => `• ${l}`)
+        const rest = missingLabels.length - maxLines
+        if (rest > 0) {
+          lines.push(`• …y ${rest} más`)
+        }
+        desc = lines.join('\n')
+      }
+      toast.warning('Análisis guardado. Envío al director de crédito pendiente.', {
+        description: desc ?? 'Cargue la documentación de asegurabilidad en la radicación y vuelva a intentar.',
+        duration: 9000,
+      })
+    }
     else {
       toast.success(res?.message ?? 'Análisis y SCORE guardado correctamente.')
     }
     emit('saved', res?.data?.analisis_score_snapshot ?? null)
-    return { sentToCreditDirectorReview: sent }
+    return {
+      sentToCreditDirectorReview: sent,
+      pendingSendToCreditDirector: pending,
+      missingInsurabilityLabels: missingLabels.length > 0 ? missingLabels : undefined,
+    }
   }
   catch (e: any) {
-    toast.error(e?.data?.message ?? 'No se pudo guardar el análisis SCORE.')
-    return { sentToCreditDirectorReview: false }
+    const msg = e?.data?.message ?? 'No se pudo guardar el análisis SCORE.'
+    toast.error(msg)
+    return { sentToCreditDirectorReview: false, pendingSendToCreditDirector: false }
   }
   finally {
     guardandoScore.value = false
@@ -324,15 +381,15 @@ defineExpose({
       <div class="grid gap-3 sm:grid-cols-3">
         <div class="space-y-1.5">
           <Label for="imp-fecha">FECHA</Label>
-          <Input id="imp-fecha" v-model="cabecera.fecha" placeholder="DD/MM/AAAA" class="font-mono" />
+          <Input id="imp-fecha" v-model="cabecera.fecha" placeholder="DD/MM/AAAA" class="font-mono" :readonly="props.readOnly" :disabled="props.readOnly" />
         </div>
         <div class="space-y-1.5">
           <Label for="imp-cedula">CÉDULA</Label>
-          <Input id="imp-cedula" v-model="cabecera.cedula" placeholder="" class="font-mono" />
+          <Input id="imp-cedula" v-model="cabecera.cedula" placeholder="" class="font-mono" :readonly="props.readOnly" :disabled="props.readOnly" />
         </div>
         <div class="space-y-1.5">
           <Label for="imp-nombre">NOMBRE</Label>
-          <Input id="imp-nombre" v-model="cabecera.nombre" placeholder="" />
+          <Input id="imp-nombre" v-model="cabecera.nombre" placeholder="" :readonly="props.readOnly" :disabled="props.readOnly" />
         </div>
       </div>
 
@@ -393,6 +450,7 @@ defineExpose({
                 <template v-else-if="!isSectionRow(row)">
                   <Select
                     v-if="isMatrixDataRow(row)"
+                    :disabled="props.readOnly"
                     :model-value="selectedMatrixOptionValue(row)"
                     @update:model-value="(v) => onMatrixOptionChange(row, v == null ? '__none__' : String(v))"
                   >
@@ -401,6 +459,7 @@ defineExpose({
                       :aria-invalid="erroresValidacionVisibles && isFilaPuntajeIncompleta(row)"
                       class="h-auto min-h-8 w-full whitespace-normal py-1 text-left font-mono text-sm"
                       :class="erroresValidacionVisibles && isFilaPuntajeIncompleta(row) ? 'ring-2 ring-destructive' : ''"
+                      :disabled="props.readOnly"
                     >
                       <SelectValue placeholder="Seleccionar…" />
                     </SelectTrigger>
@@ -423,6 +482,8 @@ defineExpose({
                     v-model="row.caracteristica"
                     class="h-8 font-mono text-sm"
                     placeholder="—"
+                    :readonly="props.readOnly"
+                    :disabled="props.readOnly"
                   />
                 </template>
               </TableCell>
@@ -456,6 +517,8 @@ defineExpose({
                     class="h-8 font-mono text-sm text-right"
                     :class="erroresValidacionVisibles && isFilaPuntajeIncompleta(row) ? 'ring-2 ring-destructive' : ''"
                     placeholder="—"
+                    :readonly="props.readOnly"
+                    :disabled="props.readOnly"
                   />
                 </template>
               </TableCell>
@@ -478,6 +541,8 @@ defineExpose({
           rows="4"
           class="min-h-24 w-full resize-y"
           placeholder="Escriba observaciones sobre este SCORE (opcional)…"
+          :readonly="props.readOnly"
+          :disabled="props.readOnly"
         />
         <p class="text-xs text-muted-foreground">
           Visible al guardar y en el PDF del análisis SCORE si hay texto.
@@ -503,15 +568,6 @@ defineExpose({
             </TableBody>
           </Table>
         </div>
-      </div>
-
-      <div class="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-        <p class="font-medium text-foreground">
-          Firma de analista
-        </p>
-        <p class="mt-2 text-xs">
-          Espacio reservado según plantilla impresa.
-        </p>
       </div>
     </div>
   </div>

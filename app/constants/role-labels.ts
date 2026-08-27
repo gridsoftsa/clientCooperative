@@ -8,6 +8,7 @@ const ROLE_DISPLAY_LABELS: Record<string, string> = {
   user: 'Usuario',
   asesor: 'Asesor',
   analista: 'Analista',
+  auxiliar_credito: 'Auxiliar de crédito',
   director_agencia: 'Director de agencia',
   director_credito: 'Director de crédito',
   gestor_documental: 'Gestor documental',

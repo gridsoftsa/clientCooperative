@@ -1,11 +1,30 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/components/ui/collapsible'
 import Multiselect from '@vueform/multiselect'
 import type { ApplicantForm, ApplicantDocumentForm, FinancialInfoForm } from '~/types/credit-application'
 import { normalizeStoredActivityType } from '~/constants/auxiliary-documents-checklist'
+import {
+  compareYmd,
+  expeditionBeforeEighteenthBirthday,
+  isAtLeastAgeYears,
+  maxBirthYmdForMinAge,
+  MIN_APPLICANT_AGE_YEARS,
+  ymdAddCalendarYears,
+  ymdLocalToday,
+} from '~/utils/applicant-dates'
+import { documentNumberLengthHint, validateColombianDocumentNumber } from '~/utils/colombian-document-number'
+import {
+  PASTED_PLAIN_TEXT_MAX_LENGTH,
+  clampPastedPlainText,
+  pastedPlainTextFromClipboardEvent,
+} from '~/utils/sanitize-pasted-plain-text'
+import {
+  RADICACION_JOB_POSITION_OPTIONS_FALLBACK,
+  RADICACION_OCCUPATION_OPTIONS_FALLBACK,
+} from '~/constants/radicacion-form-catalog-fallbacks'
 /** Import explícito: Nuxt auto-importa como `RadicacionAuxiliaryDocumentsSection`, no como `AuxiliaryDocumentsSection`. */
 import AuxiliaryDocumentsSection from '~/components/radicacion/AuxiliaryDocumentsSection.vue'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -31,6 +50,12 @@ const props = withDefaults(
     hideDocumentsSection?: boolean
     /** Checklist documentos módulo auxiliar (según actividad económica); típico solo deudor en radicación. */
     showDocumentosAuxiliarChecklist?: boolean
+    /** Texto para archivos pendientes en checklist auxiliar (`immediate` en detalle con subida automática). */
+    auxiliaryPendingUploadHint?: 'draftSave' | 'immediate'
+    /** `full` en alta/edición; `uploadOnly` / `viewOnly` en revisión documental (detalle). */
+    auxiliaryInteractionMode?: 'full' | 'uploadOnly' | 'viewOnly'
+    /** Checkbox y comentario de revisión por ítem del checklist (documentos ya vinculados). */
+    showAuxiliaryDocumentReview?: boolean
     /** Documentos de la solicitud (enlaces de archivos ya subidos en checklist auxiliar). */
     creditApplicationDocuments?: Array<{
       id: number
@@ -38,6 +63,8 @@ const props = withDefaults(
       title?: string
       original_name?: string
       download_url?: string
+      is_reviewed?: boolean
+      review_comment?: string | null
     }>
     /**
      * Si true, «Ingreso cultivos/negocio» no se edita a mano: lo calculan las plantillas de actividad económica.
@@ -58,6 +85,9 @@ const props = withDefaults(
     hideDocumentsSection: false,
     creditApplicationId: null,
     showDocumentosAuxiliarChecklist: false,
+    auxiliaryPendingUploadHint: 'draftSave',
+    auxiliaryInteractionMode: 'full',
+    showAuxiliaryDocumentReview: false,
     creditApplicationDocuments: () => [],
     documentProducerOrgUnitId: null,
     trdDocumentTypeOptions: () => [],
@@ -68,6 +98,14 @@ const props = withDefaults(
 const { hasAnyPermission } = usePermissions()
 
 const personalReadOnly = computed(() => props.readOnlyForm || props.documentsEditableOnly)
+
+/** Permite cambiar tipo de actividad en modo solo documentos (checklist auxiliar en revisión documental). */
+const activityTypeReadOnly = computed(() => {
+  if (!personalReadOnly.value) {
+    return false
+  }
+  return !(props.documentsEditableOnly && docCanSubir.value)
+})
 
 /** Alta/edición de documentos (título, archivo, quitar, agregar). */
 const docActionsEnabled = computed(() => !props.readOnlyForm || props.documentsEditableOnly)
@@ -80,6 +118,11 @@ const docCanEditar = computed(
 )
 const docCanEliminar = computed(
   () => docActionsEnabled.value && hasAnyPermission(['radicacion_documentos_eliminar']),
+)
+
+/** Bloquea subida en checklist auxiliar si no hay permiso de subida (p. ej. solo «decidir» en revisión documental). */
+const auxiliaryUploadBlockedByPermissions = computed(
+  () => (personalReadOnly.value && !props.documentsEditableOnly) || !docCanSubir.value,
 )
 
 function canEditDocumentTitle(doc: ApplicantDocumentForm): boolean {
@@ -101,6 +144,15 @@ function canRemoveDocumentRow(doc: ApplicantDocumentForm): boolean {
 }
 
 const { $api, $csrf } = useNuxtApp()
+const {
+  open: inlinePreviewOpen,
+  loading: inlinePreviewLoading,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  previewLocalFile,
+  previewApplicationDocument,
+} = useDocumentInlinePreview()
 
 const emit = defineEmits<{
   'update:modelValue': [ApplicantForm]
@@ -130,6 +182,44 @@ const financial = computed({
 
 function setFinancial<K extends keyof FinancialInfoForm>(key: K, value: FinancialInfoForm[K]) {
   financial.value = { ...financial.value, [key]: value }
+}
+
+function setIncomeDescription(value: string) {
+  setFinancial('income', { ...(financial.value.income || {}), description: value })
+}
+
+function setExpensesDescription(value: string) {
+  setFinancial('expenses', { ...(financial.value.expenses || {}), description: value })
+}
+
+function onPasteIncomeDescription(e: ClipboardEvent) {
+  if (personalReadOnly.value) {
+    return
+  }
+  e.preventDefault()
+  setIncomeDescription(pastedPlainTextFromClipboardEvent(e, financial.value.income?.description ?? ''))
+}
+
+function onBlurIncomeDescription() {
+  if (personalReadOnly.value) {
+    return
+  }
+  setIncomeDescription(clampPastedPlainText(financial.value.income?.description ?? ''))
+}
+
+function onPasteExpensesDescription(e: ClipboardEvent) {
+  if (personalReadOnly.value) {
+    return
+  }
+  e.preventDefault()
+  setExpensesDescription(pastedPlainTextFromClipboardEvent(e, financial.value.expenses?.description ?? ''))
+}
+
+function onBlurExpensesDescription() {
+  if (personalReadOnly.value) {
+    return
+  }
+  setExpensesDescription(clampPastedPlainText(financial.value.expenses?.description ?? ''))
 }
 
 /** Misma clave `value` que en parametrización (`actividad-economica` / checklist auxiliar). */
@@ -167,6 +257,14 @@ const { options: economicActivityOptions, fetchOptions: fetchEconomicActivityOpt
   { value: 'Pensionado', label: 'Pensionado' },
   { value: 'agropecuario', label: 'Agropecuario' },
 ])
+const { options: occupationOptions, fetchOptions: fetchOccupationOptions } = useTemplateFlatCatalogOptions(
+  'occupation',
+  RADICACION_OCCUPATION_OPTIONS_FALLBACK,
+)
+const { options: jobPositionOptions, fetchOptions: fetchJobPositionOptions } = useTemplateFlatCatalogOptions(
+  'job-position',
+  RADICACION_JOB_POSITION_OPTIONS_FALLBACK,
+)
 
 onMounted(() => {
   void Promise.all([
@@ -175,6 +273,8 @@ onMounted(() => {
     fetchResidenceTypeOptions(),
     fetchMaritalStatusOptions(),
     fetchEconomicActivityOptions(),
+    fetchOccupationOptions(),
+    fetchJobPositionOptions(),
   ])
 })
 
@@ -188,12 +288,19 @@ const sectionClass = 'space-y-4'
 const sectionTitleClass = 'text-sm font-semibold text-foreground border-b pb-2 mb-1'
 const fieldClass = 'space-y-1.5'
 
-/** Checklist auxiliar (deudor): solo visible si el rol puede subir adjuntos. */
+/**
+ * Checklist auxiliar (deudor): visible si puede subir, si el padre activa revisión documental,
+ * o en consulta (`viewOnly`) para que los adjuntos ya cargados se vean al abrir la radicación.
+ */
 const auxiliaryChecklistVisible = computed(
   () =>
     !props.hideDocumentsSection
     && props.showDocumentosAuxiliarChecklist
-    && docCanSubir.value,
+    && (
+      docCanSubir.value
+      || props.showAuxiliaryDocumentReview
+      || props.auxiliaryInteractionMode === 'viewOnly'
+    ),
 )
 
 /** Documentos libres (sin checklist): flujo de codeudor u otros formularios. */
@@ -205,24 +312,28 @@ const freeAttachmentsVisible = computed(
     && (props.showSearch || props.showCoDebtorConcept),
 )
 
-/** Con checklist auxiliar, mostrar el contenido expandido por defecto (la lista no debe quedar «vacía» hasta abrir). */
-const documentosAdjuntosOpen = ref(props.showDocumentosAuxiliarChecklist)
-
-watch(
-  () => props.showDocumentosAuxiliarChecklist,
-  (show) => {
-    if (show) {
-      documentosAdjuntosOpen.value = true
-    }
-  },
-)
+const freeAttachmentStats = computed(() => {
+  const rows = documents.value ?? []
+  const withFile = rows.filter(d =>
+    (d.file instanceof File) || Boolean(d.original_name?.trim()),
+  ).length
+  const withTitle = rows.filter(d => d.title?.trim()).length
+  return {
+    total: rows.length,
+    withFile,
+    withTitle,
+    percent: rows.length ? Math.round((withFile / rows.length) * 100) : 0,
+  }
+})
 
 type AuxiliaryDocumentsSectionExpose = {
-  validateRequiredAuxiliaryUploads: () => boolean
+  validateRequiredAuxiliaryUploads: (opts?: { silent?: boolean }) => boolean
 }
 
 const auxiliaryDocumentsSectionRef = ref<AuxiliaryDocumentsSectionExpose | null>(null)
 const submitValidationAttempted = ref(false)
+/** Tras cualquier cambio en fecha de nacimiento o expedición: validación en vivo (sin esperar blur ni envío). */
+const liveApplicantDateCheckRequested = ref(false)
 
 const requiredFieldIds = {
   document_type: 'doc_type',
@@ -236,6 +347,8 @@ const requiredFieldIds = {
   mobile_phone: 'mobile',
   residence_address: 'address',
   activity_type: 'activity_type',
+  occupation: 'occupation',
+  position: 'position',
 } as const
 
 type RequiredFieldKey = keyof typeof requiredFieldIds
@@ -251,6 +364,14 @@ function isRequiredFieldMissing(field: RequiredFieldKey): boolean {
   return !hasValue(local.value[field as keyof ApplicantForm])
 }
 
+function documentNumberFormatInvalid(): boolean {
+  const num = local.value.document_number?.trim() ?? ''
+  if (!num) {
+    return false
+  }
+  return validateColombianDocumentNumber(local.value.document_type ?? '', num) !== null
+}
+
 function firstMissingRequiredField(): RequiredFieldKey | null {
   const ordered: RequiredFieldKey[] = [
     'document_type',
@@ -264,8 +385,57 @@ function firstMissingRequiredField(): RequiredFieldKey | null {
     'mobile_phone',
     'residence_address',
     'activity_type',
+    'occupation',
+    'position',
   ]
   return ordered.find(field => isRequiredFieldMissing(field)) ?? null
+}
+
+/** Expedición anterior al nacimiento o sin al menos 18 años calendario entre ambas fechas. */
+function expeditionVersusBirthRulesInvalid(): boolean {
+  const exp = local.value.expedition_date?.trim() ?? ''
+  const birth = local.value.birth_date?.trim() ?? ''
+  if (!hasValue(exp) || !hasValue(birth)) {
+    return false
+  }
+  const order = compareYmd(exp, birth)
+  if (order !== null && order < 0) {
+    return true
+  }
+  return expeditionBeforeEighteenthBirthday(exp, birth)
+}
+
+/** Menor de edad respecto a la fecha actual (segunda validación; solo si la primera ya cumple). */
+function birthUnder18VersusToday(): boolean {
+  const b = local.value.birth_date?.trim() ?? ''
+  if (!hasValue(b)) {
+    return false
+  }
+  return !isAtLeastAgeYears(b, MIN_APPLICANT_AGE_YEARS, ymdLocalToday())
+}
+
+function applicantDateRulesBroken(): boolean {
+  return expeditionVersusBirthRulesInvalid() || birthUnder18VersusToday()
+}
+
+function showApplicantDateRuleFeedback(): boolean {
+  return submitValidationAttempted.value || liveApplicantDateCheckRequested.value
+}
+
+function allStepOneValid(): boolean {
+  if (firstMissingRequiredField()) {
+    return false
+  }
+  if (documentNumberFormatInvalid()) {
+    return false
+  }
+  if (expeditionVersusBirthRulesInvalid()) {
+    return false
+  }
+  if (birthUnder18VersusToday()) {
+    return false
+  }
+  return true
 }
 
 function focusField(field: RequiredFieldKey): void {
@@ -283,50 +453,163 @@ function focusField(field: RequiredFieldKey): void {
 function validateRequiredStepOneFields(): boolean {
   submitValidationAttempted.value = true
   const firstMissing = firstMissingRequiredField()
-  if (!firstMissing) {
-    return true
+  if (firstMissing) {
+    nextTick(() => focusField(firstMissing))
+    return false
   }
-  nextTick(() => focusField(firstMissing))
-  return false
+  if (documentNumberFormatInvalid()) {
+    nextTick(() => focusField('document_number'))
+    toast.error(
+      validateColombianDocumentNumber(local.value.document_type ?? '', local.value.document_number ?? '')
+        ?? 'Revise el número de documento según el tipo.',
+    )
+    return false
+  }
+  if (expeditionVersusBirthRulesInvalid()) {
+    nextTick(() => focusField('expedition_date'))
+    const exp = local.value.expedition_date?.trim() ?? ''
+    const birth = local.value.birth_date?.trim() ?? ''
+    if (hasValue(exp) && hasValue(birth)) {
+      const order = compareYmd(exp, birth)
+      if (order !== null && order < 0) {
+        toast.error('La fecha de expedición no puede ser anterior a la fecha de nacimiento.')
+      } else {
+        toast.error('Entre la fecha de expedición y la de nacimiento debe haber al menos 18 años (documento de mayor de edad). Revise si hubo error de digitación.')
+      }
+    }
+    return false
+  }
+  if (birthUnder18VersusToday()) {
+    nextTick(() => focusField('birth_date'))
+    toast.error('El solicitante debe tener al menos 18 años cumplidos hoy (revise la fecha de nacimiento).')
+    return false
+  }
+  return true
 }
 
+const documentNumberHintDisplay = computed(() => documentNumberLengthHint(local.value.document_type ?? ''))
+
+/** Con dígitos pero longitud inválida para CC/CE/NIT: feedback en vivo (como fechas). */
+const documentNumberRuleFeedbackVisible = computed(
+  () => documentNumberFormatInvalid() && hasValue(local.value.document_number),
+)
+
+const documentNumberErrorDisplay = computed(() => {
+  if (documentNumberRuleFeedbackVisible.value) {
+    return validateColombianDocumentNumber(local.value.document_type ?? '', local.value.document_number ?? '') ?? ''
+  }
+  if (submitValidationAttempted.value && documentNumberFormatInvalid()) {
+    return validateColombianDocumentNumber(local.value.document_type ?? '', local.value.document_number ?? '') ?? ''
+  }
+  return ''
+})
+
 function fieldErrorClass(field: RequiredFieldKey): string {
-  if (!submitValidationAttempted.value || !isRequiredFieldMissing(field)) {
+  const destructive = 'border-destructive focus-visible:ring-destructive'
+  if (
+    (field === 'birth_date' || field === 'expedition_date')
+    && showApplicantDateRuleFeedback()
+    && applicantDateRulesBroken()
+  ) {
+    return destructive
+  }
+  if (field === 'document_number' && documentNumberRuleFeedbackVisible.value) {
+    return destructive
+  }
+  if (!submitValidationAttempted.value) {
     return ''
   }
-  return 'border-destructive focus-visible:ring-destructive'
+  if (field === 'document_number' && documentNumberFormatInvalid()) {
+    return destructive
+  }
+  if (isRequiredFieldMissing(field)) {
+    return destructive
+  }
+  return ''
 }
 
 function multiselectErrorClass(field: RequiredFieldKey): string {
+  if (field === 'document_type' && documentNumberRuleFeedbackVisible.value) {
+    return 'multiselect-municipality multiselect-danger'
+  }
   if (!submitValidationAttempted.value || !isRequiredFieldMissing(field)) {
     return 'multiselect-municipality'
   }
   return 'multiselect-municipality multiselect-danger'
 }
 
-watch(local, () => {
-  if (!submitValidationAttempted.value) {
-    return
+const maxBirthDateYmd = computed(() => maxBirthYmdForMinAge(MIN_APPLICANT_AGE_YEARS, ymdLocalToday()) ?? undefined)
+
+const todayYmdMax = computed(() => ymdLocalToday())
+
+const minExpeditionDateInput = computed(() => {
+  const b = local.value.birth_date?.trim()
+  if (!b) {
+    return undefined
   }
-  if (!firstMissingRequiredField()) {
+  return ymdAddCalendarYears(b, MIN_APPLICANT_AGE_YEARS) ?? undefined
+})
+
+const expeditionDateFeedbackMessage = computed(() => {
+  if (!(submitValidationAttempted.value || liveApplicantDateCheckRequested.value)) {
+    return ''
+  }
+  if (!expeditionVersusBirthRulesInvalid()) {
+    return ''
+  }
+  const exp = local.value.expedition_date?.trim() ?? ''
+  const birth = local.value.birth_date?.trim() ?? ''
+  if (!hasValue(exp) || !hasValue(birth)) {
+    return ''
+  }
+  const order = compareYmd(exp, birth)
+  if (order !== null && order < 0) {
+    return 'No puede ser anterior a la fecha de nacimiento.'
+  }
+  return 'Entre expedición y nacimiento debe haber al menos 18 años (mayor de edad). Revise digitación.'
+})
+
+const showBirthMinimumAgeError = computed(
+  () =>
+    (submitValidationAttempted.value || liveApplicantDateCheckRequested.value)
+    && birthUnder18VersusToday()
+    && !expeditionVersusBirthRulesInvalid(),
+)
+
+watch(
+  () => [local.value.birth_date, local.value.expedition_date],
+  () => {
+    if (personalReadOnly.value) {
+      return
+    }
+    liveApplicantDateCheckRequested.value = true
+    nextTick(() => {
+      if (!applicantDateRulesBroken()) {
+        liveApplicantDateCheckRequested.value = false
+      }
+    })
+  },
+)
+
+watch(local, () => {
+  if (allStepOneValid()) {
     submitValidationAttempted.value = false
+    liveApplicantDateCheckRequested.value = false
   }
 }, { deep: true })
 
 watch(financial, () => {
-  if (!submitValidationAttempted.value) {
-    return
-  }
-  if (!firstMissingRequiredField()) {
+  if (allStepOneValid()) {
     submitValidationAttempted.value = false
+    liveApplicantDateCheckRequested.value = false
   }
 }, { deep: true })
 
-function validateAuxiliaryDocumentsRequired(): boolean {
-  if (!props.showDocumentosAuxiliarChecklist || !docCanSubir.value) {
+function validateAuxiliaryDocumentsRequired(opts?: { silent?: boolean }): boolean {
+  if (!props.showDocumentosAuxiliarChecklist || !docCanSubir.value || props.auxiliaryInteractionMode === 'viewOnly') {
     return true
   }
-  return auxiliaryDocumentsSectionRef.value?.validateRequiredAuxiliaryUploads() ?? true
+  return auxiliaryDocumentsSectionRef.value?.validateRequiredAuxiliaryUploads(opts) ?? true
 }
 
 defineExpose({
@@ -507,6 +790,50 @@ function onDocumentDragOver(e: DragEvent) {
   e.dataTransfer!.dropEffect = 'copy'
 }
 
+function freeDocumentFileInputId(index: number): string {
+  return `doc_file_${index}`
+}
+
+function triggerFreeDocumentFileInput(index: number): void {
+  const doc = documents.value[index]
+  if (!doc || !canPickDocumentFile(doc)) {
+    return
+  }
+  const el = document.getElementById(freeDocumentFileInputId(index)) as HTMLInputElement | null
+  el?.click()
+}
+
+function canPreviewFreeDocument(doc: ApplicantDocumentForm): boolean {
+  return Boolean(doc.file || doc.id)
+}
+
+async function openFreeDocumentPreview(doc: ApplicantDocumentForm): Promise<void> {
+  if (doc.file instanceof File) {
+    previewLocalFile(doc.file)
+    return
+  }
+  const appId = props.creditApplicationId
+  if (!doc.id || !appId) {
+    toast.error('No hay documento para previsualizar.')
+    return
+  }
+  await previewApplicationDocument(appId, doc.id, doc.original_name || doc.title)
+}
+
+/** Misma razón que AuxiliaryDocumentsSection: evitar `<label>` envolviendo controles interactivos (iOS Safari). */
+function onDocumentUploadZoneActivate(index: number, event?: MouseEvent | KeyboardEvent): void {
+  const doc = documents.value[index]
+  if (!doc || !canPickDocumentFile(doc)) {
+    return
+  }
+  if (event && 'target' in event && event.target instanceof Element) {
+    if (event.target.closest('a[href], button')) {
+      return
+    }
+  }
+  triggerFreeDocumentFileInput(index)
+}
+
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
 const VALID_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
 
@@ -537,32 +864,40 @@ function formatFileSize(bytes: number): string {
     <section v-if="!showOnlyFinancial && showSearch && !personalReadOnly" :class="sectionClass">
       <h3 :class="sectionTitleClass">Buscar por documento</h3>
       <div class="rounded-lg border border-border bg-muted/30 p-4">
-        <div class="flex flex-wrap items-end gap-3">
-          <div :class="fieldClass" class="min-w-0 flex-1 sm:max-w-[280px]">
-            <Input
-              id="search_doc"
-              v-model="local.document_number"
-              placeholder="Ej: 1234567890"
-              inputmode="numeric"
-              autocomplete="off"
-            :class="['h-9 w-full', fieldErrorClass('document_number')]"
-              @input="onDigitsOnlyInput($event, v => (local.document_number = v))"
-              @keyup.enter="runSearch"
-            />
+          <div class="flex flex-wrap items-end gap-3">
+            <div :class="fieldClass" class="min-w-0 flex-1 sm:max-w-[280px]">
+              <Label for="search_doc" class="text-foreground">Número de documento</Label>
+              <Input
+                id="search_doc"
+                v-model="local.document_number"
+                placeholder="Ej: 1234567890"
+                inputmode="numeric"
+                autocomplete="off"
+                :class="['h-9 w-full', fieldErrorClass('document_number')]"
+                :aria-invalid="!!documentNumberErrorDisplay"
+                @input="onDigitsOnlyInput($event, v => (local.document_number = v))"
+                @keyup.enter="runSearch"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="default"
+              class="h-9 shrink-0"
+              :disabled="loadingSearch || !local.document_number?.trim()"
+              @click="runSearch"
+            >
+              <Icon v-if="loadingSearch" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              <Icon v-else name="i-lucide-search" class="mr-2 h-4 w-4" />
+              Buscar
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            size="default"
-            class="h-9 shrink-0"
-            :disabled="loadingSearch || !local.document_number?.trim()"
-            @click="runSearch"
-          >
-            <Icon v-if="loadingSearch" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-            <Icon v-else name="i-lucide-search" class="mr-2 h-4 w-4" />
-            Buscar
-          </Button>
-        </div>
+          <p v-if="documentNumberHintDisplay" class="mt-2 text-xs text-muted-foreground">
+            {{ documentNumberHintDisplay }}
+          </p>
+          <p v-if="documentNumberErrorDisplay" class="mt-1 text-xs text-destructive">
+            {{ documentNumberErrorDisplay }}
+          </p>
       </div>
     </section>
 
@@ -599,8 +934,15 @@ function formatFileSize(bytes: number): string {
             :disabled="personalReadOnly"
             :readonly="personalReadOnly"
             :class="fieldErrorClass('document_number')"
+            :aria-invalid="!!documentNumberErrorDisplay"
             @input="onDigitsOnlyInput($event, v => updateField('document_number', v))"
           />
+          <p v-if="documentNumberHintDisplay" class="text-xs text-muted-foreground">
+            {{ documentNumberHintDisplay }}
+          </p>
+          <p v-if="documentNumberErrorDisplay" class="text-xs text-destructive">
+            {{ documentNumberErrorDisplay }}
+          </p>
         </div>
         <div :class="fieldClass">
           <Label for="exp_date">Fecha expedición *</Label>
@@ -609,9 +951,14 @@ function formatFileSize(bytes: number): string {
             :model-value="local.expedition_date"
             type="date"
             :disabled="personalReadOnly"
+            :min="minExpeditionDateInput"
+            :max="todayYmdMax"
             :class="fieldErrorClass('expedition_date')"
             @update:model-value="updateField('expedition_date', $event ?? '')"
           />
+          <p v-if="expeditionDateFeedbackMessage" class="text-xs text-destructive">
+            {{ expeditionDateFeedbackMessage }}
+          </p>
         </div>
         <div :class="fieldClass">
           <Label for="exp_place">Lugar de expedición *</Label>
@@ -687,9 +1034,13 @@ function formatFileSize(bytes: number): string {
             :model-value="local.birth_date"
             type="date"
             :disabled="personalReadOnly"
+            :max="maxBirthDateYmd"
             :class="fieldErrorClass('birth_date')"
             @update:model-value="updateField('birth_date', String($event ?? ''))"
           />
+          <p v-if="showBirthMinimumAgeError" class="text-xs text-destructive">
+            Debe tener al menos 18 años cumplidos.
+          </p>
         </div>
         <div :class="fieldClass">
           <Label for="gender">Género *</Label>
@@ -860,7 +1211,7 @@ function formatFileSize(bytes: number): string {
             id="activity_type"
             :model-value="financial.activity_type ? financial.activity_type : null"
             :options="economicActivityOptions"
-            :disabled="personalReadOnly"
+            :disabled="activityTypeReadOnly"
             mode="single"
             value-prop="value"
             label="label"
@@ -874,13 +1225,22 @@ function formatFileSize(bytes: number): string {
           />
         </div>
         <div :class="fieldClass">
-          <Label for="occupation">Ocupación</Label>
-          <Input
+          <Label for="occupation">Ocupación *</Label>
+          <Multiselect
             id="occupation"
-            :model-value="local.occupation"
-            placeholder="Ej: Comerciante"
+            :model-value="local.occupation ? local.occupation : null"
+            :options="occupationOptions"
             :disabled="personalReadOnly"
-            @update:model-value="updateField('occupation', String($event ?? ''))"
+            mode="single"
+            value-prop="value"
+            label="label"
+            :searchable="true"
+            :can-clear="false"
+            placeholder="Seleccionar"
+            no-options-text="Sin opciones. Configure «Ocupación» en Parametrización → Radicación."
+            no-results-text="Sin coincidencias"
+            :class="multiselectErrorClass('occupation')"
+            @update:model-value="updateField('occupation', ($event != null && $event !== '') ? String($event) : '')"
           />
         </div>
         <div :class="fieldClass">
@@ -894,13 +1254,22 @@ function formatFileSize(bytes: number): string {
           />
         </div>
         <div :class="fieldClass">
-          <Label for="position">Cargo</Label>
-          <Input
+          <Label for="position">Cargo *</Label>
+          <Multiselect
             id="position"
-            :model-value="local.position"
-            placeholder="Ej: Vendedor"
+            :model-value="local.position ? local.position : null"
+            :options="jobPositionOptions"
             :disabled="personalReadOnly"
-            @update:model-value="updateField('position', String($event ?? ''))"
+            mode="single"
+            value-prop="value"
+            label="label"
+            :searchable="true"
+            :can-clear="false"
+            placeholder="Seleccionar"
+            no-options-text="Sin opciones. Configure «Cargo» en Parametrización → Radicación."
+            no-results-text="Sin coincidencias"
+            :class="multiselectErrorClass('position')"
+            @update:model-value="updateField('position', ($event != null && $event !== '') ? String($event) : '')"
           />
         </div>
         <div :class="fieldClass">
@@ -931,15 +1300,13 @@ function formatFileSize(bytes: number): string {
       v-if="auxiliaryChecklistVisible"
       :class="sectionClass"
     >
-      <div class="space-y-3 rounded-lg border border-border bg-muted/25 p-4">
-        <div class="space-y-1">
+      <div class="space-y-3 rounded-lg border border-border bg-muted/20 p-3 sm:p-4">
+        <div class="space-y-0.5">
           <h3 class="text-sm font-semibold text-foreground">
             Documentos adjuntos
           </h3>
           <p class="text-xs text-muted-foreground leading-snug">
-            Según el <span class="font-medium text-foreground">tipo de actividad económica</span> elegido arriba se
-            muestran los documentos definidos en Parametrización → Radicación → Documentos (módulo auxiliar). PDF, ZIP
-            o imagen; máx. 10 MB por archivo.
+            Checklist según actividad económica. Use los filtros para ver pendientes o listos.
           </p>
         </div>
         <AuxiliaryDocumentsSection
@@ -948,7 +1315,10 @@ function formatFileSize(bytes: number): string {
           :credit-application-id="creditApplicationId ?? undefined"
           :application-documents="creditApplicationDocuments ?? []"
           :economic-activity-options="economicActivityOptions"
-          :disabled="(personalReadOnly && !documentsEditableOnly) || !docCanSubir"
+          :auxiliary-pending-upload-hint="auxiliaryPendingUploadHint"
+          :interaction-mode="auxiliaryInteractionMode"
+          :show-document-review-controls="showAuxiliaryDocumentReview"
+          :disabled="auxiliaryUploadBlockedByPermissions"
           @update:applicant="emit('update:modelValue', $event)"
         />
       </div>
@@ -1113,8 +1483,16 @@ function formatFileSize(bytes: number): string {
             class="mt-1 flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             placeholder="Detalle de ingresos (negocio, cultivos, etc.)"
             rows="2"
-            @input="setFinancial('income', { ...(financial.income || {}), description: ($event.target as HTMLTextAreaElement).value })"
+            :readonly="personalReadOnly"
+            :maxlength="PASTED_PLAIN_TEXT_MAX_LENGTH"
+            @paste="onPasteIncomeDescription"
+            @blur="onBlurIncomeDescription"
+            @input="setIncomeDescription(($event.target as HTMLTextAreaElement).value)"
           />
+          <p class="mt-1 text-[11px] text-muted-foreground">
+            Al pegar desde Word se limpian espacios extra y caracteres especiales.
+            {{ (financial.income?.description ?? '').length }}/{{ PASTED_PLAIN_TEXT_MAX_LENGTH }}
+          </p>
         </div>
           </div>
         </div>
@@ -1250,8 +1628,16 @@ function formatFileSize(bytes: number): string {
             class="mt-1 flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             placeholder="Detalle de gastos del hogar"
             rows="2"
-            @input="setFinancial('expenses', { ...(financial.expenses || {}), description: ($event.target as HTMLTextAreaElement).value })"
+            :readonly="personalReadOnly"
+            :maxlength="PASTED_PLAIN_TEXT_MAX_LENGTH"
+            @paste="onPasteExpensesDescription"
+            @blur="onBlurExpensesDescription"
+            @input="setExpensesDescription(($event.target as HTMLTextAreaElement).value)"
           />
+          <p class="mt-1 text-[11px] text-muted-foreground">
+            Al pegar desde Word se limpian espacios extra y caracteres especiales.
+            {{ (financial.expenses?.description ?? '').length }}/{{ PASTED_PLAIN_TEXT_MAX_LENGTH }}
+          </p>
         </div>
           </div>
         </div>
@@ -1356,6 +1742,7 @@ function formatFileSize(bytes: number): string {
                 <div class="flex w-full justify-center pt-1">
                   <Checkbox
                     :id="`asset_garantia_${idx}`"
+                    bare
                     :model-value="!!asset.garantia"
                     @update:model-value="updateAsset(idx, 'garantia', !!$event)"
                   />
@@ -1400,6 +1787,9 @@ function formatFileSize(bytes: number): string {
                 Adjunte documentos con título descriptivo. Formatos: PDF, JPG, PNG, DOC, DOCX. Máx. 10 MB cada uno.
               </p>
             </div>
+            <Badge variant="outline" class="shrink-0 tabular-nums">
+              {{ freeAttachmentStats.withFile }}/{{ freeAttachmentStats.total }}
+            </Badge>
             <Icon
               name="i-lucide-chevron-down"
               class="h-5 w-5 shrink-0 text-muted-foreground transition-transform duration-200"
@@ -1469,85 +1859,75 @@ function formatFileSize(bytes: number): string {
                     Indique el área productora documental en el paso «Datos de la solicitud» para clasificar adjuntos con la TRD.
                   </p>
                 </div>
-                <div class="p-4">
+                <div class="flex flex-wrap items-center gap-2 p-3">
                   <input
-                    :id="`doc_file_${idx}`"
+                    :id="freeDocumentFileInputId(idx)"
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                     class="sr-only"
                     @change="onDocumentFileChange(idx, $event)"
                   >
-                  <label
-                    :for="`doc_file_${idx}`"
-                    class="flex min-h-[6.5rem] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 px-4 py-4 text-center transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
-                    :class="canPickDocumentFile(doc) ? 'hover:border-primary/45 hover:bg-muted/35' : 'cursor-not-allowed opacity-60 pointer-events-none'"
-                    @dragover="onDocumentDragOver"
-                    @drop="onDocumentDrop(idx, $event)"
-                  >
-                    <template v-if="doc.file">
-                      <Icon name="i-lucide-file-check" class="h-7 w-7 text-green-600 dark:text-green-500" />
-                      <span class="max-w-full truncate text-center text-sm font-medium text-foreground">
-                        {{ doc.file.name }}
-                      </span>
-                      <span class="text-xs text-muted-foreground">
-                        {{ formatFileSize(doc.file.size) }}
-                      </span>
-                      <span class="text-xs font-medium text-primary">Clic para cambiar</span>
-                    </template>
-                    <template v-else-if="doc.original_name">
-                      <Icon name="i-lucide-file-text" class="h-7 w-7 text-primary" />
-                      <span class="max-w-full truncate text-center text-sm font-medium text-foreground">
-                        {{ doc.original_name }}
-                      </span>
-                      <span
-                        v-if="doc.is_reviewed"
-                        class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                      >
-                        Revisado
-                      </span>
-                      <span
-                        v-if="doc.review_comment"
-                        class="max-w-full truncate text-center text-xs text-amber-700 dark:text-amber-300"
-                        :title="doc.review_comment"
-                      >
-                        Nota revisión: {{ doc.review_comment }}
-                      </span>
-                      <span class="text-xs text-muted-foreground">Archivo existente</span>
-                      <span class="text-xs font-medium text-primary">Clic para reemplazar</span>
-                    </template>
-                    <template v-else>
-                      <div class="flex size-10 items-center justify-center rounded-full bg-muted">
-                        <Icon name="i-lucide-upload" class="size-5 text-muted-foreground" />
-                      </div>
-                      <span class="max-w-sm text-center text-sm font-medium text-foreground">
-                        Arrastre aquí o haga clic para seleccionar
-                      </span>
-                      <span class="text-xs text-muted-foreground">PDF, JPG, PNG, DOC · máx. 10 MB</span>
-                    </template>
-                  </label>
-                </div>
-                <div v-if="canRemoveDocumentRow(doc)" class="flex justify-end border-t border-border px-4 py-3">
+                  <div class="min-w-0 max-w-[14rem]">
+                    <p
+                      v-if="doc.file || doc.original_name"
+                      class="truncate text-xs text-muted-foreground"
+                      :title="doc.file?.name ?? doc.original_name ?? ''"
+                    >
+                      {{ doc.file?.name ?? doc.original_name }}
+                      <span v-if="doc.file" class="text-foreground/70">· {{ formatFileSize(doc.file.size) }}</span>
+                    </p>
+                  </div>
                   <Button
+                    v-if="canPreviewFreeDocument(doc)"
                     type="button"
-                    variant="destructive"
+                    variant="outline"
                     size="sm"
-                    class="h-9 gap-1.5 px-2.5"
+                    class="h-9 gap-1.5"
+                    @click="void openFreeDocumentPreview(doc)"
+                  >
+                    <Icon name="i-lucide-eye" class="size-3.5" />
+                    Ver
+                  </Button>
+                  <Button
+                    v-if="canPickDocumentFile(doc)"
+                    type="button"
+                    size="sm"
+                    :variant="doc.file || doc.original_name ? 'outline' : 'default'"
+                    class="h-9 gap-1.5"
+                    @click="triggerFreeDocumentFileInput(idx)"
+                  >
+                    <Icon :name="doc.file || doc.original_name ? 'i-lucide-refresh-cw' : 'i-lucide-upload'" class="size-3.5" />
+                    {{ doc.file || doc.original_name ? 'Cambiar' : 'Adjuntar' }}
+                  </Button>
+                  <Button
+                    v-if="canRemoveDocumentRow(doc)"
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="h-9 text-destructive hover:text-destructive"
                     @click="removeDocument(idx)"
                   >
-                    <Icon name="i-lucide-trash" class="h-4 w-4 shrink-0" />
-                    Quitar
+                    <Icon name="i-lucide-trash" class="size-4" />
                   </Button>
                 </div>
               </div>
-              <Button v-if="docCanSubir" type="button" variant="outline" size="sm" @click="addDocument">
+              <Button v-if="docCanSubir" type="button" variant="outline" size="sm" class="w-full sm:w-auto" @click="addDocument">
                 <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-                Agregar documento
+                Agregar otro documento
               </Button>
             </div>
           </template>
         </CollapsibleContent>
       </Collapsible>
     </section>
+
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :loading="inlinePreviewLoading"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>
 

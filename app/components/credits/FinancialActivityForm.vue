@@ -13,6 +13,7 @@ import {
 } from '~/constants/credits-financial-templates'
 import {
   getRadicacionReadOnlyConfigKeys,
+  PLANTILLA_COMERCIAL_RADICACION_ONLY_KEYS,
   CULTIVO_PERMANENTE_DURACION_MESES_DEFAULT,
   CANA_PANELA_DURACION_CICLO_MESES_DEFAULT,
   CANA_PANELA_CANT_KG_HECTAREA_DEFAULT,
@@ -131,6 +132,12 @@ async function loadFlatDataForTemplate(template: string, product: string | null)
   loadingFlatData.value = true
   try {
     const flatData = await fetchFlatData(template, product)
+    // Gastos operacionales de plantilla comercial: captura del caso, nunca desde parametrización.
+    if (template === 'plantilla-comercial') {
+      for (const key of PLANTILLA_COMERCIAL_RADICACION_ONLY_KEYS) {
+        delete flatData[key]
+      }
+    }
     formData.value = { ...flatData, ...formData.value }
     if (template === 'ganado-doble-proposito') {
       const d = formData.value
@@ -238,6 +245,11 @@ watch(
       const flatData = await fetchFlatData(templateSelected.value, product)
       // Reemplazar por completo con la config del producto seleccionado (evita arrastrar config de Maíz al elegir Papa).
       // Usar flatData como única fuente para ciclo_corto_cost_breakdown, kg_x_ha, etc.
+      if (templateSelected.value === 'plantilla-comercial') {
+        for (const key of PLANTILLA_COMERCIAL_RADICACION_ONLY_KEYS) {
+          delete flatData[key]
+        }
+      }
       formData.value = { ...flatData, tipo_producto: product }
       if (templateSelected.value === 'servicios') {
         applyServiciosPctContribucion(formData.value)

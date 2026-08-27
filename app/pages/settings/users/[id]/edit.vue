@@ -5,6 +5,7 @@ import type { User, UserAccountStatus } from '~/types/user'
 import { requiresOrgStaffLink, type ApplicationDomain } from '~/constants/application-domains'
 import { ACCOUNT_STATUS_FORM_OPTIONS } from '~/utils/accountStatus'
 import { normalizeRoleNames } from '~/utils/userRoles'
+import { PASSWORD_REQUIREMENTS, validateRobustPassword } from '~/utils/password'
 import type { Role } from '~/types/role'
 
 definePageMeta({
@@ -53,6 +54,7 @@ function rolesMultipleLabel(values: unknown): string {
 const sucursales = ref<Array<{ id: number; name: string; code: string | null; is_main?: boolean }>>([])
 const loading = ref(false)
 const saving = ref(false)
+const resendingCredentials = ref(false)
 const changePassword = ref(false)
 
 const sucursalSelectOptions = computed(() =>
@@ -124,6 +126,16 @@ function normalizeAccountStatus(value: unknown): UserAccountStatus {
     return value
   }
   return 'active'
+}
+
+function onAllowedSucursalChecked(sucursalId: number, checked: boolean | 'indeterminate') {
+  if (checked === true) {
+    if (!form.value.allowed_sucursal_ids.includes(sucursalId)) {
+      form.value.allowed_sucursal_ids.push(sucursalId)
+    }
+    return
+  }
+  form.value.allowed_sucursal_ids = form.value.allowed_sucursal_ids.filter(id => id !== sucursalId)
 }
 
 const fetchLinkableStaff = async () => {
@@ -213,8 +225,9 @@ const handleSubmit = async () => {
       return
     }
 
-    if (form.value.password.length < 8) {
-      toast.error('La contraseña debe tener al menos 8 caracteres')
+    const passwordError = validateRobustPassword(form.value.password)
+    if (passwordError) {
+      toast.error(passwordError)
       return
     }
   }
@@ -277,6 +290,41 @@ const handleSubmit = async () => {
     toast.error(message)
   } finally {
     saving.value = false
+  }
+}
+
+async function handleResendCredentials() {
+  if (resendingCredentials.value || !user.value) {
+    return
+  }
+
+  const confirmed = window.confirm(
+    `Se generará una nueva contraseña temporal y se enviará por correo a ${form.value.email}. La contraseña anterior dejará de funcionar. ¿Continuar?`,
+  )
+  if (!confirmed) {
+    return
+  }
+
+  resendingCredentials.value = true
+  try {
+    const res = await $api<{
+      ok: boolean
+      message: string
+      temporary_password?: string
+    }>(`/users/${userId}/resend-credentials`, { method: 'POST' })
+
+    if (res.temporary_password) {
+      toast.success(res.message, {
+        description: `Contraseña temporal: ${res.temporary_password}`,
+        duration: 20000,
+      })
+    } else {
+      toast.success(res.message)
+    }
+  } catch (error: any) {
+    toast.error(error?.data?.message || 'No se pudo reenviar el correo')
+  } finally {
+    resendingCredentials.value = false
   }
 }
 
@@ -476,7 +524,7 @@ onMounted(async () => {
                 <div class="flex items-center gap-3">
                   <Switch
                     id="changePassword"
-                    v-model="changePassword"
+                    v-model:checked="changePassword"
                   />
                   <Label for="changePassword" class="font-normal leading-snug">
                     Cambiar contraseña
@@ -486,11 +534,14 @@ onMounted(async () => {
                 <div v-if="changePassword" class="grid grid-cols-1 gap-6 md:grid-cols-2">
                   <div class="space-y-3">
                     <Label for="password" class="leading-snug">Nueva Contraseña *</Label>
+                    <p class="text-xs text-muted-foreground">
+                      {{ PASSWORD_REQUIREMENTS }}
+                    </p>
                     <PasswordInput
                       id="password"
                       v-model="form.password"
                       required
-                      placeholder="Mínimo 8 caracteres"
+                      placeholder="Contraseña robusta"
                     />
                   </div>
 
@@ -508,6 +559,35 @@ onMounted(async () => {
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle>Credenciales de acceso</CardTitle>
+              <CardDescription>
+                Si el usuario no recibió el correo de bienvenida, puedes reenviarlo. Se generará una
+                <span class="font-medium text-foreground">nueva contraseña temporal</span> y la anterior dejará de servir.
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p class="text-sm text-muted-foreground">
+                Correo de destino: <span class="font-medium text-foreground">{{ form.email }}</span>
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                :disabled="resendingCredentials || !form.email || accountStatus === 'inactive'"
+                @click="handleResendCredentials"
+              >
+                <Icon
+                  v-if="resendingCredentials"
+                  name="i-lucide-loader-2"
+                  class="mr-2 h-4 w-4 animate-spin"
+                />
+                <Icon v-else name="i-lucide-mail" class="mr-2 h-4 w-4" />
+                Reenviar credenciales por correo
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card v-if="showAllowedSucursales">
             <CardHeader class="gap-2">
               <CardTitle class="leading-snug">Sucursales permitidas (admin)</CardTitle>
@@ -521,10 +601,7 @@ onMounted(async () => {
                   <Checkbox
                     :id="`suc-${s.id}`"
                     :checked="form.allowed_sucursal_ids.includes(s.id)"
-                    @update:checked="(checked) => {
-                      if (checked) form.allowed_sucursal_ids.push(s.id)
-                      else form.allowed_sucursal_ids = form.allowed_sucursal_ids.filter(id => id !== s.id)
-                    }"
+                    @update:checked="onAllowedSucursalChecked(s.id, $event)"
                   />
                   <Label :for="`suc-${s.id}`" class="font-normal cursor-pointer">
                     {{ s.name }}{{ s.is_main ? ' (Principal)' : '' }}

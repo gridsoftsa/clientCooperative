@@ -23,7 +23,7 @@ function reportHref(item: ReportCatalogItem): string {
         Reportes
       </h2>
       <p class="mt-1 max-w-2xl text-sm text-muted-foreground">
-        Cada informe tiene su propia pantalla. Solo están contempladas las ocho hojas vigentes del libro Excel de referencia; el resto quedó fuera de alcance.
+        Cada informe tiene su propia pantalla. Las vistas disponibles siguen el libro Excel de referencia y los indicadores acordados; el resto quedó fuera de alcance o en roadmap.
       </p>
     </div>
 

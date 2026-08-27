@@ -182,6 +182,12 @@ export const navMenu: NavMenu[] = [
         permission: 'radicacion_ver',
       },
       {
+        title: 'Documentación',
+        icon: 'i-lucide-folder-archive',
+        link: '/documentacion',
+        permission: 'documentacion_ver',
+      },
+      {
         title: 'Solicitantes',
         icon: 'i-lucide-user-check',
         link: '/solicitantes',
@@ -375,6 +381,7 @@ export const navMenu: NavMenu[] = [
           'notificaciones_ver',
           'display_ver',
           'empresa_ver',
+          'seguridad_ver',
           'usuarios_ver',
           'sucursales_ver',
           'estructura_org_ver',
@@ -404,6 +411,12 @@ export const navMenu: NavMenu[] = [
             icon: 'i-lucide-building',
             link: '/settings/company',
             permission: 'empresa_ver',
+          },
+          {
+            title: 'Seguridad',
+            icon: 'i-lucide-shield',
+            link: '/settings/security',
+            permission: 'seguridad_ver',
           },
           {
             title: 'Usuarios',

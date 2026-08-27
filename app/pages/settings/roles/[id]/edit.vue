@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useDebounceFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import type { Role, Permission } from '~/types/role'
 
@@ -24,8 +25,46 @@ const role = ref<Role | null>(null)
 const permissions = ref<Permission[]>([])
 const loading = ref(false)
 const saving = ref(false)
+const savingPermissions = ref(false)
+/** Evita PUT al hidratar el rol desde el servidor. */
+const skipPermissionAutoSave = ref(true)
 
 const visiblePermissionDomains = computed(() => manageableDomains.value)
+
+const debouncedPersistPermissions = useDebounceFn(async () => {
+  if (skipPermissionAutoSave.value || !role.value) {
+    return
+  }
+  if (!formData.value.name.trim()) {
+    return
+  }
+  savingPermissions.value = true
+  try {
+    await $api(`/roles/${roleId}`, {
+      method: 'PUT',
+      body: { name: formData.value.name, permissions: formData.value.permissions },
+    })
+    await refetchUserSilently()
+    toast.success('Permisos guardados', {
+      id: 'role-permissions-auto-save',
+      description: 'Los cambios ya quedaron registrados en el rol.',
+      duration: 3500,
+    })
+  } catch (error: unknown) {
+    const err = error as { data?: { message?: string } }
+    toast.error(err?.data?.message ?? 'Error al guardar permisos')
+  } finally {
+    savingPermissions.value = false
+  }
+}, 450)
+
+watch(
+  () => formData.value.permissions,
+  () => {
+    debouncedPersistPermissions()
+  },
+  { deep: true },
+)
 
 function normalizePermissionNames(raw: unknown): string[] {
   if (!Array.isArray(raw)) {
@@ -90,6 +129,8 @@ const handleSubmit = async () => {
 
 onMounted(async () => {
   await Promise.all([fetchRole(), fetchPermissions()])
+  await nextTick()
+  skipPermissionAutoSave.value = false
 })
 </script>
 
@@ -144,9 +185,20 @@ onMounted(async () => {
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Permisos</CardTitle>
-              <CardDescription>Selecciona los permisos que tendrá este rol</CardDescription>
+            <CardHeader class="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+              <div class="min-w-0 flex-1">
+                <CardTitle>Permisos</CardTitle>
+                <CardDescription>
+                  Busca por nombre o módulo. Los cambios se guardan automáticamente al marcar o desmarcar.
+                </CardDescription>
+              </div>
+              <span
+                v-if="savingPermissions"
+                class="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+              >
+                <Icon name="i-lucide-loader-2" class="h-3.5 w-3.5 animate-spin" />
+                Guardando permisos…
+              </span>
             </CardHeader>
             <CardContent>
               <SettingsRolePermissionsPicker
@@ -157,14 +209,19 @@ onMounted(async () => {
             </CardContent>
           </Card>
 
-          <div class="flex justify-end gap-4">
-            <Button type="button" variant="outline" @click="router.back()">
-              Cancelar
-            </Button>
-            <Button type="submit" :disabled="saving">
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              {{ saving ? 'Guardando...' : 'Actualizar Rol' }}
-            </Button>
+          <div class="flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
+            <p class="max-w-md text-right text-xs text-muted-foreground">
+              Los permisos ya se sincronizan con el servidor al marcarlos. Usa el botón solo para guardar el nombre del rol.
+            </p>
+            <div class="flex gap-4">
+              <Button type="button" variant="outline" @click="router.back()">
+                Cancelar
+              </Button>
+              <Button type="submit" :disabled="saving">
+                <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                {{ saving ? 'Guardando...' : 'Guardar nombre del rol' }}
+              </Button>
+            </div>
           </div>
         </div>
       </form>

@@ -12,6 +12,8 @@ export interface FinancialInfoForm {
   activity_templates?: ActivityTemplateData[]
   /** Cantidad de plantillas (se guarda explícitamente en radicación) */
   activity_templates_count?: number
+  /** Deudor sin plantilla agropecuaria en paso 2 (radicación) */
+  withoutActivityTemplate?: boolean
   activity_type?: string
   concept?: string
   income?: {
@@ -49,6 +51,21 @@ export interface FinancialInfoForm {
    * Persisted in applicant pivot `financial_info` JSON.
    */
   auxiliaryDocuments?: Record<string, number | null>
+  /**
+   * Document IDs for documentation-insurability checklist (`documentation-insurability-documents`), keyed by item key.
+   * Persisted on debtor pivot `financial_info` JSON (revisión documental).
+   */
+  insurabilityDocuments?: Record<string, number | null>
+  /**
+   * Document IDs for documentation-fng-documents checklist, keyed by item key.
+   * Persisted on debtor pivot `financial_info` JSON (revisión documental).
+   */
+  fngDocuments?: Record<string, number | null>
+  /**
+   * Document IDs for credit-director-approver-documents checklist, keyed by item key.
+   * Persisted on debtor pivot `financial_info` JSON (revisión director de crédito).
+   */
+  approverEntityDocuments?: Record<string, number | null>
   solvency?: {
     /** (Pasivos + monto solicitado) ÷ Activos × 100 — se calcula en resumen */
     solvency?: number
@@ -130,6 +147,21 @@ export interface ApplicantForm {
    * then IDs are stored on `financial_info.auxiliaryDocuments`.
    */
   auxiliaryDocumentFiles?: Record<string, File | undefined>
+  /**
+   * Pending files for insurability checklist uploads (revisión documental). Uploaded via multipart; IDs stored in
+   * `financial_info.insurabilityDocuments`.
+   */
+  insurabilityDocumentFiles?: Record<string, File | undefined>
+  /**
+   * Pending files for FNG checklist uploads (revisión documental). Uploaded via multipart; IDs stored in
+   * `financial_info.fngDocuments`.
+   */
+  fngDocumentFiles?: Record<string, File | undefined>
+  /**
+   * Pending files for approver-entity checklist (director de crédito). Uploaded via multipart; IDs stored in
+   * `financial_info.approverEntityDocuments`.
+   */
+  approverEntityDocumentFiles?: Record<string, File | undefined>
 }
 
 export interface CreditApplicationForm {
@@ -139,7 +171,8 @@ export interface CreditApplicationForm {
   destination?: string
   destination_description?: string
   /**
-   * Crédito con garantía del Fondo Nacional de Garantías (FNG). Opcional (null = sin indicar).
+   * Crédito con garantía del Fondo Nacional de Garantías (FNG).
+   * En formularios nuevos/edición el valor por defecto es `false` (No); la API puede devolver `null` en registros antiguos.
    */
   credito_garantia_fng?: boolean | null
   /**
@@ -154,6 +187,10 @@ export interface CreditApplicationForm {
   numero_radicado_externo: string
   /** Área productora documental para aplicar TRD vigente a los adjuntos */
   document_producer_org_unit_id?: number | null
+  /** Marca de solicitud privilegiada (informes); editable con permiso `radicacion_marcar_privilegiado`. */
+  is_privileged?: boolean
+  /** Obligatoria si `is_privileged` es true; texto libre en español. */
+  privileged_justification?: string | null
 }
 
 /** Normaliza lista de plantillas desde API (JSON string o arreglo). */

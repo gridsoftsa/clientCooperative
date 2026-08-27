@@ -227,6 +227,14 @@ function buildInitialFormData(): Record<string, unknown> {
       for (const k of ['arriendo', 'gastos_servicios', 'gastos_imprevistos', 'gastos_empleados']) {
         if (data[k] === undefined) data[k] = null
       }
+      if (data.gastos_operacionales_conceptos === undefined || data.gastos_operacionales_conceptos === null) {
+        data.gastos_operacionales_conceptos = {
+          arriendo: 'Arriendo',
+          gastos_servicios: 'Gastos servicios',
+          gastos_imprevistos: 'Gastos imprevistos',
+          gastos_empleados: 'Gastos empleados',
+        }
+      }
       continue
     }
     if (section.layout === 'semanasDiasTable') {
@@ -321,14 +329,16 @@ const avesCantidadDiariaExceedsCubetas = computed(() =>
 )
 
 watch(
-  () => [props.schema, props.initialData],
+  () => props.schema,
   () => {
     const next = buildInitialFormData()
+    Object.keys(formData).forEach((k) => {
+      delete formData[k]
+    })
     Object.keys(next).forEach((k) => {
       formData[k] = next[k]
     })
   },
-  { deep: true },
 )
 
 function emitFormData() {
@@ -684,6 +694,7 @@ const inputBaseClass =
             :form-data="formData"
             :invalid-field-keys="invalidFieldKeys"
             :field-dom-id-prefix="fieldDomIdPrefix"
+            :disabled="readOnlyForm"
             @update:field="({ key, value }) => (formData[key] = value)"
           />
         </div>

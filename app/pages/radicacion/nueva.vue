@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import Multiselect from '@vueform/multiselect'
 import ApplicantFormFields from '~/components/radicacion/ApplicantFormFields.vue'
+import FngDocumentsSection from '~/components/radicacion/FngDocumentsSection.vue'
 import {
   sumUtilidadMensualFromTemplates,
   validateAllActivityTemplates,
@@ -16,9 +18,39 @@ import {
   resolveAuxiliaryChecklistRows,
   titleForAuxiliaryDocumentUpload,
 } from '~/constants/auxiliary-documents-checklist'
+import {
+  extractFngItemsFromCatalogResponse,
+  titleForFngDocumentUpload,
+} from '~/constants/documentation-fng-checklist'
 import { mergeApplicantFromApi } from '~/utils/merge-applicant-search'
 import { messageFromFetchError } from '~/utils/http-error-message'
+import {
+  findDocumentIdByTitle,
+  hasPendingRadicacionDocumentUploads,
+  readDocumentIdMap,
+  runDocumentUpload,
+} from '~/utils/radicacion-document-upload'
+import { isAuxiliaryChecklistLabelUnique } from '~/utils/auxiliary-documents-validation'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
+import { validateColombianDocumentNumber } from '~/utils/colombian-document-number'
+import { validateApplicantMinimalIdentityForDraftSave } from '~/utils/radicacion-debtor-draft-minimal'
+import {
+  PASTED_PLAIN_TEXT_MAX_LENGTH,
+  clampPastedPlainText,
+  pastedPlainTextFromClipboardEvent,
+  sanitizeApplicantPlainTextFields,
+} from '~/utils/sanitize-pasted-plain-text'
+import {
+  isDebtorWithoutActivityTemplate,
+  setDebtorWithoutActivityTemplateFlag,
+} from '~/utils/radicacion-debtor-activity-template'
+import { RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK } from '~/constants/radicacion-form-catalog-fallbacks'
+import {
+  RADICACION_CREDITO_GARANTIA_FNG_OPTIONS,
+  creditoGarantiaFngBooleanToSelectValue,
+  selectValueToCreditoGarantiaFngBoolean,
+} from '~/constants/radicacion-credito-fng-yes-no'
+import { appendFileToFormData } from '~/utils/safe-upload-file-name'
 
 definePageMeta({
   layout: 'default',
@@ -28,13 +60,24 @@ definePageMeta({
 
 const { $api, $csrf } = useNuxtApp()
 const router = useRouter()
+const { hasPermission } = usePermissions()
 const { user: authUser } = useAuth()
+
+const { options: creditDestinationOptions, fetchOptions: fetchCreditDestinationOptions } = useTemplateFlatCatalogOptions(
+  'credit-destination',
+  RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK,
+)
 
 /** Siempre inicia en deudor; 'codeudor' solo al agregar codeudor a solicitud existente por URL */
 const mode = ref<'deudor' | 'codeudor'>('deudor')
 const currentStep = ref(1)
 /** Paso 1 deudor: validación checklist auxiliar antes de «Siguiente». */
 const debtorStepOneFormRef = ref<{
+  validateRequiredStepOneFields: () => boolean
+  validateAuxiliaryDocumentsRequired: () => boolean
+} | null>(null)
+/** Asistente codeudor paso 1: mismas validaciones que deudor (incl. checklist auxiliar). */
+const codeudorWizardStepOneFormRef = ref<{
   validateRequiredStepOneFields: () => boolean
   validateAuxiliaryDocumentsRequired: () => boolean
 } | null>(null)
@@ -46,8 +89,34 @@ const loadingSearch = ref(false)
 const loadingApplication = ref(false)
 const submitDirectorDialogOpen = ref(false)
 const agencies = ref<Array<{ id: number; sucursal_id: number; name: string; code?: string }>>([])
+/** Error visual al enviar al director sin radicado externo (solo flujo deudor). */
+const radicadoExternoDirectorError = ref(false)
 /** Solicitud existente cargada para agregar codeudor (por numero_radicado_externo) */
 const existingApplication = ref<Record<string, unknown> | null>(null)
+
+/** Documentos ya persistidos en la solicitud (para checklist auxiliar codeudor tras buscar por radicado). */
+const codeudorApplicationDocuments = computed((): Array<{
+  id: number
+  applicant_id?: number
+  title?: string
+  original_name?: string
+  download_url?: string
+}> => {
+  if (mode.value !== 'codeudor') {
+    return []
+  }
+  const raw = existingApplication.value as { documents?: unknown } | null | undefined
+  const docs = raw?.documents
+  return Array.isArray(docs)
+    ? docs as Array<{
+        id: number
+        applicant_id?: number
+        title?: string
+        original_name?: string
+        download_url?: string
+      }>
+    : []
+})
 /** Dentro del paso Codeudores del deudor: mostrando el flujo de 3 pasos para agregar uno */
 const addingCodeudor = ref(false)
 const codeudorStep = ref(1)
@@ -97,13 +166,15 @@ const form = ref<CreditApplicationForm>({
   term_months: 12,
   destination: '',
   destination_description: '',
-  credito_garantia_fng: null,
+  credito_garantia_fng: false,
   destination_activity_templates: [],
   agency_id: 0,
   status: 'Draft',
   co_debtors: [],
   numero_radicado_externo: '',
   document_producer_org_unit_id: null,
+  is_privileged: false,
+  privileged_justification: '',
 })
 
 const {
@@ -157,6 +228,37 @@ function validateTrdOnFreeDocuments(): string | null {
   return null
 }
 
+watch(
+  () => form.value.numero_radicado_externo,
+  (v) => {
+    if (radicadoExternoDirectorError.value && typeof v === 'string' && v.trim() !== '') {
+      radicadoExternoDirectorError.value = false
+    }
+  },
+)
+
+function focusNumeroRadicadoExternoInput(): void {
+  nextTick(() => {
+    const el = document.getElementById('numero_radicado_externo')
+    if (el instanceof HTMLElement) {
+      el.focus()
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  })
+}
+
+/** Obligatorio al enviar al director de agencia (flujo deudor en esta página). */
+function validateNumeroRadicadoExternoForDirectorSubmit(): boolean {
+  if (!form.value.numero_radicado_externo?.trim()) {
+    radicadoExternoDirectorError.value = true
+    toast.error('Indique el número de radicado externo para enviar al director de agencia.')
+    focusNumeroRadicadoExternoInput()
+    return false
+  }
+  radicadoExternoDirectorError.value = false
+  return true
+}
+
 const stepsDeudor = [
   { num: 1, title: 'Datos del Deudor' },
   { num: 2, title: 'Actividad económica' },
@@ -199,6 +301,28 @@ async function fetchCatalogs() {
   }
 }
 
+
+function onIsPrivilegedSelectUpdate(value: unknown): void {
+  form.value.is_privileged = value === 'yes'
+  if (value !== 'yes') {
+    form.value.privileged_justification = ''
+  }
+}
+
+function validatePrivilegedFieldsForSave(): boolean {
+  if (!hasPermission('radicacion_marcar_privilegiado')) {
+    return true
+  }
+  if (form.value.is_privileged !== true) {
+    return true
+  }
+  const j = String(form.value.privileged_justification ?? '').trim()
+  if (j.length < 10) {
+    toast.error('Indique la justificación por la cual la solicitud es privilegiada (mínimo 10 caracteres).')
+    return false
+  }
+  return true
+}
 
 async function searchApplicant() {
   const doc = form.value.debtor.document_number?.trim()
@@ -324,7 +448,7 @@ function searchApplicantForWizard() {
   }
 }
 
-function finalizeCodeudorWizard() {
+async function finalizeCodeudorWizard() {
   const app = codeudorWizardApplicant.value
   if (!app.document_number?.trim()
     || !app.first_name?.trim()
@@ -332,7 +456,23 @@ function finalizeCodeudorWizard() {
     toast.error('Completa documento, primer nombre y primer apellido del codeudor')
     return
   }
-  const rTemplates = validateAllActivityTemplates(getActivityTemplatesFor(app))
+  const docErr = validateColombianDocumentNumber(app.document_type ?? '', app.document_number ?? '')
+  if (docErr) {
+    toast.error(docErr)
+    return
+  }
+  await nextTick()
+  const stepRef = codeudorWizardStepOneFormRef.value
+  if (!stepRef?.validateRequiredStepOneFields()) {
+    toast.error('Completa los campos obligatorios del codeudor')
+    codeudorStep.value = 1
+    return
+  }
+  if (!stepRef.validateAuxiliaryDocumentsRequired()) {
+    codeudorStep.value = 1
+    return
+  }
+  const rTemplates = validateAllActivityTemplates(getActivityTemplatesFor(app), { requireAtLeastOne: false })
   if (!rTemplates.valid) {
     toast.error(rTemplates.errors.join('. '))
     return
@@ -357,10 +497,21 @@ function hasDocumentsWithoutTitleInApplicant(app: ApplicantForm): boolean {
   return false
 }
 
-function nextCodeudorStep() {
+async function nextCodeudorStep() {
+  await nextTick()
+  if (codeudorStep.value === 1) {
+    const ref = codeudorWizardStepOneFormRef.value
+    if (!ref?.validateRequiredStepOneFields()) {
+      toast.error('Completa los campos obligatorios del codeudor')
+      return
+    }
+    if (!ref.validateAuxiliaryDocumentsRequired()) {
+      return
+    }
+  }
   if (codeudorStep.value === 2) {
     const templates = getActivityTemplatesFor(codeudorWizardApplicant.value)
-    const r = validateAllActivityTemplates(templates)
+    const r = validateAllActivityTemplates(templates, { requireAtLeastOne: false })
     if (!r.valid) {
       toast.error(r.errors.join('. '))
       nextTick(() => codeudorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
@@ -441,19 +592,20 @@ function setActivityTemplatesFor(app: ApplicantForm, val: ActivityTemplateData[]
   fi.income = { ...income, business: sumUtilidad }
 }
 
-/** Mismas reglas que «Siguiente» en paso 1 (deudor): obligatorios + checklist auxiliar). Requiere que el paso 1 siga montado (p. ej. v-show). */
+/** Mismas reglas que «Siguiente» en paso 1: obligatorios + checklist auxiliar (deudor o codeudor en URL dedicada). Requiere paso 1 montado (v-show). */
 async function validateDebtorStepOneForRadicacion(): Promise<boolean> {
-  if (mode.value !== 'deudor') {
+  if (mode.value !== 'deudor' && mode.value !== 'codeudor') {
     return true
   }
   await nextTick()
   const formRef = debtorStepOneFormRef.value
+  const label = mode.value === 'codeudor' ? 'codeudor' : 'deudor'
   if (!formRef) {
-    toast.error('No se pudo validar los datos del deudor. Vuelva al paso 1 e intente de nuevo.')
+    toast.error(`No se pudo validar los datos del ${label}. Vuelva al paso 1 e intente de nuevo.`)
     return false
   }
   if (!formRef.validateRequiredStepOneFields()) {
-    toast.error('Completa los campos obligatorios del deudor')
+    toast.error(`Completa los campos obligatorios del ${label}`)
     return false
   }
   if (!formRef.validateAuxiliaryDocumentsRequired()) {
@@ -463,9 +615,35 @@ async function validateDebtorStepOneForRadicacion(): Promise<boolean> {
 }
 
 /** Valida plantillas de actividad (deudor y codeudores) antes de guardar o enviar solicitud. */
+const debtorWithoutActivityTemplate = ref(false)
+
+watch(
+  () => (form.value.debtor.financial_info as Record<string, unknown> | undefined)?.withoutActivityTemplate,
+  () => {
+    debtorWithoutActivityTemplate.value = isDebtorWithoutActivityTemplate(form.value.debtor)
+  },
+  { immediate: true },
+)
+
+watch(debtorWithoutActivityTemplate, (checked, wasChecked) => {
+  if (checked === wasChecked) {
+    return
+  }
+  setDebtorWithoutActivityTemplateFlag(form.value.debtor, checked)
+  if (checked) {
+    setActivityTemplates([])
+  }
+})
+
+function debtorSkipsActivityTemplateStep(): boolean {
+  return debtorWithoutActivityTemplate.value || isDebtorWithoutActivityTemplate(form.value.debtor)
+}
+
 function validateActivityTemplatesBeforeSave(): string | null {
   const debtorT = getActivityTemplates()
-  let r = validateAllActivityTemplates(debtorT)
+  let r = debtorSkipsActivityTemplateStep()
+    ? { valid: true, errors: [], invalidFieldKeys: [] as string[] }
+    : validateAllActivityTemplates(debtorT, { requireAtLeastOne: true })
   if (!r.valid) {
     return r.errors.join(' ')
   }
@@ -473,7 +651,7 @@ function validateActivityTemplatesBeforeSave(): string | null {
   for (let i = 0; i < cos.length; i++) {
     const co = cos[i]
     if (!co) continue
-    r = validateAllActivityTemplates(getActivityTemplatesFor(co))
+    r = validateAllActivityTemplates(getActivityTemplatesFor(co), { requireAtLeastOne: false })
     if (!r.valid) {
       return `Codeudor ${i + 1}: ${r.errors.join(' ')}`
     }
@@ -586,7 +764,10 @@ function onKeydownNumeric(e: KeyboardEvent, allowDecimal = false) {
 
 function canProceedStep1(): boolean {
   const d = form.value.debtor
-  return !!(d.document_number?.trim() && d.first_name?.trim() && d.first_last_name?.trim())
+  if (!d.document_number?.trim() || !d.first_name?.trim() || !d.first_last_name?.trim()) {
+    return false
+  }
+  return validateColombianDocumentNumber(d.document_type ?? '', d.document_number ?? '') === null
 }
 
 function canProceedStep2(): boolean {
@@ -653,15 +834,32 @@ function hasDocumentsWithoutTitle(): boolean {
 function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
   const { debtor, co_debtors, ...rest } = form.value
   const { documents: _d, auxiliaryDocumentFiles: _aux, ...debtorWithoutDocs } = debtor
-  const coDebtorsWithoutDocs = (co_debtors ?? []).map(({ documents: _doc, ...co }) => co)
+  const coDebtorsWithoutDocs = (co_debtors ?? []).map(
+    ({ documents: _doc, auxiliaryDocumentFiles: _auxCo, ...co }) => co,
+  )
   const radicado = form.value.numero_radicado_externo?.trim() || null
+  const privileged = form.value.is_privileged === true
   return {
     ...rest,
-    debtor: debtorWithoutDocs,
-    co_debtors: coDebtorsWithoutDocs,
+    destination_description: clampPastedPlainText(form.value.destination_description ?? ''),
+    debtor: sanitizeApplicantPlainTextFields(debtorWithoutDocs),
+    co_debtors: coDebtorsWithoutDocs.map(co => sanitizeApplicantPlainTextFields(co)),
     numero_radicado_externo: radicado,
     status,
+    privileged_justification: privileged ? String(form.value.privileged_justification ?? '').trim() : null,
   }
+}
+
+function onPasteDestinationDescription(e: ClipboardEvent) {
+  e.preventDefault()
+  form.value.destination_description = pastedPlainTextFromClipboardEvent(
+    e,
+    form.value.destination_description ?? '',
+  )
+}
+
+function onBlurDestinationDescription() {
+  form.value.destination_description = clampPastedPlainText(form.value.destination_description ?? '')
 }
 
 /** Payload para auto-guardado: usa valores por defecto si faltan (permite crear borrador temprano) */
@@ -682,7 +880,7 @@ function payloadForAutoSave(): Record<string, unknown> {
 function canCreateDraft(): boolean {
   if (mode.value !== 'deudor' || addingCodeudor.value) return false
   if (!canProceedStep1()) return false
-  if (!agencies.value.length) return false
+  if (form.value.agency_id <= 0) return false
   return true
 }
 
@@ -727,6 +925,18 @@ function validateAllDocumentsBeforeUpload(): string | null {
       return `"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`
     }
   }
+  for (const co of form.value.co_debtors ?? []) {
+    for (const f of Object.values(co.auxiliaryDocumentFiles ?? {})) {
+      if (f instanceof File && f.size > MAX_DOCUMENT_SIZE) {
+        return `"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`
+      }
+    }
+  }
+  for (const f of Object.values(form.value.debtor.fngDocumentFiles ?? {})) {
+    if (f instanceof File && f.size > MAX_DOCUMENT_SIZE) {
+      return `"${f.name}" supera el límite de 10 MB. Por favor, sube uno más pequeño.`
+    }
+  }
   return null
 }
 
@@ -737,26 +947,58 @@ async function uploadAllDocuments(
     co_debtors?: Array<{ applicant_id: number }>
   },
 ) {
+  if (!hasPendingRadicacionDocumentUploads(form.value)) {
+    return
+  }
+
   const sizeErr = validateAllDocumentsBeforeUpload()
   if (sizeErr) throw new Error(sizeErr)
+
+  let serverDocuments: Array<{ id?: number; title?: string | null; applicant_id?: number | null }> = []
+  try {
+    const fresh = await $api<{ data?: { documents?: typeof serverDocuments } }>(`/credit-applications/${applicationId}`)
+    const data = (fresh as { data?: { documents?: typeof serverDocuments } })?.data ?? fresh
+    serverDocuments = Array.isArray((data as { documents?: typeof serverDocuments }).documents)
+      ? (data as { documents: typeof serverDocuments }).documents
+      : []
+  } catch {
+    serverDocuments = []
+  }
 
   const pivots = application.application_applicants ?? []
   const debtorPivot = pivots.find((p: { role: string }) => p.role === 'DEUDOR')
   const codeudorApplicantIds = (application.co_debtors ?? []).map((c: { applicant_id: number }) => c.applicant_id)
+  const debtorApplicantId = debtorPivot
+    ? Number((debtorPivot as { applicant_id?: number }).applicant_id ?? 0) || null
+    : null
+
+  async function deleteDocIfPresent(docId: number | null | undefined) {
+    if (typeof docId === 'number' && docId > 0) {
+      await $api(`/credit-applications/${applicationId}/documents/${docId}`, { method: 'DELETE' })
+    }
+  }
 
   // Deudor
   if (debtorPivot) {
     const docs = form.value.debtor.documents ?? []
     for (const doc of docs) {
       if (!doc.file || !doc.title?.trim()) continue
-      if (doc.id) {
-        await $api(`/credit-applications/${applicationId}/documents/${doc.id}`, { method: 'DELETE' })
-      }
+      await deleteDocIfPresent(doc.id)
       const fd = new FormData()
       fd.append('title', doc.title.trim())
-      fd.append('file', doc.file)
+      appendFileToFormData(fd, doc.file, 'adjunto')
       appendRadicacionTrdToFormData(fd, doc)
-      await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
+      const res = await runDocumentUpload(
+        `Deudor — adjunto: ${doc.title.trim()}`,
+        doc.file,
+        () => $api<{ data: { id: number; original_name?: string } }>(
+          `/credit-applications/${applicationId}/documents`,
+          { method: 'POST', body: fd },
+        ),
+      )
+      doc.id = res.data.id
+      doc.original_name = res.data.original_name ?? doc.file.name
+      doc.file = undefined
     }
 
     let labelByKey: Record<string, string> = {}
@@ -779,26 +1021,38 @@ async function uploadAllDocuments(
     let didAuxiliarUpload = false
     if (auxFiles && debtorPivot) {
       const fi = { ...(typeof fiRaw === 'object' && fiRaw ? fiRaw : {}) } as Record<string, unknown>
-      const docMap = { ...(typeof fi.auxiliaryDocuments === 'object' && fi.auxiliaryDocuments
-        ? fi.auxiliaryDocuments as Record<string, number | null>
-        : {}) }
+      const docMap = readDocumentIdMap(fi, 'auxiliaryDocuments')
 
       for (const [key, file] of Object.entries(auxFiles)) {
-        if (!(file instanceof File)) continue
-        const prevId = docMap[key]
-        if (typeof prevId === 'number' && prevId > 0) {
-          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+        if (!(file instanceof File)) {
+          continue
+        }
+        if (file.size < 1) {
+          throw new Error(`El documento auxiliar «${labelByKey[key] ?? key}» está vacío. Vuelva a seleccionarlo.`)
         }
         const label = labelByKey[key] ?? key
+        const uploadTitle = titleForAuxiliaryDocumentUpload(label)
+        const labelRows = Object.entries(labelByKey).map(([k, lab]) => ({ key: k, label: lab }))
+        const prevId = docMap[key]
+          ?? (isAuxiliaryChecklistLabelUnique(labelRows, label)
+            ? findDocumentIdByTitle(serverDocuments, uploadTitle, debtorApplicantId)
+            : null)
+        await deleteDocIfPresent(prevId)
         const fd = new FormData()
-        fd.append('title', titleForAuxiliaryDocumentUpload(label))
-        fd.append('file', file)
+        fd.append('title', uploadTitle)
+        appendFileToFormData(fd, file, 'auxiliar')
         fd.append('auxiliary_checklist', '1')
-        const res = await $api<{ data: { id: number } }>(
-          `/credit-applications/${applicationId}/documents`,
-          { method: 'POST', body: fd },
+        const res = await runDocumentUpload(
+          `Deudor — documento auxiliar: ${label}`,
+          file,
+          () => $api<{ data: { id: number } }>(
+            `/credit-applications/${applicationId}/documents`,
+            { method: 'POST', body: fd },
+          ),
         )
         docMap[key] = res.data.id
+        serverDocuments = serverDocuments.filter(d => d.id !== prevId)
+        serverDocuments.push({ id: res.data.id, title: uploadTitle, applicant_id: debtorApplicantId })
         didAuxiliarUpload = true
       }
 
@@ -812,6 +1066,60 @@ async function uploadAllDocuments(
         })
       }
     }
+
+    let didFngUpload = false
+    if (form.value.credito_garantia_fng) {
+      const fngFiles = form.value.debtor.fngDocumentFiles
+      if (fngFiles && Object.keys(fngFiles).length > 0) {
+        let labelByKeyFng: Record<string, string> = {}
+        try {
+          const cfgFng = await $api<unknown>('/catalogs/template-flat-data/documentation-fng-documents')
+          const rowsFng = extractFngItemsFromCatalogResponse(cfgFng)
+          labelByKeyFng = Object.fromEntries(rowsFng.map(r => [r.key, r.label]))
+        } catch {
+          labelByKeyFng = {}
+        }
+        const fiFng = { ...(typeof fiRaw === 'object' && fiRaw ? fiRaw : {}) } as Record<string, unknown>
+        const fngDocMap = readDocumentIdMap(fiFng, 'fngDocuments')
+
+        for (const [key, file] of Object.entries(fngFiles)) {
+          if (!(file instanceof File)) {
+            continue
+          }
+          const labelFng = labelByKeyFng[key] ?? key
+          const uploadTitleFng = titleForFngDocumentUpload(labelFng)
+          const prevIdFng = fngDocMap[key]
+            ?? findDocumentIdByTitle(serverDocuments, uploadTitleFng, debtorApplicantId)
+          await deleteDocIfPresent(prevIdFng)
+          const fdFng = new FormData()
+          fdFng.append('title', uploadTitleFng)
+          appendFileToFormData(fdFng, file, 'fng')
+          fdFng.append('fng_checklist', '1')
+          const resFng = await runDocumentUpload(
+            `Deudor — documento FNG: ${labelFng}`,
+            file,
+            () => $api<{ data: { id: number } }>(
+              `/credit-applications/${applicationId}/documents`,
+              { method: 'POST', body: fdFng },
+            ),
+          )
+          fngDocMap[key] = resFng.data.id
+          serverDocuments = serverDocuments.filter(d => d.id !== prevIdFng)
+          serverDocuments.push({ id: resFng.data.id, title: uploadTitleFng, applicant_id: debtorApplicantId })
+          didFngUpload = true
+        }
+
+        if (didFngUpload) {
+          form.value.debtor.financial_info = { ...fiFng, fngDocuments: fngDocMap }
+          form.value.debtor.fngDocumentFiles = {}
+          await $csrf()
+          await $api(`/credit-applications/${applicationId}`, {
+            method: 'PUT',
+            body: payloadWithoutDocuments('Draft'),
+          })
+        }
+      }
+    }
   }
 
   // Codeudores (desde tabla co_debtors)
@@ -823,15 +1131,89 @@ async function uploadAllDocuments(
     const docs = co.documents ?? []
     for (const doc of docs) {
       if (!doc.file || !doc.title?.trim()) continue
-      if (doc.id) {
-        await $api(`/credit-applications/${applicationId}/documents/${doc.id}`, { method: 'DELETE' })
-      }
+      await deleteDocIfPresent(doc.id)
       const fd = new FormData()
       fd.append('title', doc.title.trim())
-      fd.append('file', doc.file)
+      appendFileToFormData(fd, doc.file, 'adjunto')
       fd.append('applicant_id', String(applicantId))
       appendRadicacionTrdToFormData(fd, doc)
-      await $api(`/credit-applications/${applicationId}/documents`, { method: 'POST', body: fd })
+      const res = await runDocumentUpload(
+        `Codeudor ${i + 1} — adjunto: ${doc.title.trim()}`,
+        doc.file,
+        () => $api<{ data: { id: number; original_name?: string } }>(
+          `/credit-applications/${applicationId}/documents`,
+          { method: 'POST', body: fd },
+        ),
+      )
+      doc.id = res.data.id
+      doc.original_name = res.data.original_name ?? doc.file.name
+      doc.file = undefined
+    }
+
+    let labelByKeyCo: Record<string, string> = {}
+    const auxFilesCo = co.auxiliaryDocumentFiles
+    const fiRawCo = co.financial_info
+    const activityTypeCo = fiRawCo && typeof fiRawCo === 'object'
+      ? String((fiRawCo as { activity_type?: string }).activity_type ?? '').trim()
+      : ''
+    if (auxFilesCo && Object.keys(auxFilesCo).length > 0 && activityTypeCo) {
+      try {
+        const cfgCo = await $api<unknown>('/catalogs/template-flat-data/auxiliary-documents')
+        const ibaCo = extractItemsByActivityFromCatalogResponse(cfgCo)
+        const rowsCo = resolveAuxiliaryChecklistRows(ibaCo, activityTypeCo)
+        labelByKeyCo = Object.fromEntries(rowsCo.map(r => [r.key, r.label]))
+      } catch {
+        labelByKeyCo = {}
+      }
+    }
+
+    let didAuxCo = false
+    if (auxFilesCo) {
+      const fiCo = { ...(typeof fiRawCo === 'object' && fiRawCo ? fiRawCo : {}) } as Record<string, unknown>
+      const docMapCo = readDocumentIdMap(fiCo, 'auxiliaryDocuments')
+
+      for (const [key, file] of Object.entries(auxFilesCo)) {
+        if (!(file instanceof File)) continue
+        const labelCo = labelByKeyCo[key] ?? key
+        const uploadTitleCo = titleForAuxiliaryDocumentUpload(labelCo)
+        const labelRowsCo = Object.entries(labelByKeyCo).map(([k, lab]) => ({ key: k, label: lab }))
+        const prevId = docMapCo[key]
+          ?? (isAuxiliaryChecklistLabelUnique(labelRowsCo, labelCo)
+            ? findDocumentIdByTitle(serverDocuments, uploadTitleCo, applicantId)
+            : null)
+        await deleteDocIfPresent(prevId)
+        const fdAux = new FormData()
+        fdAux.append('title', uploadTitleCo)
+        appendFileToFormData(fdAux, file, 'auxiliar-codeudor')
+        fdAux.append('auxiliary_checklist', '1')
+        fdAux.append('applicant_id', String(applicantId))
+        const resCo = await runDocumentUpload(
+          `Codeudor ${i + 1} — documento auxiliar: ${labelCo}`,
+          file,
+          () => $api<{ data: { id: number } }>(
+            `/credit-applications/${applicationId}/documents`,
+            { method: 'POST', body: fdAux },
+          ),
+        )
+        docMapCo[key] = resCo.data.id
+        serverDocuments = serverDocuments.filter(d => d.id !== prevId)
+        serverDocuments.push({ id: resCo.data.id, title: uploadTitleCo, applicant_id: applicantId })
+        didAuxCo = true
+      }
+
+      if (didAuxCo) {
+        const cos = form.value.co_debtors ?? []
+        const rowCo = cos[i]
+        if (rowCo) {
+          rowCo.financial_info = { ...fiCo, auxiliaryDocuments: docMapCo }
+          rowCo.auxiliaryDocumentFiles = {}
+        }
+        await $csrf()
+        await $api(`/credit-applications/${applicationId}`, {
+          method: 'PUT',
+          body: payloadWithoutDocuments('Draft'),
+        })
+      }
     }
   }
 }
@@ -843,6 +1225,14 @@ async function saveCodeudor() {
   }
   if (!canProceedStep1()) {
     toast.error('Completa documento, primer nombre y primer apellido del codeudor')
+    return
+  }
+  await nextTick()
+  if (!debtorStepOneFormRef.value?.validateRequiredStepOneFields()) {
+    toast.error('Completa los campos obligatorios del codeudor')
+    return
+  }
+  if (!debtorStepOneFormRef.value?.validateAuxiliaryDocumentsRequired()) {
     return
   }
   if (hasDocumentsWithoutTitle()) {
@@ -867,11 +1257,11 @@ async function saveCodeudor() {
   try {
     await $csrf()
     const existingCoDebtors = (app.co_debtors ?? []).map((c: any) => {
-      const { documents: _d, ...rest } = c
+      const { documents: _d, auxiliaryDocumentFiles: _auxE, ...rest } = c
       return rest
     })
     const codeudorFormData = form.value.debtor
-    const { documents: _dd, ...coWithoutDocs } = codeudorFormData
+    const { documents: _dd, auxiliaryDocumentFiles: _auxDraft, ...coWithoutDocs } = codeudorFormData
     const payload = {
       debtor: app.debtor,
       co_debtors: [...existingCoDebtors, coWithoutDocs],
@@ -903,10 +1293,71 @@ async function saveCodeudor() {
         if (!doc.file || !doc.title?.trim()) continue
         const fd = new FormData()
         fd.append('title', doc.title.trim())
-        fd.append('file', doc.file)
+        appendFileToFormData(fd, doc.file, 'adjunto')
         fd.append('applicant_id', String(createdCoDebtor.applicant_id))
         appendRadicacionTrdToFormData(fd, doc)
-        await $api(`/credit-applications/${updated.id}/documents`, { method: 'POST', body: fd })
+        await runDocumentUpload(
+          `Codeudor nuevo — adjunto: ${doc.title.trim()}`,
+          doc.file,
+          () => $api(`/credit-applications/${updated.id}/documents`, { method: 'POST', body: fd }),
+        )
+      }
+
+      const debtorAsCo = form.value.debtor
+      let labelBySave: Record<string, string> = {}
+      const auxSave = debtorAsCo.auxiliaryDocumentFiles
+      const fiSave = debtorAsCo.financial_info
+      const actSave = fiSave && typeof fiSave === 'object'
+        ? String((fiSave as { activity_type?: string }).activity_type ?? '').trim()
+        : ''
+      if (auxSave && Object.keys(auxSave).length > 0 && actSave) {
+        try {
+          const cfgS = await $api<unknown>('/catalogs/template-flat-data/auxiliary-documents')
+          const ibaS = extractItemsByActivityFromCatalogResponse(cfgS)
+          const rowsS = resolveAuxiliaryChecklistRows(ibaS, actSave)
+          labelBySave = Object.fromEntries(rowsS.map(r => [r.key, r.label]))
+        } catch {
+          labelBySave = {}
+        }
+      }
+      let didAuxSave = false
+      if (auxSave) {
+        const fiObj = { ...(typeof fiSave === 'object' && fiSave ? fiSave : {}) } as Record<string, unknown>
+        const docMapS = { ...(typeof fiObj.auxiliaryDocuments === 'object' && fiObj.auxiliaryDocuments
+          ? fiObj.auxiliaryDocuments as Record<string, number | null>
+          : {}) }
+        for (const [key, file] of Object.entries(auxSave)) {
+          if (!(file instanceof File)) continue
+          const prevId = docMapS[key]
+          if (typeof prevId === 'number' && prevId > 0) {
+            await $api(`/credit-applications/${updated.id}/documents/${prevId}`, { method: 'DELETE' })
+          }
+          const lbl = labelBySave[key] ?? key
+          const fdAux = new FormData()
+          fdAux.append('title', titleForAuxiliaryDocumentUpload(lbl))
+          appendFileToFormData(fdAux, file, 'auxiliar-codeudor')
+          fdAux.append('auxiliary_checklist', '1')
+          fdAux.append('applicant_id', String(createdCoDebtor.applicant_id))
+          const resS = await runDocumentUpload(
+            `Codeudor nuevo — documento auxiliar: ${lbl}`,
+            file,
+            () => $api<{ data: { id: number } }>(
+              `/credit-applications/${updated.id}/documents`,
+              { method: 'POST', body: fdAux },
+            ),
+          )
+          docMapS[key] = resS.data.id
+          didAuxSave = true
+        }
+        if (didAuxSave) {
+          form.value.debtor.financial_info = { ...fiObj, auxiliaryDocuments: docMapS }
+          form.value.debtor.auxiliaryDocumentFiles = {}
+          await $csrf()
+          await $api(`/credit-applications/${updated.id}`, {
+            method: 'PUT',
+            body: payloadWithoutDocuments('Draft'),
+          })
+        }
       }
     }
     toast.success('Codeudor agregado correctamente')
@@ -931,44 +1382,42 @@ async function saveCodeudor() {
 
 async function saveDraft() {
   if (mode.value === 'codeudor') {
+    const identityErrCo = validateApplicantMinimalIdentityForDraftSave(form.value.debtor, 'co_debtor')
+    if (identityErrCo) {
+      toast.error(identityErrCo)
+      return
+    }
     await saveCodeudor()
     return
   }
-  if (!(await validateDebtorStepOneForRadicacion())) {
+  const identityErr = validateApplicantMinimalIdentityForDraftSave(form.value.debtor, 'debtor')
+  if (identityErr) {
+    toast.error(identityErr)
     return
   }
-  if (!canProceedStep1()) {
-    toast.error('Completa al menos documento, primer nombre y primer apellido del deudor')
+  if (form.value.agency_id <= 0) {
+    toast.error('Seleccione la sucursal')
     return
   }
-  if (!canProceedStep2()) {
-    toast.error('Completa monto, plazo, sucursal, destino del crédito y al menos una plantilla de actividad en el destino')
-    return
-  }
-  if (hasDocumentsWithoutTitle()) {
-    toast.error('Todos los documentos adjuntos deben tener un título')
-    return
-  }
-  const errTemplates = validateActivityTemplatesBeforeSave()
-  if (errTemplates) {
-    toast.error(errTemplates)
+  if (!validatePrivilegedFieldsForSave()) {
     return
   }
 
   saving.value = true
   try {
     await $csrf()
+    const body = payloadForAutoSave()
     let application: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> }
     if (draftId.value) {
       const { data } = await $api<{ data: typeof application }>(`/credit-applications/${draftId.value}`, {
         method: 'PUT',
-        body: payloadWithoutDocuments('Draft'),
+        body,
       })
       application = data
     } else {
       const { data } = await $api<{ data: typeof application }>('/credit-applications', {
         method: 'POST',
-        body: payloadWithoutDocuments('Draft'),
+        body,
       })
       application = data
     }
@@ -976,17 +1425,14 @@ async function saveDraft() {
     clearLocalDraft()
     toast.success('Borrador guardado. Puedes retomarlo más tarde.')
     await navigateTo(`/radicacion/editar/${application.id}`)
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Error guardando:', e)
-    let msg = 'Error al guardar'
-    if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
-      msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
-    } else if (e?.data?.errors && typeof e.data.errors === 'object') {
-      msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
-    } else if (e?.data?.message) {
-      msg = e.data.message
-    } else if (e?.message) {
-      msg = e.message
+    let msg = messageFromFetchError(e, 'Error al guardar')
+    if (e && typeof e === 'object') {
+      const err = e as Record<string, unknown>
+      if (err.status === 413 || err.statusCode === 413) {
+        msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
+      }
     }
     toast.error(msg)
   } finally {
@@ -1000,6 +1446,9 @@ async function submitApplication() {
     await saveCodeudor()
     return
   }
+  if (!validateNumeroRadicadoExternoForDirectorSubmit()) {
+    return
+  }
   if (!(await validateDebtorStepOneForRadicacion())) {
     return
   }
@@ -1008,7 +1457,7 @@ async function submitApplication() {
     return
   }
   if (!canProceedStep2()) {
-    toast.error('Completa monto, plazo, sucursal, destino del crédito y al menos una plantilla de actividad en el destino')
+    toast.error('Completa monto, plazo, sucursal y destino del crédito')
     return
   }
   if (hasDocumentsWithoutTitle()) {
@@ -1018,6 +1467,9 @@ async function submitApplication() {
   const errTemplatesSubmit = validateActivityTemplatesBeforeSave()
   if (errTemplatesSubmit) {
     toast.error(errTemplatesSubmit)
+    return
+  }
+  if (!validatePrivilegedFieldsForSave()) {
     return
   }
 
@@ -1043,19 +1495,9 @@ async function submitApplication() {
     clearLocalDraft()
     toast.success('Solicitud enviada al director de agencia.')
     await navigateTo('/radicacion')
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Error enviando:', e)
-    let msg = 'Error al enviar'
-    if (e?.status === 413 || e?.statusCode === 413 || e?.response?.status === 413 || String(e?.message || '').includes('413')) {
-      msg = 'Uno o más archivos superan el límite de 10 MB. Por favor, sube documentos más pequeños.'
-    } else if (e?.data?.errors && typeof e.data.errors === 'object') {
-      msg = Object.values(e.data.errors as Record<string, string[]>).flat().join(', ')
-    } else if (e?.data?.message) {
-      msg = e.data.message
-    } else if (e?.message) {
-      msg = e.message
-    }
-    toast.error(msg)
+    toast.error(messageFromFetchError(e, 'Error al enviar'))
   } finally {
     saving.value = false
   }
@@ -1067,6 +1509,7 @@ function openSubmitDirectorDialog() {
 }
 
 async function confirmSubmitToDirector() {
+  if (saving.value) return
   submitDirectorDialogOpen.value = false
   await submitApplication()
 }
@@ -1077,8 +1520,17 @@ async function nextStep() {
       toast.error('Ingresa el código (RAD-XXX) o radicado externo para buscar la solicitud')
       return
     }
-    const ok = await fetchApplicationByRadicado()
-    if (!ok) return
+    const okFetch = await fetchApplicationByRadicado()
+    if (!okFetch) return
+    await nextTick()
+    const stepOneRef = debtorStepOneFormRef.value
+    if (!stepOneRef?.validateRequiredStepOneFields()) {
+      toast.error('Completa los campos obligatorios del codeudor')
+      return
+    }
+    if (!stepOneRef.validateAuxiliaryDocumentsRequired()) {
+      return
+    }
   }
   if (mode.value === 'deudor' && currentStep.value === 1) {
     const okRequired = debtorStepOneFormRef.value?.validateRequiredStepOneFields() ?? true
@@ -1090,13 +1542,25 @@ async function nextStep() {
     if (!okAux) {
       return
     }
+    if (!validatePrivilegedFieldsForSave()) {
+      return
+    }
   }
-  if (
-    (mode.value === 'deudor' && currentStep.value === 2)
-    || (mode.value === 'codeudor' && currentStep.value === 2)
-  ) {
+  if (mode.value === 'deudor' && currentStep.value === 2) {
+    await nextTick()
+    if (!debtorSkipsActivityTemplateStep()) {
+      const templates = getActivityTemplates()
+      const r = validateAllActivityTemplates(templates, { requireAtLeastOne: true })
+      if (!r.valid) {
+        toast.error(r.errors.join('. '))
+        nextTick(() => debtorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
+        return
+      }
+    }
+  }
+  if (mode.value === 'codeudor' && currentStep.value === 2) {
     const templates = getActivityTemplates()
-    const r = validateAllActivityTemplates(templates)
+    const r = validateAllActivityTemplates(templates, { requireAtLeastOne: false })
     if (!r.valid) {
       toast.error(r.errors.join('. '))
       nextTick(() => debtorActivityTemplatesListRef.value?.highlightFirstInvalidFromList(templates))
@@ -1154,8 +1618,9 @@ function selectMode(m: 'deudor' | 'codeudor') {
 
 
 onMounted(() => {
-  fetchCatalogs()
-  loadProducerUnits()
+  void fetchCatalogs()
+  void loadProducerUnits()
+  void fetchCreditDestinationOptions()
 })
 </script>
 
@@ -1214,21 +1679,34 @@ onMounted(() => {
     <div class="rounded-xl border bg-card p-4">
       <div class="space-y-1.5 max-w-2xl">
         <Label for="numero_radicado_externo" class="text-sm font-semibold">
-          {{ mode === 'codeudor' ? 'Código o radicado externo *' : 'Número de radicado externo' }}
+          {{ mode === 'codeudor' ? 'Código o radicado externo *' : 'Número de radicado externo *' }}
         </Label>
         <Input
           id="numero_radicado_externo"
           v-model="form.numero_radicado_externo"
           type="text"
           maxlength="100"
-          :placeholder="mode === 'codeudor' ? 'Ej: RAD-2026-000001 o RAD-EXT-2025-001234' : 'Ej: RAD-EXT-2025-001234 (se asigna al pasar a análisis)'"
+          :placeholder="mode === 'codeudor' ? 'Ej: RAD-2026-000001 o RAD-EXT-2025-001234' : 'Ej: RAD-EXT-2025-001234'"
           :required="mode === 'codeudor'"
+          :aria-invalid="mode === 'deudor' && radicadoExternoDirectorError ? true : undefined"
           class="max-w-2xl font-mono"
+          :class="
+            mode === 'deudor' && radicadoExternoDirectorError
+              ? 'border-destructive ring-2 ring-destructive/30 focus-visible:ring-destructive'
+              : ''
+          "
         />
+        <p
+          v-if="mode === 'deudor' && radicadoExternoDirectorError"
+          class="text-sm text-destructive"
+          role="alert"
+        >
+          Indique el número de radicado externo para enviar al director de agencia.
+        </p>
         <p class="text-xs text-muted-foreground">
           {{ mode === 'codeudor'
             ? 'Código interno (RAD-XXX) o radicado externo para vincular este codeudor a la solicitud.'
-            : 'Opcional al crear. Se asigna al enviar al sistema externo y pasar la solicitud a análisis.' }}
+            : 'Obligatorio para enviar la solicitud al director de agencia.' }}
         </p>
       </div>
     </div>
@@ -1370,18 +1848,20 @@ onMounted(() => {
             ? (codeudorStep === 1
                 ? 'Busca por cédula o completa el formulario (datos personales y concepto del codeudor)'
                 : codeudorStep === 2
-                  ? 'Plantillas agropecuarias según la actividad económica'
+                  ? 'Opcional. Plantillas agropecuarias según la actividad económica del codeudor'
                   : 'Ingresos, gastos y solvencia del codeudor')
             : mode === 'codeudor'
               ? (currentStep === 1
                   ? 'Busca por cédula o completa el formulario del codeudor'
                   : currentStep === 2
-                    ? 'Plantillas agropecuarias según la actividad económica del codeudor'
+                    ? 'Opcional. Plantillas agropecuarias según la actividad económica del codeudor'
                     : 'Ingresos, gastos y solvencia del codeudor')
               : (currentStep === 1
                 ? 'Busca por cédula o completa el formulario del deudor principal'
                 : currentStep === 2
-                  ? 'Plantillas agropecuarias según la actividad económica del deudor'
+                  ? (debtorWithoutActivityTemplate
+                    ? 'Sin plantilla de actividad económica'
+                    : 'Plantillas agropecuarias según la actividad económica del deudor')
                   : currentStep === 3
                     ? 'Ingresos, gastos y solvencia del deudor'
                     : currentStep === 4
@@ -1403,13 +1883,51 @@ onMounted(() => {
             :loading-search="loadingSearch"
             :hide-financial-section="true"
             :show-co-debtor-concept="mode === 'codeudor'"
-            :show-documentos-auxiliar-checklist="mode === 'deudor' && !addingCodeudor"
-            :credit-application-documents="[]"
+            :show-documentos-auxiliar-checklist="(mode === 'deudor' && !addingCodeudor) || mode === 'codeudor'"
+            :credit-application-documents="codeudorApplicationDocuments"
             :document-producer-org-unit-id="form.document_producer_org_unit_id"
             :trd-document-type-options="trdTypeOptions"
             :trd-classification-required="trdRequired"
             @search="searchApplicant"
           />
+          <div
+            v-if="mode === 'deudor' && hasPermission('radicacion_marcar_privilegiado')"
+            class="space-y-1.5 rounded-md border border-dashed border-muted-foreground/25 bg-muted/10 p-4"
+          >
+            <Label for="nueva_form_is_privileged_trigger">¿Es privilegiado? *</Label>
+            <Select
+              :model-value="form.is_privileged === true ? 'yes' : 'no'"
+              @update:model-value="onIsPrivilegedSelectUpdate"
+            >
+              <SelectTrigger id="nueva_form_is_privileged_trigger">
+                <SelectValue placeholder="Seleccionar" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="no">
+                  No
+                </SelectItem>
+                <SelectItem value="yes">
+                  Sí
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <div v-if="form.is_privileged === true" class="space-y-1.5">
+              <Label for="nueva_form_privileged_justification">Justificación (privilegiado) *</Label>
+              <textarea
+                id="nueva_form_privileged_justification"
+                v-model="form.privileged_justification"
+                rows="4"
+                class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                placeholder="Explique por qué esta solicitud se considera privilegiada."
+              />
+              <p class="text-xs text-muted-foreground">
+                Mínimo 10 caracteres. Queda guardado con la solicitud para informes.
+              </p>
+            </div>
+            <p class="text-xs text-muted-foreground">
+              Queda guardado con la solicitud para informes. El director de crédito puede confirmarlo o cambiarlo al registrar la decisión final.
+            </p>
+          </div>
         </div>
 
         <!-- Paso 2: Actividad económica -->
@@ -1417,11 +1935,29 @@ onMounted(() => {
           v-show="(mode === 'deudor' && currentStep === 2) || (mode === 'codeudor' && currentStep === 2)"
           class="space-y-4"
         >
+          <label
+            v-if="mode === 'deudor'"
+            class="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5"
+          >
+            <Checkbox
+              id="debtor_without_activity_template"
+              bare
+              v-model:checked="debtorWithoutActivityTemplate"
+            />
+            <span class="text-sm">Sin plantilla de actividad</span>
+          </label>
           <CreditsFinancialActivityFormList
+            v-if="mode !== 'deudor' || !debtorWithoutActivityTemplate"
             ref="debtorActivityTemplatesListRef"
             :model-value="getActivityTemplates()"
             @update:model-value="setActivityTemplates"
           />
+          <p
+            v-else-if="mode === 'deudor'"
+            class="text-sm text-muted-foreground"
+          >
+            No se requiere configurar plantillas agropecuarias para este deudor.
+          </p>
         </div>
 
         <!-- Paso 3: Datos financieros -->
@@ -1516,10 +2052,20 @@ onMounted(() => {
             </div>
             <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
               <Label for="destination">Destino del crédito *</Label>
-              <Input
+              <Multiselect
                 id="destination"
-                v-model="form.destination"
-                placeholder="Ej: Capital de trabajo, vivienda..."
+                :model-value="form.destination ? form.destination : null"
+                :options="creditDestinationOptions"
+                mode="single"
+                value-prop="value"
+                label="label"
+                :searchable="true"
+                :can-clear="false"
+                placeholder="Seleccionar destino"
+                no-options-text="Sin opciones. Configure «Destino del crédito» en Parametrización → Radicación."
+                no-results-text="Sin coincidencias"
+                class="multiselect-municipality"
+                @update:model-value="form.destination = ($event != null && $event !== '') ? String($event) : ''"
               />
             </div>
             <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
@@ -1530,35 +2076,79 @@ onMounted(() => {
                 class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 placeholder="Describa en detalle el uso que se le dará al crédito (inversión, gastos a cubrir, etc.)"
                 rows="4"
+                :maxlength="PASTED_PLAIN_TEXT_MAX_LENGTH"
+                @paste="onPasteDestinationDescription"
+                @blur="onBlurDestinationDescription"
               />
+              <p class="text-[11px] text-muted-foreground">
+                Al pegar desde Word se limpian espacios extra y caracteres especiales.
+                {{ (form.destination_description ?? '').length }}/{{ PASTED_PLAIN_TEXT_MAX_LENGTH }}
+              </p>
             </div>
-            <div class="space-y-3 sm:col-span-2 lg:col-span-3">
-              <div class="rounded-lg border border-border bg-muted/30 p-4">
-                <div class="flex items-start gap-3">
-                  <Checkbox
-                    id="credito_garantia_fng"
-                    :model-value="form.credito_garantia_fng === true"
-                    @update:model-value="form.credito_garantia_fng = $event ? true : false"
-                  />
-                  <div class="min-w-0 space-y-1.5">
-                    <Label for="credito_garantia_fng" class="cursor-pointer text-sm font-medium leading-snug">
-                      Créditos con garantía del Fondo Nacional de Garantías (FNG)
-                    </Label>
-                    <p class="text-xs text-muted-foreground leading-relaxed">
-                      Marque si la operación cuenta con cobertura o garantía del FNG. Dato informativo y opcional para la solicitud.
-                    </p>
-                  </div>
-                </div>
+            <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
+              <div class="max-w-md space-y-1.5">
+                <Label for="credito_garantia_fng">Créditos con garantía del Fondo Nacional de Garantías (FNG) *</Label>
+                <Multiselect
+                  id="credito_garantia_fng"
+                  :model-value="creditoGarantiaFngBooleanToSelectValue(form.credito_garantia_fng)"
+                  :options="RADICACION_CREDITO_GARANTIA_FNG_OPTIONS"
+                  mode="single"
+                  value-prop="value"
+                  label="label"
+                  :searchable="false"
+                  :can-clear="false"
+                  placeholder="Seleccionar"
+                  no-results-text="Sin coincidencias"
+                  class="multiselect-municipality w-full"
+                  @update:model-value="form.credito_garantia_fng = selectValueToCreditoGarantiaFngBoolean($event)"
+                />
+                <p class="text-xs text-muted-foreground leading-relaxed">
+                  Por defecto «No». Elija «Sí» solo si la operación cuenta con cobertura o garantía del FNG. Si marca «Sí», cargue el paquete FNG en el bloque siguiente; <span class="font-medium text-foreground">revisión de documentación</span> adjunta un único documento de respaldo al aprobar.
+                </p>
               </div>
+            </div>
+            <div
+              v-if="form.credito_garantia_fng"
+              class="space-y-3 sm:col-span-2 lg:col-span-3"
+            >
+              <Card class="border-border/80">
+                <CardHeader class="pb-2">
+                  <CardTitle class="text-base">
+                    Documentos FNG (Fondo Nacional de Garantías)
+                  </CardTitle>
+                  <CardDescription class="text-xs leading-relaxed">
+                    Checklist según Parametrización → Radicación (plantilla «FNG — documentos»). Los archivos se suben cuando ya existe un borrador en el servidor.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent class="pt-0 space-y-3">
+                  <p
+                    v-if="!draftId"
+                    class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
+                  >
+                    Para adjuntar el paquete FNG, primero debe existir el borrador: complete el paso 1 del deudor y espere el guardado automático, o pulse <span class="font-medium">Guardar borrador</span>. Cuando aparezca el checklist, elija archivos y guarde de nuevo para persistirlos.
+                  </p>
+                  <FngDocumentsSection
+                    v-else
+                    :applicant="form.debtor"
+                    :credit-application-id="draftId"
+                    :application-documents="[]"
+                    :disabled="!hasPermission('radicacion_fng_documentos_subir') && !hasPermission('radicacion_documentos_subir')"
+                    auxiliary-pending-upload-hint="draftSave"
+                    interaction-mode="full"
+                    checklist-scope="adviser_pack"
+                    @update:applicant="(v) => { form.debtor = v }"
+                  />
+                </CardContent>
+              </Card>
             </div>
           </div>
           <div class="space-y-4 border-t border-border pt-6">
             <div>
               <p class="text-sm font-medium">
-                Actividades económicas del destino (referencia) *
+                Actividades económicas del destino (referencia)
               </p>
               <p class="mt-1 text-xs text-muted-foreground">
-                Añada al menos una plantilla con la herramienta de abajo; los ingresos aquí son solo referencia y no alteran el perfil financiero del deudor.
+                Opcional: puede añadir plantillas con la herramienta de abajo; los ingresos aquí son solo referencia y no alteran el perfil financiero del deudor.
               </p>
             </div>
             <CreditsFinancialActivityFormList
@@ -1610,8 +2200,9 @@ onMounted(() => {
           </div>
 
           <!-- Paso 1: Datos del Codeudor -->
-          <div v-if="codeudorStep === 1" class="space-y-4">
+          <div v-show="codeudorStep === 1" class="space-y-4">
             <ApplicantFormFields
+              ref="codeudorWizardStepOneFormRef"
               v-model="codeudorWizardApplicant"
               :credit-application-id="draftId ?? undefined"
               :show-search="true"
@@ -1621,11 +2212,13 @@ onMounted(() => {
               :document-producer-org-unit-id="form.document_producer_org_unit_id"
               :trd-document-type-options="trdTypeOptions"
               :trd-classification-required="trdRequired"
+              :show-documentos-auxiliar-checklist="true"
+              :credit-application-documents="[]"
               @search="searchApplicantForWizard"
             />
           </div>
           <!-- Paso 2: Actividad económica -->
-          <div v-else-if="codeudorStep === 2" class="space-y-4">
+          <div v-show="codeudorStep === 2" class="space-y-4">
             <CreditsFinancialActivityFormList
               ref="codeudorActivityTemplatesListRef"
               :model-value="getActivityTemplatesFor(codeudorWizardApplicant)"
@@ -1633,7 +2226,7 @@ onMounted(() => {
             />
           </div>
           <!-- Paso 3: Datos financieros -->
-          <div v-else-if="codeudorStep === 3" class="space-y-4">
+          <div v-show="codeudorStep === 3" class="space-y-4">
             <ApplicantFormFields
               v-model="codeudorWizardApplicant"
               :credit-application-id="draftId ?? undefined"

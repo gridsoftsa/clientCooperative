@@ -10,8 +10,13 @@ const props = withDefaults(
     amountRequested: number
     /** Fragmento del título tras «Resumen financiero » (ej. «del deudor», «del codeudor»). */
     summaryScopeLabel?: string
+    /**
+     * Si true, las cifras reflejan ajustes del analista en la hoja de análisis (no la radicación).
+     * Solo debe usarse desde `/radicacion/analisis-score`.
+     */
+    analysisAdjusted?: boolean
   }>(),
-  { summaryScopeLabel: 'del deudor' },
+  { summaryScopeLabel: 'del deudor', analysisAdjusted: false },
 )
 
 const { formatPesosConSimbolo } = usePesosFormat()
@@ -86,6 +91,15 @@ const montoActivos = computed(() => {
   <div class="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
     <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
       Resumen financiero {{ summaryScopeLabel }}
+    </p>
+    <p
+      v-if="analysisAdjusted"
+      class="mb-3 rounded-md border border-primary/35 bg-primary/[0.07] px-3 py-2 text-xs text-foreground dark:bg-primary/[0.12]"
+      role="note"
+    >
+      Indicadores calculados con los <strong class="font-semibold">activos</strong> y la
+      <strong class="font-semibold">consulta central de riesgos</strong> diligenciados en el análisis.
+      Los datos de la radicación no se modifican.
     </p>
     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
       <div class="space-y-1">

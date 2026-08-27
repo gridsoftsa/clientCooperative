@@ -7,25 +7,41 @@ export default defineNuxtPlugin(() => {
     baseURL: `${apiBase}/api`,
     credentials: 'include', // Important for Sanctum cookies
     headers: {
-      'Accept': 'application/json',
+      Accept: 'application/json',
       'X-Requested-With': 'XMLHttpRequest',
-      'Content-Type': 'application/json'
     },
-    async onRequest({ request, options }) {
-      // FormData: no enviar Content-Type para que el navegador añada boundary
+    async onRequest({ options }) {
+      /**
+       * No fijar `Content-Type: application/json` en defaults: con FormData, ofetch puede fusionar
+       * headers y dejar `application/json`, y entonces el boundary multipart no se envía → Laravel
+       * no recibe `file` y responde 422 (p. ej. subida FNG / adjuntos).
+       */
       if (options.body instanceof FormData) {
         const headers = new Headers(options.headers as HeadersInit)
         headers.delete('Content-Type')
+        headers.delete('content-type')
+        options.headers = headers
+      } else if (
+        options.body !== undefined
+        && options.body !== null
+        && typeof options.body === 'object'
+        && !(options.body instanceof Blob)
+        && !(options.body instanceof ArrayBuffer)
+        && !(options.body instanceof URLSearchParams)
+      ) {
+        const headers = new Headers(options.headers as HeadersInit)
+        if (!headers.has('Content-Type')) {
+          headers.set('Content-Type', 'application/json')
+        }
         options.headers = headers
       }
-      // Get CSRF token before making requests
       const csrfToken = await getCsrfToken(apiBase)
       if (csrfToken) {
         const headers = new Headers(options.headers as HeadersInit)
         headers.set('X-XSRF-TOKEN', csrfToken)
         options.headers = headers
       }
-    }
+    },
   })
 
   // Lee XSRF-TOKEN directo de document.cookie (más fiable en cross-subdomain que useCookie)
