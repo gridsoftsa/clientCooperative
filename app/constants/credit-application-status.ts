@@ -77,8 +77,8 @@ const STATUS_LABELS: Record<string, string> = {
 export type CreditApplicationStatusLabelOptions = {
   /** Estado actual: viene del API cuando la solicitud está en `Returned` tras devolución documental. */
   skipNextDirectorReview?: boolean
-  /** `true` cuando el analista devolvió la radicación y el asesor debe corregir y reenviar al analista. */
-  resubmitToAnalystAfterReturn?: boolean
+  /** `true` cuando el director de crédito devolvió (Devolución) y el reenvío vuelve a esa revisión. */
+  resubmitToCreditDirectorAfterReturn?: boolean
   /** `event_key` de la fila de trazabilidad para acertar el matiz de `Returned`. */
   timelineEventKey?: string | null
   /** Si el estado etiquetado es el origen o el destino de esa fila. */
@@ -100,6 +100,9 @@ function returnedLabelFromTimeline(
     if (ek === 'analyst_returned_review') {
       return 'Devuelta por analista'
     }
+    if (ek === 'credit_director_returned') {
+      return 'Devolución'
+    }
     if (ek === 'credit_director_returned_modification') {
       return 'Modificación'
     }
@@ -114,6 +117,9 @@ function returnedLabelFromTimeline(
     }
     if (ek === 'sent_to_director_review') {
       return 'Devuelta por director de agencia'
+    }
+    if (ek === 'resubmitted_to_credit_director_after_return') {
+      return 'Devolución'
     }
     return null
   }
@@ -150,6 +156,10 @@ export function getCreditApplicationStatusLabel(
 
   if (options?.resubmitToAnalystAfterReturn === true) {
     return 'Devuelta por analista (pendiente asesor)'
+  }
+
+  if (options?.resubmitToCreditDirectorAfterReturn === true) {
+    return 'Devolución'
   }
 
   if (options?.timelineEventKey != null && options.timelineRole != null) {

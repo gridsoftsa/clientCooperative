@@ -30,6 +30,7 @@ interface CreditSummaryRow {
   status: string
   skip_next_director_review?: boolean
   resubmit_to_analyst_after_return?: boolean
+  resubmit_to_credit_director_after_return?: boolean
   amount_requested: string
   created_at: string | null
   sucursal: { id: number; name: string; code: string | null } | null
@@ -517,6 +518,7 @@ onUnmounted(() => {
                               {{ getCreditApplicationStatusLabel(row.status, {
                                 skipNextDirectorReview: row.skip_next_director_review,
                                 resubmitToAnalystAfterReturn: row.resubmit_to_analyst_after_return,
+                                resubmitToCreditDirectorAfterReturn: row.resubmit_to_credit_director_after_return,
                               }) }}
                             </Badge>
                           </TableCell>

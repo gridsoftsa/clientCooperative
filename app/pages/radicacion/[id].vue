@@ -387,7 +387,7 @@ const analystDecisionOptions = [
   { value: 'returned', label: 'Devolver al asesor para corrección (visible también para director de agencia)' },
 ]
 
-const creditDirectorDecision = ref<'approved' | 'rejected' | 'returned_modification' | 'returned_insurer_response' | ''>('')
+const creditDirectorDecision = ref<'approved' | 'rejected' | 'returned' | 'returned_modification' | 'returned_insurer_response' | ''>('')
 const creditDirectorConcept = ref('')
 const creditDirectorExceptionOptions = [
   { value: 'no', label: 'No' },
@@ -413,6 +413,7 @@ const documentationReviewConceptCollapsibleOpen = ref(true)
 const creditDirectorDecisionOptions = [
   { value: 'approved', label: 'Aprobar para desembolso' },
   { value: 'rejected', label: 'Rechazar solicitud' },
+  { value: 'returned', label: 'Devolución' },
   { value: 'returned_modification', label: 'Modificación' },
   { value: 'returned_insurer_response', label: 'Respuesta aseguradora' },
 ]
@@ -529,6 +530,7 @@ function onCreditDirectorDecisionUpdate(value: string | null) {
   if (
     value === 'approved'
     || value === 'rejected'
+    || value === 'returned'
     || value === 'returned_modification'
     || value === 'returned_insurer_response'
   ) {
@@ -676,6 +678,8 @@ function timelineEventStatusLabel(
     timelineEventKey: event.event_key ?? null,
     timelineRole: role,
     skipNextDirectorReview: application.value?.skip_next_director_review,
+    resubmitToAnalystAfterReturn: application.value?.resubmit_to_analyst_after_return,
+    resubmitToCreditDirectorAfterReturn: application.value?.resubmit_to_credit_director_after_return,
   })
 }
 
@@ -1726,6 +1730,7 @@ async function fetchApplication() {
     } else if (
       application.value?.skip_next_director_review === true
       || application.value?.resubmit_to_analyst_after_return === true
+      || application.value?.resubmit_to_credit_director_after_return === true
       || timelineHasReturnedEvent(application.value?.timeline)
     ) {
       timelineExpanded.value = true
@@ -3185,7 +3190,7 @@ onMounted(() => {
                 <CardTitle>Decisión final — director de crédito</CardTitle>
                 <CardDescription>
                   Revise la radicación y el SCORE. Elija <strong>Aprobar para desembolso</strong>, <strong>Rechazar solicitud</strong>,
-                  <strong>Modificación</strong> o <strong>Respuesta aseguradora</strong> según corresponda. Debe dejar un concepto claro y estructurado.
+                  <strong>Devolución</strong>, <strong>Modificación</strong> o <strong>Respuesta aseguradora</strong> según corresponda. Debe dejar un concepto claro y estructurado.
                 </CardDescription>
               </div>
               <Button
@@ -4192,6 +4197,9 @@ onMounted(() => {
             </template>
             <template v-else-if="creditDirectorDecision === 'rejected'">
               La solicitud quedará <strong>rechazada</strong> de forma definitiva. Esta acción no se puede deshacer desde aquí.
+            </template>
+            <template v-else-if="creditDirectorDecision === 'returned'">
+              La solicitud pasará a estado <strong>Devolución</strong> para que el asesor corrija. Al reenviar, volverá a revisión del director de crédito.
             </template>
             <template v-else-if="creditDirectorDecision === 'returned_modification'">
               La solicitud pasará a estado <strong>Modificación</strong> para corrección y nuevo flujo hasta una nueva revisión del director de crédito.

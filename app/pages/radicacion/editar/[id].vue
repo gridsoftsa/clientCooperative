@@ -84,11 +84,8 @@ const submitDirectorDialogOpen = ref(false)
 const radicadoExternoDirectorError = ref(false)
 /** Tras devolución desde revisión documental: el backend envía directo a esa revisión sin pasar por el director. */
 const skipNextDirectorReview = computed(() => Boolean(application.value?.skip_next_director_review))
-/** Devolución por revisión de documentos: solo adjuntos; el resto queda bloqueado en UI y el API ignora otros cambios. */
-const documentsOnlyEditMode = computed(
-  () => Boolean(application.value?.skip_next_director_review)
-    && isCreditApplicationAdviserEditableStatus(application.value?.status),
-)
+/** Tras Devolución del director de crédito: el reenvío vuelve a esa revisión. */
+const resubmitToCreditDirector = computed(() => Boolean(application.value?.resubmit_to_credit_director_after_return))
 
 const timelineEvents = computed(() =>
   Array.isArray(application.value?.timeline) ? application.value.timeline : [],
@@ -108,6 +105,9 @@ const showEditTraceability = computed((): boolean => {
     return true
   }
   if (application.value.resubmit_to_analyst_after_return === true) {
+    return true
+  }
+  if (application.value.resubmit_to_credit_director_after_return === true) {
     return true
   }
   return timelineEvents.value.some(
@@ -140,6 +140,8 @@ function timelineEventStatusLabel(
     timelineEventKey: event.event_key ?? null,
     timelineRole: role,
     skipNextDirectorReview: application.value?.skip_next_director_review,
+    resubmitToAnalystAfterReturn: application.value?.resubmit_to_analyst_after_return,
+    resubmitToCreditDirectorAfterReturn: application.value?.resubmit_to_credit_director_after_return,
   })
 }
 const currentStep = ref(1)
@@ -673,9 +675,6 @@ const emptyCodeudor = (): ApplicantForm => ({
 })
 
 function startAddingCodeudor() {
-  if (documentsOnlyEditMode.value) {
-    return
-  }
   addingCodeudor.value = true
   codeudorEditIndex.value = null
   codeudorStep.value = 1
@@ -707,10 +706,6 @@ function searchApplicantForWizard() {
 }
 
 async function finalizeCodeudorWizard() {
-  if (documentsOnlyEditMode.value && codeudorEditIndex.value === null) {
-    toast.error('No puede agregar codeudores en una devolución solo por documentos.')
-    return
-  }
   const app = codeudorWizardApplicant.value
   if (!app.document_number?.trim()
     || !app.first_name?.trim()
@@ -788,9 +783,6 @@ function prevCodeudorStep() {
 }
 
 function removeCoDebtor(index: number) {
-  if (documentsOnlyEditMode.value) {
-    return
-  }
   if (addingCodeudor.value && codeudorEditIndex.value === index) {
     cancelAddingCodeudor()
   } else if (addingCodeudor.value && codeudorEditIndex.value != null && codeudorEditIndex.value > index) {
@@ -1024,9 +1016,6 @@ function payloadWithoutDocuments(status: 'Draft' | 'Submitted') {
 }
 
 function onPasteDestinationDescription(e: ClipboardEvent) {
-  if (documentsOnlyEditMode.value) {
-    return
-  }
   e.preventDefault()
   form.value.destination_description = pastedPlainTextFromClipboardEvent(
     e,
@@ -1578,44 +1567,6 @@ function upsertLocalApplicationDocument(doc: {
 }
 
 async function saveChanges() {
-  if (documentsOnlyEditMode.value) {
-    if (!(await validateRadicacionStepOneForPersist())) {
-      return
-    }
-    if (!canProceedStep1()) {
-      toast.error(
-        addingCodeudor.value
-          ? 'Completa al menos documento, primer nombre y primer apellido del codeudor'
-          : 'Completa al menos documento, primer nombre y primer apellido del deudor',
-      )
-      return
-    }
-    if (hasDocumentsWithoutTitle()) {
-      toast.error('Todos los documentos adjuntos deben tener un título')
-      return
-    }
-    if (!validatePrivilegedFieldsForSave()) {
-      return
-    }
-
-    saving.value = true
-    try {
-      await $csrf()
-      if (!application.value?.id) {
-        return
-      }
-      await uploadAllDocuments(application.value.id, application.value)
-      toast.success('Documentos guardados correctamente')
-      router.push('/radicacion')
-    } catch (e: unknown) {
-      console.error('Error guardando:', e)
-      toast.error(messageFromFetchError(e, 'Error al guardar'))
-    } finally {
-      saving.value = false
-    }
-    return
-  }
-
   const identityErr = validateApplicantMinimalIdentityForDraftSave(
     addingCodeudor.value ? codeudorWizardApplicant.value : form.value.debtor,
     addingCodeudor.value ? 'co_debtor' : 'debtor',
@@ -1701,7 +1652,7 @@ async function submitToDirectorReviewBody() {
     )
     return
   }
-  if (!documentsOnlyEditMode.value && !canProceedStep2()) {
+  if (!canProceedStep2()) {
     toast.error('Completa monto, plazo, sucursal y destino del crédito')
     return
   }
@@ -1709,12 +1660,10 @@ async function submitToDirectorReviewBody() {
     toast.error('Todos los documentos adjuntos deben tener un título')
     return
   }
-  if (!documentsOnlyEditMode.value) {
-    const errTemplates = validateActivityTemplatesBeforeSave()
-    if (errTemplates) {
-      toast.error(errTemplates)
-      return
-    }
+  const errTemplates = validateActivityTemplatesBeforeSave()
+  if (errTemplates) {
+    toast.error(errTemplates)
+    return
   }
   if (!validatePrivilegedFieldsForSave()) {
     return
@@ -1726,16 +1675,12 @@ async function submitToDirectorReviewBody() {
     if (!applicationIdForSubmit) {
       return
     }
-    if (documentsOnlyEditMode.value) {
-      await uploadAllDocuments(applicationIdForSubmit, application.value!)
-    } else {
-      const { data: updated } = await $api<{ data: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> } }>(
-        `/credit-applications/${id.value}`,
-        { method: 'PUT', body: payloadWithoutDocuments('Draft') },
-      )
-      await uploadAllDocuments(updated.id, updated)
-      applicationIdForSubmit = updated.id
-    }
+    const { data: updated } = await $api<{ data: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> } }>(
+      `/credit-applications/${id.value}`,
+      { method: 'PUT', body: payloadWithoutDocuments('Draft') },
+    )
+    await uploadAllDocuments(updated.id, updated)
+    applicationIdForSubmit = updated.id
     const submitRes = await $api<{ message?: string }>(`/credit-applications/${applicationIdForSubmit}/submit-to-director-review`, { method: 'PATCH' })
     toast.success(submitRes?.message ?? 'Solicitud enviada al director de agencia.')
     await navigateTo('/radicacion')
@@ -1760,7 +1705,7 @@ async function nextStep() {
       return
     }
   }
-  if (!documentsOnlyEditMode.value && currentStep.value === 2) {
+  if (currentStep.value === 2) {
     await nextTick()
     if (!debtorSkipsActivityTemplateStep()) {
       const templates = getActivityTemplates()
@@ -1772,7 +1717,7 @@ async function nextStep() {
       }
     }
   }
-  if (!documentsOnlyEditMode.value && currentStep.value === 4) {
+  if (currentStep.value === 4) {
     if (form.value.amount_requested <= 0) {
       toast.error('Indique el monto solicitado')
       return
@@ -1955,15 +1900,28 @@ onMounted(() => {
       </div>
 
       <div
-        v-if="documentsOnlyEditMode"
+        v-if="skipNextDirectorReview"
         class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-950 dark:text-amber-50"
         role="status"
       >
         <p class="font-medium">
-          Devolución por revisión de documentos: solo puede cambiar documentos adjuntos
+          Devolución por revisión de documentos
         </p>
         <p class="mt-1 text-muted-foreground">
-          Los datos del formulario y el monto no se pueden modificar hasta completar esta revisión. Suba o reemplace los archivos requeridos y use «Enviar a revisión de documentación».
+          Puede corregir todos los datos del formulario y los documentos. Al reenviar, la solicitud vuelve a revisión de documentación (sin pasar otra vez por el director de agencia).
+        </p>
+      </div>
+
+      <div
+        v-else-if="resubmitToCreditDirector"
+        class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-950 dark:text-amber-50"
+        role="status"
+      >
+        <p class="font-medium">
+          Devolución del director de crédito
+        </p>
+        <p class="mt-1 text-muted-foreground">
+          Puede corregir todos los datos del formulario y los documentos. Al reenviar, la solicitud vuelve a revisión del director de crédito.
         </p>
       </div>
 
@@ -1979,7 +1937,6 @@ onMounted(() => {
             maxlength="100"
             placeholder="Ej: RAD-EXT-2025-001234"
             class="max-w-2xl font-mono"
-            :readonly="documentsOnlyEditMode"
             :aria-invalid="radicadoExternoDirectorError ? true : undefined"
             :class="
               radicadoExternoDirectorError
@@ -2060,7 +2017,6 @@ onMounted(() => {
                 inputmode="decimal"
                 placeholder="0"
                 class="font-semibold"
-                :readonly="documentsOnlyEditMode"
                 @keydown="onKeydownPesosOnly"
                 @update:model-value="setSolvencyField('liabilities', parsePesosInput(String($event)))"
               />
@@ -2162,7 +2118,6 @@ onMounted(() => {
               :loading-search="loadingSearch"
               :hide-financial-section="true"
               :read-only-form="false"
-              :documents-editable-only="documentsOnlyEditMode"
               :show-documentos-auxiliar-checklist="!addingCodeudor"
               :credit-application-documents="application?.documents ?? []"
               @search="searchApplicant"
@@ -2212,7 +2167,6 @@ onMounted(() => {
             class="space-y-4"
           >
             <label
-              v-if="!documentsOnlyEditMode"
               class="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2.5"
             >
               <Checkbox
@@ -2226,7 +2180,6 @@ onMounted(() => {
               v-if="!debtorWithoutActivityTemplate"
               ref="debtorActivityTemplatesListRef"
               :model-value="getActivityTemplates()"
-              :read-only-form="documentsOnlyEditMode"
               @update:model-value="setActivityTemplates"
             />
             <p
@@ -2245,8 +2198,6 @@ onMounted(() => {
               v-model="form.debtor"
               :credit-application-id="application?.id"
               :show-only-financial="true"
-              :read-only-form="documentsOnlyEditMode"
-              :documents-editable-only="documentsOnlyEditMode"
             />
           </div>
 
@@ -2260,7 +2211,6 @@ onMounted(() => {
                   type="text"
                   inputmode="decimal"
                   placeholder="Ej: 5.000.000"
-                  :readonly="documentsOnlyEditMode"
                   @keydown="onKeydownPesosOnly"
                   @update:model-value="(v) => (form.amount_requested = parsePesosInput(String(v)) ?? 0)"
                 />
@@ -2274,7 +2224,6 @@ onMounted(() => {
                   min="1"
                   placeholder="Ej: 12"
                   inputmode="numeric"
-                  :readonly="documentsOnlyEditMode"
                   @keydown="onKeydownNumeric($event, false)"
                 />
               </div>
@@ -2298,7 +2247,6 @@ onMounted(() => {
                   id="destination"
                   :model-value="form.destination ? form.destination : null"
                   :options="creditDestinationOptions"
-                  :disabled="documentsOnlyEditMode"
                   mode="single"
                   value-prop="value"
                   label="label"
@@ -2319,7 +2267,6 @@ onMounted(() => {
                   class="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   placeholder="Describa en detalle el uso que se le dará al crédito"
                   rows="4"
-                  :readonly="documentsOnlyEditMode"
                   :maxlength="PASTED_PLAIN_TEXT_MAX_LENGTH"
                   @paste="onPasteDestinationDescription"
                   @blur="onBlurDestinationDescription"
@@ -2336,7 +2283,6 @@ onMounted(() => {
                     id="credito_garantia_fng"
                     :model-value="creditoGarantiaFngBooleanToSelectValue(form.credito_garantia_fng)"
                     :options="RADICACION_CREDITO_GARANTIA_FNG_OPTIONS"
-                    :disabled="documentsOnlyEditMode"
                     mode="single"
                     value-prop="value"
                     label="label"
@@ -2392,7 +2338,6 @@ onMounted(() => {
               <CreditsFinancialActivityFormList
                 ref="destinationActivityTemplatesListRef"
                 v-model="form.destination_activity_templates"
-                :read-only-form="documentsOnlyEditMode"
                 list-hint="Añade plantillas que ilustren cómo se invertirá o destinará el crédito. No se sincronizan con el paso 2 ni el 3."
               />
             </div>
@@ -2407,7 +2352,6 @@ onMounted(() => {
                 Agrega codeudores si el crédito lo requiere
               </p>
               <Button
-                v-if="!documentsOnlyEditMode"
                 type="button"
                 variant="outline"
                 size="sm"
@@ -2429,7 +2373,6 @@ onMounted(() => {
                 class="flex w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2.5 sm:gap-3"
               >
                 <Button
-                  v-if="!documentsOnlyEditMode"
                   type="button"
                   variant="destructive"
                   size="sm"
@@ -2509,7 +2452,6 @@ onMounted(() => {
                 :show-co-debtor-concept="true"
                 :hide-financial-section="true"
                 :read-only-form="false"
-                :documents-editable-only="documentsOnlyEditMode"
                 :show-documentos-auxiliar-checklist="true"
                 :credit-application-documents="application?.documents ?? []"
                 @search="searchApplicantForWizard"
@@ -2519,7 +2461,6 @@ onMounted(() => {
               <CreditsFinancialActivityFormList
                 ref="codeudorActivityTemplatesListRef"
                 :model-value="getActivityTemplatesFor(codeudorWizardApplicant)"
-                :read-only-form="documentsOnlyEditMode"
                 @update:model-value="(v) => setActivityTemplatesFor(codeudorWizardApplicant, v)"
               />
             </div>
@@ -2528,7 +2469,6 @@ onMounted(() => {
                 v-model="codeudorWizardApplicant"
                 :credit-application-id="application?.id"
                 :show-only-financial="true"
-                :read-only-form="documentsOnlyEditMode"
               />
             </div>
 
@@ -2603,7 +2543,13 @@ onMounted(() => {
                 @click="openSubmitDirectorDialog"
               >
                 <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-                {{ skipNextDirectorReview ? 'Enviar a revisión de documentación' : 'Enviar al director' }}
+                {{
+                  skipNextDirectorReview
+                    ? 'Enviar a revisión de documentación'
+                    : resubmitToCreditDirector
+                      ? 'Enviar al director de crédito'
+                      : 'Enviar al director'
+                }}
               </Button>
             </div>
           </div>
@@ -2614,11 +2560,20 @@ onMounted(() => {
         <AlertDialogContent class="max-w-sm">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {{ skipNextDirectorReview ? 'Confirmar envío a revisión de documentación' : 'Confirmar envío al director' }}
+              {{
+                skipNextDirectorReview
+                  ? 'Confirmar envío a revisión de documentación'
+                  : resubmitToCreditDirector
+                    ? 'Confirmar envío al director de crédito'
+                    : 'Confirmar envío al director'
+              }}
             </AlertDialogTitle>
             <AlertDialogDescription>
               <template v-if="skipNextDirectorReview">
                 Esta acción guarda los cambios y envía la radicación de nuevo a revisión de documentación, sin pasar por el director de agencia (ya estaba aprobado en esa etapa).
+              </template>
+              <template v-else-if="resubmitToCreditDirector">
+                Esta acción guarda los cambios y envía la radicación de nuevo a revisión del director de crédito.
               </template>
               <template v-else>
                 Esta acción guarda el borrador y envía la radicación a revisión del director de agencia.

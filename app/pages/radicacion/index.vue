@@ -523,6 +523,7 @@ watch(transferDialogOpen, (v) => {
                     {{ getStatusLabel(app.status, {
                       skipNextDirectorReview: app.skip_next_director_review,
                       resubmitToAnalystAfterReturn: app.resubmit_to_analyst_after_return,
+                      resubmitToCreditDirectorAfterReturn: app.resubmit_to_credit_director_after_return,
                     }) }}
                   </Badge>
                 </TableCell>
