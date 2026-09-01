@@ -2560,12 +2560,96 @@ function computeAvesPonedorasTotalUtilidadMensual(data: Record<string, unknown>)
   return computeAvesPonedorasTotalUtilidad(data)
 }
 
+export interface FinagroRangeNormalized {
+  edad_min: number
+  edad_max: number
+  label?: string
+  pct_costos: number
+  kg_hectarea: number | null
+}
+
+const LEGACY_FINAGRO_BANDS: Array<{ edad_min: number, edad_max: number, pctKey: string, kgKey: string }> = [
+  { edad_min: 1, edad_max: 1, pctKey: 'finagro_1_pct', kgKey: 'finagro_1_kg' },
+  { edad_min: 2, edad_max: 2, pctKey: 'finagro_2_pct', kgKey: 'finagro_2_kg' },
+  { edad_min: 3, edad_max: 3, pctKey: 'finagro_3_pct', kgKey: 'finagro_3_kg' },
+  { edad_min: 4, edad_max: 4, pctKey: 'finagro_4_pct', kgKey: 'finagro_4_kg' },
+  { edad_min: 5, edad_max: 17, pctKey: 'finagro_5_17_pct', kgKey: 'finagro_5_17_kg' },
+  { edad_min: 18, edad_max: 20, pctKey: 'finagro_18_20_pct', kgKey: 'finagro_18_20_kg' },
+]
+
+/** Acepta objetos {edad_min,…}, tuplas [min, max, label, pct, kg] o JSON string. */
+export function normalizeFinagroRanges(raw: unknown): FinagroRangeNormalized[] {
+  let list: unknown = raw
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (!trimmed) return []
+    try {
+      list = JSON.parse(trimmed)
+    } catch {
+      return []
+    }
+  }
+  if (!Array.isArray(list)) return []
+  const out: FinagroRangeNormalized[] = []
+  for (const item of list) {
+    if (Array.isArray(item) && item.length >= 4) {
+      const edadMin = Number(item[0])
+      const edadMax = Number(item[1])
+      if (!Number.isFinite(edadMin) || !Number.isFinite(edadMax)) continue
+      const pct = Number(item[3])
+      const kg = item[4] == null || item[4] === '' ? null : Number(item[4])
+      out.push({
+        edad_min: edadMin,
+        edad_max: edadMax,
+        label: item[2] != null && item[2] !== '' ? String(item[2]) : undefined,
+        pct_costos: Number.isFinite(pct) ? pct : 0,
+        kg_hectarea: kg != null && Number.isFinite(kg) ? kg : null,
+      })
+      continue
+    }
+    if (!item || typeof item !== 'object') continue
+    const r = item as Record<string, unknown>
+    const edadMin = Number(r.edad_min)
+    const edadMax = Number(r.edad_max)
+    if (!Number.isFinite(edadMin) || !Number.isFinite(edadMax)) continue
+    const pct = Number(r.pct_costos ?? 0)
+    const kgRaw = r.kg_hectarea
+    const kg = kgRaw == null || kgRaw === '' ? null : Number(kgRaw)
+    out.push({
+      edad_min: edadMin,
+      edad_max: edadMax,
+      label: r.label != null && r.label !== '' ? String(r.label) : undefined,
+      pct_costos: Number.isFinite(pct) ? pct : 0,
+      kg_hectarea: kg != null && Number.isFinite(kg) ? kg : null,
+    })
+  }
+  return out
+}
+
+function rangesFromLegacyFinagroFields(data: Record<string, unknown>): FinagroRangeNormalized[] {
+  const hasLegacy = LEGACY_FINAGRO_BANDS.some(b => data[b.pctKey] != null && data[b.pctKey] !== '')
+  if (!hasLegacy) return []
+  return LEGACY_FINAGRO_BANDS.map(b => {
+    const pct = Number(data[b.pctKey] ?? 0)
+    const kg = getFinagroNum(data[b.kgKey])
+    return {
+      edad_min: b.edad_min,
+      edad_max: b.edad_max,
+      pct_costos: Number.isFinite(pct) ? pct : 0,
+      kg_hectarea: kg,
+    }
+  })
+}
+
 /** Lookup en finagro_ranges: encuentra el rango donde edad_min <= edad <= edad_max */
 function findFinagroRange(data: Record<string, unknown>): { pct_costos: number; kg_hectarea: number | null } | null {
   const edad = Number(data.edad_cultivo ?? 0)
   if (!Number.isFinite(edad) || edad < 1) return null
-  const ranges = (data.finagro_ranges as Array<{ edad_min: number; edad_max: number; pct_costos: number; kg_hectarea?: number | null }>) ?? []
-  const range = ranges.find((r: { edad_min: number; edad_max: number }) => edad >= r.edad_min && edad <= r.edad_max)
+  let ranges = normalizeFinagroRanges(data.finagro_ranges)
+  if (ranges.length === 0) {
+    ranges = rangesFromLegacyFinagroFields(data)
+  }
+  const range = ranges.find(r => edad >= r.edad_min && edad <= r.edad_max)
   if (!range) return null
   return {
     pct_costos: Number(range.pct_costos ?? 0),

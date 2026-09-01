@@ -1755,14 +1755,10 @@ function prevStep() {
   if (currentStep.value > 1) currentStep.value--
 }
 
-watch([application, debtor, coDebtors], () => {
-  if (skipFormSyncFromApplication.value) {
-    return
-  }
-  if (application.value && debtor.value && canEdit.value) {
-    syncFormFromApplication()
-  }
-}, { deep: true })
+// No vigilar en profundidad `application` / codeudores: mutaciones locales
+// (p. ej. al subir documentos) recargaban el formulario desde el API y
+// borraban plantillas, activos y tipo de actividad aún no guardados.
+// La hidratación ocurre en fetchApplication() → syncFormFromApplication().
 
 onMounted(() => {
   void fetchApplication()

@@ -5,27 +5,16 @@
  * Solo lectura: los datos vienen de la configuración de la plantilla.
  */
 import { formatDecimalDisplay } from '~/composables/usePesosFormat'
-
-interface FinagroRange {
-  edad_min: number
-  edad_max: number
-  label?: string
-  pct_costos: number
-  kg_hectarea: number | null
-}
+import { normalizeFinagroRanges, type FinagroRangeNormalized } from '~/constants/credits-financial-templates'
 
 const props = defineProps<{
   formData: Record<string, unknown>
 }>()
 
 /** Rangos desde formData.finagro_ranges (viene del API por producto). */
-const ranges = computed(() => {
-  const arr = (props.formData.finagro_ranges ?? []) as FinagroRange[]
-  if (!Array.isArray(arr) || arr.length === 0) return []
-  return arr
-})
+const ranges = computed(() => normalizeFinagroRanges(props.formData.finagro_ranges))
 
-function formatLabel(row: FinagroRange): string {
+function formatLabel(row: FinagroRangeNormalized): string {
   if (row.label) return row.label
   const min = row.edad_min ?? 1
   const max = row.edad_max ?? 1
