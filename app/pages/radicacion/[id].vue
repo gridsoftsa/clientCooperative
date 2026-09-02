@@ -19,6 +19,8 @@ import {
   creditDirectorReturnResubmitOptions,
   returnFlowConfirmDescription,
   returnedByResumeLabel,
+  serializeReturnToForApi,
+  parseReturnToSelection,
   type ReturnResubmitTo,
 } from '~/constants/credit-application-return'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
@@ -1367,7 +1369,12 @@ async function confirmAnalystDecision() {
       body: {
         decision,
         concept: analystConcept.value.trim(),
-        ...(decision === 'returned' ? { resubmit_to: analystResubmitTo.value } : {}),
+        ...(decision === 'returned'
+          ? (() => {
+              const to = serializeReturnToForApi(analystResubmitTo.value)
+              return to ? { resubmit_to: to } : {}
+            })()
+          : {}),
       },
     })
     analystDecisionDialogOpen.value = false
@@ -1378,12 +1385,15 @@ async function confirmAnalystDecision() {
     }
     toast.success(
       wasReturned
-        ? 'Radicación devuelta al asesor.'
+        ? (serializeReturnToForApi(analystResubmitTo.value)
+            ? 'Radicación devuelta a la etapa seleccionada.'
+            : 'Radicación devuelta al asesor.')
         : 'Decisión del analista registrada correctamente.',
       wasReturned
         ? {
-            description:
-              'Dejó de aparecer en el listado por defecto del analista (solo «En análisis»). Para localizarla, use el filtro de estado «Devuelta (ajustes pendientes)».',
+            description: serializeReturnToForApi(analystResubmitTo.value)
+              ? 'Quedó en la bandeja de esa etapa. Al completarla, vuelve a análisis.'
+              : 'Quedó en la bandeja del asesor (inicio del flujo). Al corregir, vuelve a análisis.',
             duration: 10000,
           }
         : undefined,
@@ -1416,7 +1426,12 @@ async function confirmDirectorDecision() {
       body: {
         decision: directorDecision.value,
         concept: directorConcept.value.trim(),
-        ...(directorDecision.value === 'returned' ? { resubmit_to: directorResubmitTo.value } : {}),
+        ...(directorDecision.value === 'returned'
+          ? (() => {
+              const to = serializeReturnToForApi(directorResubmitTo.value)
+              return to ? { resubmit_to: to } : {}
+            })()
+          : {}),
       },
     })
     directorDecisionDialogOpen.value = false
@@ -1521,7 +1536,10 @@ async function confirmCreditDirectorDecision() {
         : null,
     }
     if (creditDirectorDecision.value === 'returned') {
-      body.resubmit_to = creditDirectorReturnTo.value
+      const to = serializeReturnToForApi(creditDirectorReturnTo.value)
+      if (to) {
+        body.resubmit_to = to
+      }
     }
     if (
       application.value?.documentation_insurability_required === true
@@ -1625,7 +1643,10 @@ async function confirmDocumentationDecision() {
       body.credit_mortgage_options = [documentationCreditMortgage.value]
     }
     if (documentationDecision.value === 'returned') {
-      body.resubmit_to = documentationResubmitTo.value
+      const to = serializeReturnToForApi(documentationResubmitTo.value)
+      if (to) {
+        body.resubmit_to = to
+      }
     }
     await $api(`/credit-applications/${application.value.id}/documentation-decision`, {
       method: 'PATCH',
@@ -3340,7 +3361,7 @@ onMounted(() => {
               :searchable="false"
               placeholder="Seleccionar etapa anterior"
               class="multiselect-director"
-              @update:model-value="(v: string | null) => { if (v === 'advisor' || v === 'agency_director' || v === 'documentation' || v === 'analysis') creditDirectorReturnTo = v }"
+              @update:model-value="(v: unknown) => { const n = parseReturnToSelection(v); if (n === 'advisor' || n === 'agency_director' || n === 'documentation' || n === 'analysis') creditDirectorReturnTo = n }"
             />
             <p class="text-xs text-muted-foreground">
               Etapas anteriores a revisión de director de crédito. Al completar esa etapa, la radicación vuelve aquí.
@@ -3556,7 +3577,7 @@ onMounted(() => {
               :searchable="false"
               placeholder="Seleccionar etapa"
               class="multiselect-director"
-              @update:model-value="(v: string | null) => { if (v === 'advisor') directorResubmitTo = v }"
+              @update:model-value="(v: unknown) => { const n = parseReturnToSelection(v); if (n === 'advisor') directorResubmitTo = n }"
             />
             <p class="text-xs text-muted-foreground">
               Solo hay una etapa anterior: el asesor. Al corregir, vuelve al director de agencia.
@@ -3779,7 +3800,7 @@ onMounted(() => {
               :searchable="false"
               placeholder="Seleccionar etapa"
               class="multiselect-director"
-              @update:model-value="(v: string | null) => { if (v === 'advisor' || v === 'agency_director') documentationResubmitTo = v }"
+              @update:model-value="(v: unknown) => { const n = parseReturnToSelection(v); if (n === 'advisor' || n === 'agency_director') documentationResubmitTo = n }"
             />
             <p class="text-xs text-muted-foreground">
               Etapas anteriores a revisión de documentos. Al completar esa etapa, la radicación vuelve aquí.
@@ -3862,7 +3883,7 @@ onMounted(() => {
               :searchable="false"
               placeholder="Seleccionar etapa"
               class="multiselect-director"
-              @update:model-value="(v: string | null) => { if (v === 'advisor' || v === 'agency_director' || v === 'documentation') analystResubmitTo = v }"
+              @update:model-value="(v: unknown) => { const n = parseReturnToSelection(v); if (n === 'advisor' || n === 'agency_director' || n === 'documentation') analystResubmitTo = n }"
             />
             <p class="text-xs text-muted-foreground">
               Etapas anteriores a análisis. Al completar esa etapa, la radicación vuelve al analista.

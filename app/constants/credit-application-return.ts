@@ -58,6 +58,36 @@ export function resubmitToLabel(to: string | null | undefined): string {
   }
 }
 
+export function parseReturnToSelection(v: unknown): ReturnResubmitTo | null {
+  let raw: string | null = null
+  if (typeof v === 'string') {
+    raw = v
+  } else if (v && typeof v === 'object' && 'value' in v) {
+    const inner = (v as { value: unknown }).value
+    raw = typeof inner === 'string' ? inner : null
+  }
+  if (raw == null) {
+    return null
+  }
+  const t = raw.trim()
+  if (t === 'advisor' || t.toLowerCase() === 'asesor') {
+    return 'advisor'
+  }
+  if (t === 'documentation' || t === 'analysis' || t === 'agency_director' || t === 'credit_director') {
+    return t
+  }
+  return null
+}
+
+/** Si el destino es el asesor, no se envía: el API usa el valor por defecto (inicio del flujo). */
+export function serializeReturnToForApi(value: unknown): string | undefined {
+  const parsed = parseReturnToSelection(value)
+  if (parsed == null || parsed === 'advisor') {
+    return undefined
+  }
+  return parsed
+}
+
 export function returnFlowConfirmDescription(returnTo: string, resumeTo: string): string {
   const dest = resubmitToLabel(returnTo) || returnTo
   const resume = resubmitToLabel(resumeTo) || resumeTo
