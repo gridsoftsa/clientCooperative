@@ -34,6 +34,7 @@ interface CreditSummaryRow {
   returned_by?: string | null
   parked_after_return?: boolean
   corrected_after_return?: boolean
+  corrected_after_credit_director_return?: boolean
   amount_requested: string
   created_at: string | null
   sucursal: { id: number; name: string; code: string | null } | null
@@ -522,6 +523,7 @@ onUnmounted(() => {
                               :resubmit-to-credit-director-after-return="row.resubmit_to_credit_director_after_return"
                               :parked-after-return="Boolean(row.parked_after_return)"
                               :corrected-after-return="Boolean(row.corrected_after_return)"
+                              :corrected-after-credit-director-return="Boolean(row.corrected_after_credit_director_return)"
                             />
                           </TableCell>
                           <TableCell class="whitespace-nowrap px-3 py-2.5 text-sm text-muted-foreground">

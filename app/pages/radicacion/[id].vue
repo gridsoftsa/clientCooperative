@@ -379,8 +379,14 @@ const parkedReturnHint = computed((): string => {
   }
   return `Esta radicación fue devuelta a esta etapa. Al completar la revisión, vuelve a ${resume}.`
 })
+const showCorrectedAfterCreditDirectorHint = computed(
+  () => Boolean(application.value?.corrected_after_credit_director_return) && !parkedReturnHint.value && !showReturnedCorrectionHint.value,
+)
 const showCorrectedAfterReturnHint = computed(
-  () => Boolean(application.value?.corrected_after_return) && !parkedReturnHint.value && !showReturnedCorrectionHint.value,
+  () => Boolean(application.value?.corrected_after_return)
+    && !application.value?.corrected_after_credit_director_return
+    && !parkedReturnHint.value
+    && !showReturnedCorrectionHint.value,
 )
 const returnedFromDocumentationReview = computed(() => Boolean(application.value?.skip_next_director_review))
 const canAnalystDecide = computed(
@@ -2848,6 +2854,7 @@ onMounted(() => {
             :resubmit-to-credit-director-after-return="application.resubmit_to_credit_director_after_return"
             :parked-after-return="Boolean(application.parked_after_return)"
             :corrected-after-return="Boolean(application.corrected_after_return)"
+            :corrected-after-credit-director-return="Boolean(application.corrected_after_credit_director_return)"
           />
         </div>
         <p class="text-muted-foreground">
@@ -2967,13 +2974,24 @@ onMounted(() => {
     </Alert>
 
     <Alert
+      v-if="showCorrectedAfterCreditDirectorHint && application?.id"
+      class="border-amber-600/35 bg-amber-500/[0.08] dark:border-amber-500/35 dark:bg-amber-950/40 [&>svg]:text-amber-700 dark:[&>svg]:text-amber-300"
+    >
+      <Icon name="i-lucide-check-circle-2" class="h-4 w-4" />
+      <AlertTitle>Corregida tras devolución del ente aprobador</AlertTitle>
+      <AlertDescription class="mt-1 text-sm leading-relaxed">
+        El director de crédito la devolvió (devolución o modificación) y ya se corrigió. Volvió al flujo. Revise la trazabilidad.
+      </AlertDescription>
+    </Alert>
+
+    <Alert
       v-if="showCorrectedAfterReturnHint && application?.id"
       class="border-teal-600/35 bg-teal-500/[0.08] dark:border-teal-500/35 dark:bg-teal-950/40 [&>svg]:text-teal-700 dark:[&>svg]:text-teal-300"
     >
       <Icon name="i-lucide-check-circle-2" class="h-4 w-4" />
       <AlertTitle>Corregida tras devolución</AlertTitle>
       <AlertDescription class="mt-1 text-sm leading-relaxed">
-        Esta radicación ya fue devuelta y se corrigió. Volvió al flujo. Revise la trazabilidad para ver quién la devolvió y cuándo se reenvió.
+        Revisión de documentación o el analista la devolvió y ya se corrigió. Volvió al flujo. Revise la trazabilidad.
       </AlertDescription>
     </Alert>
 

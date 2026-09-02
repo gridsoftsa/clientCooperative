@@ -434,7 +434,7 @@ watch(transferDialogOpen, (v) => {
         <p v-if="!loading" class="text-sm text-muted-foreground">
           {{ pagination.total }} solicitud{{ pagination.total === 1 ? '' : 'es' }} encontrada{{ pagination.total === 1 ? '' : 's' }}.
           <span class="block sm:inline sm:before:content-[' '] mt-1 sm:mt-0">
-            Si ya se devolvió y se corrigió, junto al estado aparece el sello «Corregida tras devolución».
+            Si ya se corrigió tras una devolución de documentación o del analista, el sello es verde. Si la devolvió el ente aprobador (devolución o modificación), es amarillo.
           </span>
         </p>
 
@@ -529,6 +529,7 @@ watch(transferDialogOpen, (v) => {
                     :resubmit-to-credit-director-after-return="app.resubmit_to_credit_director_after_return"
                     :parked-after-return="Boolean(app.parked_after_return)"
                     :corrected-after-return="Boolean(app.corrected_after_return)"
+                    :corrected-after-credit-director-return="Boolean(app.corrected_after_credit_director_return)"
                   />
                 </TableCell>
                 <TableCell class="whitespace-nowrap text-sm tabular-nums">

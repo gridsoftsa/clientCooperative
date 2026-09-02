@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
   resubmitToCreditDirectorAfterReturn?: boolean
   parkedAfterReturn?: boolean
   correctedAfterReturn?: boolean
+  correctedAfterCreditDirectorReturn?: boolean
 }>(), {
   returnedBy: null,
   skipNextDirectorReview: undefined,
@@ -19,6 +20,7 @@ const props = withDefaults(defineProps<{
   resubmitToCreditDirectorAfterReturn: undefined,
   parkedAfterReturn: false,
   correctedAfterReturn: false,
+  correctedAfterCreditDirectorReturn: false,
 })
 
 const statusLabel = computed(() => getCreditApplicationStatusLabel(props.status, {
@@ -43,10 +45,18 @@ const statusLabel = computed(() => getCreditApplicationStatusLabel(props.status,
       Devuelta a esta etapa
     </Badge>
     <Badge
+      v-else-if="correctedAfterCreditDirectorReturn"
+      variant="warning"
+      class="font-normal"
+      title="El ente aprobador (director de crédito) la devolvió (devolución o modificación) y ya se corrigió."
+    >
+      Corregida tras devolución
+    </Badge>
+    <Badge
       v-else-if="correctedAfterReturn"
       variant="outline"
       class="border-teal-500/50 bg-teal-500/10 font-normal text-teal-800 dark:border-teal-400/40 dark:bg-teal-950/40 dark:text-teal-200"
-      title="Esta radicación ya fue devuelta y se corrigió. Volvió al flujo."
+      title="Revisión de documentación o el analista la devolvió y ya se corrigió."
     >
       Corregida tras devolución
     </Badge>
