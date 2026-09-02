@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import TransferCreditApplicationSucursalDialog from '~/components/radicacion/TransferCreditApplicationSucursalDialog.vue'
+import CreditApplicationStatusBadges from '~/components/radicacion/CreditApplicationStatusBadges.vue'
 import {
   creditApplicationStatusFilterOptions as statusFilterOptions,
-  getCreditApplicationStatusBadgeVariant as getStatusBadgeVariant,
-  getCreditApplicationStatusLabel as getStatusLabel,
   isCreditApplicationTerminalImmutable,
   isCreditApplicationAdviserEditableStatus,
 } from '~/constants/credit-application-status'
@@ -434,6 +433,9 @@ watch(transferDialogOpen, (v) => {
 
         <p v-if="!loading" class="text-sm text-muted-foreground">
           {{ pagination.total }} solicitud{{ pagination.total === 1 ? '' : 'es' }} encontrada{{ pagination.total === 1 ? '' : 's' }}.
+          <span class="block sm:inline sm:before:content-[' '] mt-1 sm:mt-0">
+            Si ya se devolvió y se corrigió, junto al estado aparece el sello «Corregida tras devolución».
+          </span>
         </p>
 
         <div v-if="loading" class="flex justify-center py-8">
@@ -519,14 +521,15 @@ watch(transferDialogOpen, (v) => {
                 <TableCell>{{ formatCurrency(Number(app.amount_requested)) }}</TableCell>
                 <TableCell>{{ app.term_months }} meses</TableCell>
                 <TableCell>
-                  <Badge :variant="getStatusBadgeVariant(app.status)">
-                    {{ getStatusLabel(app.status, {
-                      returnedBy: app.returned_by,
-                      skipNextDirectorReview: app.skip_next_director_review,
-                      resubmitToAnalystAfterReturn: app.resubmit_to_analyst_after_return,
-                      resubmitToCreditDirectorAfterReturn: app.resubmit_to_credit_director_after_return,
-                    }) }}
-                  </Badge>
+                  <CreditApplicationStatusBadges
+                    :status="app.status"
+                    :returned-by="app.returned_by"
+                    :skip-next-director-review="app.skip_next_director_review"
+                    :resubmit-to-analyst-after-return="app.resubmit_to_analyst_after_return"
+                    :resubmit-to-credit-director-after-return="app.resubmit_to_credit_director_after_return"
+                    :parked-after-return="Boolean(app.parked_after_return)"
+                    :corrected-after-return="Boolean(app.corrected_after_return)"
+                  />
                 </TableCell>
                 <TableCell class="whitespace-nowrap text-sm tabular-nums">
                   {{ formatCreatedAt(app.created_at) }}

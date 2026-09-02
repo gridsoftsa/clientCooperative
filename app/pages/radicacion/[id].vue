@@ -11,6 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/component
 import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import RadicacionResumenFinancieroDeudorComparacion from '~/components/radicacion/RadicacionResumenFinancieroDeudorComparacion.vue'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
+import CreditApplicationStatusBadges from '~/components/radicacion/CreditApplicationStatusBadges.vue'
 import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable, isCreditApplicationAdviserEditableStatus, isCreditApplicationReturnedToAdviser } from '~/constants/credit-application-status'
 import {
   documentationReturnResubmitOptions,
@@ -378,6 +379,9 @@ const parkedReturnHint = computed((): string => {
   }
   return `Esta radicación fue devuelta a esta etapa. Al completar la revisión, vuelve a ${resume}.`
 })
+const showCorrectedAfterReturnHint = computed(
+  () => Boolean(application.value?.corrected_after_return) && !parkedReturnHint.value && !showReturnedCorrectionHint.value,
+)
 const returnedFromDocumentationReview = computed(() => Boolean(application.value?.skip_next_director_review))
 const canAnalystDecide = computed(
   () => hasPermission('radicacion_analisis_guardar') && application.value?.status === 'In_Analysis',
@@ -2835,6 +2839,17 @@ onMounted(() => {
         <h2 class="text-2xl font-bold tracking-tight">
           Ver Radicación
         </h2>
+        <div v-if="application?.status" class="mt-2">
+          <CreditApplicationStatusBadges
+            :status="application.status"
+            :returned-by="application.returned_by"
+            :skip-next-director-review="application.skip_next_director_review"
+            :resubmit-to-analyst-after-return="application.resubmit_to_analyst_after_return"
+            :resubmit-to-credit-director-after-return="application.resubmit_to_credit_director_after_return"
+            :parked-after-return="Boolean(application.parked_after_return)"
+            :corrected-after-return="Boolean(application.corrected_after_return)"
+          />
+        </div>
         <p class="text-muted-foreground">
           <template v-if="documentationUploadMode">
             Revisión de documentación: puede ajustar el tipo de actividad económica, el checklist auxiliar (deudor y codeudores), documentos de asegurabilidad y FNG cuando la solicitud tiene garantía FNG, e indicar si el crédito es hipotecario antes de registrar el concepto.
@@ -2948,6 +2963,17 @@ onMounted(() => {
       <AlertTitle>Devolución a esta etapa</AlertTitle>
       <AlertDescription class="mt-1 text-sm leading-relaxed">
         {{ parkedReturnHint }}
+      </AlertDescription>
+    </Alert>
+
+    <Alert
+      v-if="showCorrectedAfterReturnHint && application?.id"
+      class="border-teal-600/35 bg-teal-500/[0.08] dark:border-teal-500/35 dark:bg-teal-950/40 [&>svg]:text-teal-700 dark:[&>svg]:text-teal-300"
+    >
+      <Icon name="i-lucide-check-circle-2" class="h-4 w-4" />
+      <AlertTitle>Corregida tras devolución</AlertTitle>
+      <AlertDescription class="mt-1 text-sm leading-relaxed">
+        Esta radicación ya fue devuelta y se corrigió. Volvió al flujo. Revise la trazabilidad para ver quién la devolvió y cuándo se reenvió.
       </AlertDescription>
     </Alert>
 

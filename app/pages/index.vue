@@ -5,9 +5,9 @@ import { BarChart } from '~/components/ui/chart-bar'
 import { DonutChart } from '~/components/ui/chart-donut'
 import {
   creditApplicationStatusOrder,
-  getCreditApplicationStatusBadgeVariant,
   getCreditApplicationStatusLabel,
 } from '~/constants/credit-application-status'
+import CreditApplicationStatusBadges from '~/components/radicacion/CreditApplicationStatusBadges.vue'
 
 /** Colores alineados con la gravedad del flujo (Unovis / CSS hex). */
 const STATUS_CHART_COLORS = [
@@ -32,6 +32,8 @@ interface CreditSummaryRow {
   resubmit_to_analyst_after_return?: boolean
   resubmit_to_credit_director_after_return?: boolean
   returned_by?: string | null
+  parked_after_return?: boolean
+  corrected_after_return?: boolean
   amount_requested: string
   created_at: string | null
   sucursal: { id: number; name: string; code: string | null } | null
@@ -512,17 +514,15 @@ onUnmounted(() => {
                             {{ formatCurrency(Number(row.amount_requested)) }}
                           </TableCell>
                           <TableCell class="px-3 py-2">
-                            <Badge
-                              :variant="getCreditApplicationStatusBadgeVariant(row.status)"
-                              class="px-2 py-0.5 text-xs font-normal leading-tight"
-                            >
-                              {{ getCreditApplicationStatusLabel(row.status, {
-                                returnedBy: row.returned_by,
-                                skipNextDirectorReview: row.skip_next_director_review,
-                                resubmitToAnalystAfterReturn: row.resubmit_to_analyst_after_return,
-                                resubmitToCreditDirectorAfterReturn: row.resubmit_to_credit_director_after_return,
-                              }) }}
-                            </Badge>
+                            <CreditApplicationStatusBadges
+                              :status="row.status"
+                              :returned-by="row.returned_by"
+                              :skip-next-director-review="row.skip_next_director_review"
+                              :resubmit-to-analyst-after-return="row.resubmit_to_analyst_after_return"
+                              :resubmit-to-credit-director-after-return="row.resubmit_to_credit_director_after_return"
+                              :parked-after-return="Boolean(row.parked_after_return)"
+                              :corrected-after-return="Boolean(row.corrected_after_return)"
+                            />
                           </TableCell>
                           <TableCell class="whitespace-nowrap px-3 py-2.5 text-sm text-muted-foreground">
                             {{ formatShortDate(row.created_at) }}
