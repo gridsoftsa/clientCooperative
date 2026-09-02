@@ -521,6 +521,7 @@ watch(transferDialogOpen, (v) => {
                 <TableCell>
                   <Badge :variant="getStatusBadgeVariant(app.status)">
                     {{ getStatusLabel(app.status, {
+                      returnedBy: app.returned_by,
                       skipNextDirectorReview: app.skip_next_director_review,
                       resubmitToAnalystAfterReturn: app.resubmit_to_analyst_after_return,
                       resubmitToCreditDirectorAfterReturn: app.resubmit_to_credit_director_after_return,

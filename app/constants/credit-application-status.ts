@@ -1,4 +1,4 @@
-import type { BadgeVariants } from '~/components/ui/badge'
+import { returnedByStatusLabel } from '~/constants/credit-application-return'
 
 /** Cierre del flujo: sin edición ni desactivación (API y UI alineados). */
 export function isCreditApplicationTerminalImmutable(status: string | null | undefined): boolean {
@@ -75,8 +75,12 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export type CreditApplicationStatusLabelOptions = {
+  /** Quién devolvió (`returned_by` en API): documentation | analyst | agency_director | credit_director. */
+  returnedBy?: string | null
   /** Estado actual: viene del API cuando la solicitud está en `Returned` tras devolución documental. */
   skipNextDirectorReview?: boolean
+  /** `true` cuando el reenvío vuelve a análisis (analista u otro ente que eligió esa etapa). */
+  resubmitToAnalystAfterReturn?: boolean
   /** `true` cuando el director de crédito devolvió (Devolución) y el reenvío vuelve a esa revisión. */
   resubmitToCreditDirectorAfterReturn?: boolean
   /** `event_key` de la fila de trazabilidad para acertar el matiz de `Returned`. */
@@ -152,6 +156,11 @@ export function getCreditApplicationStatusLabel(
       return direct
     }
     return status
+  }
+
+  const fromReturnedBy = returnedByStatusLabel(options?.returnedBy)
+  if (fromReturnedBy != null) {
+    return fromReturnedBy
   }
 
   if (options?.resubmitToAnalystAfterReturn === true) {

@@ -21,6 +21,10 @@ interface PeriodColumn {
 interface SeguimientoPeriodCell {
   tramitadas: number
   devueltas: number
+  devueltas_auxiliar: number
+  devueltas_analista: number
+  devueltas_director_agencia: number
+  devueltas_director_credito: number
   correcciones: number
   negadas: number
   error_pct: number | null
@@ -37,6 +41,10 @@ interface SeguimientoRow {
   totals: {
     tramitadas: number
     devueltas: number
+    devueltas_auxiliar: number
+    devueltas_analista: number
+    devueltas_director_agencia: number
+    devueltas_director_credito: number
     correcciones: number
     negadas: number
     error_pct: number | null
@@ -57,6 +65,10 @@ interface DevueltasNegadasResponse {
       grand: {
         tramitadas: number
         devueltas: number
+        devueltas_auxiliar: number
+        devueltas_analista: number
+        devueltas_director_agencia: number
+        devueltas_director_credito: number
         correcciones: number
         negadas: number
         error_pct: number | null
@@ -107,6 +119,10 @@ function periodCell(row: SeguimientoRow, periodKey: string): SeguimientoPeriodCe
   return row.by_period?.[periodKey] ?? {
     tramitadas: 0,
     devueltas: 0,
+    devueltas_auxiliar: 0,
+    devueltas_analista: 0,
+    devueltas_director_agencia: 0,
+    devueltas_director_credito: 0,
     correcciones: 0,
     negadas: 0,
     error_pct: null,
@@ -295,7 +311,7 @@ onUnmounted(() => {
         Devueltas y negadas
       </h2>
       <p class="text-sm text-muted-foreground">
-        Por mes de creación de la radicación y sucursal: tramitadas, devoluciones registradas, reenvíos tras corrección, negadas por director de crédito, porcentaje de error y comparación con el mes anterior (misma sucursal).
+        Por mes de creación de la radicación y sucursal: tramitadas, devoluciones del auxiliar y del analista (indicador), reenvíos de esas devoluciones, negadas, % error y desglose por ente que devolvió.
       </p>
     </div>
 
@@ -387,7 +403,7 @@ onUnmounted(() => {
           </div>
           <p class="mt-3 text-xs text-muted-foreground">
             <span class="font-medium text-foreground">Vista previa:</span>
-            se actualiza al cambiar fechas o sucursal. % error = (devueltas + correcciones) / tramitadas. Mejoró = % error del mes − % error del mes calendario previo.
+            % error = (devueltas del auxiliar y del analista + correcciones de esas devoluciones) / tramitadas. Las devoluciones de director de agencia o de crédito se ven en el desglose y no entran al indicador.
           </p>
           <p class="mt-2 text-xs text-muted-foreground">
             Sin fechas, el servidor usa el año calendario actual. Las métricas provienen de la trazabilidad de eventos de cada radicación.
@@ -411,7 +427,7 @@ onUnmounted(() => {
             </Card>
             <Card>
               <CardHeader class="space-y-1 px-4 py-4">
-                <CardDescription>Devueltas (suma meses)</CardDescription>
+                <CardDescription>Devueltas KPI (auxiliar + analista)</CardDescription>
                 <CardTitle class="text-3xl">{{ reportData.totals.grand.devueltas }}</CardTitle>
               </CardHeader>
             </Card>
@@ -427,6 +443,70 @@ onUnmounted(() => {
                 <CardTitle class="text-3xl">{{ pctLabel(reportData.totals.grand.error_pct) }}</CardTitle>
               </CardHeader>
             </Card>
+          </div>
+
+          <div class="overflow-hidden rounded-lg border">
+            <div class="border-b bg-muted/30 px-4 py-2.5">
+              <p class="text-sm font-medium">
+                Devoluciones por ente
+              </p>
+              <p class="text-xs text-muted-foreground">
+                Radicaciones con al menos una devolución de cada ente en el rango. Independiente del % error (solo auxiliar y analista).
+              </p>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Sucursal</TableHead>
+                  <TableHead class="text-right">Auxiliar</TableHead>
+                  <TableHead class="text-right">Analista</TableHead>
+                  <TableHead class="text-right">Dir. agencia</TableHead>
+                  <TableHead class="text-right">Dir. crédito</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow
+                  v-for="row in reportData.rows"
+                  :key="`ente-${row.sucursal.id}`"
+                >
+                  <TableCell>
+                    <div class="font-medium">
+                      {{ row.sucursal.name }}
+                    </div>
+                    <div v-if="row.sucursal.code" class="text-xs text-muted-foreground">
+                      {{ row.sucursal.code }}
+                    </div>
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">
+                    {{ row.totals.devueltas_auxiliar }}
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">
+                    {{ row.totals.devueltas_analista }}
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">
+                    {{ row.totals.devueltas_director_agencia }}
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">
+                    {{ row.totals.devueltas_director_credito }}
+                  </TableCell>
+                </TableRow>
+                <TableRow class="bg-muted/50 font-medium">
+                  <TableCell>Totales</TableCell>
+                  <TableCell class="text-right tabular-nums">
+                    {{ reportData.totals.grand.devueltas_auxiliar }}
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">
+                    {{ reportData.totals.grand.devueltas_analista }}
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">
+                    {{ reportData.totals.grand.devueltas_director_agencia }}
+                  </TableCell>
+                  <TableCell class="text-right tabular-nums">
+                    {{ reportData.totals.grand.devueltas_director_credito }}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
 
           <div v-if="reportData.periods.length === 0" class="rounded-lg border border-dashed py-8 text-center text-sm text-muted-foreground">
@@ -458,7 +538,7 @@ onUnmounted(() => {
                         Tram.
                       </TableHead>
                       <TableHead class="text-right text-xs font-normal">
-                        Dev.
+                        Dev. KPI
                       </TableHead>
                       <TableHead class="text-right text-xs font-normal">
                         Corr.
@@ -477,7 +557,7 @@ onUnmounted(() => {
                       Tram.
                     </TableHead>
                     <TableHead class="text-right text-xs font-normal">
-                      Dev.
+                      Dev. KPI
                     </TableHead>
                     <TableHead class="text-right text-xs font-normal">
                       Corr.

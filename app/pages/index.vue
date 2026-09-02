@@ -31,6 +31,7 @@ interface CreditSummaryRow {
   skip_next_director_review?: boolean
   resubmit_to_analyst_after_return?: boolean
   resubmit_to_credit_director_after_return?: boolean
+  returned_by?: string | null
   amount_requested: string
   created_at: string | null
   sucursal: { id: number; name: string; code: string | null } | null
@@ -516,6 +517,7 @@ onUnmounted(() => {
                               class="px-2 py-0.5 text-xs font-normal leading-tight"
                             >
                               {{ getCreditApplicationStatusLabel(row.status, {
+                                returnedBy: row.returned_by,
                                 skipNextDirectorReview: row.skip_next_director_review,
                                 resubmitToAnalystAfterReturn: row.resubmit_to_analyst_after_return,
                                 resubmitToCreditDirectorAfterReturn: row.resubmit_to_credit_director_after_return,

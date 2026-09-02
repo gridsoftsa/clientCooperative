@@ -62,11 +62,11 @@ export const REPORTS_CATALOG: ReportCatalogItem[] = [
     slug: 'devueltas-negadas',
     title: 'Devueltas y negadas',
     summary:
-      'Por mes de creación de la radicación y sucursal: tramitadas, devueltas (al menos una devolución), correcciones (reenvío tras devolución), negadas (director de crédito), % error y variación vs mes anterior.',
+      'Por mes de creación de la radicación y sucursal: tramitadas, devoluciones del auxiliar y del analista (indicador), reenvíos de esas devoluciones, negadas, % error y desglose por ente que devolvió (incluido director de agencia y de crédito).',
     excelSheet: 'DEVUELTAS Y NEGADAS',
     status: 'available',
     dataSource: 'applications',
-    note: '% error = (devueltas + correcciones) / tramitadas. Mejoró = % error mes actual − % error mes previo. Fuente: trazabilidad credit_application_events.',
+    note: '% error = (devueltas auxiliar + analista + correcciones de esas devoluciones) / tramitadas. Las devoluciones de director de agencia o de crédito se desglosan y no entran al indicador. Mejoró = % error mes actual − % error mes previo. Fuente: trazabilidad credit_application_events.',
   },
   {
     slug: 'negadas-retiradas',

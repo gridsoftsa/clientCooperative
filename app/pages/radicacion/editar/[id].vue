@@ -49,6 +49,7 @@ import {
   setDebtorWithoutActivityTemplateFlag,
 } from '~/utils/radicacion-debtor-activity-template'
 import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable, isCreditApplicationAdviserEditableStatus, isCreditApplicationReturnedToAdviser } from '~/constants/credit-application-status'
+import { returnedByStatusLabel, resubmitToLabel, inferResubmitToFromFlags } from '~/constants/credit-application-return'
 import { RADICACION_CREDIT_DESTINATION_OPTIONS_FALLBACK } from '~/constants/radicacion-form-catalog-fallbacks'
 import {
   RADICACION_CREDITO_GARANTIA_FNG_OPTIONS,
@@ -84,8 +85,46 @@ const submitDirectorDialogOpen = ref(false)
 const radicadoExternoDirectorError = ref(false)
 /** Tras devolución desde revisión documental: el backend envía directo a esa revisión sin pasar por el director. */
 const skipNextDirectorReview = computed(() => Boolean(application.value?.skip_next_director_review))
+/** Tras devolución del analista (o respuesta aseguradora): el reenvío vuelve a análisis. */
+const resubmitToAnalyst = computed(() => Boolean(application.value?.resubmit_to_analyst_after_return))
 /** Tras Devolución del director de crédito: el reenvío vuelve a esa revisión. */
 const resubmitToCreditDirector = computed(() => Boolean(application.value?.resubmit_to_credit_director_after_return))
+/** Reenvío que no pasa por el director de agencia: no exige radicado externo. */
+const skipsAgencyDirectorOnResubmit = computed(() =>
+  skipNextDirectorReview.value || resubmitToAnalyst.value || resubmitToCreditDirector.value,
+)
+const returnResubmitDestination = computed(() => {
+  return inferResubmitToFromFlags({
+    skipNextDirectorReview: skipNextDirectorReview.value,
+    resubmitToAnalystAfterReturn: resubmitToAnalyst.value,
+    resubmitToCreditDirectorAfterReturn: resubmitToCreditDirector.value,
+  }) ?? 'agency_director'
+})
+const returnBannerTitle = computed(() => {
+  const fromWho = returnedByStatusLabel(application.value?.returned_by)
+  if (fromWho) {
+    return fromWho
+  }
+  if (skipNextDirectorReview.value) {
+    return 'Devolución por revisión de documentos'
+  }
+  if (resubmitToAnalyst.value) {
+    return 'Devolución — reenvío a análisis'
+  }
+  if (resubmitToCreditDirector.value) {
+    return 'Devolución del director de crédito'
+  }
+  return ''
+})
+const showReturnResubmitBanner = computed(() => {
+  if (!application.value) {
+    return false
+  }
+  if (isCreditApplicationReturnedToAdviser(String(application.value.status ?? ''))) {
+    return true
+  }
+  return skipNextDirectorReview.value || resubmitToAnalyst.value || resubmitToCreditDirector.value
+})
 
 const timelineEvents = computed(() =>
   Array.isArray(application.value?.timeline) ? application.value.timeline : [],
@@ -139,6 +178,7 @@ function timelineEventStatusLabel(
   return getCreditApplicationStatusLabel(status, {
     timelineEventKey: event.event_key ?? null,
     timelineRole: role,
+    returnedBy: application.value?.returned_by,
     skipNextDirectorReview: application.value?.skip_next_director_review,
     resubmitToAnalystAfterReturn: application.value?.resubmit_to_analyst_after_return,
     resubmitToCreditDirectorAfterReturn: application.value?.resubmit_to_credit_director_after_return,
@@ -1635,7 +1675,7 @@ async function submitToDirectorReview() {
 }
 
 async function submitToDirectorReviewBody() {
-  if (!skipNextDirectorReview.value && !form.value.numero_radicado_externo?.trim()) {
+  if (!skipsAgencyDirectorOnResubmit.value && !form.value.numero_radicado_externo?.trim()) {
     radicadoExternoDirectorError.value = true
     toast.error('Indique el número de radicado externo para enviar al director de agencia.')
     focusNumeroRadicadoExternoInput()
@@ -1896,35 +1936,22 @@ onMounted(() => {
       </div>
 
       <div
-        v-if="skipNextDirectorReview"
+        v-if="showReturnResubmitBanner"
         class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-950 dark:text-amber-50"
         role="status"
       >
         <p class="font-medium">
-          Devolución por revisión de documentos
+          {{ returnBannerTitle || 'Devuelta para ajustes' }}
         </p>
         <p class="mt-1 text-muted-foreground">
-          Puede corregir todos los datos del formulario y los documentos. Al reenviar, la solicitud vuelve a revisión de documentación (sin pasar otra vez por el director de agencia).
-        </p>
-      </div>
-
-      <div
-        v-else-if="resubmitToCreditDirector"
-        class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-950 dark:text-amber-50"
-        role="status"
-      >
-        <p class="font-medium">
-          Devolución del director de crédito
-        </p>
-        <p class="mt-1 text-muted-foreground">
-          Puede corregir todos los datos del formulario y los documentos. Al reenviar, la solicitud vuelve a revisión del director de crédito.
+          Puede corregir todos los datos del formulario y los documentos. Al reenviar, la solicitud vuelve a {{ resubmitToLabel(returnResubmitDestination) }}{{ skipNextDirectorReview ? ' (sin pasar otra vez por el director de agencia)' : '' }}.
         </p>
       </div>
 
       <div class="rounded-xl border bg-card p-4">
         <div class="space-y-1.5 max-w-2xl">
           <Label for="numero_radicado_externo" class="text-sm font-semibold">
-            Número de radicado externo *
+            Número de radicado externo{{ skipsAgencyDirectorOnResubmit ? '' : ' *' }}
           </Label>
           <Input
             id="numero_radicado_externo"
@@ -1949,8 +1976,8 @@ onMounted(() => {
           </p>
           <p class="text-xs text-muted-foreground">
             {{
-              skipNextDirectorReview
-                ? 'No es obligatorio para el reenvío solo a revisión de documentación.'
+              skipsAgencyDirectorOnResubmit
+                ? 'No es obligatorio para este reenvío (no pasa por el director de agencia).'
                 : 'Obligatorio para enviar la solicitud al director de agencia.'
             }}
           </p>
@@ -2542,9 +2569,11 @@ onMounted(() => {
                 {{
                   skipNextDirectorReview
                     ? 'Enviar a revisión de documentación'
-                    : resubmitToCreditDirector
-                      ? 'Enviar al director de crédito'
-                      : 'Enviar al director'
+                    : resubmitToAnalyst
+                      ? 'Enviar al analista'
+                      : resubmitToCreditDirector
+                        ? 'Enviar al director de crédito'
+                        : 'Enviar al director'
                 }}
               </Button>
             </div>
@@ -2559,14 +2588,19 @@ onMounted(() => {
               {{
                 skipNextDirectorReview
                   ? 'Confirmar envío a revisión de documentación'
-                  : resubmitToCreditDirector
-                    ? 'Confirmar envío al director de crédito'
-                    : 'Confirmar envío al director'
+                  : resubmitToAnalyst
+                    ? 'Confirmar envío al analista'
+                    : resubmitToCreditDirector
+                      ? 'Confirmar envío al director de crédito'
+                      : 'Confirmar envío al director'
               }}
             </AlertDialogTitle>
             <AlertDialogDescription>
               <template v-if="skipNextDirectorReview">
                 Esta acción guarda los cambios y envía la radicación de nuevo a revisión de documentación, sin pasar por el director de agencia (ya estaba aprobado en esa etapa).
+              </template>
+              <template v-else-if="resubmitToAnalyst">
+                Esta acción guarda los cambios y envía la radicación de nuevo a análisis.
               </template>
               <template v-else-if="resubmitToCreditDirector">
                 Esta acción guarda los cambios y envía la radicación de nuevo a revisión del director de crédito.
