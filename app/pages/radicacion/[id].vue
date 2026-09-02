@@ -16,7 +16,9 @@ import {
   documentationReturnResubmitOptions,
   analystReturnResubmitOptions,
   agencyDirectorReturnResubmitOptions,
-  resubmitToLabel,
+  creditDirectorReturnResubmitOptions,
+  returnFlowConfirmDescription,
+  returnedByResumeLabel,
   type ReturnResubmitTo,
 } from '~/constants/credit-application-return'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
@@ -196,12 +198,12 @@ function timelineHasReturnedEvent(events: unknown): boolean {
   )
 }
 const directorDecision = ref<'approved' | 'returned' | ''>('')
-const directorResubmitTo = ref<ReturnResubmitTo>('agency_director')
+const directorResubmitTo = ref<ReturnResubmitTo>('advisor')
 const directorConcept = ref('')
 const directorDecisionDialogOpen = ref(false)
 const submittingDirectorDecision = ref(false)
 const documentationDecision = ref<'approved' | 'returned' | ''>('')
-const documentationResubmitTo = ref<ReturnResubmitTo>('documentation')
+const documentationResubmitTo = ref<ReturnResubmitTo>('advisor')
 const documentationConcept = ref('')
 const documentationInsurabilityChoice = ref<'yes' | 'no'>('no')
 const documentationInsurabilityStatusValue = ref('')
@@ -358,6 +360,22 @@ const showReturnedCorrectionHint = computed(
         && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
     ),
 )
+const parkedReturnHint = computed((): string => {
+  const by = application.value?.returned_by
+  const status = String(application.value?.status ?? '')
+  if (!by || isCreditApplicationReturnedToAdviser(status)) {
+    return ''
+  }
+  const resume = returnedByResumeLabel(String(by))
+  if (!resume) {
+    return ''
+  }
+  const workflow = new Set(['Director_Review', 'Documentation_Review', 'In_Analysis', 'Credit_Director_Review'])
+  if (!workflow.has(status)) {
+    return ''
+  }
+  return `Esta radicación fue devuelta a esta etapa. Al completar la revisión, vuelve a ${resume}.`
+})
 const returnedFromDocumentationReview = computed(() => Boolean(application.value?.skip_next_director_review))
 const canAnalystDecide = computed(
   () => hasPermission('radicacion_analisis_guardar') && application.value?.status === 'In_Analysis',
@@ -384,20 +402,21 @@ const directorDecisionOptions = [
 ]
 const documentationDecisionOptions = [
   { value: 'approved', label: 'Aprobar y enviar a análisis' },
-  { value: 'returned', label: 'Devolver por revisión de documentos' },
+  { value: 'returned', label: 'Devolver a una etapa anterior' },
 ]
 
 const analystDecision = ref<'approved' | 'returned' | ''>('')
-const analystResubmitTo = ref<ReturnResubmitTo>('analysis')
+const analystResubmitTo = ref<ReturnResubmitTo>('advisor')
 const analystConcept = ref('')
 const analystDecisionDialogOpen = ref(false)
 const submittingAnalystDecision = ref(false)
 const analystDecisionOptions = [
   { value: 'approved', label: 'Aprobar (abre Análisis y SCORE para análisis y envío a director de crédito)' },
-  { value: 'returned', label: 'Devolver al asesor para corrección' },
+  { value: 'returned', label: 'Devolver a una etapa anterior' },
 ]
 
 const creditDirectorDecision = ref<'approved' | 'rejected' | 'returned' | 'returned_modification' | 'returned_insurer_response' | ''>('')
+const creditDirectorReturnTo = ref<ReturnResubmitTo>('advisor')
 const creditDirectorConcept = ref('')
 const creditDirectorExceptionOptions = [
   { value: 'no', label: 'No' },
@@ -516,7 +535,7 @@ function onDirectorDecisionUpdate(value: string | null) {
   if (value === 'approved' || value === 'returned') {
     directorDecision.value = value
     if (value === 'returned') {
-      directorResubmitTo.value = 'agency_director'
+      directorResubmitTo.value = 'advisor'
     }
     return
   }
@@ -527,7 +546,7 @@ function onDocumentationDecisionUpdate(value: string | null) {
   if (value === 'approved' || value === 'returned') {
     documentationDecision.value = value
     if (value === 'returned') {
-      documentationResubmitTo.value = 'documentation'
+      documentationResubmitTo.value = 'advisor'
     }
     return
   }
@@ -538,7 +557,7 @@ function onAnalystDecisionUpdate(value: string | null) {
   if (value === 'approved' || value === 'returned') {
     analystDecision.value = value
     if (value === 'returned') {
-      analystResubmitTo.value = 'analysis'
+      analystResubmitTo.value = 'advisor'
     }
     return
   }
@@ -554,6 +573,9 @@ function onCreditDirectorDecisionUpdate(value: string | null) {
     || value === 'returned_insurer_response'
   ) {
     creditDirectorDecision.value = value
+    if (value === 'returned') {
+      creditDirectorReturnTo.value = 'advisor'
+    }
     if (value !== 'approved') {
       creditDirectorApproverValue.value = ''
     }
@@ -1497,6 +1519,9 @@ async function confirmCreditDirectorDecision() {
       approver_value: creditDirectorDecision.value === 'approved'
         ? creditDirectorApproverValue.value.trim()
         : null,
+    }
+    if (creditDirectorDecision.value === 'returned') {
+      body.resubmit_to = creditDirectorReturnTo.value
     }
     if (
       application.value?.documentation_insurability_required === true
@@ -2894,6 +2919,17 @@ onMounted(() => {
       </AlertDescription>
     </Alert>
 
+    <Alert
+      v-if="parkedReturnHint && application?.id"
+      class="border-amber-600/35 bg-amber-500/[0.08] dark:border-amber-500/35 dark:bg-amber-950/40 [&>svg]:text-amber-700 dark:[&>svg]:text-amber-300"
+    >
+      <Icon name="i-lucide-undo-2" class="h-4 w-4" />
+      <AlertTitle>Devolución a esta etapa</AlertTitle>
+      <AlertDescription class="mt-1 text-sm leading-relaxed">
+        {{ parkedReturnHint }}
+      </AlertDescription>
+    </Alert>
+
     <div v-if="loading" class="flex justify-center py-12">
       <Icon name="i-lucide-loader-2" class="h-10 w-10 animate-spin text-muted-foreground" />
     </div>
@@ -3289,6 +3325,28 @@ onMounted(() => {
             />
           </div>
           <div
+            v-if="creditDirectorDecision === 'returned'"
+            class="space-y-1.5"
+          >
+            <Label for="credit_director_resubmit_to">Devolver a *</Label>
+            <Multiselect
+              id="credit_director_resubmit_to"
+              :model-value="creditDirectorReturnTo"
+              :options="creditDirectorReturnResubmitOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="false"
+              placeholder="Seleccionar etapa anterior"
+              class="multiselect-director"
+              @update:model-value="(v: string | null) => { if (v === 'advisor' || v === 'agency_director' || v === 'documentation' || v === 'analysis') creditDirectorReturnTo = v }"
+            />
+            <p class="text-xs text-muted-foreground">
+              Etapas anteriores a revisión de director de crédito. Al completar esa etapa, la radicación vuelve aquí.
+            </p>
+          </div>
+          <div
             class="grid gap-4"
             :class="hasPermission('radicacion_marcar_privilegiado') ? 'sm:grid-cols-2' : ''"
           >
@@ -3486,7 +3544,7 @@ onMounted(() => {
             v-if="directorDecision === 'returned'"
             class="space-y-1.5"
           >
-            <Label for="director_resubmit_to">Al corregir, la radicación vuelve a *</Label>
+            <Label for="director_resubmit_to">Devolver a *</Label>
             <Multiselect
               id="director_resubmit_to"
               :model-value="directorResubmitTo"
@@ -3498,10 +3556,10 @@ onMounted(() => {
               :searchable="false"
               placeholder="Seleccionar etapa"
               class="multiselect-director"
-              @update:model-value="(v: string | null) => { if (v === 'agency_director' || v === 'documentation') directorResubmitTo = v }"
+              @update:model-value="(v: string | null) => { if (v === 'advisor') directorResubmitTo = v }"
             />
             <p class="text-xs text-muted-foreground">
-              El asesor corrige y, al reenviar, la solicitud entra en esa etapa.
+              Solo hay una etapa anterior: el asesor. Al corregir, vuelve al director de agencia.
             </p>
           </div>
           <div class="space-y-1.5">
@@ -3709,7 +3767,7 @@ onMounted(() => {
             v-if="documentationDecision === 'returned'"
             class="space-y-1.5"
           >
-            <Label for="documentation_resubmit_to">Al corregir, la radicación vuelve a *</Label>
+            <Label for="documentation_resubmit_to">Devolver a *</Label>
             <Multiselect
               id="documentation_resubmit_to"
               :model-value="documentationResubmitTo"
@@ -3721,10 +3779,10 @@ onMounted(() => {
               :searchable="false"
               placeholder="Seleccionar etapa"
               class="multiselect-director"
-              @update:model-value="(v: string | null) => { if (v === 'documentation' || v === 'analysis' || v === 'agency_director') documentationResubmitTo = v }"
+              @update:model-value="(v: string | null) => { if (v === 'advisor' || v === 'agency_director') documentationResubmitTo = v }"
             />
             <p class="text-xs text-muted-foreground">
-              El asesor corrige y, al reenviar, la solicitud entra en esa etapa.
+              Etapas anteriores a revisión de documentos. Al completar esa etapa, la radicación vuelve aquí.
             </p>
           </div>
           <div class="space-y-1.5">
@@ -3792,7 +3850,7 @@ onMounted(() => {
             v-if="analystDecision === 'returned'"
             class="space-y-1.5"
           >
-            <Label for="analyst_resubmit_to">Al corregir, la radicación vuelve a *</Label>
+            <Label for="analyst_resubmit_to">Devolver a *</Label>
             <Multiselect
               id="analyst_resubmit_to"
               :model-value="analystResubmitTo"
@@ -3804,10 +3862,10 @@ onMounted(() => {
               :searchable="false"
               placeholder="Seleccionar etapa"
               class="multiselect-director"
-              @update:model-value="(v: string | null) => { if (v === 'analysis' || v === 'documentation') analystResubmitTo = v }"
+              @update:model-value="(v: string | null) => { if (v === 'advisor' || v === 'agency_director' || v === 'documentation') analystResubmitTo = v }"
             />
             <p class="text-xs text-muted-foreground">
-              El asesor corrige y, al reenviar, la solicitud entra en esa etapa.
+              Etapas anteriores a análisis. Al completar esa etapa, la radicación vuelve al analista.
             </p>
           </div>
           <div class="space-y-1.5">
@@ -4290,7 +4348,7 @@ onMounted(() => {
               La solicitud quedará <strong>rechazada</strong> de forma definitiva. Esta acción no se puede deshacer desde aquí.
             </template>
             <template v-else-if="creditDirectorDecision === 'returned'">
-              La solicitud pasará a estado <strong>Devolución</strong> para que el asesor corrija. Al reenviar, volverá a revisión del director de crédito.
+              {{ returnFlowConfirmDescription(creditDirectorReturnTo, 'credit_director') }}
             </template>
             <template v-else-if="creditDirectorDecision === 'returned_modification'">
               La solicitud pasará a estado <strong>Modificación</strong> para corrección y nuevo flujo hasta una nueva revisión del director de crédito.
@@ -4325,7 +4383,7 @@ onMounted(() => {
           <AlertDialogTitle>Confirmar decisión del director</AlertDialogTitle>
           <AlertDialogDescription>
             <template v-if="directorDecision === 'returned'">
-              La radicación volverá al asesor. Al reenviar, entra a {{ resubmitToLabel(directorResubmitTo) }}.
+              {{ returnFlowConfirmDescription(directorResubmitTo, 'agency_director') }}
             </template>
             <template v-else>
               Esta acción actualizará el estado de la radicación y guardará el concepto del director en la trazabilidad.
@@ -4357,7 +4415,7 @@ onMounted(() => {
               Se guardará el texto del concepto en la radicación. Permanecerás en esta vista.
             </template>
             <template v-else-if="analystDecision === 'returned'">
-              Esta acción devolverá la radicación al asesor. Al reenviar, entra a {{ resubmitToLabel(analystResubmitTo) }}. Se anulará la aprobación previa del analista si existía.
+              {{ returnFlowConfirmDescription(analystResubmitTo, 'analysis') }} Se anulará la aprobación previa del analista si existía.
             </template>
             <template v-else-if="analystDecision === 'approved'">
               Se guardará la aprobación y te llevará a Análisis y SCORE para completar el análisis y el SCORE.
@@ -4389,7 +4447,7 @@ onMounted(() => {
           <AlertDialogTitle>Confirmar revisión de documentos</AlertDialogTitle>
           <AlertDialogDescription>
             <template v-if="documentationDecision === 'returned'">
-              La radicación volverá al asesor. Al reenviar, entra a {{ resubmitToLabel(documentationResubmitTo) }}.
+              {{ returnFlowConfirmDescription(documentationResubmitTo, 'documentation') }}
             </template>
             <template v-else>
               Esta acción actualizará el estado de la radicación y guardará el concepto de revisión documental.
