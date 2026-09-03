@@ -445,6 +445,7 @@ const creditDirectorExceptionJustification = ref('')
 const creditDirectorExceptionReasonOptions = ref<Array<{ value: string, label: string }>>([])
 const creditDirectorExceptionReasonsSelected = ref<string[]>([])
 const creditDirectorApproverValue = ref('')
+const creditDirectorApproverName = ref('')
 const creditDirectorApproverOptions = ref<Array<{ value: string, label: string }>>([])
 const creditDirectorDecisionDialogOpen = ref(false)
 const submittingCreditDirectorDecision = ref(false)
@@ -590,6 +591,7 @@ function onCreditDirectorDecisionUpdate(value: string | null) {
     }
     if (value !== 'approved') {
       creditDirectorApproverValue.value = ''
+      creditDirectorApproverName.value = ''
     }
     return
   }
@@ -611,6 +613,7 @@ function onCreditDirectorExceptionUpdate(value: string | null) {
   creditDirectorExceptionJustification.value = ''
   creditDirectorExceptionReasonsSelected.value = []
   creditDirectorApproverValue.value = ''
+  creditDirectorApproverName.value = ''
 }
 
 function onCreditDirectorPrivilegedUpdate(value: string | null) {
@@ -1510,6 +1513,10 @@ async function openCreditDirectorDecisionDialog() {
       toast.error('Seleccione el ente aprobador.')
       return
     }
+    if (creditDirectorApproverName.value.trim().length < 2) {
+      toast.error('Indique el nombre del ente aprobador (mínimo 2 caracteres).')
+      return
+    }
   }
   if (hasPermission('radicacion_marcar_privilegiado') && creditDirectorIsPrivilegedChoice.value === 'yes') {
     if (creditDirectorPrivilegedJustification.value.trim().length < 10) {
@@ -1543,6 +1550,9 @@ async function confirmCreditDirectorDecision() {
       exception_justification: exceptionJustificationPayload,
       approver_value: creditDirectorDecision.value === 'approved'
         ? creditDirectorApproverValue.value.trim()
+        : null,
+      approver_name: creditDirectorDecision.value === 'approved'
+        ? creditDirectorApproverName.value.trim()
         : null,
     }
     if (creditDirectorDecision.value === 'returned') {
@@ -3098,19 +3108,26 @@ onMounted(() => {
             <span class="text-muted-foreground">Justificación (privilegiado):</span>
             {{ application.privileged_justification }}
           </p>
+          <p
+            v-if="application?.credit_director_approver_value"
+            class="text-sm"
+          >
+            <span class="text-muted-foreground">Ente aprobador:</span>
+            {{ approverLabelForValue(application.credit_director_approver_value) }}
+          </p>
+          <p
+            v-if="application?.credit_director_approver_name"
+            class="text-sm"
+          >
+            <span class="text-muted-foreground">Nombre del ente aprobador:</span>
+            {{ application.credit_director_approver_name }}
+          </p>
           <div
             v-if="application?.credit_director_is_exception"
             class="space-y-2 rounded-md border border-amber-200 bg-amber-50/80 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"
           >
             <p class="font-medium text-foreground">
               Excepción: Sí
-            </p>
-            <p
-              v-if="!application?.credit_director_is_exception && application?.credit_director_approver_value"
-              class="text-sm"
-            >
-              <span class="text-muted-foreground">Ente aprobador:</span>
-              {{ approverLabelForValue(application.credit_director_approver_value) }}
             </p>
             <p class="whitespace-pre-wrap">
               <span class="text-muted-foreground">Justificación:</span>
@@ -3459,22 +3476,36 @@ onMounted(() => {
           </div>
           <div
             v-if="creditDirectorDecision === 'approved'"
-            class="space-y-1.5"
+            class="space-y-3"
           >
-            <Label for="credit_director_approver">Ente aprobador *</Label>
-            <Multiselect
-              id="credit_director_approver"
-              :model-value="creditDirectorApproverValue === '' ? null : creditDirectorApproverValue"
-              :options="creditDirectorApproverOptions"
-              value-prop="value"
-              label="label"
-              mode="single"
-              :can-clear="false"
-              :searchable="true"
-              placeholder="Seleccionar aprobador"
-              class="multiselect-director"
-              @update:model-value="onCreditDirectorApproverUpdate"
-            />
+            <div class="space-y-1.5">
+              <Label for="credit_director_approver">Ente aprobador *</Label>
+              <Multiselect
+                id="credit_director_approver"
+                :model-value="creditDirectorApproverValue === '' ? null : creditDirectorApproverValue"
+                :options="creditDirectorApproverOptions"
+                value-prop="value"
+                label="label"
+                mode="single"
+                :can-clear="false"
+                :searchable="true"
+                placeholder="Seleccionar aprobador"
+                class="multiselect-director"
+                @update:model-value="onCreditDirectorApproverUpdate"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="credit_director_approver_name">Nombre del ente aprobador *</Label>
+              <Input
+                id="credit_director_approver_name"
+                v-model="creditDirectorApproverName"
+                maxlength="200"
+                placeholder="Nombre de la persona, comité u órgano que aprueba"
+              />
+              <p class="text-xs text-muted-foreground">
+                Identifique quién aprueba el crédito (mínimo 2 caracteres).
+              </p>
+            </div>
           </div>
           <div
             v-if="showApproverEntityDocumentsInCreditDirectorCard"
@@ -4407,7 +4438,7 @@ onMounted(() => {
           <AlertDialogTitle>Confirmar decisión final del director de crédito</AlertDialogTitle>
           <AlertDialogDescription>
             <template v-if="creditDirectorDecision === 'approved'">
-              La solicitud pasará a estado <strong>desembolso</strong>. Verifique que el concepto quede completo antes de confirmar.
+              La solicitud pasará a estado <strong>desembolso</strong>. Verifique el ente aprobador, su nombre y que el concepto quede completo antes de confirmar.
             </template>
             <template v-else-if="creditDirectorDecision === 'rejected'">
               La solicitud quedará <strong>rechazada</strong> de forma definitiva. Esta acción no se puede deshacer desde aquí.
