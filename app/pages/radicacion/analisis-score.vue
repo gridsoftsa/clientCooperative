@@ -366,6 +366,9 @@ function aplicarVistaFinancieraDesdeSolicitud(data: Record<string, unknown>): vo
  * Tras aplicar montos/ingresos/egresos/activos desde la radicación, fusiona el EMERGENCIA persistido
  * en `analisis_score_snapshot` (mismo orden que la carga inicial). Sin esto, al volver del paso Score
  * al Análisis solo quedaba la radicación y se perdían los valores guardados del analista.
+ *
+ * Después del merge se vuelven a aplicar ingresos, gastos y monto/plazo de la solicitud viva:
+ * si el crédito se devolvió para corregir el paso 3, el analista no debe ver cifras del análisis anterior.
  */
 function reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data: Record<string, unknown>): void {
   const snap = data.analisis_score_snapshot as Record<string, unknown> | null | undefined
@@ -373,6 +376,9 @@ function reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data: Record<string
     emergenciaState.value,
     snap && typeof snap === 'object' ? (snap as { emergencia?: unknown }).emergencia : undefined,
   )
+  aplicarMontoYPlazoCreditoDesdeSolicitud(data)
+  aplicarIngresosCapacidadDesdeRadicacion(data)
+  aplicarEgresosCapacidadDesdeRadicacion(data)
   const dPre = data.debtor as Record<string, unknown> | null | undefined
   if (dPre && typeof dPre === 'object') {
     if (!emergenciaState.value.deudorCodeudor.deudor.trim()) {
@@ -412,6 +418,12 @@ async function refrescarVistaFinancieraDesdeSolicitudApi(): Promise<boolean> {
       : null
     aplicarVistaFinancieraDesdeSolicitud(data)
     reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data)
+    const co = pickCoDebtorRowsFromSolicitudData(data)
+    aplicarActivosEmergenciaDesdeSolicitud(emergenciaState.value, {
+      debtor: data.debtor,
+      coDebtors: co,
+    })
+    actualizarResumenFinancieroDeudorDesdeSolicitud(data)
     return true
   }
   catch (e) {

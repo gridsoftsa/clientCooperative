@@ -332,10 +332,37 @@ export function mergeEmergenciaFromSnapshot(saved: unknown): EmergenciaState {
   return merged
 }
 
+/** Campos de capacidad que salen del paso 3 de radicación (solo lectura en análisis). */
+const CAPACIDAD_CAMPOS_DESDE_RADICACION = [
+  'ingresos',
+  'gastoPersonal',
+  'alimentacion',
+  'gastosServiciosArriendo',
+  'arriendo',
+  'serviciosPublicos',
+  'gastoSalud',
+  'gastoPension',
+  'gastoArl',
+  'otrosGastos',
+  'totalEgresos',
+] as const
+
+function restaurarCapacidadDesdeRadicacion(
+  target: EmergenciaCapacidadBloque,
+  source: EmergenciaCapacidadBloque,
+): void {
+  for (const key of CAPACIDAD_CAMPOS_DESDE_RADICACION) {
+    target[key] = source[key]
+  }
+}
+
 /**
  * Aplica un snapshot de EMERGENCIA sobre un estado ya hidratado (p. ej. monto, ingresos, egresos y activos desde la solicitud).
  * Importante: `deepMerge` fusiona arrays de `filas` por índice; por eso, si el snapshot trae `activos`, se reemplazan
  * las personas indicadas con `normalizarPersonaActivo` para que los activos guardados en análisis no se mezclen con la radicación.
+ *
+ * Ingresos, gastos y monto/plazo del crédito no se toman del snapshot: si el asesor los corrigió tras una
+ * devolución, el análisis debe mostrar la radicación viva (el snapshot conserva otros ingresos, cuotas, etc.).
  */
 export function mergeEmergenciaSnapshotOverBase(base: EmergenciaState, saved: unknown): EmergenciaState {
   if (saved == null || typeof saved !== 'object' || Array.isArray(saved)) {
@@ -354,6 +381,12 @@ export function mergeEmergenciaSnapshotOverBase(base: EmergenciaState, saved: un
       merged.activos.totalActivos = pa.totalActivos
     }
   }
+  restaurarCapacidadDesdeRadicacion(merged.capacidadBloque1.a, base.capacidadBloque1.a)
+  restaurarCapacidadDesdeRadicacion(merged.capacidadBloque1.b, base.capacidadBloque1.b)
+  restaurarCapacidadDesdeRadicacion(merged.capacidadBloque2.a, base.capacidadBloque2.a)
+  restaurarCapacidadDesdeRadicacion(merged.capacidadBloque2.b, base.capacidadBloque2.b)
+  merged.credito.vrCredito = base.credito.vrCredito
+  merged.credito.plazoMeses = base.credito.plazoMeses
   ensureCuotasFinMinimo(merged.capacidadBloque1.a)
   ensureCuotasFinMinimo(merged.capacidadBloque1.b)
   ensureCuotasFinMinimo(merged.capacidadBloque2.a)
