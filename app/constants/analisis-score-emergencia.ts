@@ -347,12 +347,27 @@ const CAPACIDAD_CAMPOS_DESDE_RADICACION = [
   'totalEgresos',
 ] as const
 
+/** Totales derivados: no se reutilizan del snapshot (se recalculan con ingresos/gastos/cuotas vigentes). */
+const CAPACIDAD_CAMPOS_DERIVADOS = [
+  'totalIngresos',
+  'ingDisponibles',
+  'reservaSobreIngreso',
+  'valorCuota',
+  'saldo',
+] as const
+
 function restaurarCapacidadDesdeRadicacion(
   target: EmergenciaCapacidadBloque,
   source: EmergenciaCapacidadBloque,
 ): void {
   for (const key of CAPACIDAD_CAMPOS_DESDE_RADICACION) {
     target[key] = source[key]
+  }
+}
+
+function invalidarTotalesDerivadosCapacidad(b: EmergenciaCapacidadBloque): void {
+  for (const key of CAPACIDAD_CAMPOS_DERIVADOS) {
+    b[key] = ''
   }
 }
 
@@ -385,6 +400,10 @@ export function mergeEmergenciaSnapshotOverBase(base: EmergenciaState, saved: un
   restaurarCapacidadDesdeRadicacion(merged.capacidadBloque1.b, base.capacidadBloque1.b)
   restaurarCapacidadDesdeRadicacion(merged.capacidadBloque2.a, base.capacidadBloque2.a)
   restaurarCapacidadDesdeRadicacion(merged.capacidadBloque2.b, base.capacidadBloque2.b)
+  invalidarTotalesDerivadosCapacidad(merged.capacidadBloque1.a)
+  invalidarTotalesDerivadosCapacidad(merged.capacidadBloque1.b)
+  invalidarTotalesDerivadosCapacidad(merged.capacidadBloque2.a)
+  invalidarTotalesDerivadosCapacidad(merged.capacidadBloque2.b)
   merged.credito.vrCredito = base.credito.vrCredito
   merged.credito.plazoMeses = base.credito.plazoMeses
   ensureCuotasFinMinimo(merged.capacidadBloque1.a)

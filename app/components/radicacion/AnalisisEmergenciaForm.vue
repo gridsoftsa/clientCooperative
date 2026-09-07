@@ -34,7 +34,7 @@ import {
 import {
   parsePesosFlexibleAnalisis,
   sumCuotasFinEmergencia,
-  totalGastosCapacidadConCuotasFin,
+  recalcularCapacidadPagoDerivados,
 } from '~/utils/analisis-emergencia-capacidad'
 
 const state = defineModel<EmergenciaState>({ required: true })
@@ -266,120 +266,11 @@ function onCuotaFinPesosModelUpdate(line: EmergenciaCuotaLine, v: string) {
   line.cuota = n === undefined ? raw : formatPesos(n)
 }
 
-function syncTotalIngresosBloque(b: EmergenciaCapacidadBloque) {
-  const ing = parsePesosFlexible(b.ingresos)
-  const otr = parsePesosFlexible(b.otrosIngresos)
-  const noSust = parsePesosFlexible(b.unsustainedIncome)
-  const rawTotal = ing + otr - noSust
-  const sum = Math.max(0, rawTotal)
-  const allBlank = !String(b.ingresos ?? '').trim()
-    && !String(b.otrosIngresos ?? '').trim()
-    && !String(b.unsustainedIncome ?? '').trim()
-  if (sum === 0 && allBlank) {
-    b.totalIngresos = ''
-  }
-  else {
-    b.totalIngresos = formatPesos(sum)
-  }
-}
-
 function syncAllTotalesIngresosCapacidad() {
-  const s = state.value
-  syncTotalIngresosBloque(s.capacidadBloque1.a)
-  syncTotalIngresosBloque(s.capacidadBloque1.b)
-  syncTotalIngresosBloque(s.capacidadBloque2.a)
-  syncTotalIngresosBloque(s.capacidadBloque2.b)
-}
-
-/** `formatPesos` asume no negativos; aquí hace falta el signo y miles en COP. */
-function formatPesosDiferencia(n: number): string {
-  if (!Number.isFinite(n)) {
-    return ''
-  }
-  if (n === 0) {
-    return '0'
-  }
-  const sign = n < 0 ? '-' : ''
-  return sign + formatPesos(Math.abs(n))
-}
-
-/** Total ingresos − (gastos radicación + suma cuotas entidades financieras). Solo se escribe vía `watch`. */
-function syncIngresosDisponiblesBloque(b: EmergenciaCapacidadBloque) {
-  const noTi = !String(b.totalIngresos ?? '').trim()
-  const te = totalGastosCapacidadConCuotasFin(b)
-  if (noTi && te === 0) {
-    b.ingDisponibles = ''
-    return
-  }
-  const ti = parsePesosFlexible(b.totalIngresos)
-  b.ingDisponibles = formatPesosDiferencia(ti - te)
-}
-
-function syncAllIngresosDisponiblesCapacidad() {
-  const s = state.value
-  syncIngresosDisponiblesBloque(s.capacidadBloque1.a)
-  syncIngresosDisponiblesBloque(s.capacidadBloque1.b)
-  syncIngresosDisponiblesBloque(s.capacidadBloque2.a)
-  syncIngresosDisponiblesBloque(s.capacidadBloque2.b)
-}
-
-/**
- * Reserva = |ingresos disponibles| × (% ING / 100). Siempre es una detracción (línea «(-) % ing.»).
- * Si ingresos disponibles es negativo, el saldo sigue restando esta reserva (no la “devuelve”).
- */
-function syncReservaSobreIngresoBloque(b: EmergenciaCapacidadBloque, pct: number) {
-  const p = Number.isFinite(pct) && pct >= 0 ? pct : 0
-  if (!String(b.ingDisponibles ?? '').trim()) {
-    b.reservaSobreIngreso = ''
-    return
-  }
-  const id = parsePesosFlexible(b.ingDisponibles)
-  const val = Math.abs(id) * (p / 100)
-  b.reservaSobreIngreso = formatPesosDiferencia(val)
-}
-
-function syncAllReservasSobreIngresoCapacidad() {
-  const s = state.value
-  const pd = props.pctReservaDeudor
-  const pc = props.pctReservaCodeudor
-  syncReservaSobreIngresoBloque(s.capacidadBloque1.a, pd)
-  syncReservaSobreIngresoBloque(s.capacidadBloque1.b, pc)
-  syncReservaSobreIngresoBloque(s.capacidadBloque2.a, pc)
-  syncReservaSobreIngresoBloque(s.capacidadBloque2.b, pc)
-}
-
-/** Cada subsección de capacidad: mismo texto que Vr. cuota var. (crédito) para el snapshot. */
-function syncValorCuotaDesdeCredito() {
-  const v = state.value.credito.vrCuotaVar
-  const c = state.value.capacidadBloque1
-  const c2 = state.value.capacidadBloque2
-  c.a.valorCuota = v
-  c.b.valorCuota = v
-  c2.a.valorCuota = v
-  c2.b.valorCuota = v
-}
-
-/**
- * Saldo = ingresos disponibles (con signo) − reserva ING − valor de cuota.
- * Si ingresos disponibles es negativo, el saldo también queda negativo.
- */
-function syncSaldoBloque(b: EmergenciaCapacidadBloque) {
-  if (!String(b.ingDisponibles ?? '').trim()) {
-    b.saldo = ''
-    return
-  }
-  const id = parsePesosFlexible(b.ingDisponibles)
-  const res = parsePesosFlexible(b.reservaSobreIngreso)
-  const vc = parsePesosFlexible(state.value.credito.vrCuotaVar)
-  b.saldo = formatPesosDiferencia(id - res - vc)
-}
-
-function syncAllSaldoCapacidad() {
-  const s = state.value
-  syncSaldoBloque(s.capacidadBloque1.a)
-  syncSaldoBloque(s.capacidadBloque1.b)
-  syncSaldoBloque(s.capacidadBloque2.a)
-  syncSaldoBloque(s.capacidadBloque2.b)
+  recalcularCapacidadPagoDerivados(state.value, {
+    pctReservaDeudor: props.pctReservaDeudor,
+    pctReservaCodeudor: props.pctReservaCodeudor,
+  })
 }
 
 watch(
@@ -398,6 +289,13 @@ watch(
     state.value.capacidadBloque2.b.otrosIngresos,
     state.value.capacidadBloque2.b.unsustainedIncome,
     state.value.capacidadBloque1.a.totalEgresos,
+    state.value.capacidadBloque1.a.gastoPersonal,
+    state.value.capacidadBloque1.a.alimentacion,
+    state.value.capacidadBloque1.a.gastosServiciosArriendo,
+    state.value.capacidadBloque1.a.gastoSalud,
+    state.value.capacidadBloque1.a.gastoPension,
+    state.value.capacidadBloque1.a.gastoArl,
+    state.value.capacidadBloque1.a.otrosGastos,
     state.value.capacidadBloque1.b.totalEgresos,
     state.value.capacidadBloque2.a.totalEgresos,
     state.value.capacidadBloque2.b.totalEgresos,
@@ -414,10 +312,6 @@ watch(
   ],
   () => {
     syncAllTotalesIngresosCapacidad()
-    syncAllIngresosDisponiblesCapacidad()
-    syncAllReservasSobreIngresoCapacidad()
-    syncValorCuotaDesdeCredito()
-    syncAllSaldoCapacidad()
   },
   { flush: 'post', immediate: true },
 )

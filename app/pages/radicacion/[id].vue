@@ -208,7 +208,7 @@ const submittingDirectorDecision = ref(false)
 const documentationDecision = ref<'approved' | 'returned' | ''>('')
 const documentationResubmitTo = ref<ReturnResubmitTo>('advisor')
 const documentationConcept = ref('')
-const documentationInsurabilityChoice = ref<'yes' | 'no'>('no')
+const documentationInsurabilityChoice = ref<'yes' | 'no'>('yes')
 const documentationInsurabilityStatusValue = ref('')
 const documentationInsurabilityStatusJustification = ref('')
 const documentationInsurabilityStatusOptions = ref<Array<{ value: string, label: string }>>([])
@@ -260,6 +260,7 @@ const showInsurabilityDocumentsSection = computed(
     hasPermission('radicacion_insurability_ver')
     && (
       application.value?.documentation_insurability_required === true
+      || documentationReviewFlowActive.value
       || (canDocumentationDecide.value && documentationInsurabilityChoice.value === 'yes')
     ),
 )
@@ -333,7 +334,10 @@ const fngDocumentationInteractionMode = computed((): 'full' | 'uploadOnly' | 'vi
 const showInsurabilityStatusInAsegurabilidadCard = computed(
   () =>
     hasPermission('radicacion_insurability_status_editar')
-    && application.value?.documentation_insurability_required === true,
+    && (
+      application.value?.documentation_insurability_required === true
+      || documentationReviewFlowActive.value
+    ),
 )
 
 const canEditInsurabilityStatusInAsegurabilidadSection = computed(
@@ -1598,14 +1602,6 @@ async function confirmCreditDirectorDecision() {
   }
 }
 
-function onDocumentationInsurabilityChoiceUpdate(v: unknown): void {
-  documentationInsurabilityChoice.value = v === 'yes' ? 'yes' : 'no'
-  if (documentationInsurabilityChoice.value === 'no') {
-    documentationInsurabilityStatusValue.value = ''
-    documentationInsurabilityStatusJustification.value = ''
-  }
-}
-
 function onDocumentationInsurabilityStatusUpdate(v: unknown): void {
   documentationInsurabilityStatusValue.value = typeof v === 'string' ? v : ''
   if (documentationInsurabilityStatusValue.value === '') {
@@ -1656,7 +1652,7 @@ async function confirmDocumentationDecision() {
     const body: Record<string, unknown> = {
       decision: documentationDecision.value,
       concept: documentationConcept.value.trim(),
-      insurability_required: documentationInsurabilityChoice.value === 'yes',
+      insurability_required: true,
       documents: documentsPayload,
     }
     if (documentationDecision.value === 'approved') {
@@ -1838,7 +1834,7 @@ async function fetchApplication() {
     lastDebtorDocumentationFinancialPatchSignature.value = stableStringifyDocumentationFinancialPatch(
       buildDocumentationFinancialPatch(form.value.debtor.financial_info),
     )
-    documentationInsurabilityChoice.value = application.value?.documentation_insurability_required === true ? 'yes' : 'no'
+    documentationInsurabilityChoice.value = 'yes'
     documentationInsurabilityStatusValue.value = typeof application.value?.insurability_status_value === 'string'
       && application.value.insurability_status_value !== ''
       ? application.value.insurability_status_value
@@ -3706,13 +3702,12 @@ onMounted(() => {
           <CollapsibleContent>
             <CardContent class="space-y-4 pt-0">
           <div class="space-y-1.5">
-            <Label for="documentation_insurability">Requiere asegurabilidad</Label>
+            <Label for="documentation_insurability">Requiere asegurabilidad *</Label>
             <div class="flex justify-start">
               <Multiselect
                 id="documentation_insurability"
-                :model-value="documentationInsurabilityChoice === 'yes' ? 'yes' : 'no'"
+                :model-value="'yes'"
                 :options="[
-                  { value: 'no', label: 'No' },
                   { value: 'yes', label: 'Sí' },
                 ]"
                 value-prop="value"
@@ -3720,19 +3715,72 @@ onMounted(() => {
                 mode="single"
                 :can-clear="false"
                 :searchable="false"
-                placeholder="Seleccionar"
+                :disabled="true"
+                placeholder="Sí"
                 class="multiselect-director w-full max-w-md"
-                @update:model-value="onDocumentationInsurabilityChoiceUpdate"
               />
             </div>
             <p class="text-xs text-muted-foreground leading-relaxed">
-              Si marca «Sí», complete los documentos del checklist debajo antes de registrar la decisión. El <span class="font-medium">estado catalogado de asegurabilidad</span> y su justificación los registra el <span class="font-medium">director de crédito</span> al aprobar la operación (o quien tenga permiso de actualizar estado en la sección de asegurabilidad). Marque como revisados los del checklist auxiliar y, si la solicitud tiene garantía FNG, cada documento FNG ya cargado en la solicitud.
+              En revisión documental la asegurabilidad es <span class="font-medium text-foreground">obligatoria</span>. Complete el checklist debajo. El <span class="font-medium">estado catalogado de asegurabilidad</span> y su justificación los registra quien tenga permiso (plantilla: director de crédito) en esta misma sección o al aprobar la operación. Marque como revisados los del checklist auxiliar y, si la solicitud tiene garantía FNG, cada documento FNG ya cargado en la solicitud.
             </p>
           </div>
           <div
             v-if="inlineInsurabilityDocumentsInDocReviewCard"
             class="rounded-md border border-border/60 bg-muted/10 p-4 space-y-3"
           >
+            <div
+              v-if="showInsurabilityStatusInAsegurabilidadCard"
+              class="rounded-md border bg-muted/30 p-4 space-y-3"
+            >
+              <p class="text-sm text-muted-foreground leading-relaxed">
+                Esta radicación <span class="font-medium text-foreground">requiere asegurabilidad</span>.
+                El <span class="font-medium text-foreground">director de crédito</span> (o quien tenga permiso de actualizar estado) registra aquí el estado catalogado y su justificación.
+              </p>
+              <template v-if="canEditInsurabilityStatusInAsegurabilidadSection">
+                <div class="space-y-3">
+                  <div class="space-y-1.5">
+                    <Label for="documentation_review_insurability_status">Estado asegurabilidad *</Label>
+                    <Multiselect
+                      id="documentation_review_insurability_status"
+                      :model-value="documentationInsurabilityStatusValue === '' ? null : documentationInsurabilityStatusValue"
+                      :options="documentationInsurabilityStatusOptions"
+                      value-prop="value"
+                      label="label"
+                      mode="single"
+                      :can-clear="false"
+                      :searchable="false"
+                      placeholder="Seleccionar estado"
+                      class="multiselect-director w-full max-w-md"
+                      @update:model-value="onDocumentationInsurabilityStatusUpdate"
+                    />
+                  </div>
+                  <div v-if="documentationInsurabilityStatusValue !== ''" class="space-y-1.5">
+                    <Label for="documentation_review_insurability_justification">Justificación del estado *</Label>
+                    <textarea
+                      id="documentation_review_insurability_justification"
+                      v-model="documentationInsurabilityStatusJustification"
+                      rows="4"
+                      class="flex min-h-[100px] w-full max-w-2xl rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      placeholder="Fundamente el estado elegido respecto de la operación."
+                    />
+                    <p class="text-xs text-muted-foreground">
+                      Mínimo 10 caracteres para guardar el cambio.
+                    </p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2 justify-start">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      :disabled="submittingInsurabilityStatusPatch"
+                      @click="patchInsurabilityStatusFromSection"
+                    >
+                      <Icon v-if="submittingInsurabilityStatusPatch" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                      Guardar estado y justificación
+                    </Button>
+                  </div>
+                </div>
+              </template>
+            </div>
             <div>
               <p class="text-sm font-medium text-foreground">
                 Documentos de asegurabilidad

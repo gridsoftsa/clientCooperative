@@ -27,6 +27,7 @@ import {
   formatMontoCopVista,
   tasaEfectivaPorcentajeDesdeNominal,
 } from '~/utils/analisis-emergencia-cuota'
+import { recalcularCapacidadPagoDerivados } from '~/utils/analisis-emergencia-capacidad'
 import type { EmergenciaCreditoCampoValidacion } from '~/utils/analisis-emergencia-validacion'
 import {
   descripcionErroresAdicionales,
@@ -395,6 +396,10 @@ function reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data: Record<string
   sincronizarTasaEfectivaDesdeNominal()
   sincronizarVrCuotaVarFormula()
   sincronizarGarantiaConPlantilla()
+  recalcularCapacidadPagoDerivados(emergenciaState.value, {
+    pctReservaDeudor: pctIngDeudor.value,
+    pctReservaCodeudor: pctIngCodeudor.value,
+  })
 }
 
 const sincronizandoPaso3Radicacion = ref(false)
