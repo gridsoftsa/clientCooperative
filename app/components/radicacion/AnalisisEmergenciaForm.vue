@@ -303,17 +303,13 @@ watch(
     ...(state.value.capacidadBloque1.b.cuotasFin ?? []).map(l => l.cuota),
     ...(state.value.capacidadBloque2.a.cuotasFin ?? []).map(l => l.cuota),
     ...(state.value.capacidadBloque2.b.cuotasFin ?? []).map(l => l.cuota),
-    state.value.capacidadBloque1.a.ingDisponibles,
-    state.value.capacidadBloque1.b.ingDisponibles,
-    state.value.capacidadBloque2.a.ingDisponibles,
-    state.value.capacidadBloque2.b.ingDisponibles,
     props.pctReservaDeudor,
     props.pctReservaCodeudor,
   ],
   () => {
     syncAllTotalesIngresosCapacidad()
   },
-  { flush: 'post', immediate: true },
+  { flush: 'sync', immediate: true },
 )
 
 watch(
@@ -862,6 +858,7 @@ defineExpose({
                     <Label :for="`c1-${sideIdx}-ti`" class="text-xs">Total ingresos</Label>
                     <Input
                       :id="`c1-${sideIdx}-ti`"
+                      :key="`c1-ti-${side.key}-${state.capacidadBloque1[side.key].totalIngresos}`"
                       :model-value="displayPesosStored(state.capacidadBloque1[side.key].totalIngresos)"
                       type="text"
                       inputmode="decimal"
@@ -953,6 +950,7 @@ defineExpose({
             <div :class="campoMontoClave">
               <Label class="text-xs" :class="labelMontoClave">Ingresos disponibles</Label>
               <Input
+                :key="`c1-disp-${side.key}-${state.capacidadBloque1[side.key].ingDisponibles}`"
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque1[side.key].ingDisponibles)"
                 type="text"
                 inputmode="decimal"
@@ -966,6 +964,7 @@ defineExpose({
             <div :class="campoStack">
               <Label class="text-xs">{{ side.reserva }}</Label>
               <Input
+                :key="`c1-res-${side.key}-${state.capacidadBloque1[side.key].reservaSobreIngreso}`"
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque1[side.key].reservaSobreIngreso)"
                 type="text"
                 inputmode="decimal"
@@ -993,6 +992,7 @@ defineExpose({
               <div :class="campoMontoClave">
                 <Label class="text-xs" :class="labelMontoClave">Saldo</Label>
                 <Input
+                  :key="`c1-saldo-${side.key}-${state.capacidadBloque1[side.key].saldo}`"
                   :model-value="displayPesosIngresosDisponibles(state.capacidadBloque1[side.key].saldo)"
                   type="text"
                   inputmode="decimal"
@@ -1079,6 +1079,7 @@ defineExpose({
                     <Label :for="`c2-${sideIdx}-ti`" class="text-xs">Total ingresos</Label>
                     <Input
                       :id="`c2-${sideIdx}-ti`"
+                      :key="`c2-ti-${side.key}-${state.capacidadBloque2[side.key].totalIngresos}`"
                       :model-value="displayPesosStored(state.capacidadBloque2[side.key].totalIngresos)"
                       type="text"
                       inputmode="decimal"
@@ -1170,6 +1171,7 @@ defineExpose({
             <div :class="campoMontoClave">
               <Label class="text-xs" :class="labelMontoClave">Ingresos disponibles</Label>
               <Input
+                :key="`c2-disp-${side.key}-${state.capacidadBloque2[side.key].ingDisponibles}`"
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque2[side.key].ingDisponibles)"
                 type="text"
                 inputmode="decimal"
@@ -1183,6 +1185,7 @@ defineExpose({
             <div :class="campoStack">
               <Label class="text-xs">{{ etiquetaReservaCodeudor }}</Label>
               <Input
+                :key="`c2-res-${side.key}-${state.capacidadBloque2[side.key].reservaSobreIngreso}`"
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque2[side.key].reservaSobreIngreso)"
                 type="text"
                 inputmode="decimal"
@@ -1210,6 +1213,7 @@ defineExpose({
               <div :class="campoMontoClave">
                 <Label class="text-xs" :class="labelMontoClave">Saldo</Label>
                 <Input
+                  :key="`c2-saldo-${side.key}-${state.capacidadBloque2[side.key].saldo}`"
                   :model-value="displayPesosIngresosDisponibles(state.capacidadBloque2[side.key].saldo)"
                   type="text"
                   inputmode="decimal"

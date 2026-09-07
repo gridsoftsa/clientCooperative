@@ -393,19 +393,34 @@ function reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data: Record<string
     emergenciaState.value.deudorCodeudor.fechaAnalisis = scoreCabecera.value.fecha
   }
   aplicarCabeceraALineaEmergenciaDeudor()
+  sincronizarGarantiaConPlantilla()
+  recalcularCapacidadPagoEnHojaAnalisis()
+}
+
+const sincronizandoPaso3Radicacion = ref(false)
+let syncRadicacionSerial = 0
+
+function recalcularCapacidadPagoEnHojaAnalisis(): void {
   sincronizarTasaEfectivaDesdeNominal()
   sincronizarVrCuotaVarFormula()
-  sincronizarGarantiaConPlantilla()
   recalcularCapacidadPagoDerivados(emergenciaState.value, {
     pctReservaDeudor: pctIngDeudor.value,
     pctReservaCodeudor: pctIngCodeudor.value,
   })
 }
 
-const sincronizandoPaso3Radicacion = ref(false)
+function snapshotEmergenciaParaApi(): Record<string, unknown> {
+  recalcularCapacidadPagoEnHojaAnalisis()
+  return emergenciaStateToSnapshotObject(emergenciaState.value)
+}
 
-/** Relee la solicitud y aplica monto, ingresos, egresos y activos. `true` si la petición tuvo éxito. */
-async function refrescarVistaFinancieraDesdeSolicitudApi(): Promise<boolean> {
+/**
+ * Relee la solicitud y alinea monto, ingresos y gastos (paso 3 de radicación).
+ * No vuelve a fusionar el snapshot de análisis: eso pisaba totales recalculados y ediciones no guardadas.
+ */
+async function refrescarVistaFinancieraDesdeSolicitudApi(opts?: {
+  incluirActivos?: boolean
+}): Promise<boolean> {
   const id = solicitudId.value
   if (id == null) {
     return false
@@ -414,35 +429,49 @@ async function refrescarVistaFinancieraDesdeSolicitudApi(): Promise<boolean> {
     return false
   }
   sincronizandoPaso3Radicacion.value = true
+  const serial = ++syncRadicacionSerial
   try {
     const res = await $api<{ data?: Record<string, unknown> } & Record<string, unknown>>(`/credit-applications/${id}`)
+    if (serial !== syncRadicacionSerial) {
+      return false
+    }
     const data = (res?.data ?? res) as Record<string, unknown>
     solicitudStatus.value = typeof data.status === 'string' ? data.status : null
     analystReviewApprovedAt.value = data.analyst_review_approved_at != null && data.analyst_review_approved_at !== ''
       ? String(data.analyst_review_approved_at)
       : null
-    aplicarVistaFinancieraDesdeSolicitud(data)
-    reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data)
-    const co = pickCoDebtorRowsFromSolicitudData(data)
-    aplicarActivosEmergenciaDesdeSolicitud(emergenciaState.value, {
-      debtor: data.debtor,
-      coDebtors: co,
-    })
-    actualizarResumenFinancieroDeudorDesdeSolicitud(data)
+    aplicarMontoYPlazoCreditoDesdeSolicitud(data)
+    aplicarIngresosCapacidadDesdeRadicacion(data)
+    aplicarEgresosCapacidadDesdeRadicacion(data)
+    if (opts?.incluirActivos === true) {
+      const co = pickCoDebtorRowsFromSolicitudData(data)
+      codeudoresDeSolicitud.value = buildCodeudoresDesdeCoDebtors(co)
+      aplicarActivosEmergenciaDesdeSolicitud(emergenciaState.value, {
+        debtor: data.debtor,
+        coDebtors: co,
+      })
+      actualizarResumenFinancieroDeudorDesdeSolicitud(data)
+    }
+    recalcularCapacidadPagoEnHojaAnalisis()
     return true
   }
   catch (e) {
+    if (serial !== syncRadicacionSerial) {
+      return false
+    }
     console.error('Error actualizando datos de radicación (activos, ingresos, gastos):', e)
     toast.error('No se pudo leer la solicitud actualizada. Vuelve a intentar o recarga la página.')
     return false
   }
   finally {
-    sincronizandoPaso3Radicacion.value = false
+    if (serial === syncRadicacionSerial) {
+      sincronizandoPaso3Radicacion.value = false
+    }
   }
 }
 
 async function sincronizarPaso3RadicacionDesdeFormulario(): Promise<void> {
-  if (await refrescarVistaFinancieraDesdeSolicitudApi()) {
+  if (await refrescarVistaFinancieraDesdeSolicitudApi({ incluirActivos: true })) {
     toast.success('Ingresos, gastos y activos alineados con el paso 3 de la radicación.')
   }
 }
@@ -588,6 +617,9 @@ watch(
       void fetchIngParametrizacion()
       void refrescarVistaFinancieraDesdeSolicitudApi()
     }
+    if (s === 3 || s === 4) {
+      recalcularCapacidadPagoEnHojaAnalisis()
+    }
     if (s === 4) {
       void fetchUser()
     }
@@ -680,6 +712,8 @@ async function loadSolicitudParaAnalisis(
   const pasoAlExito = options?.pasoAlExitoCarga
   solicitudCargaSerial.value += 1
   const cargaId = solicitudCargaSerial.value
+  syncRadicacionSerial += 1
+  sincronizandoPaso3Radicacion.value = false
   if (!soft) {
     resetVistaAnalisisScoreParaSolicitud()
   }
@@ -1073,6 +1107,10 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
   }
   guardandoEmergenciaBorrador.value = true
   try {
+    if (import.meta.client && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    await nextTick()
     const { $api, $csrf } = useNuxtApp()
     await $csrf()
     const rows = filasImprimirActuales().map(r => ({ ...r }))
@@ -1092,7 +1130,7 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
         nivel_ifs: classifyPuntajeTotalIFS(total),
         nivel_riesgo: classifyNivelRiesgo(total),
         observaciones: observacionesScore.value.trim() === '' ? null : observacionesScore.value,
-        emergencia: emergenciaStateToSnapshotObject(emergenciaState.value),
+        emergencia: snapshotEmergenciaParaApi(),
         resumen_financiero_deudor_analisis: buildResumenFinancieroDeudorAnalisisPersistido(
           resumenDeudorFinancialInfo.value,
           emergenciaState.value,
@@ -1167,10 +1205,20 @@ const mostrarBotonGuardarCierre = computed(
 )
 
 async function ejecutarGuardarScore(): Promise<void> {
+  if (import.meta.client && document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
+  await nextTick()
+  recalcularCapacidadPagoEnHojaAnalisis()
   await scorePanelRef.value?.guardarAnalisisScore()
 }
 
 async function ejecutarGuardarCierreAnalista(): Promise<void> {
+  if (import.meta.client && document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
+  await nextTick()
+  recalcularCapacidadPagoEnHojaAnalisis()
   const r = await scorePanelRef.value?.guardarAnalisisScore({ conceptoAnalista: conceptoAnalista.value })
   if (r?.sentToCreditDirectorReview) {
     envioDirectorCreditoPendiente.value = false
