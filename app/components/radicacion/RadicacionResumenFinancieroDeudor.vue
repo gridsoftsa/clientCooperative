@@ -78,12 +78,15 @@ function solvenciaColorClass(pct: number | null): string {
 const montoActivos = computed(() => {
   const f = fi.value
   if (!f) return 0
-  const sol = (f as { solvency?: { assets?: number } }).solvency
   const assets = f?.assets ?? []
   const fromList = Array.isArray(assets)
     ? assets.reduce((s: number, a: { value?: number }) => s + (a?.value ?? 0), 0)
     : 0
-  return sol?.assets ?? fromList
+  if (fromList > 0) {
+    return fromList
+  }
+  const sol = (f as { solvency?: { assets?: number } }).solvency
+  return sol?.assets ?? 0
 })
 </script>
 

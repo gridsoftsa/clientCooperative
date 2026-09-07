@@ -5,6 +5,7 @@ import AnalisisScoreImprimirPanel from '~/components/radicacion/AnalisisScoreImp
 import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import {
   defaultEmergenciaState,
+  emergenciaSnapshotTieneFilasActivos,
   emergenciaStateToSnapshotObject,
   mergeEmergenciaSnapshotOverBase,
 } from '~/constants/analisis-score-emergencia'
@@ -341,7 +342,10 @@ function aplicarEgresosCapacidadDesdeRadicacion(data: Record<string, unknown>): 
  * Sincroniza monto, ingresos, egresos, activos (filas) y codeudores con el JSON *actual* de la solicitud.
  * No reemplaza el snapshot de emergencia completo: solo lo alimentado por la radicación (paso 3).
  */
-function aplicarVistaFinancieraDesdeSolicitud(data: Record<string, unknown>): void {
+function aplicarVistaFinancieraDesdeSolicitud(
+  data: Record<string, unknown>,
+  opts?: { incluirActivos?: boolean },
+): void {
   const co = pickCoDebtorRowsFromSolicitudData(data)
   codeudoresDeSolicitud.value = buildCodeudoresDesdeCoDebtors(co)
   if (codeudoresDeSolicitud.value.length > 0) {
@@ -353,10 +357,12 @@ function aplicarVistaFinancieraDesdeSolicitud(data: Record<string, unknown>): vo
   aplicarMontoYPlazoCreditoDesdeSolicitud(data)
   aplicarIngresosCapacidadDesdeRadicacion(data)
   aplicarEgresosCapacidadDesdeRadicacion(data)
-  aplicarActivosEmergenciaDesdeSolicitud(emergenciaState.value, {
-    debtor: data.debtor,
-    coDebtors: co,
-  })
+  if (opts?.incluirActivos !== false) {
+    aplicarActivosEmergenciaDesdeSolicitud(emergenciaState.value, {
+      debtor: data.debtor,
+      coDebtors: co,
+    })
+  }
   actualizarResumenFinancieroDeudorDesdeSolicitud(data)
   sincronizarTasaEfectivaDesdeNominal()
   sincronizarVrCuotaVarFormula()
@@ -364,12 +370,9 @@ function aplicarVistaFinancieraDesdeSolicitud(data: Record<string, unknown>): vo
 }
 
 /**
- * Tras aplicar montos/ingresos/egresos/activos desde la radicación, fusiona el EMERGENCIA persistido
- * en `analisis_score_snapshot` (mismo orden que la carga inicial). Sin esto, al volver del paso Score
- * al Análisis solo quedaba la radicación y se perdían los valores guardados del analista.
- *
- * Después del merge se vuelven a aplicar ingresos, gastos y monto/plazo de la solicitud viva:
- * si el crédito se devolvió para corregir el paso 3, el analista no debe ver cifras del análisis anterior.
+ * Tras aplicar montos/ingresos/egresos desde la radicación, fusiona el EMERGENCIA persistido.
+ * Los activos del snapshot no se vuelven a pisar con el paso 3 (a diferencia de ingresos/gastos):
+ * el analista los edita aquí, igual que los pasivos de la central de riesgos.
  */
 function reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data: Record<string, unknown>): void {
   const snap = data.analisis_score_snapshot as Record<string, unknown> | null | undefined
@@ -794,7 +797,11 @@ async function loadSolicitudParaAnalisis(
       && snap.variable_rows.length > 0,
     )
 
-    aplicarVistaFinancieraDesdeSolicitud(data)
+    aplicarVistaFinancieraDesdeSolicitud(data, {
+      incluirActivos: !emergenciaSnapshotTieneFilasActivos(
+        snap && typeof snap === 'object' ? (snap as { emergencia?: unknown }).emergencia : undefined,
+      ),
+    })
     reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data)
 
     if (pasoAlExito != null) {

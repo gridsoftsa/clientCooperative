@@ -1240,7 +1240,8 @@ defineExpose({
           <p class="text-xs text-muted-foreground">
             Se muestran el deudor y los codeudores según la radicación. Bienes raíces: activos con Garantía en el paso 3;
             otros bienes: activos sin Garantía. El total global suma las dos tablas de cada persona.
-            Si añadiste o quitaste activos en el paso 3, pulsa <span class="font-medium text-foreground">Actualizar desde radicación</span> o vuelve a abrir este paso para alinear con la base.
+            Los valores que edites aquí se guardan en el análisis (no cambian la radicación).
+            Si el asesor corrigió activos en el paso 3, pulsa <span class="font-medium text-foreground">Actualizar desde radicación</span>.
           </p>
         </div>
         <Button
