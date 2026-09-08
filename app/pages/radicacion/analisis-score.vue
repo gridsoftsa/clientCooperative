@@ -234,15 +234,24 @@ function aplicarCabeceraALineaEmergenciaDeudor(): void {
   emergenciaState.value.deudorCodeudor.fechaAnalisis = c.fecha
 }
 
-function formatFechaRadicacion(createdAt: unknown): string {
-  if (createdAt == null || createdAt === '') {
+function formatFechaAnalisisVista(iso: unknown): string {
+  if (iso == null || iso === '') {
     return new Date().toLocaleDateString('es-CO')
   }
-  const d = new Date(String(createdAt))
+  const d = new Date(String(iso))
   if (Number.isNaN(d.getTime())) {
     return new Date().toLocaleDateString('es-CO')
   }
   return d.toLocaleDateString('es-CO')
+}
+
+/** Fecha de análisis (aprobación del analista o hoy). No usar created_at de la radicación. */
+function fechaAnalisisDesdeSolicitud(data: Record<string, unknown>): string {
+  const approved = data.analyst_review_approved_at
+  if (approved != null && String(approved).trim() !== '') {
+    return formatFechaAnalisisVista(approved)
+  }
+  return new Date().toLocaleDateString('es-CO')
 }
 
 function pickStr(row: Record<string, unknown>, ...keys: string[]): string {
@@ -737,7 +746,7 @@ async function loadSolicitudParaAnalisis(
     if (snap && typeof snap === 'object' && snap.cabecera && typeof snap.cabecera === 'object') {
       const c = snap.cabecera as Record<string, unknown>
       scoreCabecera.value = {
-        fecha: String(c.fecha ?? ''),
+        fecha: fechaAnalisisDesdeSolicitud(data),
         cedula: String(c.cedula ?? ''),
         nombre: String(c.nombre ?? ''),
       }
@@ -751,12 +760,12 @@ async function loadSolicitudParaAnalisis(
         const docNum = debtor.document_number != null ? String(debtor.document_number).trim() : ''
         const cedula = [docType, docNum].filter(Boolean).join(' ').trim()
         scoreCabecera.value = {
-          fecha: formatFechaRadicacion(data.created_at),
+          fecha: fechaAnalisisDesdeSolicitud(data),
           cedula,
           nombre: debtorDisplayName(debtor),
         }
       } else {
-        scoreCabecera.value = { fecha: formatFechaRadicacion(data.created_at), cedula: '', nombre: '' }
+        scoreCabecera.value = { fecha: fechaAnalisisDesdeSolicitud(data), cedula: '', nombre: '' }
       }
     }
 
