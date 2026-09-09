@@ -34,7 +34,7 @@ interface ExcludedResponse {
     }
     summary: {
       modification_count: number
-      real_estate_review_count: number
+      real_estate_review_count?: number
       excluded_total: number
     }
     rows: ExcludedRow[]
@@ -162,7 +162,7 @@ onUnmounted(() => {
         Excluidos del indicador de demora
       </h2>
       <p class="text-sm text-muted-foreground">
-        Este reporte separa casos que no deben afectar el indicador de tiempos del proceso estándar.
+        Solo entran las devoluciones por modificación del director de crédito. Requerir asegurabilidad ya no excluye: aplica a todos los créditos.
       </p>
     </div>
 
@@ -204,17 +204,11 @@ onUnmounted(() => {
         </div>
 
         <template v-else-if="reportData">
-          <div class="grid gap-3 sm:grid-cols-3">
+          <div class="grid gap-3 sm:grid-cols-2">
             <Card>
               <CardHeader class="space-y-1 px-4 py-4">
                 <CardDescription>Excluidas por modificación</CardDescription>
                 <CardTitle class="text-2xl">{{ reportData.summary.modification_count }}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader class="space-y-1 px-4 py-4">
-                <CardDescription>Excluidas por inmobiliaria/asegurabilidad</CardDescription>
-                <CardTitle class="text-2xl">{{ reportData.summary.real_estate_review_count }}</CardTitle>
               </CardHeader>
             </Card>
             <Card>

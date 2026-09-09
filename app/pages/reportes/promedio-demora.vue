@@ -274,7 +274,7 @@ onUnmounted(() => {
         Promedio de demora
       </h2>
       <p class="text-sm text-muted-foreground">
-        Días promedio entre etapas del flujo de radicación (marcas de trazabilidad), por sucursal. Solo se incluyen radicaciones creadas en el rango; «N» es la cantidad de tramos completados observados en esa sucursal.
+        Días promedio entre etapas del flujo de radicación (marcas de trazabilidad), por sucursal. Solo se incluyen radicaciones creadas en el rango; «N» es la cantidad de tramos completados observados en esa sucursal. Requerir asegurabilidad no excluye del indicador; sí se excluyen las devoluciones por modificación del director de crédito.
       </p>
     </div>
 
