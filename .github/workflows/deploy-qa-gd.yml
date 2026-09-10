@@ -1,0 +1,48 @@
+name: Deploy QA (GD)
+
+permissions: {}
+
+# Despliega en gd-ing-lida solo cuando hay push a la rama GD.
+# Secretos requeridos en el repo (Settings → Secrets → Actions):
+#   QA_SSH_HOST       → 2.24.77.147
+#   QA_SSH_USER       → ubuntu
+#   QA_SSH_KEY        → clave privada SSH (contenido de id_rsa o deploy key)
+
+on:
+  push:
+    branches:
+      - GD
+  workflow_dispatch:
+
+concurrency:
+  # Mismo grupo que api: evita dos deploys QA a la vez en el mismo servidor
+  group: deploy-qa-gd-server
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Deploy clientCooperative-qa on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.QA_SSH_HOST }}
+          username: ${{ secrets.QA_SSH_USER }}
+          key: ${{ secrets.QA_SSH_KEY }}
+          timeout: 2m
+          command_timeout: 40m
+          script_stop: true
+          script: |
+            set -euo pipefail
+            WWW_ROOT="${WWW_ROOT:-/home/ubuntu/www}"
+            CLIENT_DIR="$WWW_ROOT/clientCooperative-qa"
+            BRANCH=GD
+
+            cd "$CLIENT_DIR"
+            git remote -v
+            git fetch origin "$BRANCH"
+            git checkout "$BRANCH"
+            git pull --ff-only origin "$BRANCH"
+            chmod +x ./deploy-qa.sh ./scripts/compose-qa.sh 2>/dev/null || true
+            ./deploy-qa.sh
