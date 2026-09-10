@@ -4201,7 +4201,7 @@ onMounted(() => {
 
           <!-- Paso 3: Datos financieros -->
           <div v-else-if="currentStep === 3" class="space-y-4">
-            <div :class="documentationUploadMode ? '' : 'pointer-events-none'">
+            <div :class="documentationUploadMode ? '' : 'pointer-events-none overflow-visible'">
               <ApplicantFormFields
                 v-model="form.debtor"
                 :show-only-financial="true"
@@ -4433,7 +4433,7 @@ onMounted(() => {
               </div>
 
               <div v-else class="space-y-4">
-                <div :class="documentationUploadMode ? '' : 'pointer-events-none'">
+                <div :class="documentationUploadMode ? '' : 'pointer-events-none overflow-visible'">
                   <ApplicantFormFields
                     v-model="form.co_debtors[selectedCoDebtorIndex]!"
                     :show-only-financial="true"

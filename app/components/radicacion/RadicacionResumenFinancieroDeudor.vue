@@ -75,6 +75,16 @@ function solvenciaColorClass(pct: number | null): string {
   return 'bg-destructive/20 text-destructive border-destructive/40'
 }
 
+const incomeDescription = computed(() => {
+  const raw = fi.value?.income?.description
+  return typeof raw === 'string' && raw.trim() !== '' ? raw : ''
+})
+
+const expensesDescription = computed(() => {
+  const raw = fi.value?.expenses?.description
+  return typeof raw === 'string' && raw.trim() !== '' ? raw : ''
+})
+
 const montoActivos = computed(() => {
   const f = fi.value
   if (!f) return 0
@@ -155,6 +165,24 @@ const montoActivos = computed(() => {
         </p>
         <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
           {{ formatPesosConSimbolo(fi?.solvency?.real_estate) }}
+        </p>
+      </div>
+    </div>
+    <div class="mt-4 grid gap-3 sm:grid-cols-2">
+      <div class="space-y-1">
+        <p class="text-sm font-bold uppercase">
+          Descripción ingresos
+        </p>
+        <p class="min-h-[60px] whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2 text-sm">
+          {{ incomeDescription || '—' }}
+        </p>
+      </div>
+      <div class="space-y-1">
+        <p class="text-sm font-bold uppercase">
+          Descripción gastos
+        </p>
+        <p class="min-h-[60px] whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2 text-sm">
+          {{ expensesDescription || '—' }}
         </p>
       </div>
     </div>
