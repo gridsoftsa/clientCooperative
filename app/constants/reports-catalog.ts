@@ -102,11 +102,11 @@ export const REPORTS_CATALOG: ReportCatalogItem[] = [
     slug: 'indicador',
     title: 'Indicador',
     summary:
-      'Total de solicitudes radicadas en el rango (fecha de creación) y, al elegir un estado del flujo, cuántas llegaron a ese estado (actual o por trazabilidad) con el porcentaje sobre el total.',
+      'Total de solicitudes radicadas en el rango (fecha de creación) y, al elegir un estado del flujo, cuántas ingresaron a ese estado en las mismas fechas (aunque hoy estén en otro o se hayan creado antes).',
     excelSheet: 'INDICADOR',
     status: 'available',
     dataSource: 'applications',
-    note: 'Denominador = radicaciones creadas en el período; numerador = estado actual o evento con llegada a ese estado.',
+    note: 'Denominador = radicaciones creadas en el período. Numerador = ingreso a ese estado en el período (trazabilidad), independiente del estado actual.',
   },
   {
     slug: 'excepciones',

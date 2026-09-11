@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Button } from '~/components/ui/button'
+
 /**
  * Resumen solo lectura: solvencia, endeudamiento, activos, pasivos, bien raíz.
  * Misma lógica que el detalle de radicación (`/radicacion/[id]`) a partir de `financial_info` y monto solicitado.
@@ -85,6 +87,16 @@ const expensesDescription = computed(() => {
   return typeof raw === 'string' && raw.trim() !== '' ? raw : ''
 })
 
+const incomeExpanded = ref(false)
+const expensesExpanded = ref(false)
+
+watch(incomeDescription, () => {
+  incomeExpanded.value = false
+})
+watch(expensesDescription, () => {
+  expensesExpanded.value = false
+})
+
 const montoActivos = computed(() => {
   const f = fi.value
   if (!f) return 0
@@ -168,21 +180,55 @@ const montoActivos = computed(() => {
         </p>
       </div>
     </div>
-    <div class="mt-4 grid gap-3 sm:grid-cols-2">
-      <div class="space-y-1">
-        <p class="text-sm font-bold uppercase">
-          Descripción ingresos
-        </p>
-        <p class="min-h-[60px] whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2 text-sm">
-          {{ incomeDescription || '—' }}
+    <div
+      v-if="incomeDescription || expensesDescription"
+      class="mt-4 grid gap-3"
+      :class="incomeDescription && expensesDescription ? 'sm:grid-cols-2' : ''"
+    >
+      <div v-if="incomeDescription" class="space-y-1">
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-sm font-bold uppercase">
+            Descripción ingresos
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="h-8 shrink-0"
+            :aria-expanded="incomeExpanded"
+            @click="incomeExpanded = !incomeExpanded"
+          >
+            {{ incomeExpanded ? 'Ocultar' : 'Ver más' }}
+          </Button>
+        </div>
+        <p
+          v-if="incomeExpanded"
+          class="whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2 text-sm"
+        >
+          {{ incomeDescription }}
         </p>
       </div>
-      <div class="space-y-1">
-        <p class="text-sm font-bold uppercase">
-          Descripción gastos
-        </p>
-        <p class="min-h-[60px] whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2 text-sm">
-          {{ expensesDescription || '—' }}
+      <div v-if="expensesDescription" class="space-y-1">
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-sm font-bold uppercase">
+            Descripción gastos
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="h-8 shrink-0"
+            :aria-expanded="expensesExpanded"
+            @click="expensesExpanded = !expensesExpanded"
+          >
+            {{ expensesExpanded ? 'Ocultar' : 'Ver más' }}
+          </Button>
+        </div>
+        <p
+          v-if="expensesExpanded"
+          class="whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2 text-sm"
+        >
+          {{ expensesDescription }}
         </p>
       </div>
     </div>
