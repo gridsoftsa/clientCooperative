@@ -244,7 +244,7 @@ async function loadCatalog(): Promise<void> {
 async function fetchSucursales(): Promise<void> {
   loadingSucursales.value = true
   try {
-    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales')
+    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales?scope=reports')
     sucursales.value = res.data ?? []
   } catch (error: any) {
     console.error('Error cargando sucursales:', error)
