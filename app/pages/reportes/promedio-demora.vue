@@ -325,7 +325,7 @@ onUnmounted(() => {
             <div class="min-w-0 flex-1 lg:max-w-xl">
               <DateRangeStringPicker
                 id="reportes-demora-dates"
-                label="Rango (fecha de creación de la radicación)"
+                label="Rango (creación o actividad en el flujo)"
                 v-model:from="filterDateFrom"
                 v-model:to="filterDateTo"
               />
@@ -366,7 +366,7 @@ onUnmounted(() => {
           </div>
           <p class="mt-3 text-xs text-muted-foreground">
             <span class="font-medium text-foreground">Vista previa:</span>
-            se actualiza al cambiar fechas o sucursal. Los días usan fracción según horas entre eventos.
+            se actualiza al cambiar fechas o sucursal. Los días usan fracción según horas entre eventos. El rango incluye radicaciones creadas en esas fechas o con actividad de trazabilidad en el período.
           </p>
         </div>
 

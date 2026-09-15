@@ -311,7 +311,7 @@ onUnmounted(() => {
         Devueltas y negadas
       </h2>
       <p class="text-sm text-muted-foreground">
-        Por mes de creación de la radicación y sucursal: tramitadas, devoluciones del auxiliar y del analista (indicador), reenvíos de esas devoluciones, negadas, % error y desglose por ente que devolvió.
+        Tramitadas por mes de creación; devoluciones, reenvíos y negadas por mes del evento (auxiliar, analista, directores), % error y desglose por ente que devolvió.
       </p>
     </div>
 
@@ -362,7 +362,7 @@ onUnmounted(() => {
             <div class="min-w-0 flex-1 lg:max-w-xl">
               <DateRangeStringPicker
                 id="reportes-dev-neg-dates"
-                label="Rango (fecha de generación de la radicación)"
+                label="Rango de fechas"
                 v-model:from="filterDateFrom"
                 v-model:to="filterDateTo"
               />
@@ -406,7 +406,7 @@ onUnmounted(() => {
             % error = (devueltas del auxiliar y del analista + correcciones de esas devoluciones) / tramitadas. Las devoluciones de director de agencia o de crédito se ven en el desglose y no entran al indicador.
           </p>
           <p class="mt-2 text-xs text-muted-foreground">
-            Sin fechas, el servidor usa el año calendario actual. Las métricas provienen de la trazabilidad de eventos de cada radicación.
+            Sin fechas, el servidor usa el año calendario actual. Tramitadas: fecha de creación. Devueltas, correcciones y negadas: fecha del evento de trazabilidad.
           </p>
         </div>
 

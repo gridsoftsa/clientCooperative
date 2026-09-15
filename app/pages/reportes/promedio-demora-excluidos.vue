@@ -172,7 +172,7 @@ onUnmounted(() => {
           <div class="min-w-0 flex-1 lg:max-w-xl">
             <DateRangeStringPicker
               id="reportes-excluidos-demora-dates"
-              label="Rango (fecha de generación de la radicación)"
+              label="Rango (fecha de la devolución por modificación)"
               v-model:from="filterDateFrom"
               v-model:to="filterDateTo"
             />

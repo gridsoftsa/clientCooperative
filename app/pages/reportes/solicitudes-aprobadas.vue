@@ -283,7 +283,7 @@ onUnmounted(() => {
         Solicitudes aprobadas (Desembolso)
       </h2>
       <p class="text-sm text-muted-foreground">
-        Solo radicaciones en estado «Desembolso»: cantidad y suma de montos solicitados por mes y sucursal de la radicación. El rango aplica a la fecha en que se creó la radicación.
+        Radicaciones que ingresaron a «Desembolso» en el rango: cantidad y suma de montos solicitados por mes y sucursal de la radicación. El rango es la fecha de ese ingreso, no la de creación.
       </p>
     </div>
 
@@ -334,7 +334,7 @@ onUnmounted(() => {
             <div class="min-w-0 flex-1 lg:max-w-xl">
               <DateRangeStringPicker
                 id="reportes-solicitudes-aprobadas-dates"
-                label="Rango (fecha de generación de la radicación)"
+                label="Rango (fecha de ingreso a Desembolso)"
                 v-model:from="filterDateFrom"
                 v-model:to="filterDateTo"
               />
@@ -378,7 +378,7 @@ onUnmounted(() => {
             se actualiza sola al cambiar fechas o sucursal (tras un breve momento al escribir fechas).
           </p>
           <p class="mt-2 text-xs text-muted-foreground">
-            Sin fechas, el servidor usa el año calendario actual. Criterio de fecha: creación de la radicación (<code class="rounded bg-muted px-1 py-0.5 text-[11px]">created_at</code>); la tabla solo incluye estado Desembolso.
+            Sin fechas, el servidor usa el año calendario actual. El rango es el día en que la solicitud ingresó a Desembolso (trazabilidad), aunque hoy esté en otro estado o se haya creado antes.
           </p>
         </div>
 
@@ -393,7 +393,7 @@ onUnmounted(() => {
           <div class="grid gap-3 sm:grid-cols-2">
             <Card>
               <CardHeader class="space-y-1 px-4 py-4">
-                <CardDescription>Total radicaciones en Desembolso</CardDescription>
+                <CardDescription>Ingresaron a Desembolso</CardDescription>
                 <CardTitle class="text-3xl">{{ reportData.totals.count }}</CardTitle>
               </CardHeader>
             </Card>

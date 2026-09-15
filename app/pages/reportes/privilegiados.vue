@@ -296,7 +296,7 @@ onUnmounted(() => {
         <div class="space-y-1">
           <CardTitle>Filtros y vista</CardTitle>
           <CardDescription>
-            Período por <code class="rounded bg-muted px-1 py-0.5 text-[11px]">created_at</code> de la radicación.
+            Período por fecha en que se marcó como privilegiada (decisión del director o, si no hay, fecha de creación).
           </CardDescription>
         </div>
         <div class="flex shrink-0 flex-wrap gap-2">
@@ -340,7 +340,7 @@ onUnmounted(() => {
             >
               <DateRangeStringPicker
                 id="reportes-privilegiados-dates"
-                label="Período (fecha de creación de la radicación)"
+                label="Período (fecha en que se marcó privilegiada)"
                 v-model:from="filterDateFrom"
                 v-model:to="filterDateTo"
               />

@@ -294,7 +294,7 @@ onUnmounted(() => {
         Análisis y envío a director de crédito
       </h2>
       <p class="text-sm text-muted-foreground">
-        Por mes de creación de la radicación: total de radicaciones en el rango y, dentro de ese mismo criterio, las que pasaron de «Análisis» a «Revisión director de crédito» (cuando el analista envía el SCORE al director).
+        Por mes: el total cuenta radicaciones creadas en el rango; «enviadas a director» cuenta las que pasaron de «Análisis» a «Revisión director de crédito» en esas mismas fechas (cuando el analista envía el SCORE), aunque se hayan radicado antes.
       </p>
     </div>
 
@@ -345,7 +345,7 @@ onUnmounted(() => {
             <div class="min-w-0 flex-1 lg:max-w-xl">
               <DateRangeStringPicker
                 id="reportes-analisis-dates"
-                label="Rango (fecha de generación de la radicación)"
+                label="Rango de fechas"
                 v-model:from="filterDateFrom"
                 v-model:to="filterDateTo"
               />
@@ -389,7 +389,7 @@ onUnmounted(() => {
             se actualiza sola al cambiar fechas o sucursal (tras un breve momento al escribir fechas).
           </p>
           <p class="mt-2 text-xs text-muted-foreground">
-            Sin fechas, el servidor usa el año calendario actual. Criterio de fecha: creación de la radicación (<code class="rounded bg-muted px-1 py-0.5 text-[11px]">created_at</code>). El total incluye todas las radicaciones del rango; «enviadas a director» son las que registraron ese paso de estado tras el análisis.
+            Sin fechas, el servidor usa el año calendario actual. El total usa la fecha de creación. «Enviadas a director» usa el día en que la solicitud pasó de Análisis a Director de crédito, no el día en que se radicó.
           </p>
         </div>
 
