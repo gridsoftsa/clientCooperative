@@ -33,7 +33,7 @@ function onToggle(value: boolean) {
 </script>
 
 <template>
-  <div class="space-y-2 md:col-span-2">
+  <div class="col-span-full space-y-2">
     <div v-if="showLabel || helperText" class="space-y-1.5">
       <Label v-if="showLabel" :for="inputId" class="leading-snug">Estado</Label>
       <p v-if="helperText" class="text-sm text-muted-foreground leading-relaxed">

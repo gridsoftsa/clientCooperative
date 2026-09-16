@@ -15,7 +15,7 @@ withDefaults(
 </script>
 
 <template>
-  <div class="rounded-lg border border-dashed p-4 space-y-4 md:col-span-2">
+  <div class="col-span-full rounded-lg border border-dashed p-4 space-y-3">
     <p class="text-sm font-medium text-foreground leading-snug">
       Vigencia normativa
     </p>

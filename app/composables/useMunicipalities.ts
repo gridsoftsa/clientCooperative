@@ -75,12 +75,45 @@ export function useMunicipalities() {
     }
     const filtered: Array<{ id: number; label: string }> = []
     for (const o of options.value) {
-      if (filtered.length >= limit) break
+      if (filtered.length >= limit) {
+        break
+      }
       const match =
         normalizeForSearch(o.label).includes(q) || normalizeForSearch(o.departmentName).includes(q)
-      if (match) filtered.push({ id: o.id, label: o.label })
+      if (match) {
+        filtered.push({ id: o.id, label: o.label })
+      }
     }
     return filtered
+  }
+
+  /** Departamentos únicos del catálogo DANE, ordenados por nombre. */
+  function getDepartments(): MunicipalityDepartment[] {
+    const byId = new Map<number, MunicipalityDepartment>()
+    for (const municipality of list.value) {
+      const department = municipality.department
+      if (!department || byId.has(department.id)) {
+        continue
+      }
+      byId.set(department.id, {
+        id: department.id,
+        name: department.name,
+        code: department.code,
+      })
+    }
+
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  }
+
+  function getMunicipalitiesByDepartmentId(departmentId: number | null | undefined): Municipality[] {
+    if (departmentId == null) {
+      return []
+    }
+
+    return list.value
+      .filter(municipality => municipality.department_id === departmentId || municipality.department?.id === departmentId)
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, 'es'))
   }
 
   return {
@@ -92,5 +125,7 @@ export function useMunicipalities() {
     getByLabel,
     getLabel,
     getFilteredOptions,
+    getDepartments,
+    getMunicipalitiesByDepartmentId,
   }
 }

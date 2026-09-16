@@ -94,21 +94,19 @@ onMounted(() => {
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div class="space-y-1">
-          <h2 class="text-2xl font-bold tracking-tight">
-            Editar agencia
-          </h2>
-          <p class="text-muted-foreground leading-relaxed">
-            Actualice datos de identificación y ubicación.
-          </p>
-        </div>
-        <Button variant="outline" class="shrink-0" @click="router.back()">
-          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
-          Volver
+  <SettingsLayout :wide="true" hide-intro>
+    <div class="flex w-full flex-col gap-6">
+      <div class="space-y-1">
+        <Button variant="ghost" size="sm" class="h-8 w-fit -ml-2 px-2" @click="router.push('/settings/organizational-structure/offices')">
+          <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+          Volver a agencias
         </Button>
+        <h2 class="text-2xl font-bold tracking-tight">
+          Editar agencia
+        </h2>
+        <p class="text-muted-foreground text-sm leading-relaxed max-w-3xl">
+          Actualice datos de identificación y ubicación.
+        </p>
       </div>
 
       <div v-if="loading" class="flex justify-center py-12">
@@ -116,69 +114,61 @@ onMounted(() => {
       </div>
 
       <form v-else @submit.prevent="handleSubmit">
-        <div class="grid gap-6">
-          <Card>
-            <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Información de la agencia</CardTitle>
-              <CardDescription class="leading-relaxed">
-                Datos guardados por entidad; el código debe seguir siendo único.
-              </CardDescription>
-            </CardHeader>
-            <CardContent class="space-y-6">
-              <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
-                <div class="space-y-3 md:col-span-2">
-                  <Label for="name" class="leading-snug">Nombre *</Label>
-                  <Input id="name" v-model="form.name" required />
-                </div>
-
-                <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6">
-                  <div class="space-y-3">
-                    <Label for="code" class="leading-snug">Código *</Label>
-                    <Input id="code" v-model="form.code" required />
-                  </div>
-                  <div class="space-y-3">
-                    <Label for="office_type_edit" class="leading-snug">Tipo *</Label>
-                    <Select v-model="form.office_type">
-                      <SelectTrigger id="office_type_edit">
-                        <SelectValue placeholder="Seleccione tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem
-                          v-for="opt in ORG_OFFICE_TYPE_OPTIONS"
-                          :key="opt.value"
-                          :value="opt.value"
-                        >
-                          {{ opt.label }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div class="space-y-3 md:col-span-2">
-                  <Label for="org_office_city_edit" class="leading-snug">Ciudad / municipio</Label>
-                  <OrgOfficeMunicipalityField input-id="org_office_city_edit" v-model="form.city" />
-                  <p class="text-xs text-muted-foreground leading-relaxed">
-                    Abre el listado, escribe para filtrar y elige municipio y departamento (DANE), igual que en radicación.
-                  </p>
-                </div>
-                <div class="space-y-3 md:col-span-2">
-                  <Label for="org_office_address_edit" class="leading-snug">Dirección</Label>
-                  <Input id="org_office_address_edit" v-model="form.address" />
-                </div>
-                <div class="space-y-3 md:col-span-2">
-                  <Label for="org_office_phone_edit" class="leading-snug">Teléfono</Label>
-                  <Input id="org_office_phone_edit" v-model="form.phone" />
-                </div>
-
-                <OrgStructureValidityPeriodFields
-                  v-model:valid-from="form.valid_from"
-                  v-model:valid-to="form.valid_to"
-                  from-input-id="office_edit_valid_from"
-                  to-input-id="office_edit_valid_to"
+        <Card>
+          <CardHeader>
+            <CardTitle>Datos de la agencia</CardTitle>
+            <CardDescription>
+              El código debe seguir siendo único dentro de la cooperativa.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-6">
+            <div class="grid items-start gap-6 lg:grid-cols-2">
+              <div class="flex min-w-0 flex-col gap-2">
+                <Label for="name">Nombre *</Label>
+                <Input id="name" v-model="form.name" required />
+              </div>
+              <div class="flex min-w-0 flex-col gap-2">
+                <Label for="code">Código *</Label>
+                <Input id="code" v-model="form.code" required />
+              </div>
+              <div class="flex min-w-0 flex-col gap-2">
+                <Label for="office_type_edit">Tipo *</Label>
+                <Select v-model="form.office_type">
+                  <SelectTrigger id="office_type_edit">
+                    <SelectValue placeholder="Seleccione tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="opt in ORG_OFFICE_TYPE_OPTIONS"
+                      :key="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.label }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="flex min-w-0 flex-col gap-2">
+                <Label for="org_office_phone_edit">Teléfono</Label>
+                <Input id="org_office_phone_edit" v-model="form.phone" />
+              </div>
+              <div class="lg:col-span-2">
+                <OrgOfficeMunicipalityField
+                  department-input-id="org_office_department_edit"
+                  city-input-id="org_office_city_edit"
+                  v-model="form.city"
                 />
               </div>
-
+              <div class="flex min-w-0 flex-col gap-2 lg:col-span-2">
+                <Label for="org_office_address_edit">Dirección</Label>
+                <Input id="org_office_address_edit" v-model="form.address" />
+              </div>
+              <OrgStructureValidityPeriodFields
+                v-model:valid-from="form.valid_from"
+                v-model:valid-to="form.valid_to"
+                from-input-id="office_edit_valid_from"
+                to-input-id="office_edit_valid_to"
+              />
               <OrgStructureActiveMultiselect
                 :model-value="form.is_active"
                 gender="feminine"
@@ -186,19 +176,18 @@ onMounted(() => {
                 helper-text="Las agencias inactivas no se sugieren como sede en configuraciones nuevas."
                 @update:model-value="onOfficeActiveChange"
               />
-            </CardContent>
-          </Card>
-
-          <div class="flex justify-end gap-4">
-            <Button type="button" variant="outline" @click="router.back()">
-              Cancelar
-            </Button>
-            <Button type="submit" :disabled="saving">
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              {{ saving ? 'Guardando...' : 'Guardar cambios' }}
-            </Button>
-          </div>
-        </div>
+            </div>
+            <div class="flex justify-end gap-2">
+              <Button type="button" variant="outline" @click="router.back()">
+                Cancelar
+              </Button>
+              <Button type="submit" :disabled="saving">
+                <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                {{ saving ? 'Guardando...' : 'Guardar cambios' }}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </form>
     </div>
   </SettingsLayout>
