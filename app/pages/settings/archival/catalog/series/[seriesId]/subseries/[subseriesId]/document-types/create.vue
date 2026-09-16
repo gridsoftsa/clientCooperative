@@ -150,39 +150,42 @@ onMounted(loadSubseries)
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div class="space-y-1">
-          <h2 class="text-2xl font-bold tracking-tight">
-            Nuevo tipo documental
-          </h2>
-          <p v-if="subseries" class="text-muted-foreground">
-            Subserie <span class="font-mono">{{ subseries.code }}</span> — {{ subseries.name }}
-          </p>
-        </div>
+  <SettingsLayout :wide="true" hide-intro>
+    <div class="flex w-full flex-col gap-6">
+      <div class="space-y-1">
         <Button
-          variant="outline"
-          class="shrink-0"
+          variant="ghost"
+          size="sm"
+          class="h-8 w-fit -ml-2 px-2"
           @click="router.push(cancelPath())"
         >
-          Volver
+          <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+          Volver a tipos documentales
         </Button>
+        <h2 class="text-2xl font-bold tracking-tight">
+          Nuevo tipo documental
+        </h2>
+        <p v-if="subseries" class="text-muted-foreground">
+          Subserie <span class="font-mono">{{ subseries.code }}</span> — {{ subseries.name }}
+        </p>
       </div>
 
       <Card>
-        <CardContent class="pt-6 space-y-4 max-w-xl">
-          <div class="space-y-2">
+        <CardHeader>
+          <CardTitle>Datos del tipo documental</CardTitle>
+          <CardDescription>
+            Código, nombre y soportes permitidos de este tipo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-6">
+          <div class="grid items-start gap-6 lg:grid-cols-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label for="code" :class="codeInvalid ? 'text-destructive' : ''">Código *</Label>
-            <p v-if="!subseries" class="text-xs text-muted-foreground">
+            <p v-if="!subseries" class="flex h-10 items-center text-xs text-muted-foreground">
               Cargando subserie…
             </p>
-            <p v-else class="text-xs text-muted-foreground leading-relaxed">
-              Prefijo: código de la subserie (<span class="font-mono">{{ subseriesCodePrefix }}</span>).
-              Digite solo el sufijo (ej. <span class="font-mono">01</span>).
-            </p>
             <CatalogPrefixedCodeInput
-              v-if="subseries"
+              v-else
               id="code"
               ref="codeInputRef"
               v-model="form.code"
@@ -194,31 +197,36 @@ onMounted(loadSubseries)
               :external-error="codeExternalError"
               @update:invalid="codeInvalid = $event"
             />
+            <p v-if="subseries" class="text-xs text-muted-foreground leading-relaxed">
+              Prefijo: código de la subserie (<span class="font-mono">{{ subseriesCodePrefix }}</span>).
+              Digite solo el sufijo (ej. <span class="font-mono">01</span>).
+            </p>
             <p v-if="subseries && previewCode" class="text-xs text-muted-foreground">
               Código completo: <span class="font-mono font-medium text-foreground">{{ previewCode }}</span>
             </p>
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label for="name">Nombre *</Label>
             <Input id="name" v-model="form.name" />
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label for="support">Soporte permitido</Label>
-            <p class="text-xs text-muted-foreground">
-              Puede seleccionar Papel, Digital o ambos.
-            </p>
             <ArchivalDocumentAllowedSupportField
               id="support"
               v-model="allowedSupportSelected"
             />
+            <p class="text-xs text-muted-foreground">
+              Puede seleccionar Papel, Digital o ambos.
+            </p>
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2 lg:col-span-2">
             <Label for="desc">Descripción</Label>
             <Textarea id="desc" v-model="form.description" rows="3" />
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 lg:col-span-2">
             <Switch id="active" v-model="form.is_active" />
             <Label for="active" class="font-normal">{{ form.is_active ? 'Activo' : 'Inactivo' }}</Label>
+          </div>
           </div>
           <div class="flex gap-2 justify-end">
             <Button type="button" variant="outline" @click="router.back()">

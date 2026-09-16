@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import {
-  TRD_INHERITED_FROM_LABELS,
   TRD_RETENTION_APPLICATION_OPTIONS,
   TRD_RETENTION_LEVEL_HELP,
   TRD_SCOPE_LEVEL_OPTIONS,
@@ -14,7 +13,15 @@ import { coerceBoolean } from '~/utils/coerce-boolean'
 import { resolveEffectiveRetentionFromRules } from '~/utils/archival-trd-version'
 import { isTrdVersionTab, trdVersionPathWithTab } from '~/utils/archival-trd-navigation'
 import type { DocDocumentTypeRow } from '~/types/archival-catalog'
-import type { CatalogTreeSeries, EffectiveRetentionPayload, TrdRetentionRuleRow, TrdTestingOptions, TrdVersionRow } from '~/types/archival-trd'
+import type {
+  CatalogTreeSeries,
+  EffectiveRetentionPayload,
+  TrdActiveVersionConsultData,
+  TrdConsultSeriesNode,
+  TrdRetentionRuleRow,
+  TrdTestingOptions,
+  TrdVersionRow,
+} from '~/types/archival-trd'
 
 definePageMeta({
   layout: 'default',
@@ -213,10 +220,6 @@ function dispositionLabel(v: string): string {
   return formatFinalDispositionLabels(v)
 }
 
-function inheritedLabel(v: string): string {
-  return TRD_INHERITED_FROM_LABELS[v] ?? v
-}
-
 interface CatalogDocumentTypeOption {
   id: number
   label: string
@@ -412,19 +415,11 @@ const catalogFilterText = ref('')
 const catalogAssociationFilter = ref<'all' | 'associated' | 'not_associated'>('all')
 const rulesFilterText = ref('')
 const rulesScopeFilter = ref<'all' | 'series' | 'subseries' | 'document_type'>('all')
-const previewFilterText = ref('')
-const previewStatusFilter = ref<'all' | 'with_rule' | 'without_rule'>('all')
 
 const catalogAssociationFilterOptions = [
   { value: 'all', label: 'Todos los tipos' },
   { value: 'associated', label: 'Asociados a la TRD' },
   { value: 'not_associated', label: 'Sin asociar' },
-] as const
-
-const previewStatusFilterOptions = [
-  { value: 'all', label: 'Todos' },
-  { value: 'with_rule', label: 'Con regla efectiva' },
-  { value: 'without_rule', label: 'Sin regla efectiva' },
 ] as const
 
 const rulesScopeFilterOptions = [
@@ -599,29 +594,102 @@ const previewRulesNotApplyingHint = computed(
     && previewSummary.value.withRule === 0,
 )
 
-const filteredPreviewDocumentTypes = computed(() => {
-  const types = previewDocumentTypes.value
-  const q = previewFilterText.value.trim().toLowerCase()
-  const status = previewStatusFilter.value
+const previewSpreadsheetData = computed((): TrdActiveVersionConsultData | null => {
+  if (!version.value || !table.value) {
+    return null
+  }
 
-  return types.filter((tipo) => {
-    const hasRule = effectivePreviewFor(tipo.id) != null
+  const associatedIds = new Set(previewDocumentTypes.value.map(tipo => tipo.id))
+  if (associatedIds.size === 0) {
+    return null
+  }
 
-    if (status === 'with_rule' && !hasRule) {
-      return false
+  const catalog_tree: TrdConsultSeriesNode[] = []
+
+  for (const serie of catalogTree.value) {
+    const subseries = serie.subseries
+      .map((sub) => {
+        const document_types = sub.document_types
+          .filter(tipo => associatedIds.has(tipo.id))
+          .map(tipo => ({
+            id: tipo.id,
+            doc_subseries_id: tipo.doc_subseries_id,
+            code: tipo.code,
+            name: tipo.name,
+            allowed_support: tipo.allowed_support ?? null,
+            is_active: tipo.is_active,
+            effective_retention: effectivePreviewFor(tipo.id),
+          }))
+
+        if (document_types.length === 0) {
+          return null
+        }
+
+        return {
+          id: sub.id,
+          doc_series_id: sub.doc_series_id,
+          code: sub.code,
+          name: sub.name,
+          is_active: sub.is_active,
+          document_types,
+        }
+      })
+      .filter((sub): sub is NonNullable<typeof sub> => sub != null)
+
+    if (subseries.length === 0) {
+      continue
     }
-    if (status === 'without_rule' && hasRule) {
-      return false
-    }
 
-    if (!q) {
-      return true
-    }
+    catalog_tree.push({
+      id: serie.id,
+      code: serie.code,
+      name: serie.name,
+      is_active: serie.is_active,
+      subseries,
+    })
+  }
 
-    return tipo.code.toLowerCase().includes(q)
-      || tipo.name.toLowerCase().includes(q)
-  })
+  if (catalog_tree.length === 0) {
+    return null
+  }
+
+  const summary = previewSummary.value
+
+  return {
+    trd_table: {
+      id: tableId.value,
+      org_unit_id: table.value.org_unit_id,
+      org_unit: table.value.org_unit
+        ? {
+            id: table.value.org_unit_id,
+            name: table.value.org_unit.name,
+            code: table.value.org_unit.code,
+          }
+        : undefined,
+    },
+    version: {
+      ...version.value,
+      producer_office_name: metaForm.value.producer_office_name || version.value.producer_office_name,
+      producer_office_code: metaForm.value.producer_office_code || version.value.producer_office_code,
+      approved_at: metaForm.value.approved_at || version.value.approved_at,
+      effective_from: metaForm.value.effective_from || version.value.effective_from,
+      effective_to: metaForm.value.effective_to || version.value.effective_to,
+    },
+    catalog_tree,
+    effective_retention_by_document_type: Object.fromEntries(
+      [...associatedIds].map(id => [id, effectivePreviewFor(id)]),
+    ),
+    summary: {
+      document_types_count: summary.total,
+      with_effective_rule: summary.withRule,
+      without_effective_rule: summary.withoutRule,
+    },
+  }
 })
+
+const previewSpreadsheetBadge = computed(() =>
+  TRD_VERSION_STATUS_LABELS[version.value?.status ?? ''] ?? version.value?.status ?? 'Borrador',
+)
 
 function clearCatalogFilters() {
   catalogFilterText.value = ''
@@ -631,11 +699,6 @@ function clearCatalogFilters() {
 function clearRulesFilters() {
   rulesFilterText.value = ''
   rulesScopeFilter.value = 'all'
-}
-
-function clearPreviewFilters() {
-  previewFilterText.value = ''
-  previewStatusFilter.value = 'all'
 }
 
 const catalogCheckboxClass =
@@ -937,6 +1000,11 @@ async function saveDocumentTypes() {
   }
 }
 
+function closeRuleForm() {
+  showRuleForm.value = false
+  editingRuleId.value = null
+}
+
 function openNewRule() {
   editingRuleId.value = null
   finalDispositionSelected.value = ['elimination']
@@ -1231,24 +1299,25 @@ watch(
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
+  <SettingsLayout :wide="true" hide-intro>
     <div v-if="loading" class="flex justify-center py-16">
       <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
     </div>
     <div v-else-if="version" class="w-full flex flex-col gap-4">
       <div class="flex flex-wrap items-start justify-between gap-4">
-        <div class="space-y-1">
+        <div class="min-w-0 space-y-1">
           <Button variant="ghost" size="sm" class="h-8 w-fit -ml-2 px-2" @click="router.push(trdApi.tablePath(tableId))">
             <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
-            Versiones
+            Volver a versiones
           </Button>
           <h2 class="text-2xl font-bold tracking-tight">
-            TRD v{{ version.version_number }}
+            Versión v{{ version.version_number }}
           </h2>
           <div class="flex flex-wrap items-center gap-2">
             <Badge>{{ TRD_VERSION_STATUS_LABELS[version.status] ?? version.status }}</Badge>
             <span class="text-sm text-muted-foreground">
-              {{ version.producer_office_name }} ({{ version.producer_office_code }})
+              {{ version.producer_office_name }}
+              <span class="font-mono">({{ version.producer_office_code }})</span>
             </span>
           </div>
         </div>
@@ -1291,7 +1360,13 @@ watch(
 
         <TabsContent value="general" class="mt-4">
           <Card>
-            <CardContent class="pt-6 space-y-4 max-w-2xl">
+            <CardHeader>
+              <CardTitle>Datos de la versión</CardTitle>
+              <CardDescription>
+                Oficina productora, nivel de tiempos y vigencia de esta TRD.
+              </CardDescription>
+            </CardHeader>
+            <CardContent class="space-y-6">
               <Alert
                 v-if="metaValidationVisible && metaDateFieldsHaveErrors"
                 variant="destructive"
@@ -1301,29 +1376,31 @@ watch(
                   Indique la fecha de aprobación y la vigencia desde antes de guardar o activar la TRD.
                 </AlertDescription>
               </Alert>
-              <p class="text-sm text-muted-foreground leading-relaxed">
-                {{ TRD_RETENTION_LEVEL_HELP[metaForm.retention_application_level] }}
-              </p>
-              <div class="space-y-2">
-                <Label>Nombre oficina productora</Label>
-                <Input v-model="metaForm.producer_office_name" :disabled="!canEdit" />
-              </div>
-              <div class="space-y-2">
-                <Label>Código oficina productora</Label>
-                <Input v-model="metaForm.producer_office_code" :disabled="!canEdit" maxlength="64" />
-              </div>
-              <div class="space-y-2">
-                <Label>Nivel de tiempos</Label>
-                <Select v-model="metaForm.retention_application_level" :disabled="!canEdit">
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="o in TRD_RETENTION_APPLICATION_OPTIONS" :key="o.value" :value="o.value">
-                      {{ o.label }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div class="grid gap-4 sm:grid-cols-2">
+              <div class="grid items-start gap-6 lg:grid-cols-2">
+                <div class="space-y-2">
+                  <Label>Nombre oficina productora</Label>
+                  <Input v-model="metaForm.producer_office_name" :disabled="!canEdit" />
+                </div>
+                <div class="space-y-2">
+                  <Label>Código oficina productora</Label>
+                  <Input v-model="metaForm.producer_office_code" :disabled="!canEdit" maxlength="64" />
+                </div>
+                <div class="space-y-2 lg:col-span-2">
+                  <Label>Nivel de tiempos</Label>
+                  <Select v-model="metaForm.retention_application_level" :disabled="!canEdit">
+                    <SelectTrigger class="max-w-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem v-for="o in TRD_RETENTION_APPLICATION_OPTIONS" :key="o.value" :value="o.value">
+                        {{ o.label }}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p class="text-sm text-muted-foreground leading-relaxed max-w-3xl">
+                    {{ TRD_RETENTION_LEVEL_HELP[metaForm.retention_application_level] }}
+                  </p>
+                </div>
                 <div class="space-y-2">
                   <Label :class="metaDateLabelClass('approved_at')">Fecha aprobación *</Label>
                   <Input
@@ -1359,9 +1436,9 @@ watch(
                     La vigencia hasta se calcula automáticamente (1 año) o finaliza al publicar una nueva versión.
                   </p>
                 </div>
-                <div v-if="trdTestingEnabled && canEdit" class="space-y-2 sm:col-span-2">
+                <div v-if="trdTestingEnabled && canEdit" class="space-y-2 lg:col-span-2">
                   <Label>Vigencia hasta (solo prueba)</Label>
-                  <Input v-model="metaForm.effective_to" type="date" />
+                  <Input v-model="metaForm.effective_to" type="date" class="max-w-xs" />
                   <p class="text-xs text-muted-foreground">
                     Solo visible con modo prueba activo. Sobrescribe el cálculo automático al guardar.
                   </p>
@@ -1746,189 +1823,210 @@ watch(
         </TabsContent>
 
         <TabsContent value="rules" class="mt-4 space-y-4">
-          <Card v-if="showRuleForm && canEdit">
-            <CardHeader>
-              <CardTitle>{{ editingRuleId ? 'Editar regla' : 'Nueva regla de retención' }}</CardTitle>
-            </CardHeader>
-            <CardContent class="space-y-4">
-              <div class="grid gap-4 sm:grid-cols-2">
-                <div class="space-y-2">
-                  <Label>Nivel</Label>
-                  <Select v-model="ruleForm.scope_level">
-                    <SelectTrigger><SelectValue placeholder="Seleccione nivel…" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem v-for="o in TRD_SCOPE_LEVEL_OPTIONS" :key="o.value" :value="o.value">
-                        {{ o.label }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div v-if="ruleForm.scope_level === 'series'" class="space-y-2">
-                  <Label>Serie</Label>
-                  <Select v-model="ruleForm.doc_series_id">
-                    <SelectTrigger><SelectValue placeholder="Seleccione serie…" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem
-                        v-for="s in seriesOptions"
-                        :key="s.id"
-                        :value="s.id"
-                        :disabled="isSeriesOptionDisabled(s.id)"
-                      >
-                        {{ s.label }}{{ isSeriesOptionDisabled(s.id) ? ' (ya tiene regla)' : '' }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <template v-if="ruleForm.scope_level === 'subseries'">
-                  <div class="space-y-2">
-                    <Label>Serie</Label>
-                    <Select v-model="ruleForm.doc_series_id">
-                      <SelectTrigger><SelectValue placeholder="Seleccione serie…" /></SelectTrigger>
+          <div v-if="showRuleForm && canEdit" class="space-y-4">
+            <div class="space-y-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-8 w-fit -ml-2 px-2"
+                @click="closeRuleForm"
+              >
+                <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+                Volver a reglas
+              </Button>
+            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>{{ editingRuleId ? 'Editar regla de retención' : 'Nueva regla de retención' }}</CardTitle>
+                <CardDescription>
+                  Defina el nivel (serie, subserie o tipo), los tiempos y la disposición final.
+                </CardDescription>
+              </CardHeader>
+              <CardContent class="space-y-6">
+                <div class="grid items-start gap-6 lg:grid-cols-2">
+                  <div class="flex min-w-0 flex-col gap-2">
+                    <Label>Nivel</Label>
+                    <Select v-model="ruleForm.scope_level">
+                      <SelectTrigger><SelectValue placeholder="Seleccione nivel…" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem v-for="s in seriesOptions" :key="s.id" :value="s.id">
-                          {{ s.label }}
+                        <SelectItem v-for="o in TRD_SCOPE_LEVEL_OPTIONS" :key="o.value" :value="o.value">
+                          {{ o.label }}
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div class="space-y-2">
-                    <Label>Subserie</Label>
-                    <Select v-model="ruleForm.doc_subseries_id">
-                      <SelectTrigger><SelectValue placeholder="Seleccione subserie…" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem
-                          v-for="s in subseriesOptions"
-                          :key="s.id"
-                          :value="s.id"
-                          :disabled="isSubseriesOptionDisabled(s.id)"
-                        >
-                          {{ s.label }}{{ isSubseriesOptionDisabled(s.id) ? ' (ya tiene regla)' : '' }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </template>
-                <template v-if="ruleForm.scope_level === 'document_type'">
-                  <div class="space-y-2 sm:col-span-2">
-                    <p class="text-xs text-muted-foreground leading-relaxed">
+                    <p v-if="ruleForm.scope_level === 'document_type'" class="text-xs text-muted-foreground leading-relaxed">
                       Filtre por serie y subserie para acotar la lista de tipos documentales.
                     </p>
                   </div>
-                  <div class="space-y-2">
+                  <div v-if="ruleForm.scope_level === 'series'" class="flex min-w-0 flex-col gap-2">
                     <Label>Serie</Label>
                     <Select v-model="ruleForm.doc_series_id">
                       <SelectTrigger><SelectValue placeholder="Seleccione serie…" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem
-                          v-for="s in seriesOptionsForDocumentType"
+                          v-for="s in seriesOptions"
                           :key="s.id"
                           :value="s.id"
+                          :disabled="isSeriesOptionDisabled(s.id)"
                         >
-                          {{ s.label }}
+                          {{ s.label }}{{ isSeriesOptionDisabled(s.id) ? ' (ya tiene regla)' : '' }}
                         </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div class="space-y-2">
-                    <Label>Subserie</Label>
-                    <Select
-                      v-model="ruleForm.doc_subseries_id"
-                      :disabled="!ruleForm.doc_series_id"
-                    >
-                      <SelectTrigger>
-                        <SelectValue :placeholder="ruleForm.doc_series_id ? 'Seleccione subserie…' : 'Primero seleccione serie'" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem
-                          v-for="s in subseriesOptionsForDocumentType"
-                          :key="s.id"
-                          :value="s.id"
-                        >
-                          {{ s.label }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <template v-if="ruleForm.scope_level === 'subseries'">
+                    <div class="flex min-w-0 flex-col gap-2">
+                      <Label>Serie</Label>
+                      <Select v-model="ruleForm.doc_series_id">
+                        <SelectTrigger><SelectValue placeholder="Seleccione serie…" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem v-for="s in seriesOptions" :key="s.id" :value="s.id">
+                            {{ s.label }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div class="flex min-w-0 flex-col gap-2">
+                      <Label>Subserie</Label>
+                      <Select v-model="ruleForm.doc_subseries_id">
+                        <SelectTrigger><SelectValue placeholder="Seleccione subserie…" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem
+                            v-for="s in subseriesOptions"
+                            :key="s.id"
+                            :value="s.id"
+                            :disabled="isSubseriesOptionDisabled(s.id)"
+                          >
+                            {{ s.label }}{{ isSubseriesOptionDisabled(s.id) ? ' (ya tiene regla)' : '' }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </template>
+                  <template v-if="ruleForm.scope_level === 'document_type'">
+                    <div class="flex min-w-0 flex-col gap-2">
+                      <Label>Serie</Label>
+                      <Select v-model="ruleForm.doc_series_id">
+                        <SelectTrigger><SelectValue placeholder="Seleccione serie…" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem
+                            v-for="s in seriesOptionsForDocumentType"
+                            :key="s.id"
+                            :value="s.id"
+                          >
+                            {{ s.label }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div class="flex min-w-0 flex-col gap-2">
+                      <Label>Subserie</Label>
+                      <Select
+                        v-model="ruleForm.doc_subseries_id"
+                        :disabled="!ruleForm.doc_series_id"
+                      >
+                        <SelectTrigger>
+                          <SelectValue :placeholder="ruleForm.doc_series_id ? 'Seleccione subserie…' : 'Primero seleccione serie'" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem
+                            v-for="s in subseriesOptionsForDocumentType"
+                            :key="s.id"
+                            :value="s.id"
+                          >
+                            {{ s.label }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div class="flex min-w-0 flex-col gap-2 lg:col-span-2">
+                      <Label>Tipo documental</Label>
+                      <Select
+                        v-model="ruleForm.doc_document_type_id"
+                        :disabled="!ruleForm.doc_subseries_id"
+                      >
+                        <SelectTrigger>
+                          <SelectValue
+                            :placeholder="ruleForm.doc_subseries_id ? 'Seleccione tipo documental…' : 'Primero seleccione subserie'"
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem
+                            v-for="t in filteredDocumentTypeOptions"
+                            :key="t.id"
+                            :value="t.id"
+                            :disabled="isDocumentTypeOptionDisabled(t.id)"
+                          >
+                            {{ t.label }}{{ isDocumentTypeOptionDisabled(t.id) ? ' (ya tiene regla)' : '' }}
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p v-if="ruleForm.doc_subseries_id && filteredDocumentTypeOptions.length === 0" class="text-xs text-amber-700 dark:text-amber-400">
+                        No hay tipos asociados a esta TRD en la subserie seleccionada. Márcalos en la pestaña Catálogo.
+                      </p>
+                      <p v-else-if="seriesOptionsForDocumentType.length === 0" class="text-xs text-amber-700 dark:text-amber-400">
+                        Asocie tipos documentales en la pestaña Catálogo antes de crear reglas.
+                      </p>
+                    </div>
+                  </template>
+                </div>
+                <div class="grid items-start gap-6 sm:grid-cols-3">
+                  <div class="flex min-w-0 flex-col gap-2">
+                    <Label>Años gestión</Label>
+                    <Input v-model.number="ruleForm.years_management" type="number" min="0" />
                   </div>
-                  <div class="space-y-2 sm:col-span-2">
-                    <Label>Tipo documental</Label>
-                    <Select
-                      v-model="ruleForm.doc_document_type_id"
-                      :disabled="!ruleForm.doc_subseries_id"
-                    >
-                      <SelectTrigger>
-                        <SelectValue
-                          :placeholder="ruleForm.doc_subseries_id ? 'Seleccione tipo documental…' : 'Primero seleccione subserie'"
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem
-                          v-for="t in filteredDocumentTypeOptions"
-                          :key="t.id"
-                          :value="t.id"
-                          :disabled="isDocumentTypeOptionDisabled(t.id)"
-                        >
-                          {{ t.label }}{{ isDocumentTypeOptionDisabled(t.id) ? ' (ya tiene regla)' : '' }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p v-if="ruleForm.doc_subseries_id && filteredDocumentTypeOptions.length === 0" class="text-xs text-amber-700 dark:text-amber-400">
-                      No hay tipos asociados a esta TRD en la subserie seleccionada. Márcalos en la pestaña Catálogo.
+                  <div class="flex min-w-0 flex-col gap-2">
+                    <Label>Años central</Label>
+                    <Input v-model.number="ruleForm.years_central" type="number" min="0" />
+                  </div>
+                  <div class="flex min-w-0 flex-col gap-2">
+                    <Label>Años histórico</Label>
+                    <Input v-model.number="ruleForm.years_historical" type="number" min="0" />
+                  </div>
+                </div>
+                <div class="grid items-start gap-6 lg:grid-cols-2">
+                  <div class="flex min-w-0 flex-col gap-2 lg:col-span-2">
+                    <Label for="rule-final-disposition">Disposición final</Label>
+                    <ArchivalTrdFinalDispositionField
+                      id="rule-final-disposition"
+                      v-model="finalDispositionSelected"
+                    />
+                    <p class="text-xs text-muted-foreground">
+                      Puede seleccionar una o varias opciones.
                     </p>
-                    <p v-else-if="seriesOptionsForDocumentType.length === 0" class="text-xs text-amber-700 dark:text-amber-400">
-                      Asocie tipos documentales en la pestaña Catálogo antes de crear reglas.
-                    </p>
                   </div>
-                </template>
-              </div>
-              <div class="grid gap-4 sm:grid-cols-3">
-                <div class="space-y-2">
-                  <Label>Años gestión</Label>
-                  <Input v-model.number="ruleForm.years_management" type="number" min="0" />
+                  <div class="flex min-w-0 flex-col gap-2">
+                    <Label>Procedimiento</Label>
+                    <Textarea v-model="ruleForm.procedure_text" rows="3" />
+                  </div>
+                  <div class="flex min-w-0 flex-col gap-2">
+                    <Label>Observaciones</Label>
+                    <Textarea v-model="ruleForm.notes" rows="3" />
+                  </div>
                 </div>
-                <div class="space-y-2">
-                  <Label>Años central</Label>
-                  <Input v-model.number="ruleForm.years_central" type="number" min="0" />
+                <div class="flex gap-2 justify-end">
+                  <Button variant="outline" @click="closeRuleForm">
+                    Cancelar
+                  </Button>
+                  <Button :disabled="saving" @click="saveRule">
+                    Guardar regla
+                  </Button>
                 </div>
-                <div class="space-y-2">
-                  <Label>Años histórico</Label>
-                  <Input v-model.number="ruleForm.years_historical" type="number" min="0" />
-                </div>
-              </div>
-              <div class="space-y-2">
-                <Label for="rule-final-disposition">Disposición final</Label>
-                <p class="text-xs text-muted-foreground">
-                  Puede seleccionar una o varias opciones.
-                </p>
-                <ArchivalTrdFinalDispositionField
-                  id="rule-final-disposition"
-                  v-model="finalDispositionSelected"
-                />
-              </div>
-              <div class="space-y-2">
-                <Label>Procedimiento</Label>
-                <Textarea v-model="ruleForm.procedure_text" rows="3" />
-              </div>
-              <div class="space-y-2">
-                <Label>Observaciones</Label>
-                <Textarea v-model="ruleForm.notes" rows="2" />
-              </div>
-              <div class="flex gap-2 justify-end">
-                <Button variant="outline" @click="showRuleForm = false">
-                  Cancelar
-                </Button>
-                <Button :disabled="saving" @click="saveRule">
-                  Guardar regla
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
-          <Card>
-            <CardHeader class="flex flex-row items-center justify-between">
-              <CardTitle>Reglas configuradas</CardTitle>
-              <Button v-if="canEdit && !showRuleForm" size="sm" @click="openNewRule">
-                <Icon name="i-lucide-plus" class="mr-1 h-4 w-4" />
-                Regla
+          <Card v-else>
+            <CardHeader class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div class="space-y-1">
+                <CardTitle>Reglas de retención</CardTitle>
+                <CardDescription>
+                  Una regla por serie, subserie o tipo documental.
+                </CardDescription>
+              </div>
+              <Button v-if="canEdit" class="shrink-0" @click="openNewRule">
+                <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                Nueva regla
               </Button>
             </CardHeader>
             <CardContent class="space-y-4">
@@ -1975,8 +2073,14 @@ watch(
                   Limpiar filtros
                 </Button>
               </div>
-              <div v-if="!(version.retention_rules?.length)" class="text-muted-foreground text-sm py-4">
-                Sin reglas. Agregue reglas por serie, subserie o tipo documental.
+              <div v-if="!(version.retention_rules?.length)" class="py-8 text-center space-y-3">
+                <p class="text-muted-foreground">
+                  Sin reglas. Cree la primera por serie, subserie o tipo documental.
+                </p>
+                <Button v-if="canEdit" @click="openNewRule">
+                  <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                  Nueva regla
+                </Button>
               </div>
               <div
                 v-else-if="!filteredRetentionRules.length"
@@ -2039,10 +2143,9 @@ watch(
         <TabsContent value="preview" class="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Retención efectiva por tipo asociado</CardTitle>
+              <CardTitle>Vista previa de la TRD</CardTitle>
               <CardDescription>
-                Prioridad: tipo documental → subserie → serie (HU-TRD-11).
-                Muestra los tipos asociados en Catálogo y la regla que les aplica.
+                Mismo formato de hoja de cálculo que en consulta, con los tipos y reglas de esta versión (sin salir del editor).
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-4">
@@ -2075,7 +2178,7 @@ watch(
                 </p>
               </div>
               <div
-                v-if="previewDocumentTypes.length > 0"
+                v-if="previewSpreadsheetData"
                 class="flex flex-wrap gap-2 text-sm"
               >
                 <Badge variant="secondary">
@@ -2092,50 +2195,7 @@ watch(
                   {{ previewSummary.withoutRule }} sin regla efectiva
                 </Badge>
               </div>
-              <div
-                v-if="previewDocumentTypes.length > 0"
-                class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
-              >
-                <div class="w-full min-w-0 sm:max-w-md space-y-1">
-                  <Label for="preview-filter" class="text-xs">Buscar</Label>
-                  <div class="relative">
-                    <Icon name="i-lucide-search" class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="preview-filter"
-                      v-model="previewFilterText"
-                      placeholder="Código o nombre del tipo…"
-                      class="pl-9"
-                    />
-                  </div>
-                </div>
-                <div class="w-full min-w-0 sm:w-52 space-y-1">
-                  <Label for="preview-status-filter" class="text-xs">Filtrar por</Label>
-                  <Select v-model="previewStatusFilter">
-                    <SelectTrigger id="preview-status-filter">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem
-                        v-for="o in previewStatusFilterOptions"
-                        :key="o.value"
-                        :value="o.value"
-                      >
-                        {{ o.label }}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  v-if="previewFilterText || previewStatusFilter !== 'all'"
-                  variant="ghost"
-                  size="sm"
-                  class="shrink-0"
-                  @click="clearPreviewFilters"
-                >
-                  Limpiar filtros
-                </Button>
-              </div>
-              <div v-if="!previewDocumentTypes.length" class="text-muted-foreground py-6 text-center space-y-2 max-w-lg mx-auto">
+              <div v-if="!previewSpreadsheetData" class="text-muted-foreground py-6 text-center space-y-2 max-w-lg mx-auto">
                 <p>
                   No hay tipos para mostrar en la vista previa.
                 </p>
@@ -2144,43 +2204,12 @@ watch(
                   <strong>Guardar asociación</strong>. Luego defina reglas en la pestaña <strong>Reglas</strong>.
                 </p>
               </div>
-              <div
-                v-else-if="!filteredPreviewDocumentTypes.length"
-                class="text-sm text-muted-foreground py-8 text-center border border-dashed rounded-lg"
-              >
-                No hay tipos que coincidan con la búsqueda o el filtro.
+              <div v-else class="overflow-x-auto rounded-md">
+                <ArchivalTrdSpreadsheetView
+                  :data="previewSpreadsheetData"
+                  :version-badge="previewSpreadsheetBadge"
+                />
               </div>
-              <Table v-else>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Gestión</TableHead>
-                    <TableHead>Central</TableHead>
-                    <TableHead>Disposición</TableHead>
-                    <TableHead>Origen</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow v-for="tipo in filteredPreviewDocumentTypes" :key="tipo.id">
-                    <TableCell class="font-mono text-sm">
-                      {{ tipo.code }}
-                    </TableCell>
-                    <template v-if="effectivePreviewFor(tipo.id)">
-                      <TableCell>{{ effectivePreviewFor(tipo.id)!.years_management }} a</TableCell>
-                      <TableCell>{{ effectivePreviewFor(tipo.id)!.years_central }} a</TableCell>
-                      <TableCell>{{ dispositionLabel(effectivePreviewFor(tipo.id)!.final_disposition) }}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {{ inheritedLabel(effectivePreviewFor(tipo.id)!.inherited_from) }}
-                        </Badge>
-                      </TableCell>
-                    </template>
-                    <TableCell v-else colspan="4" class="text-destructive text-sm">
-                      Sin regla efectiva
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
             </CardContent>
           </Card>
         </TabsContent>

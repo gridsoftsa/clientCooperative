@@ -128,27 +128,36 @@ onMounted(load)
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4 max-w-xl">
-      <div class="flex justify-between items-center">
-        <div class="space-y-1">
-          <h2 class="text-2xl font-bold tracking-tight">
-            Editar serie
-          </h2>
-          <p v-if="series?.org_unit" class="text-sm text-muted-foreground">
-            Área: {{ series.org_unit.name }} ({{ series.org_unit.code }})
-          </p>
-        </div>
+  <SettingsLayout :wide="true" hide-intro>
+    <div class="flex w-full flex-col gap-6">
+      <div class="space-y-1">
         <Button
-          variant="outline"
+          variant="ghost"
+          size="sm"
+          class="h-8 w-fit -ml-2 px-2"
           @click="router.push(cancelPath())"
         >
-          Volver
+          <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+          Volver a series
         </Button>
+        <h2 class="text-2xl font-bold tracking-tight">
+          Editar serie
+        </h2>
+        <p v-if="series?.org_unit" class="text-sm text-muted-foreground">
+          {{ series.org_unit.name }}
+          <span class="font-mono">({{ series.org_unit.code }})</span>
+        </p>
       </div>
       <Card v-if="!loading">
-        <CardContent class="pt-6 space-y-4">
-          <div class="space-y-2">
+        <CardHeader>
+          <CardTitle>Datos de la serie</CardTitle>
+          <CardDescription>
+            Código, nombre y publicación en biblioteca institucional.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-6">
+          <div class="grid items-start gap-6 lg:grid-cols-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label>Código *</Label>
             <CatalogPrefixedCodeInput
               v-model="form.code"
@@ -161,11 +170,11 @@ onMounted(load)
               Ejemplo: área <span class="font-mono">045</span> + sufijo <span class="font-mono">02</span> → serie <span class="font-mono">045-02</span>.
             </p>
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label>Nombre *</Label>
             <Input v-model="form.name" />
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2 lg:col-span-2">
             <Label>Descripción</Label>
             <Textarea v-model="form.description" rows="3" />
           </div>
@@ -179,11 +188,11 @@ onMounted(load)
           </div>
           <p
             v-if="subseriesCount > 0 && form.is_active"
-            class="text-xs text-amber-700 dark:text-amber-400"
+            class="text-xs text-amber-700 dark:text-amber-400 lg:col-span-2"
           >
             {{ subseriesCount }} subserie(s) registrada(s). Para inactivar la serie, quite o inactivé primero todas sus subseries y tipos documentales.
           </p>
-          <div class="rounded-md border bg-muted/20 p-3">
+          <div class="rounded-md border bg-muted/20 p-3 lg:col-span-2">
             <div class="flex items-start gap-2">
               <Checkbox
                 id="publishable_library"
@@ -202,8 +211,9 @@ onMounted(load)
               </div>
             </div>
           </div>
+          </div>
           <div class="flex justify-end gap-2">
-            <Button variant="outline" @click="router.back()">
+            <Button variant="outline" @click="router.push(cancelPath())">
               Cancelar
             </Button>
             <Button :disabled="saving" @click="persist">

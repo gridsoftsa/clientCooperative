@@ -69,41 +69,54 @@ onMounted(loadTable)
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4 max-w-2xl">
-      <div class="flex items-center justify-between gap-2">
-        <h2 class="text-2xl font-bold tracking-tight">
-          Nueva versión TRD
-        </h2>
-        <Button variant="outline" @click="router.push(trdApi.tablePath(tableId))">
-          Volver
-        </Button>
+  <SettingsLayout :wide="true" hide-intro>
+    <div class="flex w-full flex-col gap-6">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="space-y-1">
+          <Button variant="ghost" size="sm" class="h-8 w-fit -ml-2 px-2" @click="router.push(trdApi.tablePath(tableId))">
+            <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+            Volver a versiones
+          </Button>
+          <h2 class="text-2xl font-bold tracking-tight">
+            Nueva versión TRD
+          </h2>
+          <p v-if="table?.org_unit" class="text-sm text-muted-foreground">
+            {{ table.org_unit.name }}
+            <span class="font-mono">({{ table.org_unit.code }})</span>
+          </p>
+        </div>
       </div>
 
       <Card>
-        <CardContent class="pt-6 space-y-4">
-          <div class="space-y-2">
-            <Label>Nombre oficina productora *</Label>
-            <Input v-model="form.producer_office_name" />
-          </div>
-          <div class="space-y-2">
-            <Label>Código oficina productora *</Label>
-            <Input v-model="form.producer_office_code" maxlength="64" />
-          </div>
-          <div class="space-y-2">
-            <Label>Nivel de aplicación de tiempos *</Label>
-            <Select v-model="form.retention_application_level">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="o in TRD_RETENTION_APPLICATION_OPTIONS" :key="o.value" :value="o.value">
-                  {{ o.label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="grid gap-4 sm:grid-cols-2">
+        <CardHeader>
+          <CardTitle>Datos de la versión</CardTitle>
+          <CardDescription>
+            Oficina productora, nivel de tiempos y vigencia inicial.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-6">
+          <div class="grid items-start gap-6 lg:grid-cols-2">
+            <div class="space-y-2">
+              <Label>Nombre oficina productora *</Label>
+              <Input v-model="form.producer_office_name" />
+            </div>
+            <div class="space-y-2">
+              <Label>Código oficina productora *</Label>
+              <Input v-model="form.producer_office_code" maxlength="64" />
+            </div>
+            <div class="space-y-2 lg:col-span-2">
+              <Label>Nivel de aplicación de tiempos *</Label>
+              <Select v-model="form.retention_application_level">
+                <SelectTrigger class="max-w-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="o in TRD_RETENTION_APPLICATION_OPTIONS" :key="o.value" :value="o.value">
+                    {{ o.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div class="space-y-2">
               <Label>Fecha aprobación</Label>
               <Input v-model="form.approved_at" type="date" />

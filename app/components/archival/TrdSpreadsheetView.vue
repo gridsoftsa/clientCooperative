@@ -3,9 +3,13 @@ import type { TrdSpreadsheetGlossaryContext } from '~/constants/trd-spreadsheet-
 import type { TrdActiveVersionConsultData } from '~/types/archival-trd'
 import { buildTrdSpreadsheetRows } from '~/utils/trd-spreadsheet-view'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   data: TrdActiveVersionConsultData
-}>()
+  /** Texto junto al número de versión (p. ej. Vigente, Borrador). */
+  versionBadge?: string
+}>(), {
+  versionBadge: 'Vigente',
+})
 
 const rows = computed(() => buildTrdSpreadsheetRows(props.data))
 
@@ -62,7 +66,7 @@ const dataColumnCount = 16
         <div class="grid gap-2 text-left text-xs sm:grid-cols-2 lg:grid-cols-4">
           <p><span class="font-semibold text-foreground">Área productora:</span> {{ orgUnitLabel }}</p>
           <p><span class="font-semibold text-foreground">Oficina productora:</span> {{ data.version.producer_office_name }} ({{ data.version.producer_office_code }})</p>
-          <p><span class="font-semibold text-foreground">Versión TRD:</span> {{ data.version.version_number }} · Vigente</p>
+          <p><span class="font-semibold text-foreground">Versión TRD:</span> {{ data.version.version_number }} · {{ versionBadge }}</p>
           <p><span class="font-semibold text-foreground">Aprobación:</span> {{ data.version.approved_at ?? '—' }}</p>
           <p class="sm:col-span-2 lg:col-span-4">
             <span class="font-semibold text-foreground">Vigencia:</span> {{ validityLabel }}

@@ -202,7 +202,7 @@ onMounted(loadUnits)
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
+  <SettingsLayout :wide="true" hide-intro>
     <div class="w-full flex flex-col gap-4">
       <div class="space-y-1">
         <Button variant="ghost" size="sm" class="h-8 w-fit -ml-2 px-2" @click="router.push('/settings/archival')">

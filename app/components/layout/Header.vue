@@ -1,22 +1,10 @@
 <script setup lang="ts">
-import { getBreadcrumbSegmentTitle } from '~/constants/breadcrumb-titles'
+import { buildPathBreadcrumbLinks } from '~/constants/breadcrumb-titles'
 
 const route = useRoute()
 
 function setLinks() {
-  const path = route.path || '/'
-  if (path === '/') {
-    return [{ title: 'Dashboard', href: '/' }]
-  }
-
-  const segments = path.split('/').filter(item => item !== '')
-
-  const breadcrumbs = segments.map((item, index) => ({
-    title: getBreadcrumbSegmentTitle(item),
-    href: `/${segments.slice(0, index + 1).join('/')}`,
-  }))
-
-  return [{ title: 'Dashboard', href: '/' }, ...breadcrumbs]
+  return buildPathBreadcrumbLinks(route.path || '/')
 }
 
 const links = ref<{

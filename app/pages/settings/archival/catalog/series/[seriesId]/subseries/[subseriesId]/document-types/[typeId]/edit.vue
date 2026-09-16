@@ -113,24 +113,35 @@ onMounted(load)
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4 max-w-xl">
-      <div class="flex justify-between items-center">
-        <div class="space-y-1">
-          <h2 class="text-2xl font-bold tracking-tight">
-            Editar tipo documental
-          </h2>
-          <p v-if="subseries" class="text-sm text-muted-foreground">
-            Subserie <span class="font-mono">{{ subseries.code }}</span> — {{ subseries.name }}
-          </p>
-        </div>
-        <Button variant="outline" @click="router.push(cancelPath())">
-          Volver
+  <SettingsLayout :wide="true" hide-intro>
+    <div class="flex w-full flex-col gap-6">
+      <div class="space-y-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-8 w-fit -ml-2 px-2"
+          @click="router.push(cancelPath())"
+        >
+          <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+          Volver a tipos documentales
         </Button>
+        <h2 class="text-2xl font-bold tracking-tight">
+          Editar tipo documental
+        </h2>
+        <p v-if="subseries" class="text-sm text-muted-foreground">
+          Subserie <span class="font-mono">{{ subseries.code }}</span> — {{ subseries.name }}
+        </p>
       </div>
       <Card v-if="!loading">
-        <CardContent class="pt-6 space-y-4">
-          <div class="space-y-2">
+        <CardHeader>
+          <CardTitle>Datos del tipo documental</CardTitle>
+          <CardDescription>
+            Código, nombre y soportes permitidos de este tipo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-6">
+          <div class="grid items-start gap-6 lg:grid-cols-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label>Código *</Label>
             <CatalogPrefixedCodeInput
               v-model="form.code"
@@ -142,35 +153,41 @@ onMounted(load)
               Prefijo: código de la subserie. Solo digite el sufijo (ej. <span class="font-mono">01</span>).
             </p>
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label>Nombre *</Label>
             <Input v-model="form.name" />
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label for="support">Soporte permitido</Label>
-            <p class="text-xs text-muted-foreground">
-              Puede seleccionar Papel, Digital o ambos.
-            </p>
             <ArchivalDocumentAllowedSupportField
               id="support"
               v-model="allowedSupportSelected"
             />
+            <p class="text-xs text-muted-foreground">
+              Puede seleccionar Papel, Digital o ambos.
+            </p>
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2 lg:col-span-2">
             <Label>Descripción</Label>
             <Textarea v-model="form.description" rows="3" />
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 lg:col-span-2">
             <Switch id="active" v-model="form.is_active" />
             <Label for="active" class="font-normal">{{ form.is_active ? 'Activo' : 'Inactivo' }}</Label>
           </div>
-          <p v-if="!form.is_active" class="text-xs text-muted-foreground leading-relaxed">
+          <p v-if="!form.is_active" class="text-xs text-muted-foreground leading-relaxed lg:col-span-2">
             Al inactivar, el tipo se conserva en el catálogo pero no podrá usarse en nuevas operaciones.
             Si está en TRD o tiene reglas de retención, el sistema rechazará la inactivación.
           </p>
-          <Button :disabled="saving" @click="submit">
-            Guardar
-          </Button>
+          </div>
+          <div class="flex justify-end gap-2">
+            <Button variant="outline" @click="router.push(cancelPath())">
+              Cancelar
+            </Button>
+            <Button :disabled="saving" @click="submit">
+              Guardar
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

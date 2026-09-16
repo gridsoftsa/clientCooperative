@@ -100,8 +100,8 @@ onMounted(load)
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4">
+  <SettingsLayout :wide="true" hide-intro>
+    <div class="w-full flex flex-col gap-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1">
           <Button
@@ -111,7 +111,7 @@ onMounted(load)
             @click="router.push(catalogApi.subseriesListPath(seriesId))"
           >
             <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
-            Subseries
+            Volver a subseries
           </Button>
           <h2 class="text-2xl font-bold tracking-tight">
             Tipos documentales

@@ -33,7 +33,7 @@ onMounted(fetchTables)
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
+  <SettingsLayout :wide="true" hide-intro>
     <div class="w-full flex flex-col gap-4">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1">

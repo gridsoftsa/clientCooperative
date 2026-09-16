@@ -106,8 +106,8 @@ function confirmCascadeDeactivate() {
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4">
+  <SettingsLayout :wide="true" hide-intro>
+    <div class="w-full flex flex-col gap-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1">
           <Button
@@ -117,7 +117,7 @@ function confirmCascadeDeactivate() {
             @click="router.push(seriesListPath)"
           >
             <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
-            Series
+            Volver a series
           </Button>
           <h2 class="text-2xl font-bold tracking-tight">
             Subseries documentales

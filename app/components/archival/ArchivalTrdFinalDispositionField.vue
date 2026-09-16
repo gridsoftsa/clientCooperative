@@ -110,11 +110,12 @@ function formatMultipleDispositionLabel(
 .trd-final-disposition-ms :deep(.multiselect-trd-final-disposition .multiselect-wrapper) {
   min-height: 2.25rem;
   align-items: center;
+  padding-left: 0.75rem;
 }
 
 .trd-final-disposition-ms :deep(.multiselect-trd-final-disposition .multiselect-tags) {
   gap: 0.375rem;
-  padding: 0.25rem 0;
+  padding: 0.25rem 0.25rem 0.25rem 0;
   flex-wrap: wrap;
 }
 

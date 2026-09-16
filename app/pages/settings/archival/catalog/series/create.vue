@@ -121,36 +121,42 @@ onMounted(fetchProducerUnits)
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div class="space-y-1">
-          <h2 class="text-2xl font-bold tracking-tight">
-            Nueva serie documental
-          </h2>
-          <p class="text-muted-foreground text-sm leading-relaxed max-w-2xl">
-            Cadena de códigos: área + serie + subserie + tipo.
-            Ejemplo: área <span class="font-mono">045</span> → serie <span class="font-mono">045-02</span> → subserie <span class="font-mono">045-02-02</span> → tipo <span class="font-mono">045-02-02-01</span>.
-          </p>
-        </div>
-        <Button variant="outline" class="shrink-0" @click="router.push(cancelPath())">
-          Volver
+  <SettingsLayout :wide="true" hide-intro>
+    <div class="flex w-full flex-col gap-6">
+      <div class="space-y-1">
+        <Button variant="ghost" size="sm" class="h-8 w-fit -ml-2 px-2" @click="router.push(cancelPath())">
+          <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+          Volver a series
         </Button>
+        <h2 class="text-2xl font-bold tracking-tight">
+          Nueva serie documental
+        </h2>
+        <p class="text-muted-foreground text-sm leading-relaxed max-w-3xl">
+          Cadena de códigos: área + serie + subserie + tipo.
+          Ejemplo: área <span class="font-mono">045</span> → serie <span class="font-mono">045-02</span> → subserie <span class="font-mono">045-02-02</span> → tipo <span class="font-mono">045-02-02-01</span>.
+        </p>
       </div>
 
       <Card>
-        <CardContent class="pt-6 space-y-4 max-w-xl">
-          <div class="space-y-2">
+        <CardHeader>
+          <CardTitle>Datos de la serie</CardTitle>
+          <CardDescription>
+            Oficina productora, código institucional y alcance de publicación.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-6">
+          <div class="grid items-start gap-6 lg:grid-cols-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label>Área productora *</Label>
             <template v-if="isOrgUnitLocked">
               <div
                 v-if="selectedUnit"
-                class="rounded-md border bg-muted/30 px-3 py-2.5 text-sm"
+                class="flex h-10 items-center rounded-md border bg-muted/30 px-3 text-sm"
               >
                 <span class="font-medium">{{ selectedUnit.name }}</span>
                 <span class="text-muted-foreground"> ({{ selectedUnit.code }})</span>
               </div>
-              <p v-else-if="loadingUnits" class="text-xs text-muted-foreground">
+              <p v-else-if="loadingUnits" class="flex h-10 items-center text-xs text-muted-foreground">
                 Cargando área…
               </p>
               <p class="text-xs text-muted-foreground">
@@ -173,28 +179,28 @@ onMounted(fetchProducerUnits)
               </SelectContent>
             </Select>
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label for="code">Código *</Label>
-            <p v-if="!form.org_unit_id" class="text-xs text-muted-foreground">
+            <p v-if="!form.org_unit_id" class="flex h-10 items-center text-xs text-muted-foreground">
               Seleccione el área para habilitar el código.
             </p>
-            <p v-else class="text-xs text-muted-foreground">
-              Prefijo: código del área (<span class="font-mono">{{ orgUnitCodePrefix }}</span>). Digite solo el sufijo a la derecha.
-            </p>
             <CatalogPrefixedCodeInput
-              v-if="form.org_unit_id"
+              v-else
               id="code"
               v-model="form.code"
               :prefix="orgUnitCodePrefix"
               maxlength="64"
               placeholder="02"
             />
+            <p v-if="form.org_unit_id" class="text-xs text-muted-foreground">
+              Prefijo: código del área (<span class="font-mono">{{ orgUnitCodePrefix }}</span>). Digite solo el sufijo a la derecha.
+            </p>
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label for="name">Nombre *</Label>
             <Input id="name" v-model="form.name" />
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2 lg:col-span-2">
             <Label for="desc">Descripción</Label>
             <Textarea id="desc" v-model="form.description" rows="3" />
           </div>
@@ -219,6 +225,7 @@ onMounted(fetchProducerUnits)
                 </p>
               </div>
             </div>
+          </div>
           </div>
           <div class="flex gap-2 justify-end">
             <Button type="button" variant="outline" @click="router.push(cancelPath())">

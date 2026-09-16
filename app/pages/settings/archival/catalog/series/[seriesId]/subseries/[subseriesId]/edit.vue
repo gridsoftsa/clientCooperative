@@ -124,24 +124,35 @@ onMounted(load)
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4 max-w-xl">
-      <div class="flex justify-between items-center">
-        <div class="space-y-1">
-          <h2 class="text-2xl font-bold tracking-tight">
-            Editar subserie
-          </h2>
-          <p v-if="series" class="text-sm text-muted-foreground">
-            Serie <span class="font-mono">{{ series.code }}</span> — {{ series.name }}
-          </p>
-        </div>
-        <Button variant="outline" @click="router.push(cancelPath())">
-          Volver
+  <SettingsLayout :wide="true" hide-intro>
+    <div class="flex w-full flex-col gap-6">
+      <div class="space-y-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          class="h-8 w-fit -ml-2 px-2"
+          @click="router.push(cancelPath())"
+        >
+          <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+          Volver a subseries
         </Button>
+        <h2 class="text-2xl font-bold tracking-tight">
+          Editar subserie
+        </h2>
+        <p v-if="series" class="text-sm text-muted-foreground">
+          Serie <span class="font-mono">{{ series.code }}</span> — {{ series.name }}
+        </p>
       </div>
       <Card v-if="!loading">
-        <CardContent class="pt-6 space-y-4">
-          <div class="space-y-2">
+        <CardHeader>
+          <CardTitle>Datos de la subserie</CardTitle>
+          <CardDescription>
+            Código y nombre dentro de la serie seleccionada.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-6">
+          <div class="grid items-start gap-6 lg:grid-cols-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label>Código *</Label>
             <CatalogPrefixedCodeInput
               v-if="series"
@@ -154,26 +165,30 @@ onMounted(load)
               Prefijo: código de la serie. Solo digite el sufijo (ej. <span class="font-mono">02</span> → <span class="font-mono">{{ series?.code ?? '045-02' }}-02</span>).
             </p>
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2">
             <Label>Nombre *</Label>
             <Input v-model="form.name" />
           </div>
-          <div class="space-y-2">
+          <div class="flex min-w-0 flex-col gap-2 lg:col-span-2">
             <Label>Descripción</Label>
             <Textarea v-model="form.description" rows="3" />
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 lg:col-span-2">
             <Switch id="active" v-model="form.is_active" />
             <Label for="active" class="font-normal">{{ form.is_active ? 'Activa' : 'Inactiva' }}</Label>
           </div>
           <p
             v-if="activeDocumentTypesCount > 0 && form.is_active"
-            class="text-xs text-muted-foreground"
+            class="text-xs text-muted-foreground lg:col-span-2"
           >
             {{ activeDocumentTypesCount }} tipo(s) documental(es) activo(s) en esta subserie.
             Al inactivarla se le preguntará si desea inactivarlos también.
           </p>
+          </div>
           <div class="flex justify-end gap-2">
+            <Button variant="outline" @click="router.push(cancelPath())">
+              Cancelar
+            </Button>
             <Button :disabled="saving" @click="submit">
               Guardar
             </Button>
