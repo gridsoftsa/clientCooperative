@@ -166,21 +166,19 @@ onMounted(() => {
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
-    <div class="w-full flex flex-col gap-4">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div class="space-y-1">
-          <h2 class="text-2xl font-bold tracking-tight">
-            Editar área
-          </h2>
-          <p class="text-muted-foreground leading-relaxed">
-            Actualice datos de la dependencia, responsable y áreas asociadas.
-          </p>
-        </div>
-        <Button variant="outline" class="shrink-0" @click="router.back()">
-          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
-          Volver
+  <SettingsLayout :wide="true" hide-intro>
+    <div class="flex w-full flex-col gap-6">
+      <div class="space-y-1">
+        <Button variant="ghost" size="sm" class="h-8 w-fit -ml-2 px-2" @click="router.push('/settings/organizational-structure/units')">
+          <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+          Volver a áreas
         </Button>
+        <h2 class="text-2xl font-bold tracking-tight">
+          Editar área
+        </h2>
+        <p class="text-muted-foreground text-sm leading-relaxed max-w-3xl">
+          Actualice datos de la dependencia, responsable y áreas asociadas.
+        </p>
       </div>
 
       <div v-if="loading" class="flex justify-center py-12">
@@ -188,105 +186,82 @@ onMounted(() => {
       </div>
 
       <form v-else @submit.prevent="handleSubmit">
-        <div class="grid gap-6">
-          <Card>
-            <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Información general</CardTitle>
-              <CardDescription class="leading-relaxed">
-                Identificación y jerarquía dentro de una agencia.
-              </CardDescription>
-            </CardHeader>
-            <CardContent class="space-y-6">
-              <div class="grid grid-cols-1 gap-6 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
-                <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6">
-                  <div class="space-y-3">
-                    <Label for="office_e" class="leading-snug">Agencia *</Label>
-                    <Select
-                      :model-value="form.org_office_id == null ? undefined : String(form.org_office_id)"
-                      @update:model-value="(v) => { form.org_office_id = v ? Number(v) : null }"
+        <Card>
+          <CardHeader>
+            <CardTitle>Datos del área</CardTitle>
+            <CardDescription>
+              Identificación, jerarquía, TRD y responsable.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-6">
+            <div class="grid items-start gap-6 lg:grid-cols-2">
+              <div class="flex min-w-0 flex-col gap-2">
+                <Label for="office_e">Agencia *</Label>
+                <Select
+                  :model-value="form.org_office_id == null ? undefined : String(form.org_office_id)"
+                  @update:model-value="(v) => { form.org_office_id = v ? Number(v) : null }"
+                >
+                  <SelectTrigger id="office_e">
+                    <SelectValue placeholder="Seleccione agencia" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="o in offices"
+                      :key="o.id"
+                      :value="String(o.id)"
                     >
-                      <SelectTrigger id="office_e">
-                        <SelectValue placeholder="Seleccione agencia" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem
-                          v-for="o in offices"
-                          :key="o.id"
-                          :value="String(o.id)"
-                        >
-                          {{ o.name }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div class="space-y-3">
-                    <Label for="parent_e" class="leading-snug">Área padre (opcional)</Label>
-                    <Select
-                      :model-value="form.parent_id == null ? 'none' : String(form.parent_id)"
-                      :disabled="!form.org_office_id"
-                      @update:model-value="(v) => { form.parent_id = v === 'none' ? null : Number(v) }"
-                    >
-                      <SelectTrigger id="parent_e">
-                        <SelectValue placeholder="Sin padre" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">
-                          (Ninguno)
-                        </SelectItem>
-                        <SelectItem
-                          v-for="u in parentsFiltered"
-                          :key="u.id"
-                          :value="String(u.id)"
-                        >
-                          {{ u.name }} — {{ u.code }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6">
-                  <div class="space-y-3">
-                    <Label for="name_e" class="leading-snug">Nombre *</Label>
-                    <Input id="name_e" v-model="form.name" required />
-                  </div>
-                  <div class="space-y-3">
-                    <Label for="code_e" class="leading-snug">Código *</Label>
-                    <Input id="code_e" v-model="form.code" required />
-                  </div>
-                </div>
-
-                <div class="space-y-3 md:col-span-2">
-                  <Label for="unit_type_e" class="leading-snug">Tipo (opcional)</Label>
-                  <Input id="unit_type_e" v-model="form.unit_type" />
-                </div>
+                      {{ o.name }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader class="gap-2">
-              <CardTitle class="leading-snug">Responsable, TRD y áreas</CardTitle>
-              <CardDescription class="leading-relaxed">
-                Mantenga al día el vínculo con áreas y la figura responsable ante documentación.
-              </CardDescription>
-            </CardHeader>
-            <CardContent class="space-y-6">
-              <div class="space-y-3 rounded-lg border p-4">
+              <div class="flex min-w-0 flex-col gap-2">
+                <Label for="parent_e">Área padre (opcional)</Label>
+                <Select
+                  :model-value="form.parent_id == null ? 'none' : String(form.parent_id)"
+                  :disabled="!form.org_office_id"
+                  @update:model-value="(v) => { form.parent_id = v === 'none' ? null : Number(v) }"
+                >
+                  <SelectTrigger id="parent_e">
+                    <SelectValue placeholder="Sin padre" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      (Ninguno)
+                    </SelectItem>
+                    <SelectItem
+                      v-for="u in parentsFiltered"
+                      :key="u.id"
+                      :value="String(u.id)"
+                    >
+                      {{ u.name }} — {{ u.code }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div class="flex min-w-0 flex-col gap-2">
+                <Label for="name_e">Nombre *</Label>
+                <Input id="name_e" v-model="form.name" required />
+              </div>
+              <div class="flex min-w-0 flex-col gap-2">
+                <Label for="code_e">Código *</Label>
+                <Input id="code_e" v-model="form.code" required />
+              </div>
+              <div class="flex min-w-0 flex-col gap-2">
+                <Label for="unit_type_e">Tipo (opcional)</Label>
+                <Input id="unit_type_e" v-model="form.unit_type" />
+              </div>
+              <div class="flex min-w-0 flex-col gap-2">
                 <OrgYesNoMultiselect
                   :model-value="form.is_document_producer ? 'yes' : 'no'"
                   input-id="unit_edit_doc_producer_ms"
                   label="¿Es área productora documental (TRD)?"
-                  helper-text="Seleccione Sí si esta dependencia clasifica expedientes conforme TRD/gestión documental."
+                  helper-text="Sí si esta dependencia clasifica expedientes conforme a TRD."
                   @update:model-value="(v: OrgYesNoChoice) => { form.is_document_producer = v === 'yes' }"
                 />
               </div>
-
-              <div class="space-y-3">
-                <Label for="mgr_e" class="leading-snug">Jefe del área — funcionario (opcional)</Label>
-                <p class="text-xs text-muted-foreground leading-relaxed">
-                  Persona que encabeza el área. Se asigna automáticamente si hay un funcionario vigente en el cargo marcado «a cargo del área»; también puede elegirlo manualmente.
-                </p>
+              <div class="flex min-w-0 flex-col gap-2">
+                <Label for="mgr_e">Jefe del área (opcional)</Label>
                 <OrgUnitManagerStaffMultiselect
                   ref="managerStaffSelectRef"
                   v-model="form.manager_staff_id"
@@ -294,36 +269,35 @@ onMounted(() => {
                   input-id="mgr_e_ms"
                   @ready="onManagerStaffReady"
                 />
-              </div>
-
-              <div class="space-y-3">
-                <Label for="mgr_pos_name_e" class="leading-snug">Nombre del cargo de jefe de área (referencia)</Label>
-                <p class="text-sm text-muted-foreground leading-relaxed">
-                  Opcional: texto del puesto que encabeza el área. Puede actualizarse manualmente o al crear un cargo «a cargo del área».
+                <p class="text-xs text-muted-foreground">
+                  Se asigna si hay un funcionario vigente en el cargo «a cargo del área»; también puede elegirlo.
                 </p>
-                <Input id="mgr_pos_name_e" v-model="form.manager_position_name" placeholder="Ej: Coordinador de área" />
               </div>
-
-              <div class="rounded-lg border p-4">
+              <div class="flex min-w-0 flex-col gap-2">
+                <Label for="mgr_pos_name_e">Cargo de jefe (referencia)</Label>
+                <Input id="mgr_pos_name_e" v-model="form.manager_position_name" placeholder="Ej: Coordinador de área" />
+                <p class="text-xs text-muted-foreground">
+                  Opcional. Puede actualizarse al crear un cargo «a cargo del área».
+                </p>
+              </div>
+              <div class="lg:col-span-2">
                 <OrgInstitutionalProcessesMultiselect
                   v-model="form.related_org_unit_ids"
                   :options="areaOptions"
                   input-id="unit_edit_related_areas_ms"
                   label="Áreas asociadas"
-                  helper-text="Opcional: seleccione otras áreas ya creadas en la estructura organizacional."
+                  helper-text="Opcional: otras áreas ya creadas en la estructura."
                   placeholder="Busque y seleccione áreas creadas"
                   no-options-text="No hay otras áreas creadas"
                   no-results-text="Sin coincidencias"
                 />
               </div>
-
               <OrgStructureValidityPeriodFields
                 v-model:valid-from="form.valid_from"
                 v-model:valid-to="form.valid_to"
                 from-input-id="unit_edit_valid_from"
                 to-input-id="unit_edit_valid_to"
               />
-
               <OrgStructureActiveMultiselect
                 :model-value="form.is_active"
                 gender="feminine"
@@ -331,19 +305,18 @@ onMounted(() => {
                 helper-text="Las áreas inactivas no se proponen en asignaciones ni catálogos de alta por defecto."
                 @update:model-value="onUnitActiveChange"
               />
-            </CardContent>
-          </Card>
-
-          <div class="flex justify-end gap-4">
-            <Button type="button" variant="outline" @click="router.back()">
-              Cancelar
-            </Button>
-            <Button type="submit" :disabled="saving">
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              {{ saving ? 'Guardando...' : 'Guardar cambios' }}
-            </Button>
-          </div>
-        </div>
+            </div>
+            <div class="flex justify-end gap-2">
+              <Button type="button" variant="outline" @click="router.back()">
+                Cancelar
+              </Button>
+              <Button type="submit" :disabled="saving">
+                <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                {{ saving ? 'Guardando...' : 'Guardar cambios' }}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </form>
     </div>
   </SettingsLayout>

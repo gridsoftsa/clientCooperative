@@ -49,45 +49,50 @@ interface ImportHistoryRow {
 
 const TEMPLATE_CARDS: Array<{
   block: ImportBlock | null
+  step?: number
   title: string
   description: string
   filename: string
   icon: string
 }> = [
   {
-    block: null,
-    title: 'Libro completo',
-    description: 'Cuatro hojas (Oficinas, Areas, Cargos, Funcionarios) en un solo archivo para cargas masivas.',
-    filename: 'plantilla-estructura-organizacional.xlsx',
-    icon: 'i-lucide-book-copy',
-  },
-  {
     block: 'offices',
-    title: 'Solo agencias',
-    description: 'Hoja Oficinas: código único por sede, tipo (main/branch/headquarters), vigencias y ciudad.',
+    step: 1,
+    title: 'Agencias',
+    description: 'Paso 1: escriba desde la fila 2. Código primero. Tipo: Principal, Sucursal o Sede. El ejemplo está en una hoja aparte.',
     filename: 'plantilla-oficinas-estructura.xlsx',
     icon: 'i-lucide-building-2',
   },
   {
     block: 'units',
-    title: 'Solo áreas',
-    description: 'Hoja Areas: dependencias por código de oficina padre y jerarquía interna.',
+    step: 2,
+    title: 'Áreas',
+    description: 'Paso 2: código primero. El ejemplo está aparte; copie el código de agencia de la hoja gris «Agencias existentes».',
     filename: 'plantilla-areas-estructura.xlsx',
     icon: 'i-lucide-network',
   },
   {
     block: 'positions',
-    title: 'Solo cargos',
-    description: 'Hoja Cargos: puestos ligados al código del área y nivel jerárquico.',
+    step: 3,
+    title: 'Cargos',
+    description: 'Paso 3: código primero. Ejemplo en hoja aparte. Use «Areas existentes» para el código de área.',
     filename: 'plantilla-cargos-estructura.xlsx',
     icon: 'i-lucide-briefcase',
   },
   {
     block: 'staff',
-    title: 'Solo funcionarios',
-    description: 'Hoja Funcionarios: datos personales y vínculo a oficina/área/cargo por código.',
+    step: 4,
+    title: 'Funcionarios',
+    description: 'Paso 4: la cédula va primero. Ejemplo en hoja aparte. Nombres y documento no pueden duplicarse.',
     filename: 'plantilla-funcionarios-estructura.xlsx',
     icon: 'i-lucide-users',
+  },
+  {
+    block: null,
+    title: 'Libro completo',
+    description: 'Los cuatro pasos, índice de colores, ejemplos en hojas aparte y catálogos de consulta.',
+    filename: 'plantilla-estructura-organizacional.xlsx',
+    icon: 'i-lucide-book-copy',
   },
 ]
 
@@ -142,9 +147,13 @@ async function downloadTemplateCard(block: ImportBlock | null, filename: string,
   }
   downloadingKey.value = key
   try {
+    const query: Record<string, string | number> = {}
+    if (block) {
+      query.block = block
+    }
     await downloadReportFile(
       '/organizational-structure/meta/import-template',
-      block ? { block } : {},
+      query,
       filename,
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
@@ -338,23 +347,28 @@ onMounted(() => {
         <CardHeader>
           <CardTitle>Plantillas por tipo</CardTitle>
           <CardDescription class="leading-relaxed max-w-4xl">
-            Descargue el libro completo o una plantilla con una sola hoja para agencias, áreas, cargos o funcionarios.
-            En la fila 1, el fondo rosado indica columnas obligatorias y el azul claro las opcionales; cada celda usa el
-            formato <span class="font-mono text-xs">clave|descripción</span> (conserve la clave y el separador
-            <span class="font-mono text-xs">|</span> para que el sistema reconozca la columna). Si combina hojas en un
-            solo archivo, mantenga los nombres de hoja Oficinas, Areas, Cargos y Funcionarios.
+            La estructura se arma en este orden: <strong>1 agencias</strong>, <strong>2 áreas</strong>, <strong>3 cargos</strong> y
+            <strong>4 funcionarios</strong>. Cada archivo incluye una hoja <strong>Indice</strong> (rojo = obligatorio, verde = opcional)
+            y hojas <strong>Ejemplo</strong> aparte para no borrarlas al escribir. En agencias elija primero el
+            <strong>departamento</strong> y luego el <strong>municipio</strong> (listas DANE). En la hoja de carga, empiece en la
+            fila 2; la primera columna es el código (o la cédula). Títulos y listas van en español.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <div
               v-for="(card, idx) in TEMPLATE_CARDS"
               :key="card.block ?? `full-${idx}`"
               class="flex flex-col rounded-lg border bg-card p-4 shadow-sm"
+              :class="card.step ? 'xl:col-span-1' : 'xl:col-span-2'"
             >
               <div class="mb-3 flex items-start gap-3">
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                  <Icon :name="card.icon" class="h-5 w-5 text-muted-foreground" />
+                <div
+                  class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md font-semibold"
+                  :class="card.step ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'"
+                >
+                  <span v-if="card.step" class="text-sm tabular-nums">{{ card.step }}</span>
+                  <Icon v-else :name="card.icon" class="h-5 w-5" />
                 </div>
                 <div class="min-w-0 space-y-1">
                   <p class="font-semibold leading-tight">
@@ -388,9 +402,11 @@ onMounted(() => {
         <CardHeader>
           <CardTitle>Validar e importar</CardTitle>
           <CardDescription class="leading-relaxed max-w-4xl">
-            Hojas reconocidas: <strong>Oficinas</strong>, <strong>Areas</strong>, <strong>Cargos</strong>, <strong>Funcionarios</strong>.
-            La primera fila debe seguir siendo la cabecera (colores y texto clave|descripción como en la plantilla).
-            Valide el archivo; elija bloques a cargar y confirme. Cada importación exitosa queda en el historial inferior.
+            Hojas de carga: <strong>Oficinas</strong>, <strong>Areas</strong>, <strong>Cargos</strong>, <strong>Funcionarios</strong>
+            (en ese orden). Las hojas verdes de catálogo no se cargan. No se permiten códigos, cédulas ni nombres de
+            funcionario/usuario duplicados (ni en el archivo ni contra lo ya creado). Si un código de agencia, área o cargo
+            ya existe, úselo como referencia; si intenta crear otro registro con el mismo código, la fila se omite. Valide
+            el archivo, elija bloques y confirme.
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
