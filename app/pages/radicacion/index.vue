@@ -3,7 +3,6 @@ import TransferCreditApplicationSucursalDialog from '~/components/radicacion/Tra
 import CreditApplicationStatusBadges from '~/components/radicacion/CreditApplicationStatusBadges.vue'
 import {
   creditApplicationStatusFilterOptions as statusFilterOptions,
-  getCreditApplicationStatusLabel,
   isCreditApplicationTerminalImmutable,
   isCreditApplicationAdviserEditableStatus,
 } from '~/constants/credit-application-status'
@@ -17,7 +16,7 @@ definePageMeta({
 
 const router = useRouter()
 const { $api, $csrf } = useNuxtApp()
-const { hasAnyPermission, hasRole, hasAnyRole, hasPermission } = usePermissions()
+const { hasAnyPermission, hasRole, hasPermission } = usePermissions()
 /** Editar / continuar borrador: crear o editar (nueva solo exige crear) */
 const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
 const isDirectorAgencia = computed(() => hasRole('director_agencia'))
@@ -89,18 +88,15 @@ const pagination = ref({
   total: 0,
 })
 
-/** Filtros de listado (estado + rango por fecha de creación + búsqueda por asociado) */
+/** Filtros de listado (estado + rango por fecha de creación) */
 const filterStatus = ref<string>('all')
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
-const filterSearch = ref('')
-const canViewStatusEnteredAt = ref(false)
 
 const hasActiveFilters = computed(() => {
   return filterStatus.value !== 'all'
     || Boolean(filterDateFrom.value?.trim())
     || Boolean(filterDateTo.value?.trim())
-    || Boolean(filterSearch.value?.trim())
 })
 
 const skipFilterWatch = ref(false)
@@ -122,10 +118,6 @@ function buildListQuery(): Record<string, string | number> {
   if (to) {
     q.created_to = to
   }
-  const search = filterSearch.value?.trim()
-  if (search) {
-    q.search = search
-  }
   return q
 }
 
@@ -139,17 +131,12 @@ async function fetchApplications() {
 
   loading.value = true
   try {
-    const res = await $api<{
-      data: any[]
-      meta: typeof pagination.value & { can_view_status_entered_at?: boolean }
-    }>(
+    const res = await $api<{ data: any[]; meta: typeof pagination.value }>(
       '/credit-applications',
       { query: buildListQuery() },
     )
     applications.value = res.data
     pagination.value = res.meta
-    canViewStatusEnteredAt.value = Boolean(res.meta?.can_view_status_entered_at)
-      || hasAnyRole(['auxiliar_credito', 'analista', 'director_credito'])
   } catch (e) {
     console.error('Error cargando solicitudes:', e)
   } finally {
@@ -157,7 +144,7 @@ async function fetchApplications() {
   }
 }
 
-watch([filterStatus, filterDateFrom, filterDateTo, filterSearch], () => {
+watch([filterStatus, filterDateFrom, filterDateTo], () => {
   if (skipFilterWatch.value)
     return
   if (listFilterDebounce)
@@ -178,7 +165,6 @@ function clearFilters() {
   filterStatus.value = 'all'
   filterDateFrom.value = ''
   filterDateTo.value = ''
-  filterSearch.value = ''
   pagination.value.current_page = 1
   nextTick(() => {
     skipFilterWatch.value = false
@@ -213,19 +199,6 @@ function formatCreatedAt(iso: string | null | undefined): string {
   } catch {
     return '—'
   }
-}
-
-function displayOrDash(value: string | null | undefined): string {
-  const t = String(value ?? '').trim()
-  return t !== '' ? t : '—'
-}
-
-function statusEnteredLabel(item: { status?: string, label?: string }): string {
-  const fromApi = String(item.label ?? '').trim()
-  if (fromApi !== '') {
-    return fromApi
-  }
-  return getCreditApplicationStatusLabel(String(item.status ?? ''))
 }
 
 const deactivateSuccess = ref(false)
@@ -422,22 +395,6 @@ watch(transferDialogOpen, (v) => {
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:flex-wrap sm:items-end">
-          <div class="grid w-full min-w-0 gap-3 sm:max-w-sm sm:shrink-0">
-            <Label for="filter-search" class="text-xs text-muted-foreground">Buscar asociado</Label>
-            <div class="relative">
-              <Icon
-                name="i-lucide-search"
-                class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                id="filter-search"
-                v-model="filterSearch"
-                type="search"
-                placeholder="Nombre o cédula"
-                class="pl-8"
-              />
-            </div>
-          </div>
           <div class="grid w-full gap-3 sm:max-w-[220px] sm:shrink-0">
             <Label for="filter-status" class="text-xs text-muted-foreground">Estado</Label>
             <Select v-model="filterStatus">
@@ -495,23 +452,16 @@ watch(transferDialogOpen, (v) => {
             No hay solicitudes. Crea una nueva para comenzar.
           </template>
         </div>
-        <div v-else class="overflow-x-auto rounded-lg border">
+        <div v-else class="border rounded-lg overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Código</TableHead>
-                <TableHead>Cédula</TableHead>
-                <TableHead>Asociado</TableHead>
-                <TableHead>Agencia</TableHead>
-                <TableHead>Asesor</TableHead>
                 <TableHead>Radicado externo</TableHead>
                 <TableHead>Monto</TableHead>
                 <TableHead>Plazo</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Fecha y hora</TableHead>
-                <TableHead v-if="canViewStatusEnteredAt" class="min-w-[220px]">
-                  Llegada a estados
-                </TableHead>
                 <TableHead class="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -567,24 +517,6 @@ watch(transferDialogOpen, (v) => {
                   </NuxtLink>
                   <span v-else>{{ app.code || '-' }}</span>
                 </TableCell>
-                <TableCell class="whitespace-nowrap font-mono text-sm">
-                  {{ displayOrDash(app.debtor_document_number) }}
-                </TableCell>
-                <TableCell class="max-w-[220px]">
-                  <span class="block truncate" :title="displayOrDash(app.debtor_name)">
-                    {{ displayOrDash(app.debtor_name) }}
-                  </span>
-                </TableCell>
-                <TableCell class="max-w-[180px]">
-                  <span class="block truncate" :title="displayOrDash(app.agency_name)">
-                    {{ displayOrDash(app.agency_name) }}
-                  </span>
-                </TableCell>
-                <TableCell class="max-w-[180px]">
-                  <span class="block truncate" :title="displayOrDash(app.adviser_name)">
-                    {{ displayOrDash(app.adviser_name) }}
-                  </span>
-                </TableCell>
                 <TableCell class="font-mono text-sm">{{ app.numero_radicado_externo || '-' }}</TableCell>
                 <TableCell>{{ formatCurrency(Number(app.amount_requested)) }}</TableCell>
                 <TableCell>{{ app.term_months }} meses</TableCell>
@@ -602,22 +534,6 @@ watch(transferDialogOpen, (v) => {
                 </TableCell>
                 <TableCell class="whitespace-nowrap text-sm tabular-nums">
                   {{ formatCreatedAt(app.created_at) }}
-                </TableCell>
-                <TableCell v-if="canViewStatusEnteredAt" class="min-w-[220px] max-w-[280px] align-top">
-                  <ul
-                    v-if="Array.isArray(app.status_entered_at) && app.status_entered_at.length > 0"
-                    class="space-y-1 text-[11px] leading-tight text-muted-foreground"
-                  >
-                    <li
-                      v-for="item in app.status_entered_at"
-                      :key="`${app.id}-${item.status}`"
-                      class="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-2"
-                    >
-                      <span class="font-medium text-foreground">{{ statusEnteredLabel(item) }}</span>
-                      <span class="shrink-0 tabular-nums">{{ formatCreatedAt(item.entered_at) }}</span>
-                    </li>
-                  </ul>
-                  <span v-else>—</span>
                 </TableCell>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-1">
