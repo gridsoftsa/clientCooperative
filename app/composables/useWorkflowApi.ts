@@ -234,27 +234,61 @@ export function useWorkflowApi() {
     return `${resolveApiBase()}/api/workflow/collaborations/${collaborationId}/files/${fileId}`
   }
 
-  function openBlobInNewTab(blob: Blob, mimeType?: string): void {
+  function parseContentDispositionFilename(header: string | null): string | null {
+    if (!header) {
+      return null
+    }
+
+    const utfMatch = header.match(/filename\*\s*=\s*UTF-8''([^;]+)/i)
+    if (utfMatch?.[1]) {
+      try {
+        return decodeURIComponent(utfMatch[1].trim())
+      }
+      catch {
+        return utfMatch[1].trim()
+      }
+    }
+
+    const asciiMatch = header.match(/filename\s*=\s*("(?:\\.|[^"])*"|[^;]+)/i)
+    if (!asciiMatch?.[1]) {
+      return null
+    }
+
+    return asciiMatch[1].replace(/^"|"$/g, '').replace(/\\"/g, '"').trim()
+  }
+
+  function openBlobInNewTab(blob: Blob, mimeType?: string, filename?: string | null): void {
     if (import.meta.server) {
       return
     }
 
-    const typedBlob = mimeType && blob.type !== mimeType
-      ? new Blob([blob], { type: mimeType })
-      : blob
-    const objectUrl = URL.createObjectURL(typedBlob)
+    const type = mimeType && blob.type !== mimeType
+      ? mimeType
+      : (blob.type || mimeType || 'application/octet-stream')
+    const safeName = filename?.trim() || ''
+    const namedBlob = safeName
+      ? new File([blob], safeName, { type })
+      : (mimeType && blob.type !== mimeType ? new Blob([blob], { type: mimeType }) : blob)
+    const objectUrl = URL.createObjectURL(namedBlob)
     const a = document.createElement('a')
     a.href = objectUrl
-    a.target = '_blank'
     a.rel = 'noopener noreferrer'
     a.style.cssText = 'position:fixed;left:-9999px;top:0'
+
+    if (safeName) {
+      a.download = safeName
+    }
+    else {
+      a.target = '_blank'
+    }
+
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000)
   }
 
-  async function fetchAuthenticatedBlob(url: string): Promise<Blob> {
+  async function fetchAuthenticatedBlob(url: string): Promise<{ blob: Blob, filename: string | null }> {
     if (import.meta.server) {
       throw new Error('No disponible en servidor.')
     }
@@ -288,16 +322,20 @@ export function useWorkflowApi() {
       throw new Error('No se pudo obtener el archivo.')
     }
 
-    return await res.blob()
+    return {
+      blob: await res.blob(),
+      filename: parseContentDispositionFilename(res.headers.get('Content-Disposition')),
+    }
   }
 
   async function viewCollaborationFileInNewTab(
     collaborationId: number,
     fileId: number,
     mimeType?: string | null,
+    originalName?: string | null,
   ): Promise<void> {
-    const blob = await fetchAuthenticatedBlob(collaborationFileViewUrl(collaborationId, fileId))
-    openBlobInNewTab(blob, mimeType ?? undefined)
+    const { blob, filename } = await fetchAuthenticatedBlob(collaborationFileViewUrl(collaborationId, fileId))
+    openBlobInNewTab(blob, mimeType ?? undefined, originalName || filename)
   }
 
   return {

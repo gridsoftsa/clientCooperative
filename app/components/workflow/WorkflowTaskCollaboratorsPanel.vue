@@ -123,11 +123,11 @@ function statusLabel(status: WorkflowTaskCollaboratorRow['status']): string {
   return status === 'responded' ? 'Respondió' : 'Pendiente'
 }
 
-async function viewFile(row: WorkflowTaskCollaboratorRow, fileId: number, mimeType?: string | null) {
-  openingFileId.value = fileId
+async function viewFile(row: WorkflowTaskCollaboratorRow, file: WorkflowTaskCollaboratorRow['files'][number]) {
+  openingFileId.value = file.id
 
   try {
-    await workflowApi.viewCollaborationFileInNewTab(row.id, fileId, mimeType)
+    await workflowApi.viewCollaborationFileInNewTab(row.id, file.id, file.mime_type, file.original_name)
   }
   catch {
     toast.error('No se pudo abrir el archivo del colaborador.')
@@ -345,7 +345,7 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
               size="sm"
               class="shrink-0"
               :disabled="openingFileId === file.id"
-              @click="viewFile(row, file.id, file.mime_type)"
+              @click="viewFile(row, file)"
             >
               <Icon
                 :name="openingFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"

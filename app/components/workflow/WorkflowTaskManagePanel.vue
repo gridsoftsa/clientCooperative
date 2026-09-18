@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import ArchivalFileWorkflowUploadPanel from '~/components/workflow/ArchivalFileWorkflowUploadPanel.vue'
 import WorkflowTaskCollaboratorsPanel from '~/components/workflow/WorkflowTaskCollaboratorsPanel.vue'
 import WorkflowTaskFilingAssignPanel from '~/components/workflow/WorkflowTaskFilingAssignPanel.vue'
+import WorkflowTaskFilingClosePanel from '~/components/workflow/WorkflowTaskFilingClosePanel.vue'
 import WorkflowTaskFilingAttachmentsPanel from '~/components/workflow/WorkflowTaskFilingAttachmentsPanel.vue'
 import WorkflowTaskFilingSummaryPanel from '~/components/workflow/WorkflowTaskFilingSummaryPanel.vue'
 import WorkflowTaskHistoryTimeline from '~/components/workflow/WorkflowTaskHistoryTimeline.vue'
@@ -70,6 +71,15 @@ const showFilingAssignment = computed(() =>
   && props.context?.filing?.status === 'registered'
   && Boolean(props.context?.filing?.id),
 )
+const canCloseFilingFromWorkflow = computed(() =>
+  hasPermission('ventanilla_gestionar')
+  && props.context?.is_active !== false
+  && props.context?.open_task?.stage?.ventanilla_role === 'response_close'
+  && Boolean(props.context?.filing?.id)
+  && props.context?.filing?.status !== 'closed'
+  && props.context?.filing?.status !== 'voided',
+)
+const filingRequiresResponse = computed(() => props.context?.filing?.requires_response === true)
 
 const stageRules = computed(() => props.context?.open_task?.stage ?? props.task.stage ?? null)
 const returnableStages = computed(() => props.context?.returnable_stages ?? [])
@@ -133,6 +143,38 @@ async function runCommentAction() {
   finally {
     saving.value = false
   }
+}
+
+async function attachPendingFilesIfNeeded(): Promise<boolean> {
+  if (!attachmentsPanelRef.value) {
+    return true
+  }
+
+  return attachmentsPanelRef.value.attachPendingFiles()
+}
+
+function scrollToFilingClose(): void {
+  document.getElementById('workflow-filing-close')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function goToFilingGestion(): void {
+  const filingId = props.context?.filing?.id
+
+  if (!filingId) {
+    return
+  }
+
+  void navigateTo(`/ventanilla/${filingId}?section=gestion`)
+}
+
+function onFilingClosed(): void {
+  if (props.closeOnWorkflowAction) {
+    emit('close')
+
+    return
+  }
+
+  emit('changed')
 }
 
 async function advance() {
@@ -271,9 +313,30 @@ function refreshContext() {
 
           <Alert v-if="advanceGuidance" class="border-primary/40 bg-primary/5">
             <Icon name="i-lucide-info" class="size-4" />
-            <AlertTitle>Cierre desde ventanilla</AlertTitle>
-            <AlertDescription>
-              {{ advanceGuidance }}
+            <AlertTitle>Cerrar el radicado</AlertTitle>
+            <AlertDescription class="space-y-3">
+              <p>
+                {{ canCloseFilingFromWorkflow
+                  ? 'Esta etapa no usa «Avanzar etapa». Adjunte documentos si aplica y complete el cierre al final de esta pantalla.'
+                  : advanceGuidance }}
+              </p>
+              <Button
+                v-if="canCloseFilingFromWorkflow"
+                size="sm"
+                type="button"
+                variant="outline"
+                @click="scrollToFilingClose"
+              >
+                Ir al cierre
+              </Button>
+              <Button
+                v-else-if="hasPermission('ventanilla_ver') && context?.filing?.id"
+                size="sm"
+                type="button"
+                @click="goToFilingGestion"
+              >
+                Ir a Gestión del radicado
+              </Button>
             </AlertDescription>
           </Alert>
 
@@ -311,7 +374,8 @@ function refreshContext() {
             <AlertTitle>Colaboración completada</AlertTitle>
             <AlertDescription class="space-y-3">
               <p>
-                Lo solicitado a los colaboradores ya fue respondido. Revise los documentos en la pestaña Colaboradores y avance la etapa.
+                Lo solicitado a los colaboradores ya fue respondido. Revise los documentos en la pestaña Colaboradores
+                {{ canCloseFilingFromWorkflow || advanceGuidance ? ' y luego cierre el radicado.' : ' y avance la etapa.' }}
               </p>
               <Button size="sm" type="button" variant="outline" @click="activeTab = 'collaborators'">
                 Ver aportes
@@ -394,6 +458,15 @@ function refreshContext() {
         :initial-assigned-user-id="context.filing.assigned_user?.id"
         :stage-name="context.open_task?.stage?.name"
         @assigned="refreshContext"
+      />
+
+      <WorkflowTaskFilingClosePanel
+        v-if="canCloseFilingFromWorkflow && context?.filing"
+        :filing-id="context.filing.id"
+        :requires-response="filingRequiresResponse"
+        :stage-name="context.open_task?.stage?.name"
+        :before-submit="attachPendingFilesIfNeeded"
+        @closed="onFilingClosed"
       />
     </TabsContent>
 

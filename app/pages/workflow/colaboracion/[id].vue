@@ -103,11 +103,16 @@ async function submitResponse() {
   }
 }
 
-async function viewContributionFile(fileId: number, mimeType?: string | null) {
-  openingFileId.value = fileId
+async function viewContributionFile(file: { id: number, mime_type?: string | null, original_name?: string | null }) {
+  openingFileId.value = file.id
 
   try {
-    await workflowApi.viewCollaborationFileInNewTab(collaborationId.value, fileId, mimeType)
+    await workflowApi.viewCollaborationFileInNewTab(
+      collaborationId.value,
+      file.id,
+      file.mime_type,
+      file.original_name,
+    )
   }
   catch (error) {
     toast.error(extractApiErrorMessage(error))
@@ -224,7 +229,7 @@ async function viewContributionFile(fileId: number, mimeType?: string | null) {
               size="sm"
               class="shrink-0"
               :disabled="openingFileId === file.id"
-              @click="viewContributionFile(file.id, file.mime_type)"
+              @click="viewContributionFile(file)"
             >
               <Icon
                 :name="openingFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"

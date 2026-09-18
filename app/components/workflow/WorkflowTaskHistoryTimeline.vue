@@ -183,6 +183,7 @@ async function viewHistoryFile(event: WorkflowHistoryEvent, file: WorkflowHistor
         file.collaboration_id ?? event.metadata?.collaboration_id ?? 0,
         file.id,
         file.mime_type,
+        file.original_name,
       )
 
       return
