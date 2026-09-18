@@ -175,6 +175,20 @@ export interface WorkflowFilingContext {
     created_at: string | null
     created_by: { id: number, name: string } | null
     stage: { key: string, name: string } | null
+    metadata?: {
+      source?: string
+      collaboration_id?: number
+      filing_id?: number
+      files?: Array<{
+        id: number
+        title: string
+        original_name: string
+        mime_type?: string | null
+        source?: string
+        collaboration_id?: number
+        filing_id?: number
+      }>
+    } | null
   }>
   is_active: boolean
   advance_guidance?: string | null
@@ -195,6 +209,7 @@ export interface WorkflowFilingContext {
 export interface WorkflowCollaboratorsSummary {
   total: number
   pending: number
+  responded?: number
   all_responded: boolean
   can_manage: boolean
   my_pending_collaboration_id?: number | null

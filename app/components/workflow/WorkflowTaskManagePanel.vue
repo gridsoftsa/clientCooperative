@@ -42,16 +42,27 @@ const canAttachFilingFiles = computed(() =>
   && props.context?.open_task
   && (hasPermission('ventanilla_gestionar') || hasPermission('workflow_gestionar')),
 )
-const showCollaboratorsTab = computed(() =>
-  props.context?.open_task?.stage?.ventanilla_role === 'management'
-  && props.context?.collaborators?.can_manage,
-)
-const showFilingTab = computed(() => Boolean(props.context?.filing?.id))
-const collaboratorsPending = computed(() => props.context?.collaborators?.pending ?? 0)
-const myPendingCollaborationId = computed(() => props.context?.collaborators?.my_pending_collaboration_id ?? null)
 const canManage = computed(() => hasPermission('workflow_gestionar'))
 const canReassign = computed(() => hasPermission('workflow_reasignar'))
 const canAssignFiling = computed(() => hasPermission('ventanilla_asignar'))
+const showFilingTab = computed(() => Boolean(props.context?.filing?.id))
+const collaboratorsPending = computed(() => props.context?.collaborators?.pending ?? 0)
+const collaboratorsTotal = computed(() => props.context?.collaborators?.total ?? 0)
+const collaboratorsCompleted = computed(() =>
+  collaboratorsTotal.value > 0 && collaboratorsPending.value === 0,
+)
+const showCollaboratorsTab = computed(() =>
+  canManage.value
+  && (
+    props.context?.open_task?.stage?.ventanilla_role === 'management'
+    || collaboratorsTotal.value > 0
+  ),
+)
+const canInviteCollaborators = computed(() =>
+  props.context?.open_task?.stage?.ventanilla_role === 'management'
+  && props.context?.collaborators?.can_manage === true,
+)
+const myPendingCollaborationId = computed(() => props.context?.collaborators?.my_pending_collaboration_id ?? null)
 const showFilingAssignment = computed(() =>
   canAssignFiling.value
   && props.context?.is_active !== false
@@ -87,10 +98,13 @@ async function runWorkflowAction(action: () => Promise<unknown>, success: string
   try {
     await action()
     toast.success(success)
-    emit('changed')
     if (props.closeOnWorkflowAction) {
       emit('close')
+
+      return
     }
+
+    emit('changed')
   }
   catch (error) {
     toast.error(extractApiErrorMessage(error))
@@ -142,11 +156,14 @@ async function advance() {
         ? 'Documentos adjuntados y etapa avanzada correctamente.'
         : 'Tarea avanzada.',
     )
-    emit('changed')
 
     if (props.closeOnWorkflowAction) {
       emit('close')
+
+      return
     }
+
+    emit('changed')
   }
   catch (error) {
     toast.error(extractApiErrorMessage(error))
@@ -197,6 +214,9 @@ function refreshContext() {
         Colaboradores
         <Badge v-if="collaboratorsPending > 0" variant="destructive" class="ml-2">
           {{ collaboratorsPending }}
+        </Badge>
+        <Badge v-else-if="collaboratorsCompleted" variant="secondary" class="ml-2">
+          Listo
         </Badge>
       </TabsTrigger>
       <TabsTrigger v-if="showArchivalTab" value="archival" class="flex-1 sm:flex-none">
@@ -283,6 +303,19 @@ function refreshContext() {
             <AlertTitle>Colaboradores pendientes</AlertTitle>
             <AlertDescription>
               Hay {{ collaboratorsPending }} colaborador(es) sin respuesta. Revise la pestaña Colaboradores antes de avanzar.
+            </AlertDescription>
+          </Alert>
+
+          <Alert v-else-if="collaboratorsCompleted" class="border-primary/40 bg-primary/5">
+            <Icon name="i-lucide-circle-check" class="size-4" />
+            <AlertTitle>Colaboración completada</AlertTitle>
+            <AlertDescription class="space-y-3">
+              <p>
+                Lo solicitado a los colaboradores ya fue respondido. Revise los documentos en la pestaña Colaboradores y avance la etapa.
+              </p>
+              <Button size="sm" type="button" variant="outline" @click="activeTab = 'collaborators'">
+                Ver aportes
+              </Button>
             </AlertDescription>
           </Alert>
         </div>
@@ -375,6 +408,7 @@ function refreshContext() {
     >
       <WorkflowTaskCollaboratorsPanel
         :task-id="context.open_task.id"
+        :read-only="!canInviteCollaborators"
         @changed="refreshContext"
       />
     </TabsContent>
@@ -387,7 +421,10 @@ function refreshContext() {
     </TabsContent>
 
     <TabsContent value="history" class="mt-6">
-      <WorkflowTaskHistoryTimeline :events="context?.events ?? []" />
+      <WorkflowTaskHistoryTimeline
+        :events="context?.events ?? []"
+        :filing-id="context?.filing?.id ?? null"
+      />
     </TabsContent>
   </Tabs>
 </template>

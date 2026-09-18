@@ -26,6 +26,7 @@ const responseNote = ref('')
 const attachment = ref<DocumentAttachmentRow>(createDocumentAttachmentRow())
 const collaboration = ref<Awaited<ReturnType<typeof workflowApi.fetchCollaboration>> | null>(null)
 const activeTab = ref('responder')
+const openingFileId = ref<number | null>(null)
 
 const isResponded = computed(() => collaboration.value?.status === 'responded')
 const filingFileCount = computed(() => collaboration.value?.filing?.files.length ?? 0)
@@ -99,6 +100,20 @@ async function submitResponse() {
   }
   finally {
     saving.value = false
+  }
+}
+
+async function viewContributionFile(fileId: number, mimeType?: string | null) {
+  openingFileId.value = fileId
+
+  try {
+    await workflowApi.viewCollaborationFileInNewTab(collaborationId.value, fileId, mimeType)
+  }
+  catch (error) {
+    toast.error(extractApiErrorMessage(error))
+  }
+  finally {
+    openingFileId.value = null
   }
 }
 </script>
@@ -191,13 +206,33 @@ async function submitResponse() {
           {{ collaboration.response_note }}
         </p>
         <ul v-if="collaboration.files.length" class="divide-y rounded-lg border">
-          <li v-for="file in collaboration.files" :key="file.id" class="px-4 py-3 text-sm">
-            <p class="font-medium">
-              {{ file.title }}
-            </p>
-            <p class="text-xs text-muted-foreground">
-              {{ file.original_name }} · folios {{ file.folio_start }}–{{ file.folio_end }}
-            </p>
+          <li
+            v-for="file in collaboration.files"
+            :key="file.id"
+            class="flex items-start justify-between gap-3 px-4 py-3 text-sm"
+          >
+            <div class="min-w-0">
+              <p class="font-medium">
+                {{ file.title }}
+              </p>
+              <p class="text-xs text-muted-foreground">
+                {{ file.original_name }} · folios {{ file.folio_start }}–{{ file.folio_end }}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0"
+              :disabled="openingFileId === file.id"
+              @click="viewContributionFile(file.id, file.mime_type)"
+            >
+              <Icon
+                :name="openingFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+                class="mr-1 size-4"
+                :class="{ 'animate-spin': openingFileId === file.id }"
+              />
+              Ver
+            </Button>
           </li>
         </ul>
       </TabsContent>

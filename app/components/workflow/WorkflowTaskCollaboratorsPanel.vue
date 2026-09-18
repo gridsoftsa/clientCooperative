@@ -7,6 +7,7 @@ import { extractApiErrorMessage } from '~/utils/workflow-task-ui'
 
 const props = defineProps<{
   taskId: number
+  readOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -29,6 +30,7 @@ const selectedPositionId = ref<string>('')
 const selectedStaffId = ref<string>('')
 const staffQuery = ref('')
 const requestNote = ref('')
+const openingFileId = ref<number | null>(null)
 
 const selectedStaff = computed(() =>
   staffResults.value.find(item => String(item.id) === selectedStaffId.value) ?? null,
@@ -102,6 +104,10 @@ watch(selectedPositionId, async () => {
 })
 
 onMounted(async () => {
+  if (props.readOnly) {
+    return
+  }
+
   await loadOrgUnits()
 })
 
@@ -115,6 +121,20 @@ function staffLabel(item: OrgStaffListItem): string {
 
 function statusLabel(status: WorkflowTaskCollaboratorRow['status']): string {
   return status === 'responded' ? 'Respondió' : 'Pendiente'
+}
+
+async function viewFile(row: WorkflowTaskCollaboratorRow, fileId: number, mimeType?: string | null) {
+  openingFileId.value = fileId
+
+  try {
+    await workflowApi.viewCollaborationFileInNewTab(row.id, fileId, mimeType)
+  }
+  catch {
+    toast.error('No se pudo abrir el archivo del colaborador.')
+  }
+  finally {
+    openingFileId.value = null
+  }
 }
 
 async function inviteCollaborator() {
@@ -169,7 +189,7 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
 
 <template>
   <div class="space-y-5">
-    <Alert v-if="summary.pending > 0" variant="secondary">
+    <Alert v-if="summary.pending > 0 && !readOnly" variant="secondary">
       <Icon name="i-lucide-users" class="size-4" />
       <AlertTitle>Respuestas pendientes</AlertTitle>
       <AlertDescription>
@@ -177,7 +197,17 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
       </AlertDescription>
     </Alert>
 
-    <Alert>
+    <Alert v-else-if="summary.total > 0 && summary.pending === 0">
+      <Icon name="i-lucide-circle-check" class="size-4" />
+      <AlertTitle>Aportes de colaboradores</AlertTitle>
+      <AlertDescription>
+        {{ readOnly
+          ? 'Documentos y notas registrados en etapas anteriores. Puede abrirlos aquí o en el historial.'
+          : 'Todos los colaboradores ya registraron su aporte. Puede abrir los documentos y avanzar la etapa.' }}
+      </AlertDescription>
+    </Alert>
+
+    <Alert v-if="!readOnly">
       <Icon name="i-lucide-bell-ring" class="size-4" />
       <AlertTitle>Notificación al colaborador</AlertTitle>
       <AlertDescription>
@@ -186,7 +216,7 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
       </AlertDescription>
     </Alert>
 
-    <div class="space-y-3 rounded-lg border bg-muted/20 p-4">
+    <div v-if="!readOnly" class="space-y-3 rounded-lg border bg-muted/20 p-4">
       <p class="text-sm font-medium">
         Agregar colaborador
       </p>
@@ -280,6 +310,7 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
             </p>
             <p class="mt-1 text-xs text-muted-foreground">
               Invitado por {{ row.invited_by?.name ?? '—' }}
+              <span v-if="row.task?.stage"> · {{ row.task.stage.name }}</span>
             </p>
             <p v-if="row.request_note" class="mt-2 whitespace-pre-wrap text-sm">
               {{ row.request_note }}
@@ -290,18 +321,44 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
           </Badge>
         </div>
 
-        <p v-if="row.response_note" class="mt-2 text-muted-foreground">
+        <p v-if="row.response_note" class="mt-2 whitespace-pre-wrap text-muted-foreground">
           {{ row.response_note }}
         </p>
 
-        <ul v-if="row.files.length" class="mt-2 space-y-1 text-xs text-muted-foreground">
-          <li v-for="file in row.files" :key="file.id">
-            {{ file.title }} ({{ file.original_name }})
+        <ul v-if="row.files.length" class="mt-3 divide-y rounded-lg border">
+          <li
+            v-for="file in row.files"
+            :key="file.id"
+            class="flex items-start justify-between gap-3 px-3 py-2"
+          >
+            <div class="min-w-0">
+              <p class="font-medium">
+                {{ file.title }}
+              </p>
+              <p class="text-xs text-muted-foreground">
+                {{ file.original_name }}
+                <span v-if="file.folio_start && file.folio_end"> · folios {{ file.folio_start }}–{{ file.folio_end }}</span>
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0"
+              :disabled="openingFileId === file.id"
+              @click="viewFile(row, file.id, file.mime_type)"
+            >
+              <Icon
+                :name="openingFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+                class="mr-1 size-4"
+                :class="{ 'animate-spin': openingFileId === file.id }"
+              />
+              Ver
+            </Button>
           </li>
         </ul>
 
         <Button
-          v-if="row.status === 'pending'"
+          v-if="row.status === 'pending' && !readOnly"
           variant="ghost"
           size="sm"
           class="mt-3 text-destructive hover:text-destructive"
@@ -314,7 +371,7 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
     </div>
 
     <p v-else class="text-sm text-muted-foreground">
-      Aún no hay colaboradores en esta tarea.
+      Aún no hay colaboradores en este proceso.
     </p>
   </div>
 </template>

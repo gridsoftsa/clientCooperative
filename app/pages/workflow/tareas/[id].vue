@@ -128,7 +128,7 @@ async function load() {
 }
 
 function goBack() {
-  router.push(backUrl.value)
+  void navigateTo(backUrl.value)
 }
 
 async function onChanged() {
@@ -136,7 +136,7 @@ async function onChanged() {
 }
 
 function onWorkflowCompleted() {
-  goBack()
+  void navigateTo(backUrl.value)
 }
 
 watch(taskId, () => {
@@ -217,7 +217,7 @@ onMounted(() => {
           :task="task"
           :context="context"
           :users="users"
-          close-on-workflow-action
+          :close-on-workflow-action="true"
           @changed="onChanged"
           @refreshed="loadContext"
           @close="onWorkflowCompleted"

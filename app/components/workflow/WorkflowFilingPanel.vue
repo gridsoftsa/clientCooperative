@@ -98,6 +98,8 @@ function eventLabel(type: string) {
     returned: 'Devolución',
     reassigned: 'Reasignación',
     comment: 'Comentario',
+    collaboration_responded: 'Aporte de colaborador',
+    files_attached: 'Documentos adjuntos',
     completed: 'Proceso cerrado',
     cancelled: 'Proceso cancelado',
     escalated: 'Escalamiento SLA etapa',

@@ -224,6 +224,82 @@ export function useWorkflowApi() {
     return res.data
   }
 
+  function resolveApiBase(): string {
+    const config = useRuntimeConfig()
+
+    return String(config.public.apiBase || 'http://localhost:8585').replace(/\/$/, '')
+  }
+
+  function collaborationFileViewUrl(collaborationId: number, fileId: number): string {
+    return `${resolveApiBase()}/api/workflow/collaborations/${collaborationId}/files/${fileId}`
+  }
+
+  function openBlobInNewTab(blob: Blob, mimeType?: string): void {
+    if (import.meta.server) {
+      return
+    }
+
+    const typedBlob = mimeType && blob.type !== mimeType
+      ? new Blob([blob], { type: mimeType })
+      : blob
+    const objectUrl = URL.createObjectURL(typedBlob)
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.target = '_blank'
+    a.rel = 'noopener noreferrer'
+    a.style.cssText = 'position:fixed;left:-9999px;top:0'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000)
+  }
+
+  async function fetchAuthenticatedBlob(url: string): Promise<Blob> {
+    if (import.meta.server) {
+      throw new Error('No disponible en servidor.')
+    }
+
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/)
+    let token = match?.[1] ? decodeURIComponent(match[1]) : ''
+    if (!token) {
+      try {
+        await $fetch('/sanctum/csrf-cookie', {
+          baseURL: resolveApiBase(),
+          credentials: 'include',
+        })
+      }
+      catch {
+        // ignore
+      }
+      const retry = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/)
+      token = retry?.[1] ? decodeURIComponent(retry[1]) : ''
+    }
+
+    const res = await fetch(url, {
+      credentials: 'include',
+      headers: {
+        Accept: '*/*',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(token ? { 'X-XSRF-TOKEN': token } : {}),
+      },
+    })
+
+    if (!res.ok) {
+      throw new Error('No se pudo obtener el archivo.')
+    }
+
+    return await res.blob()
+  }
+
+  async function viewCollaborationFileInNewTab(
+    collaborationId: number,
+    fileId: number,
+    mimeType?: string | null,
+  ): Promise<void> {
+    const blob = await fetchAuthenticatedBlob(collaborationFileViewUrl(collaborationId, fileId))
+    openBlobInNewTab(blob, mimeType ?? undefined)
+  }
+
   return {
     fetchBoard,
     fetchTasks,
@@ -252,5 +328,6 @@ export function useWorkflowApi() {
     fetchMyPendingCollaborations,
     fetchCollaboration,
     respondCollaboration,
+    viewCollaborationFileInNewTab,
   }
 }

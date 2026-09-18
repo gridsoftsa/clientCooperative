@@ -1,11 +1,18 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
 import type { WorkflowFilingContext } from '~/types/workflow'
 
 type WorkflowHistoryEvent = WorkflowFilingContext['events'][number]
+type WorkflowHistoryFile = NonNullable<NonNullable<WorkflowHistoryEvent['metadata']>['files']>[number]
 
 const props = defineProps<{
   events: WorkflowHistoryEvent[]
+  filingId?: number | null
 }>()
+
+const workflowApi = useWorkflowApi()
+const ventanillaApi = useVentanillaApi()
+const openingFileKey = ref<string | null>(null)
 
 const INITIAL_VISIBLE = 5
 const LOAD_MORE_STEP = 5
@@ -56,6 +63,20 @@ const EVENT_PRESENTATION: Record<string, EventPresentation> = {
     nodeClass: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/60 dark:text-blue-300',
     badgeClass: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-200',
     accentClass: 'border-l-blue-500',
+  },
+  collaboration_responded: {
+    label: 'Aporte de colaborador',
+    icon: 'i-lucide-paperclip',
+    nodeClass: 'border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900 dark:bg-teal-950/60 dark:text-teal-300',
+    badgeClass: 'border-teal-200 bg-teal-50 text-teal-800 dark:border-teal-900 dark:bg-teal-950/50 dark:text-teal-200',
+    accentClass: 'border-l-teal-500',
+  },
+  files_attached: {
+    label: 'Documentos adjuntos',
+    icon: 'i-lucide-file-plus',
+    nodeClass: 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-300',
+    badgeClass: 'border-indigo-200 bg-indigo-50 text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/50 dark:text-indigo-200',
+    accentClass: 'border-l-indigo-500',
   },
   comment: {
     label: 'Comentario',
@@ -141,6 +162,46 @@ function formatDateLabel(iso: string | null | undefined): string | null {
 
 function actorLabel(event: WorkflowHistoryEvent): string {
   return event.created_by?.name ?? 'Sistema'
+}
+
+function eventFiles(event: WorkflowHistoryEvent) {
+  return event.metadata?.files ?? []
+}
+
+function fileKey(eventId: number, fileId: number): string {
+  return `${eventId}-${fileId}`
+}
+
+async function viewHistoryFile(event: WorkflowHistoryEvent, file: WorkflowHistoryFile) {
+
+  const key = fileKey(event.id, file.id)
+  openingFileKey.value = key
+
+  try {
+    if (file.source === 'collaborator' || file.collaboration_id) {
+      await workflowApi.viewCollaborationFileInNewTab(
+        file.collaboration_id ?? event.metadata?.collaboration_id ?? 0,
+        file.id,
+        file.mime_type,
+      )
+
+      return
+    }
+
+    const filingId = file.filing_id ?? event.metadata?.filing_id ?? props.filingId
+
+    if (!filingId) {
+      throw new Error('No se encontró el radicado del archivo.')
+    }
+
+    await ventanillaApi.viewFilingFileInNewTab(filingId, file.id, file.mime_type ?? undefined)
+  }
+  catch {
+    toast.error('No se pudo abrir el archivo.')
+  }
+  finally {
+    openingFileKey.value = null
+  }
 }
 
 function showMore() {
@@ -268,6 +329,39 @@ function showLess() {
                 {{ event.stage.name }}
               </span>
             </div>
+
+            <ul v-if="eventFiles(event).length" class="mt-3 divide-y rounded-lg border bg-muted/20">
+              <li
+                v-for="file in eventFiles(event)"
+                :key="file.id"
+                class="flex items-start justify-between gap-3 px-3 py-2 text-sm"
+              >
+                <div class="min-w-0">
+                  <p class="font-medium">
+                    {{ file.title }}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {{ file.original_name }}
+                    <span v-if="file.source === 'collaborator'"> · colaborador</span>
+                    <span v-else> · responsable</span>
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="shrink-0"
+                  :disabled="openingFileKey === fileKey(event.id, file.id)"
+                  @click="viewHistoryFile(event, file)"
+                >
+                  <Icon
+                    :name="openingFileKey === fileKey(event.id, file.id) ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+                    class="mr-1 size-4"
+                    :class="{ 'animate-spin': openingFileKey === fileKey(event.id, file.id) }"
+                  />
+                  Ver
+                </Button>
+              </li>
+            </ul>
           </article>
         </li>
       </ol>
