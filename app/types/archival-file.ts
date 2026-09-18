@@ -27,6 +27,20 @@ export interface ArchivalFileTypeProducerArea {
   trd_table?: { id: number, org_unit_id?: number, org_unit?: { id: number, name: string, code?: string } } | null
 }
 
+export interface ArchivalFileTypeProducerAreaDraft {
+  id?: number
+  org_unit_id: number | null
+  trd_table_id: number | null
+  doc_series_id: number | null
+  doc_subseries_id: number | null
+  doc_document_type_id: number | null
+  sort_order: number
+  org_unit?: { id: number, name: string, code?: string } | null
+  doc_series?: { id: number, code: string, name: string } | null
+  doc_subseries?: { id: number, code: string, name: string, doc_series_id?: number } | null
+  doc_document_type?: { id: number, code: string, name: string, doc_subseries_id?: number } | null
+}
+
 export interface ArchivalFileType {
   id: number
   type_key: string

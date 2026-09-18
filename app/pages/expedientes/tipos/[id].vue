@@ -19,7 +19,31 @@ const loading = ref(true)
 const savingRequired = ref(false)
 const deleting = ref(false)
 const deleteDialogOpen = ref(false)
-const activeTab = ref('general')
+const areasEditorRef = ref<{ openCreate: () => void } | null>(null)
+
+const activeTab = computed({
+  get: () => {
+    const tab = route.query.tab
+    if (tab === 'areas' || tab === 'required') {
+      return tab
+    }
+
+    return 'general'
+  },
+  set: (value: string) => {
+    const query = { ...route.query }
+
+    if (value === 'general') {
+      delete query.tab
+    }
+    else {
+      query.tab = value
+    }
+
+    delete query.view
+    router.replace({ query })
+  },
+})
 
 const fileType = ref<ArchivalFileType | null>(null)
 const requiredDraft = ref<RequiredDocumentDraft[]>([])
@@ -107,8 +131,8 @@ async function saveRequiredDocuments() {
   )
 
   if (!hasProducerTrd && (!fileType.value.doc_series_id || !fileType.value.doc_subseries_id)) {
-    toast.error('Configure al menos un área productora con serie y subserie en General y TRD antes de guardar obligatorios.')
-    activeTab.value = 'general'
+    toast.error('Configure al menos un área productora con serie y subserie antes de guardar obligatorios.')
+    activeTab.value = 'areas'
     return
   }
 
@@ -166,6 +190,18 @@ async function onDeleteConfirm(reason: string) {
 }
 
 onMounted(() => load())
+
+watch(
+  () => [fileType.value?.id, route.query.tab, route.query.view] as const,
+  async () => {
+    if (!fileType.value || route.query.tab !== 'areas' || route.query.view !== 'nueva') {
+      return
+    }
+
+    await nextTick()
+    areasEditorRef.value?.openCreate()
+  },
+)
 </script>
 
 <template>
@@ -206,10 +242,20 @@ onMounted(() => load())
     </div>
 
     <template v-else-if="fileType">
-      <Tabs v-model="activeTab" default-value="general">
+      <Tabs v-model="activeTab">
         <TabsList>
           <TabsTrigger value="general">
-            General y TRD
+            General
+          </TabsTrigger>
+          <TabsTrigger value="areas">
+            Áreas productoras
+            <Badge
+              v-if="fileType.producer_areas?.length"
+              variant="secondary"
+              class="ml-2"
+            >
+              {{ fileType.producer_areas.length }}
+            </Badge>
           </TabsTrigger>
           <TabsTrigger value="required">
             Obligatorios
@@ -226,6 +272,18 @@ onMounted(() => load())
                 :initial="fileType"
                 @saved="onGeneralSaved"
                 @cancel="router.push('/expedientes/tipos')"
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="areas" class="mt-4">
+          <Card>
+            <CardContent class="min-w-0 pt-6">
+              <ArchivalFileTypeProducerAreasEditor
+                ref="areasEditorRef"
+                :file-type="fileType"
+                @updated="onGeneralSaved"
               />
             </CardContent>
           </Card>

@@ -11,7 +11,7 @@ const router = useRouter()
 const archivalApi = useArchivalFileApi()
 
 function onCreated(type: ArchivalFileType) {
-  router.push(`/expedientes/tipos/${type.id}`)
+  router.push(`/expedientes/tipos/${type.id}?tab=areas&view=nueva`)
 }
 </script>
 
@@ -27,7 +27,7 @@ function onCreated(type: ArchivalFileType) {
           Nuevo tipo de expediente
         </h1>
         <p class="max-w-3xl text-sm text-muted-foreground">
-          Defina el nombre, el catálogo documental de referencia y la tabla TRD asociada. La clave técnica se asigna sola al guardar.
+          Defina el nombre y el modelo del tipo. La clave técnica se asigna sola al guardar. Las áreas productoras se agregan después, una a una.
         </p>
       </div>
       <Button variant="outline" class="shrink-0" @click="router.push('/expedientes/tipos')">
@@ -39,7 +39,7 @@ function onCreated(type: ArchivalFileType) {
       <CardHeader>
         <CardTitle>Datos generales</CardTitle>
         <CardDescription>
-          Información del tipo, ubicación en el catálogo TRD y esquema de metadatos.
+          Información del tipo y esquema de metadatos.
         </CardDescription>
       </CardHeader>
       <CardContent>

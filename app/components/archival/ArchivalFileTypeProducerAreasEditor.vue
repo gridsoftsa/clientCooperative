@@ -1,40 +1,17 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
-import type { DocSeriesRow, DocSubseriesRow, DocDocumentTypeRow } from '~/types/archival-catalog'
+import type { ArchivalFileType, ArchivalFileTypeProducerAreaDraft } from '~/types/archival-file'
 import type { TrdTableRow } from '~/types/archival-trd'
+import {
+  archivalFileTypeBasePayload,
+  mapProducerAreaDrafts,
+  producerAreasSavePayload,
+} from '~/utils/archival-file-type-payload'
 
-export interface ProducerAreaDraft {
-  org_unit_id: number | null
-  trd_table_id: number | null
-  doc_series_id: number | null
-  doc_subseries_id: number | null
-  doc_document_type_id: number | null
-  sort_order: number
-  org_unit?: { id: number, name: string, code?: string } | null
-  doc_series?: { id: number, code: string, name: string } | null
-  doc_subseries?: { id: number, code: string, name: string, doc_series_id?: number } | null
-  doc_document_type?: { id: number, code: string, name: string, doc_subseries_id?: number } | null
-}
+const PAGE_SIZE = 8
 
-const props = defineProps<{
-  orgUnits: OrgUnitRow[]
-  trdTables: TrdTableRow[]
-  disabled?: boolean
-}>()
-
-const model = defineModel<ProducerAreaDraft[]>({ required: true })
-
-const catalogApi = useArchivalCatalogApi()
-
-const seriesByRow = ref<Record<number, DocSeriesRow[]>>({})
-const subseriesByRow = ref<Record<number, DocSubseriesRow[]>>({})
-const docTypesByRow = ref<Record<number, DocDocumentTypeRow[]>>({})
-const loadingSeriesRow = ref<number | null>(null)
-const loadingSubseriesRow = ref<number | null>(null)
-const loadingDocTypesRow = ref<number | null>(null)
-
-function emptyRow(sortOrder: number): ProducerAreaDraft {
+function emptyRow(sortOrder: number): ArchivalFileTypeProducerAreaDraft {
   return {
     org_unit_id: null,
     trd_table_id: null,
@@ -45,412 +22,404 @@ function emptyRow(sortOrder: number): ProducerAreaDraft {
   }
 }
 
-function addRow() {
-  model.value = [...model.value, emptyRow(model.value.length)]
-}
+const props = defineProps<{
+  fileType: ArchivalFileType
+}>()
 
-function removeRow(index: number) {
-  model.value = model.value
-    .filter((_, rowIndex) => rowIndex !== index)
-    .map((row, rowIndex) => ({ ...row, sort_order: rowIndex }))
-}
+const emit = defineEmits<{
+  updated: [type: ArchivalFileType]
+}>()
 
-function orgUnitOptions(rowIndex: number) {
-  const usedElsewhere = new Set(
-    model.value
-      .filter((_, index) => index !== rowIndex)
-      .map(row => row.org_unit_id)
-      .filter((id): id is number => id != null),
-  )
+const archivalApi = useArchivalFileApi()
+const trdApi = useTrdApi()
+const orgApi = useOrgStructureApi()
+const route = useRoute()
+const router = useRouter()
 
-  return props.orgUnits
-    .filter(unit => !usedElsewhere.has(unit.id))
-    .map(unit => ({
-      value: String(unit.id),
-      label: unit.name,
-    }))
-}
+const orgUnits = ref<OrgUnitRow[]>([])
+const trdTables = ref<TrdTableRow[]>([])
+const loadingCatalogs = ref(true)
+const saving = ref(false)
+const search = ref('')
+const page = ref(1)
+const view = ref<'list' | 'form'>('list')
+const editingIndex = ref<number | null>(null)
+const draft = ref<ArchivalFileTypeProducerAreaDraft>(emptyRow(0))
+const pendingDeleteIndex = ref<number | null>(null)
 
-function trdTableOptions(orgUnitId: number | null) {
-  if (!orgUnitId) {
-    return []
+const rows = computed(() => mapProducerAreaDrafts(props.fileType.producer_areas))
+
+const filteredRows = computed(() => {
+  const query = search.value.trim().toLowerCase()
+
+  if (!query) {
+    return rows.value.map((row, index) => ({ row, index }))
   }
 
-  return props.trdTables
-    .filter(table => table.org_unit_id === orgUnitId)
-    .map(table => ({
-      value: String(table.id),
-      label: table.org_unit?.name ?? `Tabla #${table.id}`,
-    }))
-}
+  return rows.value
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => {
+      const haystack = [
+        row.org_unit?.name,
+        row.org_unit?.code,
+        row.doc_series?.code,
+        row.doc_series?.name,
+        row.doc_subseries?.code,
+        row.doc_subseries?.name,
+        row.doc_document_type?.code,
+        row.doc_document_type?.name,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
 
-function seriesOptions(rowIndex: number) {
-  const row = model.value[rowIndex]
-  const list = seriesByRow.value[rowIndex] ?? []
+      return haystack.includes(query)
+    })
+})
 
-  if (
-    row?.doc_series
-    && row.doc_series_id === row.doc_series.id
-    && !list.some(item => item.id === row.doc_series?.id)
-  ) {
-    return [
-      ...list,
-      {
-        id: row.doc_series.id,
-        org_unit_id: row.org_unit_id ?? 0,
-        code: row.doc_series.code,
-        name: row.doc_series.name,
-        is_active: true,
-      } as DocSeriesRow,
-    ].map(series => ({
-      value: String(series.id),
-      label: `${series.code} — ${series.name}`,
-    }))
-  }
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / PAGE_SIZE)))
 
-  return list.map(series => ({
-    value: String(series.id),
-    label: `${series.code} — ${series.name}`,
-  }))
-}
+const pagedRows = computed(() => {
+  const start = (page.value - 1) * PAGE_SIZE
 
-function subseriesOptions(rowIndex: number) {
-  const row = model.value[rowIndex]
-  const list = subseriesByRow.value[rowIndex] ?? []
+  return filteredRows.value.slice(start, start + PAGE_SIZE)
+})
 
-  if (
-    row?.doc_subseries
-    && row.doc_subseries_id === row.doc_subseries.id
-    && !list.some(item => item.id === row.doc_subseries?.id)
-  ) {
-    return [
-      ...list,
-      {
-        id: row.doc_subseries.id,
-        doc_series_id: row.doc_subseries.doc_series_id ?? row.doc_series_id ?? 0,
-        code: row.doc_subseries.code,
-        name: row.doc_subseries.name,
-      } as DocSubseriesRow,
-    ].map(sub => ({
-      value: String(sub.id),
-      label: `${sub.code} — ${sub.name}`,
-    }))
-  }
-
-  return list.map(sub => ({
-    value: String(sub.id),
-    label: `${sub.code} — ${sub.name}`,
-  }))
-}
-
-function docTypeOptions(rowIndex: number) {
-  const row = model.value[rowIndex]
-  const list = docTypesByRow.value[rowIndex] ?? []
-
-  if (
-    row?.doc_document_type
-    && row.doc_document_type_id === row.doc_document_type.id
-    && !list.some(item => item.id === row.doc_document_type?.id)
-  ) {
-    return [
-      ...list,
-      {
-        id: row.doc_document_type.id,
-        doc_subseries_id: row.doc_document_type.doc_subseries_id ?? row.doc_subseries_id ?? 0,
-        code: row.doc_document_type.code,
-        name: row.doc_document_type.name,
-        is_active: true,
-      } as DocDocumentTypeRow,
-    ].map(type => ({
-      value: String(type.id),
-      label: `${type.code} — ${type.name}`,
-    }))
-  }
-
-  return list.map(type => ({
-    value: String(type.id),
-    label: `${type.code} — ${type.name}`,
-  }))
-}
-
-async function loadSeriesForRow(rowIndex: number, orgUnitId: number | null) {
-  if (!orgUnitId) {
-    seriesByRow.value = { ...seriesByRow.value, [rowIndex]: [] }
-    return
-  }
-
-  loadingSeriesRow.value = rowIndex
-
-  try {
-    const series = await catalogApi.fetchSeries(300, orgUnitId)
-    seriesByRow.value = { ...seriesByRow.value, [rowIndex]: series }
-  }
-  catch {
-    seriesByRow.value = { ...seriesByRow.value, [rowIndex]: [] }
-    toast.error('No se pudieron cargar las series del área.')
-  }
-  finally {
-    loadingSeriesRow.value = null
-  }
-}
-
-async function loadSubseriesForRow(rowIndex: number, seriesId: number | null) {
-  if (!seriesId) {
-    subseriesByRow.value = { ...subseriesByRow.value, [rowIndex]: [] }
-    return
-  }
-
-  loadingSubseriesRow.value = rowIndex
-
-  try {
-    const subseries = await catalogApi.fetchSubseries(seriesId)
-    subseriesByRow.value = { ...subseriesByRow.value, [rowIndex]: subseries }
-  }
-  catch {
-    subseriesByRow.value = { ...subseriesByRow.value, [rowIndex]: [] }
-    toast.error('No se pudieron cargar las subseries.')
-  }
-  finally {
-    loadingSubseriesRow.value = null
-  }
-}
-
-async function loadDocTypesForRow(rowIndex: number, subseriesId: number | null) {
-  if (!subseriesId) {
-    docTypesByRow.value = { ...docTypesByRow.value, [rowIndex]: [] }
-    return
-  }
-
-  loadingDocTypesRow.value = rowIndex
-
-  try {
-    const types = await catalogApi.fetchDocumentTypes(subseriesId)
-    docTypesByRow.value = { ...docTypesByRow.value, [rowIndex]: types }
-  }
-  catch {
-    docTypesByRow.value = { ...docTypesByRow.value, [rowIndex]: [] }
-    toast.error('No se pudieron cargar los tipos documentales.')
-  }
-  finally {
-    loadingDocTypesRow.value = null
-  }
-}
-
-async function onOrgUnitChange(rowIndex: number, value: string | null) {
-  const row = model.value[rowIndex]
-  if (!row) {
-    return
-  }
-
-  row.org_unit_id = value ? Number(value) : null
-  row.trd_table_id = null
-  row.doc_series_id = null
-  row.doc_subseries_id = null
-  row.doc_document_type_id = null
-
-  await loadSeriesForRow(rowIndex, row.org_unit_id)
-  subseriesByRow.value = { ...subseriesByRow.value, [rowIndex]: [] }
-  docTypesByRow.value = { ...docTypesByRow.value, [rowIndex]: [] }
-}
-
-async function onSeriesChange(rowIndex: number, value: string | null) {
-  const row = model.value[rowIndex]
-  if (!row) {
-    return
-  }
-
-  row.doc_series_id = value ? Number(value) : null
-  row.doc_subseries_id = null
-  row.doc_document_type_id = null
-  await loadSubseriesForRow(rowIndex, row.doc_series_id)
-  docTypesByRow.value = { ...docTypesByRow.value, [rowIndex]: [] }
-}
-
-async function onSubseriesChange(rowIndex: number, value: string | null) {
-  const row = model.value[rowIndex]
-  if (!row) {
-    return
-  }
-
-  row.doc_subseries_id = value ? Number(value) : null
-  row.doc_document_type_id = null
-  await loadDocTypesForRow(rowIndex, row.doc_subseries_id)
-}
-
-function onDocTypeChange(rowIndex: number, value: string | null) {
-  const row = model.value[rowIndex]
-  if (!row) {
-    return
-  }
-
-  row.doc_document_type_id = value ? Number(value) : null
-}
-
-function onTrdTableChange(rowIndex: number, value: string | null) {
-  const row = model.value[rowIndex]
-  if (!row) {
-    return
-  }
-
-  row.trd_table_id = value ? Number(value) : null
-}
-
-async function hydrateRow(rowIndex: number, row: ProducerAreaDraft) {
-  await loadSeriesForRow(rowIndex, row.org_unit_id)
-  await loadSubseriesForRow(rowIndex, row.doc_series_id)
-  await loadDocTypesForRow(rowIndex, row.doc_subseries_id)
-}
-
-watch(
-  () => model.value.length,
-  async () => {
-    for (const [index, row] of model.value.entries()) {
-      if (row.org_unit_id && !(index in seriesByRow.value)) {
-        await hydrateRow(index, row)
-      }
-    }
-  },
-  { immediate: true },
+const formTitle = computed(() =>
+  editingIndex.value == null ? 'Agregar área productora' : 'Editar área productora',
 )
 
-defineExpose({
-  hydrateAllRows: async () => {
-    for (const [index, row] of model.value.entries()) {
-      await hydrateRow(index, row)
+const excludeOrgUnitIds = computed(() =>
+  rows.value
+    .filter((_, index) => index !== editingIndex.value)
+    .map(row => row.org_unit_id)
+    .filter((id): id is number => id != null),
+)
+
+function areaLabel(row: ArchivalFileTypeProducerAreaDraft): string {
+  return row.org_unit?.name ?? (row.org_unit_id ? `Área #${row.org_unit_id}` : 'Sin área')
+}
+
+function catalogLabel(code?: string | null, name?: string | null): string {
+  if (code && name) {
+    return `${code} — ${name}`
+  }
+
+  return code || name || '—'
+}
+
+watch(search, () => {
+  page.value = 1
+})
+
+watch(
+  () => props.fileType.producer_areas,
+  () => {
+    if (page.value > totalPages.value) {
+      page.value = totalPages.value
     }
   },
+)
+
+function openCreate() {
+  editingIndex.value = null
+  draft.value = emptyRow(rows.value.length)
+  view.value = 'form'
+}
+
+function openEdit(index: number) {
+  const row = rows.value[index]
+  if (!row) {
+    return
+  }
+
+  editingIndex.value = index
+  draft.value = { ...row }
+  view.value = 'form'
+}
+
+function backToList() {
+  view.value = 'list'
+  editingIndex.value = null
+  draft.value = emptyRow(0)
+
+  if (route.query.view) {
+    const query = { ...route.query }
+    delete query.view
+    router.replace({ query })
+  }
+}
+
+async function persist(nextRows: ArchivalFileTypeProducerAreaDraft[], successMessage: string) {
+  saving.value = true
+
+  try {
+    const res = await archivalApi.saveFileType({
+      ...archivalFileTypeBasePayload(props.fileType),
+      producer_areas: producerAreasSavePayload(nextRows),
+    }, props.fileType.id)
+
+    toast.success(successMessage)
+    emit('updated', res.data)
+    backToList()
+  }
+  catch (error: unknown) {
+    const err = error as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    toast.error(first ?? err.data?.message ?? 'No se pudo guardar el área.')
+  }
+  finally {
+    saving.value = false
+  }
+}
+
+async function saveDraft() {
+  if (draft.value.org_unit_id == null || draft.value.doc_series_id == null || draft.value.doc_subseries_id == null) {
+    toast.error('Complete área, serie y subserie.')
+    return
+  }
+
+  const nextRows = [...rows.value]
+
+  if (editingIndex.value == null) {
+    nextRows.push({ ...draft.value, sort_order: nextRows.length })
+  }
+  else {
+    nextRows[editingIndex.value] = { ...draft.value, sort_order: editingIndex.value }
+  }
+
+  await persist(
+    nextRows,
+    editingIndex.value == null ? 'Área productora agregada.' : 'Área productora actualizada.',
+  )
+}
+
+async function confirmDelete() {
+  const index = pendingDeleteIndex.value
+  pendingDeleteIndex.value = null
+
+  if (index == null) {
+    return
+  }
+
+  const nextRows = rows.value.filter((_, rowIndex) => rowIndex !== index)
+  await persist(nextRows, 'Área productora eliminada.')
+}
+
+async function loadCatalogs() {
+  loadingCatalogs.value = true
+
+  try {
+    const [units, tables] = await Promise.all([
+      orgApi.fetchUnits({ activeOnly: true }),
+      trdApi.fetchTables(),
+    ])
+
+    orgUnits.value = units
+    trdTables.value = tables
+  }
+  catch {
+    toast.error('No se pudieron cargar las áreas y tablas TRD.')
+  }
+  finally {
+    loadingCatalogs.value = false
+  }
+}
+
+onMounted(() => {
+  void loadCatalogs()
+})
+
+defineExpose({
+  openCreate,
 })
 </script>
 
 <template>
-  <div class="min-w-0 space-y-4">
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <p class="text-sm font-medium">
-          Áreas productoras y TRD
-          <Badge v-if="model.length > 0" variant="secondary" class="ml-2 align-middle">
-            {{ model.length }}
-          </Badge>
-        </p>
-        <p class="text-xs text-muted-foreground">
-          Agregue una fila por cada área que use este tipo, con su serie, subserie y tipo documental en el catálogo.
-        </p>
-      </div>
-      <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="addRow">
-        <Icon name="i-lucide-plus" class="mr-1 size-4" />
-        Agregar área
-      </Button>
-    </div>
-
-    <div
-      v-if="model.length === 0"
-      class="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center"
-    >
-      <p class="text-sm text-muted-foreground">
-        Sin áreas productoras configuradas. El tipo podrá usarse en cualquier área al crear expedientes.
-      </p>
-      <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="addRow">
-        <Icon name="i-lucide-plus" class="mr-1 size-4" />
-        Agregar la primera
-      </Button>
-    </div>
-
-    <div v-else class="space-y-3">
-      <div
-        v-for="(row, index) in model"
-        :key="`producer-area-${index}-${row.org_unit_id ?? 'new'}`"
-        class="rounded-lg border bg-muted/10 p-4"
-      >
-        <div class="mb-3 flex items-center justify-between gap-2">
+  <div class="space-y-4">
+    <div v-if="view === 'list'" class="space-y-4">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
           <p class="text-sm font-medium">
-            Área {{ index + 1 }}
+            Áreas productoras y TRD
+            <Badge v-if="rows.length > 0" variant="secondary" class="ml-2 align-middle">
+              {{ rows.length }}
+            </Badge>
           </p>
+          <p class="text-xs text-muted-foreground">
+            Un mismo tipo puede usarse en muchas áreas. Consulte el listado y agregue o edite cada una por separado.
+          </p>
+        </div>
+        <Button type="button" size="sm" :disabled="saving || loadingCatalogs" @click="openCreate">
+          <Icon name="i-lucide-plus" class="mr-1 size-4" />
+          Agregar área
+        </Button>
+      </div>
+
+      <div class="relative max-w-md">
+        <Icon name="i-lucide-search" class="text-muted-foreground pointer-events-none absolute top-2.5 left-3 size-4" />
+        <Input
+          v-model="search"
+          class="pl-9"
+          placeholder="Buscar por área, serie o subserie…"
+        />
+      </div>
+
+      <div
+        v-if="rows.length === 0"
+        class="flex flex-col items-center gap-3 rounded-lg border border-dashed p-8 text-center"
+      >
+        <p class="text-sm text-muted-foreground">
+          Sin áreas productoras. El tipo podrá usarse en cualquier área hasta que configure las que correspondan.
+        </p>
+        <Button type="button" variant="outline" size="sm" :disabled="saving || loadingCatalogs" @click="openCreate">
+          <Icon name="i-lucide-plus" class="mr-1 size-4" />
+          Agregar la primera
+        </Button>
+      </div>
+
+      <div v-else-if="filteredRows.length === 0" class="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+        No hay áreas que coincidan con la búsqueda.
+      </div>
+
+      <div v-else class="overflow-x-auto rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Área productora</TableHead>
+              <TableHead>Serie</TableHead>
+              <TableHead>Subserie</TableHead>
+              <TableHead>Tipo documental</TableHead>
+              <TableHead class="w-[1%] text-right">
+                Acciones
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="{ row, index } in pagedRows" :key="row.id ?? `area-${index}`">
+              <TableCell class="font-medium">
+                {{ areaLabel(row) }}
+              </TableCell>
+              <TableCell class="text-sm">
+                {{ catalogLabel(row.doc_series?.code, row.doc_series?.name) }}
+              </TableCell>
+              <TableCell class="text-sm">
+                {{ catalogLabel(row.doc_subseries?.code, row.doc_subseries?.name) }}
+              </TableCell>
+              <TableCell class="text-sm">
+                {{ catalogLabel(row.doc_document_type?.code, row.doc_document_type?.name) }}
+              </TableCell>
+              <TableCell>
+                <div class="flex justify-end gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    :disabled="saving"
+                    @click="openEdit(index)"
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    class="size-8"
+                    :disabled="saving"
+                    @click="pendingDeleteIndex = index"
+                  >
+                    <Icon name="i-lucide-trash-2" class="size-4 text-destructive" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+
+      <div v-if="filteredRows.length > PAGE_SIZE" class="flex items-center justify-between gap-3 text-sm">
+        <p class="text-muted-foreground">
+          Página {{ page }} de {{ totalPages }}
+        </p>
+        <div class="flex gap-2">
           <Button
             type="button"
-            variant="ghost"
-            size="icon"
-            class="size-8 shrink-0"
-            :disabled="disabled"
-            @click="removeRow(index)"
+            variant="outline"
+            size="sm"
+            :disabled="page <= 1"
+            @click="page -= 1"
           >
-            <Icon name="i-lucide-trash-2" class="size-4 text-destructive" />
+            Anterior
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            :disabled="page >= totalPages"
+            @click="page += 1"
+          >
+            Siguiente
           </Button>
         </div>
+      </div>
+    </div>
 
-        <div class="grid min-w-0 gap-4 md:grid-cols-2">
-          <div class="space-y-2">
-            <Label :for="`producer_area_unit_${index}`">Área productora *</Label>
-            <ArchivalCatalogSearchSelect
-              :id="`producer_area_unit_${index}`"
-              :model-value="row.org_unit_id != null ? String(row.org_unit_id) : null"
-              :options="orgUnitOptions(index)"
-              placeholder="Buscar área…"
-              no-options-text="Sin áreas disponibles"
-              :disabled="disabled"
-              @update:model-value="onOrgUnitChange(index, $event)"
-            />
-          </div>
-
-          <div class="space-y-2">
-            <Label :for="`producer_area_trd_${index}`">Tabla TRD</Label>
-            <ArchivalCatalogSearchSelect
-              :id="`producer_area_trd_${index}`"
-              :model-value="row.trd_table_id != null ? String(row.trd_table_id) : null"
-              :options="trdTableOptions(row.org_unit_id)"
-              placeholder="Opcional"
-              no-options-text="Sin tablas para el área"
-              :disabled="disabled || !row.org_unit_id"
-              @update:model-value="onTrdTableChange(index, $event)"
-            />
-          </div>
-
-          <div class="space-y-2">
-            <Label :for="`producer_area_series_${index}`">Serie *</Label>
-            <ArchivalCatalogSearchSelect
-              :id="`producer_area_series_${index}`"
-              :model-value="row.doc_series_id != null ? String(row.doc_series_id) : null"
-              :options="seriesOptions(index)"
-              placeholder="Buscar serie…"
-              no-options-text="Seleccione un área primero"
-              :disabled="disabled || !row.org_unit_id || loadingSeriesRow === index"
-              @update:model-value="onSeriesChange(index, $event)"
-            />
-          </div>
-
-          <div class="space-y-2">
-            <Label :for="`producer_area_subseries_${index}`">Subserie *</Label>
-            <ArchivalCatalogSearchSelect
-              :id="`producer_area_subseries_${index}`"
-              :model-value="row.doc_subseries_id != null ? String(row.doc_subseries_id) : null"
-              :options="subseriesOptions(index)"
-              placeholder="Buscar subserie…"
-              no-options-text="Seleccione una serie primero"
-              :disabled="disabled || !row.doc_series_id || loadingSubseriesRow === index"
-              @update:model-value="onSubseriesChange(index, $event)"
-            />
-          </div>
-
-          <div class="space-y-2 md:col-span-2">
-            <Label :for="`producer_area_doctype_${index}`">Tipo documental</Label>
-            <ArchivalCatalogSearchSelect
-              :id="`producer_area_doctype_${index}`"
-              :model-value="row.doc_document_type_id != null ? String(row.doc_document_type_id) : null"
-              :options="docTypeOptions(index)"
-              placeholder="Buscar tipo documental…"
-              no-options-text="Seleccione una subserie primero"
-              :disabled="disabled || !row.doc_subseries_id || loadingDocTypesRow === index"
-              @update:model-value="onDocTypeChange(index, $event)"
-            />
-          </div>
+    <div v-else class="space-y-4">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Button type="button" variant="ghost" size="sm" class="-ml-2" :disabled="saving" @click="backToList">
+            <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
+            Volver al listado
+          </Button>
+          <h2 class="mt-1 text-base font-semibold">
+            {{ formTitle }}
+          </h2>
+          <p class="text-xs text-muted-foreground">
+            Configure la TRD de una sola área. El resto permanece en el listado.
+          </p>
         </div>
       </div>
 
-      <div class="flex justify-center">
-        <Button type="button" variant="outline" size="sm" :disabled="disabled" @click="addRow">
-          <Icon name="i-lucide-plus" class="mr-1 size-4" />
-          Agregar otra área
+      <div v-if="loadingCatalogs" class="py-8 text-center text-sm text-muted-foreground">
+        Cargando catálogos…
+      </div>
+
+      <ArchivalFileTypeProducerAreaForm
+        v-else
+        v-model="draft"
+        :org-units="orgUnits"
+        :trd-tables="trdTables"
+        :disabled="saving"
+        :exclude-org-unit-ids="excludeOrgUnitIds"
+      />
+
+      <div class="flex flex-wrap justify-end gap-2 border-t pt-4">
+        <Button type="button" variant="outline" :disabled="saving" @click="backToList">
+          Cancelar
+        </Button>
+        <Button type="button" :disabled="saving || loadingCatalogs" @click="saveDraft">
+          {{ saving ? 'Guardando…' : (editingIndex == null ? 'Agregar área' : 'Guardar área') }}
         </Button>
       </div>
     </div>
+
+    <AlertDialog :open="pendingDeleteIndex != null" @update:open="pendingDeleteIndex = $event ? pendingDeleteIndex : null">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Quitar área productora</AlertDialogTitle>
+          <AlertDialogDescription>
+            Se eliminará la configuración TRD de esta área en el tipo. Los documentos obligatorios asociados a esa área también se quitarán.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel :disabled="saving">
+            Cancelar
+          </AlertDialogCancel>
+          <AlertDialogAction :disabled="saving" @click="confirmDelete">
+            Quitar área
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>

@@ -160,7 +160,7 @@ watch(() => props.producerAreas, () => {
       <Icon name="i-lucide-info" class="size-4" />
       <AlertTitle>Áreas productoras requeridas</AlertTitle>
       <AlertDescription>
-        Configure al menos un área productora con serie y subserie en la pestaña <strong>General y TRD</strong>
+        Configure al menos un área productora con serie y subserie en la pestaña <strong>Áreas productoras</strong>
         antes de definir documentos obligatorios.
       </AlertDescription>
     </Alert>
