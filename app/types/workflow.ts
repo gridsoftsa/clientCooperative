@@ -196,6 +196,7 @@ export interface WorkflowFilingContext {
   task_escalation?: WorkflowTaskEscalationSummary | null
   archival_file?: WorkflowArchivalFileContext | null
   collaborators?: WorkflowCollaboratorsSummary
+  collaborations?: WorkflowTaskCollaboratorRow[]
   filing?: WorkflowFilingContextSummary | null
   sla_alerts?: Array<{
     id: number

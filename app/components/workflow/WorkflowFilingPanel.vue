@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import ArchivalFileWorkflowUploadPanel from '~/components/workflow/ArchivalFileWorkflowUploadPanel.vue'
+import WorkflowTaskCollaboratorsPanel from '~/components/workflow/WorkflowTaskCollaboratorsPanel.vue'
 import type { WorkflowFilingContext } from '~/types/workflow'
 
 const props = defineProps<{
   filingId: number
+  collaborationsOnly?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -114,8 +116,33 @@ defineExpose({ reload: load })
 </script>
 
 <template>
+  <div v-if="collaborationsOnly && canView" class="space-y-4">
+    <div v-if="loading" class="space-y-2">
+      <Skeleton class="h-4 w-3/4" />
+      <Skeleton class="h-16 w-full" />
+    </div>
+    <Alert v-else-if="loadError" variant="destructive">
+      <Icon name="i-lucide-circle-alert" class="size-4" />
+      <AlertTitle>Error</AlertTitle>
+      <AlertDescription class="space-y-2">
+        <p>{{ loadError }}</p>
+        <Button size="sm" variant="outline" @click="load">
+          Reintentar
+        </Button>
+      </AlertDescription>
+    </Alert>
+    <p v-else-if="!context" class="text-sm text-muted-foreground">
+      Este radicado no tiene un proceso de workflow.
+    </p>
+    <WorkflowTaskCollaboratorsPanel
+      v-else
+      :rows="context.collaborations ?? []"
+      read-only
+    />
+  </div>
+
   <Card
-    v-if="canView"
+    v-else-if="canView"
     :class="isMyOpenTask ? 'border-primary ring-1 ring-primary/30' : undefined"
   >
     <CardHeader class="flex flex-row items-start justify-between gap-4 space-y-0">
@@ -350,6 +377,19 @@ defineExpose({ reload: load })
           :archival-context="context.archival_file"
           @uploaded="load(); emit('changed')"
         />
+
+        <div class="space-y-2">
+          <p class="text-sm font-medium">
+            Colaboración
+          </p>
+          <p class="text-muted-foreground text-xs">
+            Aportes solicitados y documentos entregados durante el flujo, conservados para trazabilidad.
+          </p>
+          <WorkflowTaskCollaboratorsPanel
+            :rows="context.collaborations ?? []"
+            read-only
+          />
+        </div>
 
         <div v-if="context.events.length" class="space-y-2">
           <p class="text-sm font-medium">

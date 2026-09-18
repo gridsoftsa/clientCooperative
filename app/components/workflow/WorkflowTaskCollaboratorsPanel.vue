@@ -6,8 +6,9 @@ import type { WorkflowTaskCollaboratorRow } from '~/types/workflow'
 import { extractApiErrorMessage } from '~/utils/workflow-task-ui'
 
 const props = defineProps<{
-  taskId: number
+  taskId?: number | null
   readOnly?: boolean
+  rows?: WorkflowTaskCollaboratorRow[]
 }>()
 
 const emit = defineEmits<{
@@ -37,6 +38,28 @@ const selectedStaff = computed(() =>
 )
 
 async function loadCollaborators() {
+  if (props.rows) {
+    collaborators.value = props.rows
+    const pending = props.rows.filter(row => row.status === 'pending').length
+    summary.value = {
+      total: props.rows.length,
+      pending,
+      all_responded: pending === 0,
+      can_manage: false,
+    }
+    loading.value = false
+
+    return
+  }
+
+  if (!props.taskId) {
+    collaborators.value = []
+    summary.value = { total: 0, pending: 0, all_responded: true, can_manage: false }
+    loading.value = false
+
+    return
+  }
+
   loading.value = true
 
   try {
@@ -87,9 +110,9 @@ async function searchStaff() {
   staffResults.value = staffResults.value.filter(item => item.user_id != null)
 }
 
-watch(() => props.taskId, () => {
+watch(() => [props.taskId, props.rows] as const, () => {
   void loadCollaborators()
-}, { immediate: true })
+}, { immediate: true, deep: true })
 
 watch(selectedOrgUnitId, async () => {
   selectedPositionId.value = ''
@@ -371,7 +394,7 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
     </div>
 
     <p v-else class="text-sm text-muted-foreground">
-      Aún no hay colaboradores en este proceso.
+      {{ readOnly ? 'No hubo colaboradores en este proceso.' : 'Aún no hay colaboradores en este proceso.' }}
     </p>
   </div>
 </template>

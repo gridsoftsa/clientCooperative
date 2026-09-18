@@ -57,6 +57,7 @@ type VentanillaDetailSection =
   | 'resumen'
   | 'gestion'
   | 'workflow'
+  | 'colaboracion'
   | 'archivos'
   | 'trd'
   | 'metadatos'
@@ -119,6 +120,7 @@ const detailSections = computed(() => {
 
   if (hasPermission('workflow_ver')) {
     sections.push({ id: 'workflow', label: 'Workflow', icon: 'i-lucide-git-branch' })
+    sections.push({ id: 'colaboracion', label: 'Colaboración', icon: 'i-lucide-users' })
   }
 
   sections.push(
@@ -887,6 +889,20 @@ async function viewSticker() {
 
           <div v-show="activeSection === 'workflow'">
             <WorkflowFilingPanel :filing-id="id" @changed="load" />
+          </div>
+
+          <div v-show="activeSection === 'colaboracion'">
+            <Card>
+              <CardHeader>
+                <CardTitle>Colaboración</CardTitle>
+                <CardDescription>
+                  Trazabilidad de invitaciones, notas y documentos aportados por colaboradores del workflow.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <WorkflowFilingPanel :filing-id="id" collaborations-only @changed="load" />
+              </CardContent>
+            </Card>
           </div>
 
           <Card v-show="activeSection === 'archivos'">
