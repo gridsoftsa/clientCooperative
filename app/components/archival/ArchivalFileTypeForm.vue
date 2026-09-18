@@ -154,88 +154,45 @@ onMounted(() => loadCatalogs())
 </script>
 
 <template>
-  <form class="space-y-6" @submit.prevent="submit">
+  <form class="space-y-4" @submit.prevent="submit">
     <div v-if="loading" class="py-8 text-center text-sm text-muted-foreground">
       Cargando configuración…
     </div>
 
     <template v-else>
-      <div class="max-w-3xl space-y-6">
-        <div class="grid gap-4 md:grid-cols-2">
-          <div v-if="isCreate" class="space-y-2 md:col-span-2">
-            <p class="text-sm text-muted-foreground leading-relaxed">
-              La <span class="font-medium text-foreground">clave técnica</span> se generará automáticamente al crear
-              (por ejemplo, a partir del nombre:
-              <span class="font-mono text-xs">{{ effectiveTypeKey || 'expediente_contrato_file' }}</span>).
-              Las áreas productoras se configuran después, en una vista aparte.
-            </p>
-          </div>
+      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div v-if="isCreate" class="space-y-2 md:col-span-2 xl:col-span-3">
+          <p class="text-sm text-muted-foreground leading-relaxed">
+            La <span class="font-medium text-foreground">clave técnica</span> se generará automáticamente al crear
+            (por ejemplo, a partir del nombre:
+            <span class="font-mono text-xs">{{ effectiveTypeKey || 'expediente_contrato_file' }}</span>).
+            Las áreas productoras se configuran después, en una vista aparte.
+          </p>
+        </div>
 
-          <div v-else class="space-y-2 md:col-span-2">
-            <Label for="file_type_key">Clave técnica</Label>
-            <Input
-              id="file_type_key"
-              v-model="form.type_key"
-              :disabled="isSystem || saving"
-              placeholder="credit_file"
-              class="font-mono"
-              :class="archivalInputWarningClass(submitAttempted && !form.type_key.trim())"
-            />
-            <p v-if="isSystem" class="text-xs text-muted-foreground">
-              La clave de tipos del sistema no se puede modificar.
-            </p>
-          </div>
-
-          <div class="space-y-2 md:col-span-2">
-            <Label for="file_type_name">Nombre *</Label>
-            <Input
-              id="file_type_name"
-              v-model="form.name"
-              :disabled="saving"
-              :class="archivalInputWarningClass(submitAttempted && !form.name.trim())"
-            />
-          </div>
+        <div v-else class="space-y-2">
+          <Label for="file_type_key">Clave técnica</Label>
+          <Input
+            id="file_type_key"
+            v-model="form.type_key"
+            :disabled="isSystem || saving"
+            placeholder="credit_file"
+            class="font-mono"
+            :class="archivalInputWarningClass(submitAttempted && !form.type_key.trim())"
+          />
+          <p v-if="isSystem" class="text-xs text-muted-foreground">
+            La clave de tipos del sistema no se puede modificar.
+          </p>
         </div>
 
         <div class="space-y-2">
-          <Label for="file_type_description">Descripción</Label>
-          <Textarea id="file_type_description" v-model="form.description" rows="3" :disabled="saving" />
-        </div>
-
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div class="space-y-2">
-            <Label>Modelo</Label>
-            <Select v-model="form.model" :disabled="saving">
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="(label, value) in ARCHIVAL_FILE_MODEL_LABELS"
-                  :key="value"
-                  :value="value"
-                >
-                  {{ label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div class="space-y-2">
-            <Label>Orden</Label>
-            <Input v-model.number="form.sort_order" type="number" min="0" :disabled="saving" />
-          </div>
-        </div>
-
-        <div class="flex flex-wrap gap-x-6 gap-y-3 rounded-lg border bg-muted/20 p-4">
-          <div class="flex items-center gap-2">
-            <Checkbox id="file_type_active" v-model="form.is_active" :disabled="saving" />
-            <Label for="file_type_active" class="font-normal">Activo</Label>
-          </div>
-          <div class="flex items-center gap-2">
-            <Checkbox id="file_type_master" v-model="form.allows_master_documents" :disabled="saving" />
-            <Label for="file_type_master" class="font-normal">Permite documentos maestros</Label>
-          </div>
+          <Label for="file_type_name">Nombre *</Label>
+          <Input
+            id="file_type_name"
+            v-model="form.name"
+            :disabled="saving"
+            :class="archivalInputWarningClass(submitAttempted && !form.name.trim())"
+          />
         </div>
 
         <div class="space-y-2">
@@ -245,7 +202,7 @@ onMounted(() => loadCatalogs())
             :disabled="saving"
             @update:model-value="form.archival_metadata_schema_id = $event ? String($event) : ''"
           >
-            <SelectTrigger>
+            <SelectTrigger class="w-full">
               <SelectValue placeholder="Opcional" />
             </SelectTrigger>
             <SelectContent>
@@ -261,16 +218,55 @@ onMounted(() => loadCatalogs())
           </Select>
         </div>
 
+        <div class="space-y-2">
+          <Label>Modelo</Label>
+          <Select v-model="form.model" :disabled="saving">
+            <SelectTrigger class="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="(label, value) in ARCHIVAL_FILE_MODEL_LABELS"
+                :key="value"
+                :value="value"
+              >
+                {{ label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div class="space-y-2">
+          <Label>Orden</Label>
+          <Input v-model.number="form.sort_order" type="number" min="0" :disabled="saving" />
+        </div>
+
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border bg-muted/20 px-4 py-3">
+          <div class="flex items-center gap-2">
+            <Checkbox id="file_type_active" v-model="form.is_active" :disabled="saving" />
+            <Label for="file_type_active" class="font-normal">Activo</Label>
+          </div>
+          <div class="flex items-center gap-2">
+            <Checkbox id="file_type_master" v-model="form.allows_master_documents" :disabled="saving" />
+            <Label for="file_type_master" class="font-normal">Permite documentos maestros</Label>
+          </div>
+        </div>
+
+        <div class="space-y-2 md:col-span-2 xl:col-span-3">
+          <Label for="file_type_description">Descripción</Label>
+          <Textarea id="file_type_description" v-model="form.description" rows="2" :disabled="saving" />
+        </div>
+
         <p
           v-if="form.model === 'org_area'"
-          class="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground"
+          class="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground md:col-span-2 xl:col-span-3"
         >
           Tipos <span class="font-medium text-foreground">por área</span>: en la pestaña Áreas productoras configure la
           TRD de cada dependencia. Al adjuntar documentos se aplicará el área del expediente.
         </p>
       </div>
 
-      <div class="flex flex-wrap justify-end gap-2 border-t pt-6">
+      <div class="flex flex-wrap justify-end gap-2 border-t pt-4">
         <Button
           v-if="!isCreate"
           type="button"

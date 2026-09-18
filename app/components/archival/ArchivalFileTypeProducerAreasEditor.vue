@@ -238,8 +238,8 @@ defineExpose({
 <template>
   <div class="space-y-4">
     <div v-if="view === 'list'" class="space-y-4">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div class="min-w-0 flex-1">
           <p class="text-sm font-medium">
             Áreas productoras y TRD
             <Badge v-if="rows.length > 0" variant="secondary" class="ml-2 align-middle">
@@ -250,19 +250,20 @@ defineExpose({
             Un mismo tipo puede usarse en muchas áreas. Consulte el listado y agregue o edite cada una por separado.
           </p>
         </div>
-        <Button type="button" size="sm" :disabled="saving || loadingCatalogs" @click="openCreate">
-          <Icon name="i-lucide-plus" class="mr-1 size-4" />
-          Agregar área
-        </Button>
-      </div>
-
-      <div class="relative max-w-md">
-        <Icon name="i-lucide-search" class="text-muted-foreground pointer-events-none absolute top-2.5 left-3 size-4" />
-        <Input
-          v-model="search"
-          class="pl-9"
-          placeholder="Buscar por área, serie o subserie…"
-        />
+        <div class="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto lg:max-w-xl lg:flex-1">
+          <div class="relative min-w-0 flex-1">
+            <Icon name="i-lucide-search" class="text-muted-foreground pointer-events-none absolute top-2.5 left-3 size-4" />
+            <Input
+              v-model="search"
+              class="pl-9"
+              placeholder="Buscar por área, serie o subserie…"
+            />
+          </div>
+          <Button type="button" size="sm" class="shrink-0" :disabled="saving || loadingCatalogs" @click="openCreate">
+            <Icon name="i-lucide-plus" class="mr-1 size-4" />
+            Agregar área
+          </Button>
+        </div>
       </div>
 
       <div

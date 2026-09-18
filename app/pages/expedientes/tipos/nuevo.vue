@@ -16,7 +16,7 @@ function onCreated(type: ArchivalFileType) {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-7xl space-y-6 px-4 pb-8 md:px-6">
+  <div class="mx-auto w-full max-w-[90rem] space-y-4 px-4 pb-6 md:px-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="space-y-1">
         <Button variant="ghost" size="sm" class="-ml-2" @click="router.push('/expedientes/tipos')">
@@ -42,7 +42,7 @@ function onCreated(type: ArchivalFileType) {
           Información del tipo y esquema de metadatos.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent class="p-4 md:p-6">
         <ArchivalFileTypeForm is-create @saved="onCreated" />
       </CardContent>
     </Card>

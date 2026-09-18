@@ -205,7 +205,7 @@ watch(
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl space-y-6">
+  <div class="mx-auto w-full max-w-[90rem] space-y-4 px-4 pb-6 md:px-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="space-y-1">
         <Button variant="ghost" size="sm" class="-ml-2" @click="router.push('/expedientes/tipos')">
@@ -265,9 +265,9 @@ watch(
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" class="mt-4">
+        <TabsContent value="general" class="mt-3">
           <Card>
-            <CardContent class="min-w-0 pt-6">
+            <CardContent class="min-w-0 p-4 md:p-6">
               <ArchivalFileTypeForm
                 :initial="fileType"
                 @saved="onGeneralSaved"
@@ -277,9 +277,9 @@ watch(
           </Card>
         </TabsContent>
 
-        <TabsContent value="areas" class="mt-4">
+        <TabsContent value="areas" class="mt-3">
           <Card>
-            <CardContent class="min-w-0 pt-6">
+            <CardContent class="min-w-0 p-4 md:p-6">
               <ArchivalFileTypeProducerAreasEditor
                 ref="areasEditorRef"
                 :file-type="fileType"
@@ -289,9 +289,9 @@ watch(
           </Card>
         </TabsContent>
 
-        <TabsContent value="required" class="mt-4 space-y-4">
+        <TabsContent value="required" class="mt-3 space-y-4">
           <Card>
-            <CardContent class="min-w-0 pt-6">
+            <CardContent class="min-w-0 p-4 md:p-6">
               <ArchivalFileTypeRequiredDocumentsEditor
                 v-model="requiredDraft"
                 :producer-areas="fileType.producer_areas ?? []"

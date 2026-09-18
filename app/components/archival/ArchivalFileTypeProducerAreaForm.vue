@@ -217,7 +217,7 @@ defineExpose({ hydrate })
 </script>
 
 <template>
-  <div class="grid min-w-0 gap-4 md:grid-cols-2">
+  <div class="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
     <div class="space-y-2">
       <Label for="producer_area_unit">Área productora *</Label>
       <ArchivalCatalogSearchSelect
@@ -270,7 +270,7 @@ defineExpose({ hydrate })
       />
     </div>
 
-    <div class="space-y-2 md:col-span-2">
+    <div class="space-y-2 sm:col-span-2 xl:col-span-1">
       <Label for="producer_area_doctype">Tipo documental</Label>
       <ArchivalCatalogSearchSelect
         id="producer_area_doctype"

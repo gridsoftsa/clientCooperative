@@ -169,7 +169,7 @@ watch(() => props.producerAreas, () => {
       Cargando catálogos…
     </div>
 
-    <div v-else class="space-y-6">
+    <div v-else class="space-y-6 xl:grid xl:grid-cols-2 xl:gap-6 xl:space-y-0">
       <section
         v-for="area in configuredAreas"
         :key="`required-area-${area.org_unit_id}`"
@@ -335,8 +335,8 @@ watch(() => props.producerAreas, () => {
 .required-doc-row-grid {
   grid-template-columns:
     2.25rem
-    minmax(0, 2fr)
-    minmax(8rem, 12rem)
+    minmax(0, 2.5fr)
+    minmax(10rem, 1fr)
     4.75rem;
   column-gap: 0.625rem;
   align-items: center;
