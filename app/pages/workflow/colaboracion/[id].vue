@@ -100,7 +100,7 @@ async function submitResponse() {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-3xl space-y-6 px-4 py-8 md:px-6">
+  <div class="mx-auto w-full max-w-4xl space-y-6 px-4 py-8 md:px-6">
     <div class="flex items-start gap-3">
       <Button variant="ghost" size="icon" class="shrink-0" @click="router.push('/workflow/colaboracion')">
         <Icon name="i-lucide-arrow-left" class="size-4" />
@@ -110,7 +110,7 @@ async function submitResponse() {
           Colaboración en tarea
         </h1>
         <p class="text-sm text-muted-foreground">
-          Adjunte su aporte documental solicitado para esta etapa de gestión.
+          Revise la solicitud y el radicado, luego adjunte su aporte documental.
         </p>
       </div>
     </div>
@@ -125,22 +125,35 @@ async function submitResponse() {
       <Card>
         <CardHeader>
           <CardTitle class="text-base">
-            {{ collaboration.filing?.filing_number ?? 'Radicado' }}
+            Qué se solicita
           </CardTitle>
           <CardDescription>
-            {{ collaboration.filing?.subject ?? '—' }}
+            Instrucción de {{ collaboration.invited_by?.name ?? 'quien lo invitó' }}
             <span v-if="collaboration.task?.stage"> · {{ collaboration.task.stage.name }}</span>
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-2 text-sm">
+          <p v-if="collaboration.request_note" class="whitespace-pre-wrap font-medium">
+            {{ collaboration.request_note }}
+          </p>
+          <p v-else class="text-muted-foreground">
+            No dejaron una instrucción específica. Use el asunto, las notas y los documentos del radicado como referencia.
+          </p>
           <p>
             <span class="text-muted-foreground">Estado:</span>
             {{ isResponded ? 'Respondido' : 'Pendiente de su aporte' }}
           </p>
-          <p v-if="collaboration.invited_by">
-            <span class="text-muted-foreground">Solicitado por:</span>
-            {{ collaboration.invited_by.name }}
-          </p>
+        </CardContent>
+      </Card>
+
+      <Card v-if="collaboration.filing">
+        <CardHeader>
+          <CardTitle class="text-base">
+            Información del radicado
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <WorkflowTaskFilingSummaryPanel :filing="collaboration.filing" />
         </CardContent>
       </Card>
 

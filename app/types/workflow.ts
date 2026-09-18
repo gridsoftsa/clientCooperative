@@ -242,6 +242,7 @@ export interface WorkflowTaskCollaboratorRow {
   id: number
   workflow_task_id: number
   status: 'pending' | 'responded'
+  request_note: string | null
   response_note: string | null
   responded_at: string | null
   user: { id: number, name: string, email?: string | null } | null
@@ -257,11 +258,7 @@ export interface WorkflowTaskCollaboratorRow {
     mime_type: string | null
     size_bytes: number | null
   }>
-  filing?: {
-    id: number
-    filing_number: string
-    subject: string
-  } | null
+  filing?: WorkflowFilingContextSummary | null
   task?: {
     id: number
     stage: { name: string, key: string } | null

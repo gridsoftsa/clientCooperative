@@ -175,7 +175,12 @@ export function useWorkflowApi() {
 
   async function inviteTaskCollaborator(
     taskId: number,
-    payload: { user_id: number, org_unit_id?: number | null, org_position_id?: number | null },
+    payload: {
+      user_id: number
+      org_unit_id?: number | null
+      org_position_id?: number | null
+      request_note?: string | null
+    },
   ): Promise<WorkflowTaskCollaboratorRow> {
     const res = await api<{ data: WorkflowTaskCollaboratorRow, message: string }>(
       `/workflow/tasks/${taskId}/collaborators`,

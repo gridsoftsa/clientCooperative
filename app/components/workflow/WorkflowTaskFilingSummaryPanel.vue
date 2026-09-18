@@ -76,7 +76,7 @@ function openFilingDetail() {
       <p class="text-sm text-muted-foreground">
         Datos del radicado para apoyar la gestión de la etapa.
       </p>
-      <Button variant="outline" size="sm" @click="openFilingDetail">
+      <Button v-if="hasPermission('ventanilla_ver')" variant="outline" size="sm" @click="openFilingDetail">
         <Icon name="i-lucide-external-link" class="mr-1 size-4" />
         Abrir radicado
       </Button>

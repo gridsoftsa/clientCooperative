@@ -28,6 +28,7 @@ const selectedOrgUnitId = ref<string>('')
 const selectedPositionId = ref<string>('')
 const selectedStaffId = ref<string>('')
 const staffQuery = ref('')
+const requestNote = ref('')
 
 const selectedStaff = computed(() =>
   staffResults.value.find(item => String(item.id) === selectedStaffId.value) ?? null,
@@ -132,9 +133,11 @@ async function inviteCollaborator() {
       user_id: staff.user_id,
       org_unit_id: selectedOrgUnitId.value ? Number(selectedOrgUnitId.value) : null,
       org_position_id: selectedPositionId.value ? Number(selectedPositionId.value) : null,
+      request_note: requestNote.value.trim() || null,
     })
     toast.success('Colaborador agregado. Se le notificó para que ingrese a colaborar.')
     selectedStaffId.value = ''
+    requestNote.value = ''
     await loadCollaborators()
     emit('changed')
   }
@@ -241,6 +244,15 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
           </Select>
         </div>
 
+        <div class="space-y-2">
+          <Label>Qué se solicita (opcional)</Label>
+          <Textarea
+            v-model="requestNote"
+            rows="3"
+            placeholder="Indique al colaborador qué documento o concepto debe aportar."
+          />
+        </div>
+
         <Button class="w-full" :disabled="saving || !selectedStaffId" @click="inviteCollaborator">
           Agregar y notificar
         </Button>
@@ -268,6 +280,9 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
             </p>
             <p class="mt-1 text-xs text-muted-foreground">
               Invitado por {{ row.invited_by?.name ?? '—' }}
+            </p>
+            <p v-if="row.request_note" class="mt-2 whitespace-pre-wrap text-sm">
+              {{ row.request_note }}
             </p>
           </div>
           <Badge :variant="row.status === 'responded' ? 'secondary' : 'outline'">

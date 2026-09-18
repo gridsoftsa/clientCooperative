@@ -117,6 +117,9 @@ onMounted(() => {
               <p v-if="row.invited_by" class="mt-1 text-xs text-muted-foreground">
                 Solicitado por {{ row.invited_by.name }}
               </p>
+              <p v-if="row.request_note" class="mt-1 line-clamp-2 text-sm">
+                {{ row.request_note }}
+              </p>
             </div>
             <div class="flex items-center gap-2">
               <Badge :variant="row.status === 'responded' ? 'secondary' : 'outline'">
