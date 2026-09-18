@@ -72,6 +72,12 @@ async function loadDefinitions() {
 }
 
 async function loadPendingCollaborations() {
+  if (!hasPermission('workflow_colaborar')) {
+    pendingCollaborations.value = []
+
+    return
+  }
+
   try {
     pendingCollaborations.value = await workflowApi.fetchMyPendingCollaborations()
   }
@@ -205,12 +211,19 @@ onMounted(async () => {
 
     <Card v-if="pendingCollaborations.length">
       <CardHeader class="pb-3">
-        <CardTitle class="text-base">
-          Colaboraciones pendientes
-        </CardTitle>
-        <CardDescription>
-          Lo invitaron a aportar documentos. No gestione la etapa: abra colaboración y adjunte su archivo.
-        </CardDescription>
+        <div class="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <CardTitle class="text-base">
+              Colaboraciones pendientes
+            </CardTitle>
+            <CardDescription>
+              Lo invitaron a aportar documentos. No gestione la etapa: adjunte su archivo o abra el listado completo.
+            </CardDescription>
+          </div>
+          <Button variant="outline" size="sm" type="button" @click="navigateTo('/workflow/colaboracion')">
+            Ver todas
+          </Button>
+        </div>
       </CardHeader>
       <CardContent class="space-y-2">
         <div

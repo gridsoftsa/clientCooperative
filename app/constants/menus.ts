@@ -23,6 +23,12 @@ export const navMenu: NavMenu[] = [
         link: '/notificaciones',
       },
       {
+        title: 'Mis colaboraciones',
+        icon: 'i-lucide-users',
+        link: '/workflow/colaboracion',
+        permission: 'workflow_colaborar',
+      },
+      {
         title: 'Reportes',
         icon: 'i-lucide-chart-column',
         link: '/reportes',
@@ -46,7 +52,7 @@ export const navMenu: NavMenu[] = [
       {
         title: 'Workflow',
         icon: 'i-lucide-kanban-square',
-        anyPermission: ['workflow_ver', 'workflow_definir'],
+        anyPermission: ['workflow_ver', 'workflow_definir', 'workflow_colaborar'],
         children: [
           {
             title: 'Tablero de tareas',
@@ -57,6 +63,11 @@ export const navMenu: NavMenu[] = [
             title: 'Bandeja lista',
             link: '/workflow/bandeja',
             permission: 'workflow_ver',
+          },
+          {
+            title: 'Mis colaboraciones',
+            link: '/workflow/colaboracion',
+            permission: 'workflow_colaborar',
           },
           {
             title: 'Reportes',

@@ -292,6 +292,7 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   radicacion_catalogos_editar: 'Editar catálogos',
   workflow_ver: 'Ver tablero y tareas de workflow',
   workflow_gestionar: 'Gestionar tareas de workflow (avanzar, devolver, comentar)',
+  workflow_colaborar: 'Ver el listado de colaboraciones propias de workflow',
   workflow_reasignar: 'Reasignar tareas de workflow',
   workflow_equipo_ver: 'Ver tareas del equipo en workflow',
   workflow_ver_todas: 'Ver todas las tareas de workflow (supervisión global)',

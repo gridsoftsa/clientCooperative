@@ -189,10 +189,19 @@ export function useWorkflowApi() {
     await api(`/workflow/tasks/${taskId}/collaborators/${collaboratorId}`, { method: 'DELETE' })
   }
 
-  async function fetchMyPendingCollaborations(): Promise<WorkflowTaskCollaboratorRow[]> {
-    const res = await api<{ data: WorkflowTaskCollaboratorRow[] }>('/workflow/collaborations/mine')
+  async function fetchMyCollaborations(status?: 'pending' | 'responded'): Promise<WorkflowTaskCollaboratorRow[]> {
+    const query: Record<string, string> = {}
+    if (status) {
+      query.status = status
+    }
+
+    const res = await api<{ data: WorkflowTaskCollaboratorRow[] }>('/workflow/collaborations/mine', { query })
 
     return res.data
+  }
+
+  async function fetchMyPendingCollaborations(): Promise<WorkflowTaskCollaboratorRow[]> {
+    return fetchMyCollaborations('pending')
   }
 
   async function fetchCollaboration(id: number): Promise<WorkflowTaskCollaboratorRow> {
@@ -234,6 +243,7 @@ export function useWorkflowApi() {
     fetchTaskCollaborators,
     inviteTaskCollaborator,
     removeTaskCollaborator,
+    fetchMyCollaborations,
     fetchMyPendingCollaborations,
     fetchCollaboration,
     respondCollaboration,

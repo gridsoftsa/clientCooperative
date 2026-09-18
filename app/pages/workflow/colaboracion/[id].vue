@@ -102,7 +102,7 @@ async function submitResponse() {
 <template>
   <div class="mx-auto w-full max-w-3xl space-y-6 px-4 py-8 md:px-6">
     <div class="flex items-start gap-3">
-      <Button variant="ghost" size="icon" class="shrink-0" @click="router.push('/notificaciones')">
+      <Button variant="ghost" size="icon" class="shrink-0" @click="router.push('/workflow/colaboracion')">
         <Icon name="i-lucide-arrow-left" class="size-4" />
       </Button>
       <div>
