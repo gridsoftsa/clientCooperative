@@ -7,9 +7,16 @@ import {
 import type { WorkflowFilingContextSummary } from '~/types/workflow'
 import { formatFileSizeLabel } from '~/utils/document-attachment-folio'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   filing: WorkflowFilingContextSummary
-}>()
+  showOpenFilingButton?: boolean
+  showDetails?: boolean
+  showFiles?: boolean
+}>(), {
+  showOpenFilingButton: true,
+  showDetails: true,
+  showFiles: true,
+})
 
 const { hasPermission } = usePermissions()
 const ventanillaApi = useVentanillaApi()
@@ -71,8 +78,8 @@ function openFilingDetail() {
 </script>
 
 <template>
-  <div class="space-y-5">
-    <div class="flex flex-wrap items-center justify-between gap-2">
+  <div class="space-y-4">
+    <div v-if="showOpenFilingButton" class="flex flex-wrap items-center justify-between gap-2">
       <p class="text-sm text-muted-foreground">
         Datos del radicado para apoyar la gestión de la etapa.
       </p>
@@ -82,8 +89,8 @@ function openFilingDetail() {
       </Button>
     </div>
 
-    <div class="rounded-lg border bg-muted/20 p-4">
-      <dl class="grid gap-4 sm:grid-cols-2">
+    <div v-if="showDetails" class="rounded-lg border bg-muted/20 p-4">
+      <dl class="grid gap-3 text-sm sm:grid-cols-2">
         <div>
           <dt class="text-muted-foreground text-xs">
             Número
@@ -184,7 +191,7 @@ function openFilingDetail() {
       </dl>
     </div>
 
-    <div class="space-y-3">
+    <div v-if="showFiles" class="space-y-3">
       <div class="flex items-center justify-between gap-2">
         <p class="text-sm font-medium">
           Documentos adjuntos

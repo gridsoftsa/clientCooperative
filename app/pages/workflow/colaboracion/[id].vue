@@ -25,14 +25,17 @@ const submitAttempted = ref(false)
 const responseNote = ref('')
 const attachment = ref<DocumentAttachmentRow>(createDocumentAttachmentRow())
 const collaboration = ref<Awaited<ReturnType<typeof workflowApi.fetchCollaboration>> | null>(null)
+const activeTab = ref('responder')
 
 const isResponded = computed(() => collaboration.value?.status === 'responded')
+const filingFileCount = computed(() => collaboration.value?.filing?.files.length ?? 0)
 
 async function load() {
   loading.value = true
 
   try {
     collaboration.value = await workflowApi.fetchCollaboration(collaborationId.value)
+    activeTab.value = collaboration.value.status === 'responded' ? 'aporte' : 'responder'
   }
   catch (error) {
     toast.error(extractApiErrorMessage(error))
@@ -88,6 +91,7 @@ async function submitResponse() {
 
   try {
     collaboration.value = await workflowApi.respondCollaboration(collaborationId.value, fd)
+    activeTab.value = 'aporte'
     toast.success('Respuesta registrada correctamente.')
   }
   catch (error) {
@@ -100,17 +104,21 @@ async function submitResponse() {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-4xl space-y-6 px-4 py-8 md:px-6">
+  <div class="mx-auto w-full max-w-4xl space-y-5 px-4 py-6 md:px-6">
     <div class="flex items-start gap-3">
       <Button variant="ghost" size="icon" class="shrink-0" @click="router.push('/workflow/colaboracion')">
         <Icon name="i-lucide-arrow-left" class="size-4" />
       </Button>
-      <div>
+      <div class="min-w-0 space-y-1">
         <h1 class="text-2xl font-semibold tracking-tight">
           Colaboración en tarea
         </h1>
         <p class="text-sm text-muted-foreground">
-          Revise la solicitud y el radicado, luego adjunte su aporte documental.
+          <span class="font-medium text-foreground">
+            {{ collaboration?.filing?.filing_number ?? 'Radicado' }}
+          </span>
+          <span v-if="collaboration?.filing?.subject"> · {{ collaboration.filing.subject }}</span>
+          <span v-if="collaboration?.task?.stage"> · {{ collaboration.task.stage.name }}</span>
         </p>
       </div>
     </div>
@@ -121,96 +129,102 @@ async function submitResponse() {
       </CardContent>
     </Card>
 
-    <template v-else-if="collaboration">
-      <Card>
-        <CardHeader>
-          <CardTitle class="text-base">
-            Qué se solicita
-          </CardTitle>
-          <CardDescription>
-            Instrucción de {{ collaboration.invited_by?.name ?? 'quien lo invitó' }}
-            <span v-if="collaboration.task?.stage"> · {{ collaboration.task.stage.name }}</span>
-          </CardDescription>
-        </CardHeader>
-        <CardContent class="space-y-2 text-sm">
-          <p v-if="collaboration.request_note" class="whitespace-pre-wrap font-medium">
-            {{ collaboration.request_note }}
-          </p>
-          <p v-else class="text-muted-foreground">
-            No dejaron una instrucción específica. Use el asunto, las notas y los documentos del radicado como referencia.
-          </p>
-          <p>
-            <span class="text-muted-foreground">Estado:</span>
-            {{ isResponded ? 'Respondido' : 'Pendiente de su aporte' }}
-          </p>
-        </CardContent>
-      </Card>
+    <Tabs
+      v-else-if="collaboration"
+      v-model="activeTab"
+      :default-value="isResponded ? 'aporte' : 'responder'"
+      class="w-full"
+    >
+      <TabsList class="flex h-auto w-full shrink-0 flex-wrap gap-1 p-1">
+        <TabsTrigger v-if="!isResponded" value="responder" class="flex-1 sm:flex-none">
+          Responder
+        </TabsTrigger>
+        <TabsTrigger v-else value="aporte" class="flex-1 sm:flex-none">
+          Aporte
+        </TabsTrigger>
+        <TabsTrigger value="radicado" class="flex-1 sm:flex-none">
+          Radicado
+        </TabsTrigger>
+        <TabsTrigger value="documentos" class="flex-1 sm:flex-none">
+          Documentos
+          <Badge v-if="filingFileCount > 0" variant="secondary" class="ml-2">
+            {{ filingFileCount }}
+          </Badge>
+        </TabsTrigger>
+      </TabsList>
 
-      <Card v-if="collaboration.filing">
-        <CardHeader>
-          <CardTitle class="text-base">
-            Información del radicado
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <WorkflowTaskFilingSummaryPanel :filing="collaboration.filing" />
-        </CardContent>
-      </Card>
+      <TabsContent v-if="!isResponded" value="responder" class="mt-4 space-y-4">
+        <Alert>
+          <Icon name="i-lucide-message-square" class="size-4" />
+          <AlertTitle>Qué se solicita</AlertTitle>
+          <AlertDescription class="whitespace-pre-wrap">
+            {{ collaboration.request_note || 'No dejaron una instrucción específica. Revise el radicado y los documentos en las otras pestañas.' }}
+          </AlertDescription>
+        </Alert>
+        <p class="text-sm text-muted-foreground">
+          Solicitado por {{ collaboration.invited_by?.name ?? '—' }} · Pendiente de su aporte
+        </p>
 
-      <Card v-if="!isResponded">
-        <CardHeader>
-          <CardTitle class="text-base">
-            Su respuesta
-          </CardTitle>
-          <CardDescription>
-            Debe adjuntar al menos un archivo para completar la colaboración.
-          </CardDescription>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="space-y-2">
-            <Label>Nota (opcional)</Label>
-            <Textarea v-model="responseNote" rows="3" placeholder="Comentario sobre su aporte" />
-          </div>
+        <div class="space-y-2">
+          <Label>Nota (opcional)</Label>
+          <Textarea v-model="responseNote" rows="3" placeholder="Comentario sobre su aporte" />
+        </div>
 
-          <DocumentsDocumentAttachmentUploadCard
-            v-model:title="attachment.title"
-            v-model:folio-start="attachment.folioStart"
-            v-model:folio-end="attachment.folioEnd"
-            v-model:file="attachment.file"
-            title="Archivo de respuesta"
-            label="Documento"
-            :submit-attempted="submitAttempted"
-            :upload-constraints="VENTANILLA_FILING_UPLOAD_CONSTRAINTS"
-          />
+        <DocumentsDocumentAttachmentUploadCard
+          v-model:title="attachment.title"
+          v-model:folio-start="attachment.folioStart"
+          v-model:folio-end="attachment.folioEnd"
+          v-model:file="attachment.file"
+          title="Archivo de respuesta"
+          label="Documento"
+          :submit-attempted="submitAttempted"
+          :upload-constraints="VENTANILLA_FILING_UPLOAD_CONSTRAINTS"
+        />
 
-          <Button class="w-full" :disabled="saving" @click="submitResponse">
-            {{ saving ? 'Enviando…' : 'Enviar respuesta' }}
-          </Button>
-        </CardContent>
-      </Card>
+        <Button class="w-full sm:w-auto" :disabled="saving" @click="submitResponse">
+          {{ saving ? 'Enviando…' : 'Enviar respuesta' }}
+        </Button>
+      </TabsContent>
 
-      <Card v-else>
-        <CardHeader>
-          <CardTitle class="text-base">
-            Aporte registrado
-          </CardTitle>
-        </CardHeader>
-        <CardContent class="space-y-3 text-sm">
-          <p v-if="collaboration.response_note" class="text-muted-foreground">
-            {{ collaboration.response_note }}
-          </p>
-          <ul v-if="collaboration.files.length" class="divide-y rounded-lg border">
-            <li v-for="file in collaboration.files" :key="file.id" class="px-4 py-3">
-              <p class="font-medium">
-                {{ file.title }}
-              </p>
-              <p class="text-xs text-muted-foreground">
-                {{ file.original_name }} · folios {{ file.folio_start }}–{{ file.folio_end }}
-              </p>
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
-    </template>
+      <TabsContent v-else value="aporte" class="mt-4 space-y-3">
+        <p v-if="collaboration.response_note" class="whitespace-pre-wrap text-sm">
+          {{ collaboration.response_note }}
+        </p>
+        <ul v-if="collaboration.files.length" class="divide-y rounded-lg border">
+          <li v-for="file in collaboration.files" :key="file.id" class="px-4 py-3 text-sm">
+            <p class="font-medium">
+              {{ file.title }}
+            </p>
+            <p class="text-xs text-muted-foreground">
+              {{ file.original_name }} · folios {{ file.folio_start }}–{{ file.folio_end }}
+            </p>
+          </li>
+        </ul>
+      </TabsContent>
+
+      <TabsContent value="radicado" class="mt-4">
+        <WorkflowTaskFilingSummaryPanel
+          v-if="collaboration.filing"
+          :filing="collaboration.filing"
+          :show-open-filing-button="false"
+          :show-files="false"
+        />
+        <p v-else class="text-sm text-muted-foreground">
+          No hay datos del radicado para esta colaboración.
+        </p>
+      </TabsContent>
+
+      <TabsContent value="documentos" class="mt-4">
+        <WorkflowTaskFilingSummaryPanel
+          v-if="collaboration.filing"
+          :filing="collaboration.filing"
+          :show-open-filing-button="false"
+          :show-details="false"
+        />
+        <p v-else class="text-sm text-muted-foreground">
+          No hay documentos asociados.
+        </p>
+      </TabsContent>
+    </Tabs>
   </div>
 </template>
