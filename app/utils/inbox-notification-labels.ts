@@ -25,6 +25,8 @@ export function inboxNotificationEventLabel(eventType?: string | null): string |
     registered: 'Radicado registrado',
     registered_confirmation: 'Confirmación de radicación',
     assigned: 'Radicado asignado',
+    responded: 'Respuesta al interesado',
+    sender_notified: 'Correo al interesado',
     sla_alert: 'Alerta SLA',
     sla_reminder: 'Recordatorio SLA',
     escalated: 'Escalamiento',

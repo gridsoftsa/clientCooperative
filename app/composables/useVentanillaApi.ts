@@ -283,13 +283,14 @@ export function useVentanillaApi() {
     return res.data
   }
 
-  async function respondFiling(id: number, responseText: string): Promise<VentanillaFilingDetail> {
-    const res = await api<{ data: VentanillaFilingDetail; message: string }>(`/ventanilla/filings/${id}/respond`, {
+  async function respondFiling(
+    id: number,
+    responseText: string,
+  ): Promise<{ data: VentanillaFilingDetail; message: string }> {
+    return api<{ data: VentanillaFilingDetail; message: string }>(`/ventanilla/filings/${id}/respond`, {
       method: 'PATCH',
       body: { response_text: responseText },
     })
-
-    return res.data
   }
 
   async function closeFiling(id: number, closeReason?: string): Promise<VentanillaFilingDetail> {

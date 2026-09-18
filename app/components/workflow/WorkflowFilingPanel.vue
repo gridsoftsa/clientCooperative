@@ -105,6 +105,7 @@ function eventLabel(type: string) {
     completed: 'Proceso cerrado',
     cancelled: 'Proceso cancelado',
     escalated: 'Escalamiento SLA etapa',
+    sender_notified: 'Correo al interesado',
   }
 
   return labels[type] ?? type

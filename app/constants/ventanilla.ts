@@ -38,7 +38,9 @@ export const VENTANILLA_NOTIFICATION_CHANNEL_LABELS: Record<string, string> = {
 }
 
 export const VENTANILLA_NOTIFICATION_EVENT_LABELS: Record<string, string> = {
+  registered: 'Radicación',
   assigned: 'Asignación',
+  responded: 'Respuesta al interesado',
   sla_alert: 'Alerta SLA',
   sla_reminder: 'Recordatorio SLA',
   escalated: 'Escalamiento SLA',

@@ -70,6 +70,9 @@ const activeSection = ref<VentanillaDetailSection>('resumen')
 
 const id = computed(() => Number(route.params.id))
 const isTerminal = computed(() => filing.value?.status === 'closed' || filing.value?.status === 'voided')
+const latestSenderNotification = computed(() =>
+  filing.value?.events?.find(event => event.event_type === 'sender_notified') ?? null,
+)
 const canAssign = computed(() => hasPermission('ventanilla_asignar') && !isTerminal.value)
 const canManage = computed(() => hasPermission('ventanilla_gestionar') && !isTerminal.value)
 const canVoid = computed(() => hasPermission('ventanilla_anular') && !isTerminal.value)
@@ -123,16 +126,13 @@ const detailSections = computed(() => {
     sections.push({ id: 'colaboracion', label: 'Colaboración', icon: 'i-lucide-users' })
   }
 
-  sections.push(
-    { id: 'archivos', label: 'Archivos', icon: 'i-lucide-paperclip' },
-    { id: 'trd', label: 'Clasificación TRD', icon: 'i-lucide-folders' },
-    { id: 'metadatos', label: 'Metadatos', icon: 'i-lucide-tags' },
-    { id: 'trazabilidad', label: 'Trazabilidad', icon: 'i-lucide-history' },
-  )
-
-  if (currentFiling.notification_deliveries?.length) {
-    sections.push({ id: 'notificaciones', label: 'Notificaciones', icon: 'i-lucide-bell' })
-  }
+    sections.push(
+      { id: 'archivos', label: 'Archivos', icon: 'i-lucide-paperclip' },
+      { id: 'trd', label: 'Clasificación TRD', icon: 'i-lucide-folders' },
+      { id: 'metadatos', label: 'Metadatos', icon: 'i-lucide-tags' },
+      { id: 'trazabilidad', label: 'Trazabilidad', icon: 'i-lucide-history' },
+      { id: 'notificaciones', label: 'Notificaciones', icon: 'i-lucide-bell' },
+    )
 
   sections.push({ id: 'alertas', label: 'Alertas SLA', icon: 'i-lucide-triangle-alert' })
 
@@ -215,7 +215,8 @@ function eventTypeLabel(type: string): string {
     intake_classified: 'Clasificación desde bandeja',
     traffic_light_changed: 'Cambio de semáforo',
     sla_alert_notified: 'Notificación SLA',
-    escalated: 'Escalamiento SLA',
+    sender_notified: 'Correo al interesado',
+    files_attached: 'Archivos adjuntos',
   }
 
   return labels[type] ?? type
@@ -225,7 +226,7 @@ function alertRecipientRoleLabel(role: string): string {
   const labels: Record<string, string> = {
     assignee: 'responsable',
     immediate_supervisor: 'jefe inmediato',
-    unit_manager: 'jefe de área',
+    sender: 'interesado',
   }
 
   return labels[role] ?? role
@@ -247,14 +248,18 @@ function formatMetadataValue(dataType: string, value: unknown): string {
   return formatArchivalMetadataValue(dataType, value)
 }
 
-async function runAction(action: string, callback: () => Promise<VentanillaFilingDetail>) {
+async function runAction(
+  action: string,
+  callback: () => Promise<VentanillaFilingDetail>,
+  successMessage = 'Acción registrada correctamente',
+) {
   actionLoading.value = action
   errorMessage.value = ''
   actionMessage.value = ''
   try {
     filing.value = await callback()
     selectedAssignedUserId.value = filing.value.assigned_user?.id ?? selectedAssignedUserId.value
-    actionMessage.value = 'Acción registrada correctamente'
+    actionMessage.value = successMessage
   } catch (e: unknown) {
     const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
     const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
@@ -331,8 +336,24 @@ async function respondAndClose() {
     return
   }
 
-  await runAction('respond', () => ventanillaApi.respondFiling(id.value, responseText.value.trim()))
-  responseText.value = ''
+  actionLoading.value = 'respond'
+  errorMessage.value = ''
+  actionMessage.value = ''
+  try {
+    const res = await ventanillaApi.respondFiling(id.value, responseText.value.trim())
+    filing.value = res.data
+    selectedAssignedUserId.value = filing.value.assigned_user?.id ?? selectedAssignedUserId.value
+    actionMessage.value = res.message
+    responseText.value = ''
+  }
+  catch (e: unknown) {
+    const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    errorMessage.value = first ?? err.data?.message ?? 'No se pudo ejecutar la acción'
+  }
+  finally {
+    actionLoading.value = ''
+  }
 }
 
 async function closeFiling() {
@@ -688,6 +709,14 @@ async function viewSticker() {
                 {{ filing.response_text }}
               </dd>
             </div>
+            <div v-if="latestSenderNotification" class="sm:col-span-2">
+              <dt class="text-muted-foreground text-xs">
+                Correo al interesado
+              </dt>
+              <dd class="mt-1 font-medium">
+                {{ latestSenderNotification.description }}
+              </dd>
+            </div>
             <div v-if="filing.close_reason" class="sm:col-span-2">
               <dt class="text-muted-foreground text-xs">
                 Motivo de cierre
@@ -962,7 +991,6 @@ async function viewSticker() {
                   v-model:folio-start="workflowAttachment.folioStart"
                   v-model:folio-end="workflowAttachment.folioEnd"
                   v-model:file="workflowAttachment.file"
-                  title="Nuevo adjunto"
                   label="Documento"
                   :submit-attempted="workflowAttachmentAttempted"
                   :disabled="workflowAttachmentLoading"
@@ -1115,41 +1143,56 @@ async function viewSticker() {
             </CardContent>
           </Card>
 
-          <Card v-if="filing.notification_deliveries?.length" v-show="activeSection === 'notificaciones'">
-        <CardHeader>
-          <CardTitle>Notificaciones enviadas</CardTitle>
-          <CardDescription>
-            Registro de envíos por correo, WhatsApp e interno.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul class="space-y-2 text-sm">
-            <li
-              v-for="delivery in filing.notification_deliveries"
-              :key="delivery.id"
-              class="rounded-lg border p-3"
-            >
-              <div class="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">
-                  {{ notificationChannelLabel(delivery.channel) }}
-                </Badge>
-                <span class="font-medium">{{ notificationEventLabel(delivery.event_type) }}</span>
-                <Badge v-if="delivery.status === 'failed'" variant="destructive">
-                  Fallido
-                </Badge>
-              </div>
-              <p class="text-muted-foreground mt-1 text-xs">
-                {{ delivery.recipient_user?.name ?? delivery.recipient_address ?? 'Destinatario' }}
-                <template v-if="delivery.recipient_role">
-                  ({{ alertRecipientRoleLabel(delivery.recipient_role) }})
-                </template>
-                · {{ formatDate(delivery.sent_at) }}
+          <Card v-show="activeSection === 'notificaciones'">
+            <CardHeader>
+              <CardTitle>Notificaciones</CardTitle>
+              <CardDescription>
+                Registro de envíos por correo, WhatsApp e interno, incluidos los que no se pudieron enviar.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul v-if="filing.notification_deliveries?.length" class="space-y-2 text-sm">
+                <li
+                  v-for="delivery in filing.notification_deliveries"
+                  :key="delivery.id"
+                  class="rounded-lg border p-3"
+                >
+                  <div class="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">
+                      {{ notificationChannelLabel(delivery.channel) }}
+                    </Badge>
+                    <span class="font-medium">{{ notificationEventLabel(delivery.event_type) }}</span>
+                    <Badge v-if="delivery.status === 'failed'" variant="destructive">
+                      Fallido
+                    </Badge>
+                    <Badge v-else-if="delivery.status === 'skipped'" variant="secondary">
+                      No enviado
+                    </Badge>
+                    <Badge v-else-if="delivery.status === 'sent'" variant="outline">
+                      Enviado
+                    </Badge>
+                  </div>
+                  <p class="text-muted-foreground mt-1 text-xs">
+                    {{ delivery.recipient_user?.name ?? delivery.recipient_address ?? 'Sin destinatario' }}
+                    <template v-if="delivery.recipient_role">
+                      ({{ alertRecipientRoleLabel(delivery.recipient_role) }})
+                    </template>
+                    <template v-if="delivery.sent_at">
+                      · {{ formatDate(delivery.sent_at) }}
+                    </template>
+                  </p>
+                  <p
+                    v-if="delivery.error_message"
+                    class="mt-1 text-xs"
+                    :class="delivery.status === 'skipped' ? 'text-muted-foreground' : 'text-destructive'"
+                  >
+                    {{ delivery.error_message }}
+                  </p>
+                </li>
+              </ul>
+              <p v-else class="text-muted-foreground text-sm">
+                Aún no hay notificaciones registradas para este radicado.
               </p>
-              <p v-if="delivery.error_message" class="mt-1 text-xs text-destructive">
-                {{ delivery.error_message }}
-              </p>
-            </li>
-          </ul>
             </CardContent>
           </Card>
 

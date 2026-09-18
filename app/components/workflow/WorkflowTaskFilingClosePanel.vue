@@ -38,8 +38,8 @@ async function submit(): Promise<void> {
     }
 
     if (props.requiresResponse) {
-      await ventanillaApi.respondFiling(props.filingId, responseText.value.trim())
-      toast.success('Respuesta registrada. El radicado y el flujo quedaron cerrados.')
+      const res = await ventanillaApi.respondFiling(props.filingId, responseText.value.trim())
+      toast.success(res.message)
       responseText.value = ''
     }
     else {

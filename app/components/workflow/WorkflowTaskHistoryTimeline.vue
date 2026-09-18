@@ -106,6 +106,13 @@ const EVENT_PRESENTATION: Record<string, EventPresentation> = {
     badgeClass: 'border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-900 dark:bg-orange-950/50 dark:text-orange-200',
     accentClass: 'border-l-orange-500',
   },
+  sender_notified: {
+    label: 'Correo al interesado',
+    icon: 'i-lucide-mail',
+    nodeClass: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-cyan-950/60 dark:text-cyan-300',
+    badgeClass: 'border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-200',
+    accentClass: 'border-l-cyan-500',
+  },
 }
 
 const DEFAULT_PRESENTATION: EventPresentation = {
