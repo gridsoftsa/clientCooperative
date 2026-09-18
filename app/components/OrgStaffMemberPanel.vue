@@ -5,7 +5,7 @@ import { ORG_ASSIGNMENT_CHANGE_KIND_OPTIONS } from '~/constants/org-structure-as
 import type { OrgOffice, OrgStaffListItem } from '~/types/org-structure'
 import { dayAfterIsoDateString, formatIsoDateForDisplay, toDateInputValue } from '~/utils/dateInputValue'
 import type { OrgUnitRow, OrgPositionRow } from '~/composables/useOrgStructureApi'
-import type { PaginatedUsers, User } from '~/types/user'
+import type { User } from '~/types/user'
 import {
   hasStaffPersonalInfoForUserPrefill,
   isOrgStaffEmailValid,
@@ -226,13 +226,14 @@ async function loadUsersIfAllowed() {
     return
   }
   try {
-    const res = await $api<PaginatedUsers>('/users', { query: { per_page: 200, page: 1 } })
-    userOptions.value = res.data
-      .filter((u: User) => u.org_staff_id == null || u.org_staff_id === props.staffId)
-      .map((u: User) => ({
-        id: u.id,
-        label: `${u.name || u.email} · ${u.email}`,
-      }))
+    const res = await $api<{ data: Array<{ id: number, name: string | null, email: string }> }>(
+      '/users/linkable-for-org-staff',
+      { query: { limit: 500, for_staff_id: props.staffId } },
+    )
+    userOptions.value = res.data.map(u => ({
+      id: u.id,
+      label: `${u.name || u.email} · ${u.email}`,
+    }))
   } catch {
     userOptions.value = []
   }
@@ -602,17 +603,35 @@ async function hydrateSupervisorFromSaved(supervisorId: number | null): Promise<
   }
 }
 
+function suggestedOfficeIdFromLinkedUser(): number | null {
+  const fromApi = summary.value?.suggested_org_office_id
+  if (fromApi != null && Number.isFinite(Number(fromApi))) {
+    return Number(fromApi)
+  }
+
+  const sucursalId = summary.value?.user?.sucursal_id
+  if (sucursalId == null) {
+    return null
+  }
+
+  const match = offices.value.find(office => Number(office.sucursal_id) === Number(sucursalId))
+
+  return match?.id ?? null
+}
+
 async function hydrateUbicacionFormFromCurrentAssignment(): Promise<void> {
   if (props.readOnly) {
     return
   }
   const ca = summary.value?.current_assignment
-  const officeId = ca?.org_office?.id
-  const unitId = ca?.org_unit?.id
-  const positionId = ca?.org_position?.id
-  if (!ca || officeId == null || unitId == null || positionId == null) {
+  const assignmentOfficeId = ca?.org_office?.id ?? null
+  const unitId = ca?.org_unit?.id ?? null
+  const positionId = ca?.org_position?.id ?? null
+  const assignmentIsComplete = assignmentOfficeId != null && unitId != null && positionId != null
+  if (!assignmentIsComplete || ca == null) {
+    const suggestedOfficeId = assignmentOfficeId ?? suggestedOfficeIdFromLinkedUser()
     ubicacionForm.value = {
-      org_office_id: null,
+      org_office_id: suggestedOfficeId,
       org_unit_id: null,
       org_position_id: null,
       immediate_supervisor_staff_id: null,
@@ -624,8 +643,19 @@ async function hydrateUbicacionFormFromCurrentAssignment(): Promise<void> {
     units.value = []
     positions.value = []
     resetSupervisorSelection()
+    if (suggestedOfficeId != null) {
+      ubicacionHydrating.value = true
+      try {
+        units.value = await orgApi.fetchUnits({ activeOnly: true, orgOfficeId: suggestedOfficeId })
+      } catch {
+        units.value = []
+      } finally {
+        ubicacionHydrating.value = false
+      }
+    }
     return
   }
+  const officeId = assignmentOfficeId
 
   ubicacionHydrating.value = true
   try {

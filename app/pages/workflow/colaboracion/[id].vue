@@ -11,7 +11,6 @@ import { extractApiErrorMessage } from '~/utils/workflow-task-ui'
 
 definePageMeta({
   layout: 'default',
-  middleware: 'auth',
 })
 
 const route = useRoute()

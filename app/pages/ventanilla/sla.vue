@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { toast } from 'vue-sonner'
 import type {
   VentanillaCatalogData,
   VentanillaColombiaHolidayPreviewData,
@@ -18,8 +19,7 @@ definePageMeta({
 const api = useVentanillaApi()
 const loading = ref(true)
 const saving = ref(false)
-const errorMessage = ref('')
-const successMessage = ref('')
+const loadError = ref('')
 const data = ref<VentanillaSlaSettingsData | null>(null)
 const notificationSettings = ref<VentanillaNotificationSettingsRow | null>(null)
 const notificationSaving = ref(false)
@@ -41,14 +41,38 @@ const escalationFunctionalTypeKeys = computed({
   },
 })
 
-function toggleEscalationFunctionalType(key: string, checked: boolean): void {
+function toggleEscalationFunctionalType(key: string, checked: boolean | 'indeterminate'): void {
   const current = new Set(escalationFunctionalTypeKeys.value)
-  if (checked) {
+  if (checked === true) {
     current.add(key)
   } else {
     current.delete(key)
   }
   escalationFunctionalTypeKeys.value = Array.from(current)
+}
+
+const allEscalationFunctionalTypeKeys = computed(
+  () => catalog.value?.functional_types?.map((type) => type.key) ?? [],
+)
+
+const allEscalationFunctionalTypesSelected = computed(() => {
+  const allKeys = allEscalationFunctionalTypeKeys.value
+  if (allKeys.length === 0) {
+    return false
+  }
+
+  const selected = new Set(escalationFunctionalTypeKeys.value)
+
+  return allKeys.every((key) => selected.has(key))
+})
+
+function toggleAllEscalationFunctionalTypes(): void {
+  if (allEscalationFunctionalTypesSelected.value) {
+    escalationFunctionalTypeKeys.value = []
+    return
+  }
+
+  escalationFunctionalTypeKeys.value = [...allEscalationFunctionalTypeKeys.value]
 }
 
 const visibleHolidays = computed(() => {
@@ -126,7 +150,7 @@ onMounted(() => load())
 
 async function load() {
   loading.value = true
-  errorMessage.value = ''
+  loadError.value = ''
   try {
     const [settingsData, notificationData, catalogData] = await Promise.all([
       api.fetchSlaSettings(),
@@ -162,7 +186,8 @@ async function load() {
       )
     }
   } catch {
-    errorMessage.value = 'No se pudo cargar la configuración SLA'
+    loadError.value = 'No se pudo cargar la configuración SLA'
+    toast.error('No se pudo cargar la configuración SLA')
   } finally {
     loading.value = false
   }
@@ -188,17 +213,15 @@ async function saveNotificationSettings() {
   }
 
   notificationSaving.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
   try {
     notificationSettings.value = await api.updateNotificationSettings({
       channel_email_enabled: notificationSettings.value.channel_email_enabled,
       channel_whatsapp_enabled: notificationSettings.value.channel_whatsapp_enabled,
       channel_internal_enabled: notificationSettings.value.channel_internal_enabled,
     })
-    successMessage.value = 'Canales de notificación guardados'
+    toast.success('Canales de notificación guardados')
   } catch {
-    errorMessage.value = 'No se pudo guardar la configuración de notificaciones'
+    toast.error('No se pudo guardar la configuración de notificaciones')
   } finally {
     notificationSaving.value = false
   }
@@ -209,13 +232,11 @@ async function saveSettings() {
     return
   }
   if (data.value.settings.working_days.length === 0) {
-    errorMessage.value = 'Seleccione al menos un día laboral'
+    toast.error('Seleccione al menos un día laboral')
     return
   }
 
   saving.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
   try {
     const updated = await api.updateSlaSettings({
       calendar_name: data.value.settings.calendar_name,
@@ -235,9 +256,9 @@ async function saveSettings() {
       escalation_functional_type_keys: data.value.settings.escalation_functional_type_keys,
     })
     assignSlaData(updated)
-    successMessage.value = 'Configuración SLA guardada'
+    toast.success('Configuración SLA guardada')
   } catch {
-    errorMessage.value = 'No se pudo guardar la configuración SLA'
+    toast.error('No se pudo guardar la configuración SLA')
   } finally {
     saving.value = false
   }
@@ -245,19 +266,17 @@ async function saveSettings() {
 
 async function addHoliday() {
   if (!holidayDate.value || !holidayName.value.trim()) {
-    errorMessage.value = 'Ingrese fecha y nombre del festivo'
+    toast.error('Ingrese fecha y nombre del festivo')
     return
   }
   saving.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
   try {
     assignSlaData(await api.addHoliday({ date: holidayDate.value, name: holidayName.value.trim() }))
     holidayDate.value = ''
     holidayName.value = ''
-    successMessage.value = 'Festivo guardado'
+    toast.success('Festivo guardado')
   } catch {
-    errorMessage.value = 'No se pudo guardar el festivo'
+    toast.error('No se pudo guardar el festivo')
   } finally {
     saving.value = false
   }
@@ -265,13 +284,11 @@ async function addHoliday() {
 
 async function removeHoliday(id: number) {
   saving.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
   try {
     assignSlaData(await api.removeHoliday(id))
-    successMessage.value = 'Festivo eliminado'
+    toast.success('Festivo eliminado')
   } catch {
-    errorMessage.value = 'No se pudo eliminar el festivo'
+    toast.error('No se pudo eliminar el festivo')
   } finally {
     saving.value = false
   }
@@ -279,12 +296,10 @@ async function removeHoliday(id: number) {
 
 async function previewColombiaHolidays() {
   catalogLoading.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
   try {
     catalogPreview.value = await api.previewColombiaHolidays(catalogYear.value)
   } catch {
-    errorMessage.value = 'No se pudo consultar el calendario de festivos'
+    toast.error('No se pudo consultar el calendario de festivos')
     catalogPreview.value = null
   } finally {
     catalogLoading.value = false
@@ -293,15 +308,13 @@ async function previewColombiaHolidays() {
 
 async function importColombiaHolidays() {
   catalogLoading.value = true
-  errorMessage.value = ''
-  successMessage.value = ''
   try {
     const result = await api.importColombiaHolidays(catalogYear.value, replaceCatalogYear.value)
     assignSlaData(result.data)
     catalogPreview.value = await api.previewColombiaHolidays(catalogYear.value)
-    successMessage.value = result.message
+    toast.success(result.message || 'Calendario de festivos importado')
   } catch {
-    errorMessage.value = 'No se pudo importar el calendario de festivos'
+    toast.error('No se pudo importar el calendario de festivos')
   } finally {
     catalogLoading.value = false
   }
@@ -356,11 +369,8 @@ function formatHolidayDate(value: string): string {
       </Button>
     </div>
 
-    <p v-if="errorMessage" class="text-destructive text-sm">
-      {{ errorMessage }}
-    </p>
-    <p v-if="successMessage" class="text-sm text-emerald-600">
-      {{ successMessage }}
+    <p v-if="loadError" class="text-destructive text-sm">
+      {{ loadError }}
     </p>
 
     <div v-if="loading" class="text-muted-foreground text-sm">
@@ -618,7 +628,18 @@ function formatHolidayDate(value: string): string {
                 </label>
               </div>
               <div v-if="catalog?.functional_types?.length" class="space-y-2">
-                <Label>Tipos funcionales (vacío = todos)</Label>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <Label>Tipos funcionales (vacío = todos)</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    :disabled="!data.settings.escalation_enabled"
+                    @click="toggleAllEscalationFunctionalTypes"
+                  >
+                    {{ allEscalationFunctionalTypesSelected ? 'Deseleccionar todos' : 'Seleccionar todos' }}
+                  </Button>
+                </div>
                 <div class="flex flex-wrap gap-2">
                   <label
                     v-for="type in catalog.functional_types"

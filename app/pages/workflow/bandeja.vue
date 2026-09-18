@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { WorkflowTaskCard } from '~/types/workflow'
+import type { WorkflowTaskCard, WorkflowTaskCollaboratorRow } from '~/types/workflow'
 
 definePageMeta({
   layout: 'default',
@@ -15,6 +15,7 @@ const workflowApi = useWorkflowApi()
 
 const loading = ref(true)
 const tasks = ref<WorkflowTaskCard[]>([])
+const pendingCollaborations = ref<WorkflowTaskCollaboratorRow[]>([])
 const meta = ref({ current_page: 1, last_page: 1, per_page: 20, total: 0 })
 const { scope, canViewTeam, canViewAllTasks } = useWorkflowInboxScope()
 const statusFilter = ref<'open' | 'overdue' | 'due_soon' | 'completed'>('open')
@@ -67,6 +68,15 @@ async function loadDefinitions() {
   }
   catch {
     definitions.value = []
+  }
+}
+
+async function loadPendingCollaborations() {
+  try {
+    pendingCollaborations.value = await workflowApi.fetchMyPendingCollaborations()
+  }
+  catch {
+    pendingCollaborations.value = []
   }
 }
 
@@ -146,7 +156,7 @@ watch(() => route.query.ventanilla_filing_id, () => {
 
 onMounted(async () => {
   applyVentanillaFilingFilterFromRoute()
-  await Promise.all([ensureLoaded(), loadDefinitions()])
+  await Promise.all([ensureLoaded(), loadDefinitions(), loadPendingCollaborations()])
   await loadTasks()
 })
 </script>
@@ -192,6 +202,37 @@ onMounted(async () => {
         </Button>
       </div>
     </div>
+
+    <Card v-if="pendingCollaborations.length">
+      <CardHeader class="pb-3">
+        <CardTitle class="text-base">
+          Colaboraciones pendientes
+        </CardTitle>
+        <CardDescription>
+          Lo invitaron a aportar documentos. No gestione la etapa: abra colaboración y adjunte su archivo.
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-2">
+        <div
+          v-for="row in pendingCollaborations"
+          :key="row.id"
+          class="flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3"
+        >
+          <div class="min-w-0">
+            <p class="font-medium">
+              {{ row.filing?.filing_number ?? 'Radicado' }}
+            </p>
+            <p class="text-sm text-muted-foreground">
+              {{ row.filing?.subject ?? '—' }}
+              <span v-if="row.task?.stage?.name"> · {{ row.task.stage.name }}</span>
+            </p>
+          </div>
+          <Button size="sm" type="button" @click="navigateTo(`/workflow/colaboracion/${row.id}`)">
+            Adjuntar aporte
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
 
     <Card>
       <CardHeader class="pb-3">

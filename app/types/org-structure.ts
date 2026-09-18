@@ -48,10 +48,11 @@ export interface OrgStaffListItem {
   document_number?: string | null
   date_of_birth?: string | null
   user_id?: number | null
+  suggested_org_office_id?: number | null
   is_active: boolean
   created_at?: string
   updated_at?: string
-  user?: { id: number; name: string; email: string } | null
+  user?: { id: number; name: string; email: string; sucursal_id?: number | null } | null
   current_assignment?: {
     effective_from?: string | null
     effective_to?: string | null

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
-import type { PaginatedUsers, User } from '~/types/user'
+import type { User } from '~/types/user'
 import {
   STAFF_CREATE_DRAFT_KEY,
   STAFF_CREATE_RETURN_PATH,
@@ -107,13 +107,14 @@ async function loadUsersIfAllowed() {
     return
   }
   try {
-    const res = await $api<PaginatedUsers>('/users', { query: { per_page: 200, page: 1 } })
-    userOptions.value = res.data
-      .filter((u: User) => u.org_staff_id == null)
-      .map((u: User) => ({
-        id: u.id,
-        label: `${u.name || u.email} · ${u.email}`,
-      }))
+    const res = await $api<{ data: Array<{ id: number, name: string | null, email: string }> }>(
+      '/users/linkable-for-org-staff',
+      { query: { limit: 500 } },
+    )
+    userOptions.value = res.data.map(u => ({
+      id: u.id,
+      label: `${u.name || u.email} · ${u.email}`,
+    }))
   } catch {
     userOptions.value = []
   }

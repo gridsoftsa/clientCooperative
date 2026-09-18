@@ -48,6 +48,7 @@ const showCollaboratorsTab = computed(() =>
 )
 const showFilingTab = computed(() => Boolean(props.context?.filing?.id))
 const collaboratorsPending = computed(() => props.context?.collaborators?.pending ?? 0)
+const myPendingCollaborationId = computed(() => props.context?.collaborators?.my_pending_collaboration_id ?? null)
 const canManage = computed(() => hasPermission('workflow_gestionar'))
 const canReassign = computed(() => hasPermission('workflow_reasignar'))
 const canAssignFiling = computed(() => hasPermission('ventanilla_asignar'))
@@ -264,7 +265,20 @@ function refreshContext() {
             </AlertDescription>
           </Alert>
 
-          <Alert v-if="collaboratorsPending > 0" variant="destructive">
+          <Alert v-if="myPendingCollaborationId" class="border-primary/40 bg-primary/5">
+            <Icon name="i-lucide-paperclip" class="size-4" />
+            <AlertTitle>Usted es colaborador de esta etapa</AlertTitle>
+            <AlertDescription class="space-y-3">
+              <p>
+                No gestione ni avance el radicado aquí. Debe ir a <strong>Colaboración</strong> para adjuntar su documento y registrar el aporte.
+              </p>
+              <Button size="sm" type="button" @click="navigateTo(`/workflow/colaboracion/${myPendingCollaborationId}`)">
+                Adjuntar mi aporte
+              </Button>
+            </AlertDescription>
+          </Alert>
+
+          <Alert v-else-if="collaboratorsPending > 0" variant="destructive">
             <Icon name="i-lucide-users" class="size-4" />
             <AlertTitle>Colaboradores pendientes</AlertTitle>
             <AlertDescription>

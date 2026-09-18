@@ -197,6 +197,7 @@ export interface WorkflowCollaboratorsSummary {
   pending: number
   all_responded: boolean
   can_manage: boolean
+  my_pending_collaboration_id?: number | null
 }
 
 export interface WorkflowFilingContextFile {
