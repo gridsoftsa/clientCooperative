@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { InstitutionalLibraryDocument } from '~/types/institutional-library'
+import { institutionalLibraryCategoryIcon } from '~/utils/institutional-library-category'
 
 const props = defineProps<{
   documents: InstitutionalLibraryDocument[]
@@ -118,6 +119,10 @@ function formatDate(value?: string | null) {
   return new Date(value).toLocaleDateString('es-CO')
 }
 
+function documentIcon(document: InstitutionalLibraryDocument): string {
+  return institutionalLibraryCategoryIcon(document.institutional_category_icon)
+}
+
 function onCarouselKeydown(event: KeyboardEvent) {
   if (event.key === 'ArrowLeft') {
     event.preventDefault()
@@ -161,7 +166,7 @@ function onCarouselKeydown(event: KeyboardEvent) {
           <article
             v-for="(document, index) in documents"
             :key="document.id"
-            class="absolute top-1/2 left-1/2 w-[11.25rem] origin-center cursor-pointer rounded-2xl bg-gradient-to-br p-4 text-white transition-all duration-300 ease-out sm:w-[13.5rem] sm:p-5"
+            class="absolute top-1/2 left-1/2 w-[11.25rem] origin-center cursor-pointer overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white transition-all duration-300 ease-out sm:w-[13.5rem] sm:p-5"
             :class="[
               faceClass(index),
               circularOffset(index) === 0 ? 'h-[15.5rem] sm:h-[17.75rem]' : 'h-[13.5rem] sm:h-[15.5rem]',
@@ -169,32 +174,65 @@ function onCarouselKeydown(event: KeyboardEvent) {
             :style="slideStyle(index)"
             @click="openActive(document, index)"
           >
-            <div class="flex h-full flex-col">
-              <Badge
-                v-if="circularOffset(index) === 0"
-                class="w-fit bg-white/20 text-white hover:bg-white/20"
+            <Icon
+              name="i-lucide-sparkles"
+              class="pointer-events-none absolute -right-3 -top-2 size-16 text-white/15 sm:size-20"
+            />
+            <Icon
+              :name="documentIcon(document)"
+              class="pointer-events-none absolute -bottom-4 -right-3 size-24 text-white/10 sm:size-28"
+            />
+
+            <div class="relative z-10 flex h-full flex-col">
+              <div
+                class="flex"
+                :class="circularOffset(index) === 0 ? 'items-start justify-between gap-2' : 'justify-center'"
               >
-                Destacado
-              </Badge>
+                <div
+                  class="flex items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/25 backdrop-blur-sm"
+                  :class="circularOffset(index) === 0 ? 'size-12 sm:size-14' : 'size-14 sm:size-16'"
+                >
+                  <Icon
+                    :name="documentIcon(document)"
+                    class="text-white"
+                    :class="circularOffset(index) === 0 ? 'size-6 sm:size-7' : 'size-7 sm:size-8'"
+                  />
+                </div>
+                <Badge
+                  v-if="circularOffset(index) === 0"
+                  class="bg-white/20 text-white hover:bg-white/20"
+                >
+                  <Icon name="i-lucide-star" class="mr-1 size-3.5 fill-current" />
+                  Destacado
+                </Badge>
+              </div>
 
               <div
                 class="flex min-h-0 flex-1 flex-col"
-                :class="circularOffset(index) === 0 ? 'mt-3 justify-between' : 'justify-center'"
+                :class="circularOffset(index) === 0 ? 'mt-3 justify-between' : 'mt-4 justify-center'"
               >
-                <h3
-                  class="font-semibold tracking-tight"
-                  :class="circularOffset(index) === 0
-                    ? 'line-clamp-3 text-lg leading-snug sm:text-xl'
-                    : 'line-clamp-4 text-center text-xl leading-tight sm:text-2xl'"
-                >
-                  {{ document.title }}
-                </h3>
+                <div :class="circularOffset(index) === 0 ? '' : 'text-center'">
+                  <p
+                    v-if="circularOffset(index) !== 0 && document.institutional_category_label"
+                    class="mb-1 text-[10px] font-medium uppercase tracking-wide text-white/70"
+                  >
+                    {{ document.institutional_category_label }}
+                  </p>
+                  <h3
+                    class="font-semibold tracking-tight"
+                    :class="circularOffset(index) === 0
+                      ? 'line-clamp-2 text-lg leading-snug sm:text-xl'
+                      : 'line-clamp-3 text-lg leading-tight sm:text-xl'"
+                  >
+                    {{ document.title }}
+                  </h3>
+                </div>
 
                 <div v-if="circularOffset(index) === 0" class="mt-3 space-y-3">
                   <p class="text-xs text-white/80">
                     Versión {{ document.version_number }}
                     <span v-if="document.effective_from">
-                      · Vigente desde {{ formatDate(document.effective_from) }}
+                      · {{ formatDate(document.effective_from) }}
                     </span>
                   </p>
                   <p v-if="document.org_unit" class="text-xs text-white/70">
@@ -206,6 +244,7 @@ function onCarouselKeydown(event: KeyboardEvent) {
                     class="bg-white text-primary hover:bg-white/90"
                     @click.stop="emit('view-document', document)"
                   >
+                    <Icon name="i-lucide-eye" class="mr-1.5 size-4" />
                     Ver documento
                   </Button>
                 </div>
