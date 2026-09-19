@@ -102,6 +102,38 @@ const metadataFieldsRef = ref<{
   focusMissingField?: (fieldCode: string, fieldIndex: number) => void
 } | null>(null)
 
+type FilingFormSectionId = 'clasificacion' | 'datos' | 'trd' | 'metadatos' | 'archivos'
+
+const FILING_FORM_SECTIONS: Array<{
+  id: FilingFormSectionId
+  label: string
+  icon: string
+}> = [
+  { id: 'clasificacion', label: 'Clasificación', icon: 'i-lucide-layers' },
+  { id: 'datos', label: 'Datos', icon: 'i-lucide-file-text' },
+  { id: 'trd', label: 'TRD', icon: 'i-lucide-folder-tree' },
+  { id: 'metadatos', label: 'Metadatos', icon: 'i-lucide-list' },
+  { id: 'archivos', label: 'Archivos', icon: 'i-lucide-paperclip' },
+]
+
+const FIELD_TO_SECTION: Record<VentanillaFilingFieldKey, FilingFormSectionId> = {
+  functional_type: 'clasificacion',
+  recipient_org_unit: 'datos',
+  producer_org_unit: 'datos',
+  sender_staff: 'datos',
+  recipient_staff: 'datos',
+  sender_name: 'datos',
+  sender_identifier: 'datos',
+  recipient_name: 'datos',
+  recipient_identifier: 'datos',
+  subject: 'datos',
+  trd_document_type: 'trd',
+  metadata: 'metadatos',
+  file: 'archivos',
+}
+
+const optionalDetailsOpen = ref(false)
+
 const canOverrideResponse = computed(() => hasPermission('ventanilla_override_respuesta'))
 
 function staffById(staffId: number | string | null | undefined): OrgStaffListItem | null {
@@ -298,6 +330,86 @@ const attachedFileCount = computed(() =>
   fileRows.value.filter((row: { file: File | null; title: string }) => row.file).length,
 )
 
+const hasOptionalDetails = computed(() =>
+  assignedUserId.value != null
+  || receptionMedium.value !== ''
+  || notes.value.trim() !== '',
+)
+
+const classificationComplete = computed(() => functionalTypeKey.value !== '')
+
+const orgUnitsComplete = computed(() => {
+  if (filingType.value === 'incoming') {
+    return recipientOrgUnitId.value != null
+  }
+
+  if (filingType.value === 'outgoing') {
+    return producerOrgUnitId.value != null
+  }
+
+  return producerOrgUnitId.value != null && recipientOrgUnitId.value != null
+})
+
+const partiesComplete = computed(() => {
+  const parties = computedFilingParties.value
+
+  if (!parties.senderName || !parties.senderIdentifier) {
+    return false
+  }
+
+  if (filingType.value === 'outgoing' || filingType.value === 'internal') {
+    return Boolean(parties.recipientName && parties.recipientIdentifier)
+  }
+
+  return true
+})
+
+const datosComplete = computed(() =>
+  orgUnitsComplete.value && partiesComplete.value && subject.value.trim() !== '',
+)
+
+const trdComplete = computed(() => docDocumentTypeId.value != null)
+
+const metadataComplete = computed(() => {
+  void metadataValues.value
+
+  if (!functionalTypeKey.value && !docDocumentTypeId.value) {
+    return false
+  }
+
+  return !metadataFieldsRef.value?.findFirstMissingRequiredField?.()
+})
+
+const filesComplete = computed(() => attachedFileCount.value > 0)
+
+function isSectionComplete(id: FilingFormSectionId): boolean {
+  if (id === 'clasificacion') {
+    return classificationComplete.value
+  }
+  if (id === 'datos') {
+    return datosComplete.value
+  }
+  if (id === 'trd') {
+    return trdComplete.value
+  }
+  if (id === 'metadatos') {
+    return metadataComplete.value
+  }
+
+  return filesComplete.value
+}
+
+const completedSectionCount = computed(() =>
+  FILING_FORM_SECTIONS.filter(section => isSectionComplete(section.id)).length,
+)
+
+const requiredSectionTotal = FILING_FORM_SECTIONS.length
+const activeSection = ref<FilingFormSectionId>('clasificacion')
+
+function goToSection(id: FilingFormSectionId): void {
+  activeSection.value = id
+}
+
 const validationInput = computed(() => {
   const metadataSnapshot = metadataValues.value
   void metadataSnapshot
@@ -411,6 +523,12 @@ watch(recipientStaffId, (id) => {
   applyStaffToPartyFields(staffById(id), recipientName, recipientIdentifier)
 })
 
+watch(hasOptionalDetails, (hasDetails) => {
+  if (hasDetails) {
+    optionalDetailsOpen.value = true
+  }
+})
+
 onMounted(async () => {
   try {
     catalog.value = await ventanillaApi.fetchCatalog()
@@ -517,6 +635,8 @@ function staffDocumentIdentifier(staffRow: OrgStaffListItem | null): string {
 }
 
 async function focusValidationIssue(issue: VentanillaFilingValidationIssue): Promise<void> {
+  await nextTick()
+  goToSection(FIELD_TO_SECTION[issue.field])
   await nextTick()
 
   if (issue.field === 'trd_document_type') {
@@ -626,53 +746,73 @@ async function submit() {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-7xl space-y-6 px-4 pb-8 md:px-6">
-    <div class="flex items-start gap-3">
-      <Button variant="ghost" size="icon" class="shrink-0" @click="router.push('/ventanilla')">
-        <Icon name="i-lucide-arrow-left" class="size-4" />
-      </Button>
-      <div>
-        <h1 class="text-2xl font-semibold tracking-tight">
-          Radicar documento
-        </h1>
-        <p class="text-sm text-muted-foreground">
-          Ventanilla única — registro manual
-        </p>
+  <div class="mx-auto w-full space-y-4 px-4 pb-8 md:px-6">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="flex min-w-0 items-start gap-3">
+        <Button variant="ghost" size="icon" class="shrink-0" @click="router.push('/ventanilla')">
+          <Icon name="i-lucide-arrow-left" class="size-4" />
+        </Button>
+        <div class="min-w-0">
+          <h1 class="text-2xl font-semibold tracking-tight">
+            Radicar documento
+          </h1>
+          <p class="text-sm text-muted-foreground">
+            Complete las secciones requeridas. Los campos opcionales quedan agrupados para no interrumpir el flujo.
+          </p>
+        </div>
+      </div>
+      <div
+        class="inline-flex rounded-lg border bg-muted/40 p-1"
+        role="group"
+        aria-label="Tipo de radicación"
+      >
+        <button
+          v-for="(label, key) in VENTANILLA_FILING_TYPE_LABELS"
+          :key="key"
+          type="button"
+          class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+          :class="filingType === key
+            ? 'bg-background text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'"
+          @click="setFilingType(key)"
+        >
+          {{ label }}
+        </button>
       </div>
     </div>
 
-    <form class="space-y-6" @submit.prevent="submit">
-      <p v-if="errorMessage" class="text-destructive text-sm">
+    <form @submit.prevent="submit">
+      <p v-if="errorMessage" class="mb-4 text-destructive text-sm">
         {{ errorMessage }}
       </p>
 
-      <Card>
-        <CardHeader class="pb-4">
-          <CardTitle class="text-base">
-            Tipo de radicación
-          </CardTitle>
-        </CardHeader>
-        <CardContent class="grid gap-4 md:grid-cols-3">
-          <button
-            v-for="(label, key) in VENTANILLA_FILING_TYPE_LABELS"
-            :key="key"
-            type="button"
-            class="rounded-lg border p-4 text-left transition-colors"
-            :class="filingType === key ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50'"
-            @click="setFilingType(key)"
-          >
-            <span class="font-medium">{{ label }}</span>
-          </button>
-        </CardContent>
-      </Card>
+      <Tabs v-model="activeSection" class="gap-4">
+        <div class="sticky top-0 z-30 -mx-4 border-b bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
+          <TabsList class="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-5">
+            <TabsTrigger
+              v-for="section in FILING_FORM_SECTIONS"
+              :key="section.id"
+              :value="section.id"
+              class="h-auto min-h-10 justify-start gap-2 px-3 py-2 sm:justify-center"
+            >
+              <Icon
+                :name="isSectionComplete(section.id) ? 'i-lucide-circle-check' : section.icon"
+                class="size-4 shrink-0"
+                :class="isSectionComplete(section.id) ? 'text-primary' : 'text-muted-foreground'"
+              />
+              <span class="truncate">{{ section.label }}</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-      <Card class="border-primary/20 shadow-sm">
-        <CardHeader class="pb-4">
-          <CardTitle>
+        <TabsContent value="clasificacion" force-mount class="data-[state=inactive]:hidden">
+      <Card id="ventanilla-section-clasificacion" class="border-primary/20 shadow-sm">
+        <CardHeader class="pb-3">
+          <CardTitle class="text-base">
             Clasificación funcional
           </CardTitle>
           <CardDescription>
-            Paso principal: define el tipo de trámite, el flujo de trabajo y la obligación de respuesta.
+            Tipo de trámite, flujo de trabajo y obligación de respuesta.
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
@@ -770,15 +910,16 @@ async function submit() {
           </div>
         </CardContent>
       </Card>
+        </TabsContent>
 
-      <div class="space-y-6">
-          <Card>
-            <CardHeader class="pb-4">
+        <TabsContent value="datos" force-mount class="data-[state=inactive]:hidden">
+          <Card id="ventanilla-section-datos">
+            <CardHeader class="pb-3">
               <CardTitle class="text-base">
                 Datos del radicado
               </CardTitle>
               <CardDescription>
-                Áreas, partes, asunto y observaciones del trámite.
+                Áreas, partes y asunto. Lo opcional se abre aparte.
               </CardDescription>
             </CardHeader>
             <CardContent class="grid min-w-0 gap-4 md:grid-cols-2">
@@ -800,7 +941,11 @@ async function submit() {
               :class="multiselectErrorClass('recipient_org_unit')"
             />
           </div>
-          <div v-else class="space-y-2 md:col-span-2">
+          <div
+            v-else
+            class="space-y-2"
+            :class="filingType === 'internal' ? '' : 'md:col-span-2'"
+          >
             <Label>Área productora *</Label>
             <Multiselect
               id="ventanilla_producer_org_unit"
@@ -818,7 +963,7 @@ async function submit() {
               :class="multiselectErrorClass('producer_org_unit')"
             />
           </div>
-          <div v-if="filingType === 'internal'" class="space-y-2 md:col-span-2">
+          <div v-if="filingType === 'internal'" class="space-y-2">
             <Label>Área destinataria *</Label>
             <Multiselect
               id="ventanilla_recipient_org_unit"
@@ -837,7 +982,7 @@ async function submit() {
             />
           </div>
           <div class="min-w-0 space-y-2">
-            <Label>{{ filingType === 'incoming' ? 'Remitente *' : 'Remitente *' }}</Label>
+            <Label>Remitente *</Label>
             <Multiselect
               v-if="filingType !== 'incoming'"
               id="ventanilla_sender_staff"
@@ -877,7 +1022,7 @@ async function submit() {
             />
           </div>
           <div class="min-w-0 space-y-2">
-            <Label>{{ filingType === 'incoming' || filingType === 'internal' ? 'Destinatario *' : 'Destinatario *' }}</Label>
+            <Label>Destinatario *</Label>
             <Multiselect
               v-if="filingType === 'incoming' || filingType === 'internal'"
               id="ventanilla_recipient_staff"
@@ -923,6 +1068,24 @@ async function submit() {
             <Label>Asunto *</Label>
             <Input id="ventanilla_subject" v-model="subject" maxlength="500" :class="inputErrorClass('subject')" />
           </div>
+          <Collapsible v-model:open="optionalDetailsOpen" class="md:col-span-2">
+            <CollapsibleTrigger as-child>
+              <button
+                type="button"
+                class="flex w-full items-center justify-between rounded-md border bg-muted/20 px-3 py-2 text-left text-sm hover:bg-muted/40"
+              >
+                <span class="font-medium">Datos opcionales</span>
+                <span class="flex items-center gap-2 text-xs text-muted-foreground">
+                  Responsable, medio y observaciones
+                  <Icon
+                    name="i-lucide-chevron-down"
+                    class="size-4 transition-transform"
+                    :class="optionalDetailsOpen ? 'rotate-180' : ''"
+                  />
+                </span>
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent class="grid gap-4 pt-4 md:grid-cols-2">
           <div class="space-y-2">
             <Label>Responsable asignado</Label>
             <Multiselect
@@ -969,12 +1132,16 @@ async function submit() {
           </div>
           <div class="space-y-2 md:col-span-2">
             <Label>Observaciones</Label>
-            <Textarea v-model="notes" rows="4" class="min-h-[6rem] resize-y" />
+            <Textarea v-model="notes" rows="3" class="min-h-[5rem] resize-y" />
           </div>
+            </CollapsibleContent>
+          </Collapsible>
             </CardContent>
           </Card>
+        </TabsContent>
 
-          <Card>
+        <TabsContent value="trd" force-mount class="data-[state=inactive]:hidden">
+          <Card id="ventanilla-section-trd">
             <CardHeader class="pb-4">
               <CardTitle class="text-base">
                 Clasificación archivística (TRD)
@@ -1034,9 +1201,11 @@ async function submit() {
               />
             </CardContent>
           </Card>
+        </TabsContent>
 
-          <Card>
-            <CardHeader class="pb-4">
+        <TabsContent value="metadatos" force-mount class="data-[state=inactive]:hidden">
+          <Card id="ventanilla-section-metadatos">
+            <CardHeader class="pb-3">
               <CardTitle class="text-base">
                 Metadatos
               </CardTitle>
@@ -1057,9 +1226,11 @@ async function submit() {
               </p>
             </CardContent>
           </Card>
+        </TabsContent>
 
-          <Card>
-            <CardHeader class="flex flex-row items-center justify-between pb-4">
+        <TabsContent value="archivos" force-mount class="data-[state=inactive]:hidden">
+          <Card id="ventanilla-section-archivos">
+            <CardHeader class="flex flex-row items-center justify-between pb-3">
               <div>
                 <CardTitle class="text-base">
                   Archivos *
@@ -1095,18 +1266,25 @@ async function submit() {
               />
             </CardContent>
           </Card>
-      </div>
+        </TabsContent>
+      </Tabs>
 
-      <Card>
-        <CardContent class="flex flex-col-reverse justify-end gap-3 p-4 sm:flex-row">
-          <Button type="button" variant="outline" @click="router.push('/ventanilla')">
-            Cancelar
-          </Button>
-          <Button type="submit" :disabled="saving">
-            {{ saving ? 'Registrando…' : 'Registrar radicado' }}
-          </Button>
-        </CardContent>
-      </Card>
+      <div class="sticky bottom-0 z-20 mt-4 border-t bg-background/95 py-3 backdrop-blur">
+        <div class="mx-auto flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p class="text-sm text-muted-foreground">
+            {{ completedSectionCount }} de {{ requiredSectionTotal }} secciones listas
+            <span v-if="attachedFileCount"> · {{ attachedFileCount }} archivo{{ attachedFileCount === 1 ? '' : 's' }}</span>
+          </p>
+          <div class="flex flex-col-reverse gap-2 sm:flex-row">
+            <Button type="button" variant="outline" @click="router.push('/ventanilla')">
+              Cancelar
+            </Button>
+            <Button type="submit" :disabled="saving">
+              {{ saving ? 'Registrando…' : 'Registrar radicado' }}
+            </Button>
+          </div>
+        </div>
+      </div>
     </form>
   </div>
 </template>
