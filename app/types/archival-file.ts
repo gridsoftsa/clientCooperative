@@ -183,6 +183,8 @@ export interface ArchivalFileTreeNode {
   folio_start?: number | null
   folio_end?: number | null
   workflow_stage_key?: string | null
+  can_view_content?: boolean
+  can_download_content?: boolean
 }
 
 export interface ArchivalFileDocumentVersion {

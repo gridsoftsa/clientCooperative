@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
-import { catalogCodeSuffix } from '~/utils/archival-catalog-code'
+import CatalogConfidentialityFields from '~/components/archival/CatalogConfidentialityFields.vue'
 import type { DocSeriesRow } from '~/types/archival-catalog'
 
 definePageMeta({
@@ -28,8 +27,14 @@ const initialIsActive = ref(true)
 const subseriesCount = ref(0)
 const loading = ref(true)
 const saving = ref(false)
-
-const orgUnitCodePrefix = computed(() => series.value?.org_unit?.code ?? '')
+const confidentialityFields = ref<{
+  validate: () => string | null
+  toPayload: () => {
+    inherited: boolean
+    confidentiality_level?: import('~/types/archival-catalog').DocumentConfidentialityLevel
+    grants?: import('~/types/archival-catalog').ClassificationAccessGrantRow[]
+  }
+} | null>(null)
 
 const isDeactivating = computed(() => initialIsActive.value && form.value.is_active === false)
 
@@ -87,24 +92,26 @@ async function persist() {
 
   saving.value = true
   try {
-    const code = catalogCodeSuffix(orgUnitCodePrefix.value, form.value.code)
+    const storedCode = (series.value?.code ?? '').trim()
+    const code = form.value.code.trim()
     await $api(`/archival/catalog/series/${id.value}`, {
       method: 'PUT',
       body: {
-        code,
+        ...(code !== storedCode ? { code } : {}),
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
         is_active: form.value.is_active,
         publishable_to_institutional_library: form.value.publishable_to_institutional_library,
       },
     })
+    await catalogApi.persistClassification(confidentialityFields.value, 'series', id.value)
     toast.success('Serie actualizada')
     await catalogApi.navigateAfterCatalogSave(router, route, cancelPath())
   }
   catch (e: unknown) {
     const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
     const first = err.data?.errors?.is_active?.[0]
-    toast.error(first ?? err.data?.message ?? 'No se pudo guardar')
+    toast.error(first ?? err.data?.message ?? (e instanceof Error ? e.message : 'No se pudo guardar'))
     if (isDeactivating.value) {
       form.value.is_active = true
     }
@@ -158,16 +165,17 @@ onMounted(load)
         <CardContent class="space-y-6">
           <div class="grid items-start gap-6 lg:grid-cols-2">
           <div class="flex min-w-0 flex-col gap-2">
-            <Label>Código *</Label>
-            <CatalogPrefixedCodeInput
+            <Label for="series-code">Código *</Label>
+            <Input
+              id="series-code"
               v-model="form.code"
-              :prefix="orgUnitCodePrefix"
               maxlength="64"
-              placeholder="Sufijo (ej. 02)"
+              placeholder="005-16"
+              class="font-mono"
             />
             <p class="text-xs text-muted-foreground">
-              Prefijo: código del área (<span class="font-mono">{{ orgUnitCodePrefix || '…' }}</span>).
-              Ejemplo: área <span class="font-mono">045</span> + sufijo <span class="font-mono">02</span> → serie <span class="font-mono">045-02</span>.
+              Código de la serie en la TRD (p. ej. <span class="font-mono">005-16</span>).
+              El área productora se guarda aparte y no se agrega al código.
             </p>
           </div>
           <div class="flex min-w-0 flex-col gap-2">
@@ -212,6 +220,11 @@ onMounted(load)
             </div>
           </div>
           </div>
+          <CatalogConfidentialityFields
+            ref="confidentialityFields"
+            subject-type="series"
+            :confidentiality="series?.confidentiality"
+          />
           <div class="flex justify-end gap-2">
             <Button variant="outline" @click="router.push(cancelPath())">
               Cancelar

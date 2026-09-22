@@ -12,6 +12,7 @@ import {
 import { coerceBoolean } from '~/utils/coerce-boolean'
 import { resolveEffectiveRetentionFromRules } from '~/utils/archival-trd-version'
 import { isTrdVersionTab, trdVersionPathWithTab } from '~/utils/archival-trd-navigation'
+import { catalogConfidentialityParenthetical } from '~/utils/catalog-confidentiality'
 import type { DocDocumentTypeRow } from '~/types/archival-catalog'
 import type {
   CatalogTreeSeries,
@@ -134,7 +135,8 @@ async function reloadCatalogTree() {
   catalogTree.value = await trdApi.fetchCatalogTree(producerOrgUnitId.value, false)
 }
 
-const catalogRowActionClass = 'h-8 gap-1.5 px-2 text-xs'
+const catalogRowActionClass = 'h-8 w-full justify-center gap-1 px-1.5 text-xs'
+const catalogActionPairClass = 'grid w-[15.5rem] shrink-0 grid-cols-[5.75rem_9.5rem] gap-1'
 
 const savingSeriesActiveId = ref<number | null>(null)
 
@@ -1642,11 +1644,17 @@ watch(
                 class="border rounded-lg p-4 space-y-3"
                 :class="{ 'opacity-70': serie.is_active === false }"
               >
-                <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-start justify-between gap-3">
                   <div class="min-w-0 space-y-2">
                     <div class="flex flex-wrap items-center gap-2">
                       <p class="font-medium font-mono text-sm">
                         {{ serie.code }} — {{ serie.name }}
+                        <span
+                          v-if="catalogConfidentialityParenthetical(serie.confidentiality)"
+                          class="font-sans font-normal text-muted-foreground"
+                        >
+                          {{ catalogConfidentialityParenthetical(serie.confidentiality) }}
+                        </span>
                       </p>
                       <Badge v-if="serie.is_active === false" variant="secondary" class="text-xs">
                         Inactiva
@@ -1681,8 +1689,8 @@ watch(
                       </Badge>
                     </div>
                   </div>
-                  <div class="flex flex-wrap items-center justify-end gap-1">
-                    <PermissionGate permission="trd_catalogo_editar">
+                  <PermissionGate permission="trd_catalogo_editar">
+                    <div :class="catalogActionPairClass">
                       <Button
                         variant="warning"
                         size="sm"
@@ -1706,6 +1714,7 @@ watch(
                         type="button"
                         variant="destructive"
                         size="sm"
+                        class="col-span-2"
                         :class="catalogRowActionClass"
                         :disabled="savingSeriesActiveId === serie.id"
                         @click="setSeriesActive(serie, false)"
@@ -1718,6 +1727,7 @@ watch(
                         type="button"
                         variant="outline"
                         size="sm"
+                        class="col-span-2"
                         :class="catalogRowActionClass"
                         :disabled="savingSeriesActiveId === serie.id"
                         @click="setSeriesActive(serie, true)"
@@ -1725,8 +1735,8 @@ watch(
                         <Icon name="i-lucide-check" class="size-4 shrink-0" />
                         Activar
                       </Button>
-                    </PermissionGate>
-                  </div>
+                    </div>
+                  </PermissionGate>
                 </div>
                 <p
                   v-if="serie.is_active !== false && !canDeactivateSeries(serie)"
@@ -1740,7 +1750,7 @@ watch(
                     <Button
                       variant="outline"
                       size="sm"
-                      :class="[catalogRowActionClass, 'ml-2 inline-flex']"
+                      class="ml-2 inline-flex h-8 gap-1.5 px-2 text-xs"
                       @click="router.push(`/settings/archival/catalog/series/${serie.id}/subseries/create?return_to=${encodeURIComponent(catalogReturnTo)}`)"
                     >
                       <Icon name="i-lucide-plus" class="size-4 shrink-0" />
@@ -1748,37 +1758,47 @@ watch(
                     </Button>
                   </PermissionGate>
                 </p>
-                <div v-for="sub in serie.subseries" :key="sub.id" class="pl-4 space-y-2 border-l">
-                  <div class="flex items-center gap-2">
+                <div v-for="sub in serie.subseries" :key="sub.id" class="space-y-2 border-l pl-3">
+                  <div class="flex items-start gap-2">
                     <input
                       :ref="(el) => registerSubseriesCheckbox(sub, el as Element | null)"
                       type="checkbox"
-                      :class="catalogCheckboxClass"
+                      :class="[catalogCheckboxClass, 'mt-1.5 shrink-0']"
                       :checked="subseriesAllSelected(sub)"
                       :disabled="!canEdit"
                       :aria-label="`Seleccionar tipos de ${sub.code}`"
                       @change="onSubseriesCheckboxChange(sub, $event)"
                     >
-                    <span class="text-sm font-mono">{{ sub.code }} — {{ sub.name }}</span>
+                    <span class="min-w-0 flex-1 pt-1 text-sm font-mono leading-snug break-words">
+                      {{ sub.code }} — {{ sub.name }}
+                      <span
+                        v-if="catalogConfidentialityParenthetical(sub.confidentiality)"
+                        class="font-sans font-normal text-muted-foreground"
+                      >
+                        {{ catalogConfidentialityParenthetical(sub.confidentiality) }}
+                      </span>
+                    </span>
                     <PermissionGate permission="trd_catalogo_editar">
-                      <Button
-                        variant="warning"
-                        size="sm"
-                        :class="catalogRowActionClass"
-                        @click="router.push(catalogApi.subseriesEditPath(serie.id, sub.id, catalogReturnTo))"
-                      >
-                        <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
-                        Editar
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        :class="catalogRowActionClass"
-                        @click="router.push(catalogApi.documentTypesCreatePath(serie.id, sub.id, catalogReturnTo))"
-                      >
-                        <Icon name="i-lucide-plus" class="size-4 shrink-0" />
-                        Nuevo tipo
-                      </Button>
+                      <div :class="catalogActionPairClass">
+                        <Button
+                          variant="warning"
+                          size="sm"
+                          :class="catalogRowActionClass"
+                          @click="router.push(catalogApi.subseriesEditPath(serie.id, sub.id, catalogReturnTo))"
+                        >
+                          <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
+                          Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          :class="catalogRowActionClass"
+                          @click="router.push(catalogApi.documentTypesCreatePath(serie.id, sub.id, catalogReturnTo))"
+                        >
+                          <Icon name="i-lucide-plus" class="size-4 shrink-0" />
+                          Nuevo tipo
+                        </Button>
+                      </div>
                     </PermissionGate>
                   </div>
                   <p v-if="sub.document_types.length === 0" class="pl-6 text-xs text-muted-foreground">
@@ -1787,28 +1807,39 @@ watch(
                   <label
                     v-for="tipo in sub.document_types"
                     :key="tipo.id"
-                    class="pl-6 flex flex-wrap items-center gap-2"
+                    class="flex items-start gap-2 pl-6"
                     :class="canEdit ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'"
                   >
                     <input
                       type="checkbox"
-                      :class="catalogCheckboxClass"
+                      :class="[catalogCheckboxClass, 'mt-1.5 shrink-0']"
                       :checked="isTypeSelected(tipo.id)"
                       :disabled="!canEdit"
                       @change="onTypeCheckboxChange(tipo.id, $event)"
                     >
-                    <span class="text-sm select-none">{{ tipo.code }} — {{ tipo.name }}</span>
-                    <PermissionGate permission="trd_catalogo_editar">
-                      <Button
-                        type="button"
-                        variant="warning"
-                        size="sm"
-                        :class="catalogRowActionClass"
-                        @click.stop="router.push(catalogApi.documentTypeEditPath(serie.id, sub.id, tipo.id, catalogReturnTo))"
+                    <span class="min-w-0 flex-1 pt-1 text-sm leading-snug break-words select-none">
+                      {{ tipo.code }} — {{ tipo.name }}
+                      <span
+                        v-if="catalogConfidentialityParenthetical(tipo.confidentiality)"
+                        class="font-sans font-normal text-muted-foreground"
                       >
-                        <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
-                        Editar
-                      </Button>
+                        {{ catalogConfidentialityParenthetical(tipo.confidentiality) }}
+                      </span>
+                    </span>
+                    <PermissionGate permission="trd_catalogo_editar">
+                      <div :class="catalogActionPairClass">
+                        <Button
+                          type="button"
+                          variant="warning"
+                          size="sm"
+                          :class="catalogRowActionClass"
+                          @click.stop="router.push(catalogApi.documentTypeEditPath(serie.id, sub.id, tipo.id, catalogReturnTo))"
+                        >
+                          <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
+                          Editar
+                        </Button>
+                        <span class="h-8" aria-hidden="true" />
+                      </div>
                     </PermissionGate>
                   </label>
                 </div>

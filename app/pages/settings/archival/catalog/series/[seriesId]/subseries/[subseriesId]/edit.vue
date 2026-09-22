@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import CatalogConfidentialityFields from '~/components/archival/CatalogConfidentialityFields.vue'
 import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
 import { catalogCodeSuffix } from '~/utils/archival-catalog-code'
 import type { DocSeriesRow } from '~/types/archival-catalog'
@@ -30,11 +31,21 @@ function cancelPath(): string {
 
 const series = ref<DocSeriesRow | null>(null)
 const form = ref({ code: '', name: '', description: '', is_active: true })
+const storedCode = ref('')
 const initialIsActive = ref(true)
 const activeDocumentTypesCount = ref(0)
 const loading = ref(true)
 const saving = ref(false)
 const cascadeDialogOpen = ref(false)
+const confidentialityFields = ref<{
+  validate: () => string | null
+  toPayload: () => {
+    inherited: boolean
+    confidentiality_level?: import('~/types/archival-catalog').DocumentConfidentialityLevel
+    grants?: import('~/types/archival-catalog').ClassificationAccessGrantRow[]
+  }
+} | null>(null)
+const loadedConfidentiality = ref<import('~/types/archival-catalog').CatalogConfidentialityPayload | null>(null)
 
 const seriesCodePrefix = computed(() => series.value?.code ?? '')
 
@@ -56,8 +67,10 @@ async function load() {
       description: row.description ?? '',
       is_active: row.is_active,
     }
+    storedCode.value = row.code
     initialIsActive.value = row.is_active
     activeDocumentTypesCount.value = row.active_document_types_count ?? 0
+    loadedConfidentiality.value = row.confidentiality ?? null
   }
   catch {
     toast.error('Subserie no encontrada')
@@ -72,10 +85,11 @@ async function persist(cascadeDeactivateChildren: boolean) {
   saving.value = true
   try {
     const code = catalogCodeSuffix(seriesCodePrefix.value, form.value.code)
+    const storedSuffix = catalogCodeSuffix(seriesCodePrefix.value, storedCode.value)
     await $api(`/archival/catalog/subseries/${subseriesId.value}`, {
       method: 'PUT',
       body: {
-        code,
+        ...(code !== storedSuffix ? { code } : {}),
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
         is_active: form.value.is_active,
@@ -84,6 +98,7 @@ async function persist(cascadeDeactivateChildren: boolean) {
           : {}),
       },
     })
+    await catalogApi.persistClassification(confidentialityFields.value, 'subseries', subseriesId.value)
     toast.success('Subserie actualizada')
     await catalogApi.navigateAfterCatalogSave(
       router,
@@ -94,7 +109,7 @@ async function persist(cascadeDeactivateChildren: boolean) {
   catch (e: unknown) {
     const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
     const first = err.data?.errors?.is_active?.[0]
-    toast.error(first ?? err.data?.message ?? 'No se pudo guardar')
+    toast.error(first ?? err.data?.message ?? (e instanceof Error ? e.message : 'No se pudo guardar'))
   }
   finally {
     saving.value = false
@@ -185,6 +200,11 @@ onMounted(load)
             Al inactivarla se le preguntará si desea inactivarlos también.
           </p>
           </div>
+          <CatalogConfidentialityFields
+            ref="confidentialityFields"
+            subject-type="subseries"
+            :confidentiality="loadedConfidentiality"
+          />
           <div class="flex justify-end gap-2">
             <Button variant="outline" @click="router.push(cancelPath())">
               Cancelar

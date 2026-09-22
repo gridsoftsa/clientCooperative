@@ -48,7 +48,7 @@ function formatYears(value: number | null): string {
   return String(value)
 }
 
-const dataColumnCount = 16
+const dataColumnCount = 15
 </script>
 
 <template>
@@ -90,7 +90,7 @@ const dataColumnCount = 16
             <th colspan="2" class="trd-sheet-cell">
               Subserie documental
             </th>
-            <th colspan="2" class="trd-sheet-cell">
+            <th rowspan="2" class="trd-sheet-cell min-w-[10rem]">
               Tipo documental
             </th>
             <th rowspan="2" class="trd-sheet-cell w-20">
@@ -117,12 +117,6 @@ const dataColumnCount = 16
               Código
             </th>
             <th class="trd-sheet-cell min-w-[8rem]">
-              Nombre
-            </th>
-            <th class="trd-sheet-cell w-24">
-              Código
-            </th>
-            <th class="trd-sheet-cell min-w-[10rem]">
               Nombre
             </th>
             <th class="trd-sheet-cell w-12">
@@ -173,9 +167,6 @@ const dataColumnCount = 16
             </td>
             <td class="trd-sheet-cell">
               {{ row.subseriesName }}
-            </td>
-            <td class="trd-sheet-cell font-mono">
-              {{ row.documentTypeCode }}
             </td>
             <td class="trd-sheet-cell">
               {{ row.documentTypeName }}

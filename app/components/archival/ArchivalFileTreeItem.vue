@@ -38,10 +38,12 @@ const viewing = ref(false)
 const hasChildren = computed(() => (props.node.children?.length ?? 0) > 0)
 const isDocument = computed(() => props.node.type === 'document' || props.node.type === 'document_reference')
 const isVersionableDocument = computed(() => props.node.type === 'document')
+const canAccessDocumentContent = computed(() => props.node.can_view_content !== false)
 
 const canPublishThisDocument = computed(() =>
   props.canPublishToLibrary
   && isVersionableDocument.value
+  && canAccessDocumentContent.value
   && props.node.doc_series_publishable_to_institutional_library === true,
 )
 const isFolder = computed(() => props.node.type === 'folder')
@@ -75,15 +77,24 @@ const documentFileId = computed(() => props.fileId ?? props.node.archival_file_i
 const documentId = computed(() => props.node.archival_file_document_id ?? null)
 
 const downloadHref = computed(() => {
-  if (!props.canDownload || documentFileId.value === null || documentId.value === null) {
-    return props.node.download_url
+  if (
+    !props.canDownload
+    || !canAccessDocumentContent.value
+    || props.node.can_download_content === false
+    || documentFileId.value === null
+    || documentId.value === null
+  ) {
+    return null
   }
 
   return archivalApi.documentDownloadUrl(documentFileId.value, documentId.value)
 })
 
 const canViewDocument = computed(() =>
-  props.canView && documentFileId.value != null && documentId.value != null,
+  props.canView
+  && canAccessDocumentContent.value
+  && documentFileId.value != null
+  && documentId.value != null,
 )
 
 function handleNodeClick() {
@@ -165,6 +176,13 @@ function openExpediente() {
       <Badge v-if="!compact && node.status_label" variant="outline" class="text-xs">
         {{ node.status_label }}
       </Badge>
+      <Badge
+        v-if="isDocument && !canAccessDocumentContent"
+        variant="secondary"
+        class="text-[10px] sm:text-xs"
+      >
+        Restringido
+      </Badge>
 
       <Button
         v-if="canShowDetails"
@@ -223,7 +241,7 @@ function openExpediente() {
           </template>
         </Button>
 
-        <template v-if="canManageDocuments && !compact">
+        <template v-if="canManageDocuments && canAccessDocumentContent && !compact">
           <Button
             variant="ghost"
             size="sm"
@@ -267,8 +285,8 @@ function openExpediente() {
         :metadata-fields="metadataFields"
         :file-metadata-values="isFileRoot ? fileMetadataValues : undefined"
         :file-id="fileId"
-        :can-view-documents="canView"
-        :can-download-documents="canDownload"
+        :can-view-documents="canView && canAccessDocumentContent"
+        :can-download-documents="canDownload && canAccessDocumentContent"
       />
     </div>
 
