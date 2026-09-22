@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { CommunicationItem, CommunicationTypeValue } from '~/types/communications'
+import { canPreviewDocumentInline } from '~/utils/document-preview'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 definePageMeta({
   layout: 'default',
@@ -12,8 +14,15 @@ const communicationsApi = useCommunicationsApi()
 const { hasPermission } = usePermissions()
 const { user } = useAuth()
 const route = useRoute()
-const { viewAttachmentInNewTab } = useCommunicationAttachmentView()
+const { fetchAttachmentBlob } = useCommunicationAttachmentView()
 const openingAttachmentId = ref<number | null>(null)
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
 
 const loading = ref(false)
 const search = ref('')
@@ -135,7 +144,8 @@ async function openAttachment(file: CommunicationItem['attachments'][number]) {
 
   openingAttachmentId.value = file.id
   try {
-    await viewAttachmentInNewTab(file.id)
+    const blob = await fetchAttachmentBlob(file.id)
+    presentBlob(blob, file.original_name || file.title || 'adjunto', file.mime_type)
   }
   catch {
     toast.error('No se pudo abrir el adjunto.')
@@ -143,6 +153,14 @@ async function openAttachment(file: CommunicationItem['attachments'][number]) {
   finally {
     openingAttachmentId.value = null
   }
+}
+
+function attachmentCanPreview(file: CommunicationItem['attachments'][number]): boolean {
+  if (file.kind === 'link') {
+    return true
+  }
+
+  return canPreviewDocumentInline(file.original_name || file.title || '', file.mime_type ?? '')
 }
 
 async function loadAll() {
@@ -415,7 +433,7 @@ watch(() => route.query.unread, (value) => {
                   :disabled="openingAttachmentId === file.id"
                   @click="openAttachment(file)"
                 >
-                  <Icon :name="file.kind === 'link' ? 'i-lucide-link' : 'i-lucide-paperclip'" class="size-4" />
+                  <Icon :name="file.kind === 'link' ? 'i-lucide-link' : (attachmentCanPreview(file) ? 'i-lucide-eye' : 'i-lucide-download')" class="size-4" />
                   {{ file.title || file.original_name || 'Adjunto' }}
                 </button>
               </div>
@@ -564,5 +582,11 @@ watch(() => route.query.unread, (value) => {
         <Icon name="i-lucide-megaphone" class="size-5" />
       </NuxtLink>
     </Button>
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>

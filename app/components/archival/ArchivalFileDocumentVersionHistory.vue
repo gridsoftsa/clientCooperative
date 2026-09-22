@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import type { ArchivalFileDocumentVersion, ArchivalFileDocumentVersionHistory } from '~/types/archival-file'
 import { formatArchivalFileSize } from '~/utils/archival-metadata-display'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = defineProps<{
   fileId: number
@@ -13,7 +14,14 @@ const props = defineProps<{
 }>()
 
 const archivalApi = useArchivalFileApi()
-const { viewDocumentInNewTab } = useArchivalDocumentBlob()
+const { fetchDocumentViewBlob } = useArchivalDocumentBlob()
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
 
 const loading = ref(false)
 const history = ref<ArchivalFileDocumentVersionHistory | null>(null)
@@ -64,7 +72,8 @@ async function openDocumentView(version: ArchivalFileDocumentVersion) {
   viewingVersionId.value = version.id
 
   try {
-    await viewDocumentInNewTab(props.fileId, version.id)
+    const blob = await fetchDocumentViewBlob(props.fileId, version.id)
+    presentBlob(blob, version.original_name || props.documentTitle || 'documento', version.mime_type)
   }
   catch {
     toast.error('No se pudo abrir el documento.')
@@ -182,5 +191,11 @@ defineExpose({ reload: loadHistory })
         </div>
       </li>
     </ol>
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>

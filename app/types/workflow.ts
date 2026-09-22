@@ -30,11 +30,31 @@ export interface WorkflowBoardColumn {
   id: number
   key: string
   title: string
+  definition_id?: number | null
+  definition_key?: string | null
   tasks: WorkflowTaskCard[]
+}
+
+export interface WorkflowBoardFlowStage {
+  id: number
+  key: string
+  name: string
+  task_count: number
+}
+
+export interface WorkflowBoardFlow {
+  id: number
+  key: string
+  name: string
+  description?: string | null
+  task_count: number
+  functional_types: Array<{ key: string, label: string }>
+  stages: WorkflowBoardFlowStage[]
 }
 
 export interface WorkflowBoardData {
   definition: { id: number, key: string, name: string } | null
+  flows?: WorkflowBoardFlow[]
   columns: WorkflowBoardColumn[]
 }
 

@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type { ArchivalFileTreeNode } from '~/types/archival-file'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = defineProps<{
   node: ArchivalFileTreeNode
@@ -26,7 +27,14 @@ const emit = defineEmits<{
 }>()
 
 const archivalApi = useArchivalFileApi()
-const { viewDocumentInNewTab } = useArchivalDocumentBlob()
+const { fetchDocumentViewBlob } = useArchivalDocumentBlob()
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
 const router = useRouter()
 
 const depth = computed(() => props.depth ?? 0)
@@ -115,7 +123,8 @@ async function openDocumentView() {
   viewing.value = true
 
   try {
-    await viewDocumentInNewTab(documentFileId.value, documentId.value)
+    const blob = await fetchDocumentViewBlob(documentFileId.value, documentId.value)
+    presentBlob(blob, props.node.name || 'documento', props.node.mime_type)
   }
   catch (error) {
     toast.error(error instanceof Error ? error.message : 'No se pudo abrir el documento.')
@@ -311,5 +320,11 @@ function openExpediente() {
         @publish-to-library="emit('publishToLibrary', $event)"
       />
     </div>
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>

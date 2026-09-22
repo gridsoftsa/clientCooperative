@@ -6,6 +6,7 @@ import type {
   InstitutionalLibraryHome,
   InstitutionalLibrarySection,
 } from '~/types/institutional-library'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const FILTER_ALL_ORG_UNITS = 'all'
 
@@ -17,7 +18,14 @@ definePageMeta({
 
 const libraryApi = useInstitutionalLibraryApi()
 const archivalApi = useArchivalFileApi()
-const { viewDocumentInNewTab } = useArchivalDocumentBlob()
+const { fetchDocumentViewBlob } = useArchivalDocumentBlob()
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
 const { hasPermission } = usePermissions()
 
 const loading = ref(false)
@@ -159,7 +167,8 @@ async function openPreview(document: InstitutionalLibraryDocument) {
   previewing.value = true
 
   try {
-    await viewDocumentInNewTab(document.archival_file_id, document.id)
+    const blob = await fetchDocumentViewBlob(document.archival_file_id, document.id)
+    presentBlob(blob, document.title || 'documento', document.mime_type)
   }
   catch (error) {
     toast.error(error instanceof Error ? error.message : 'No se pudo abrir el documento.')
@@ -285,7 +294,12 @@ onMounted(() => loadHome())
 
           <div class="flex flex-wrap gap-2">
             <Button type="button" :disabled="previewing" @click="openPreview(documentDetail)">
-              Visualizar
+              <Icon
+                :name="previewing ? 'i-lucide-loader-2' : 'i-lucide-eye'"
+                class="mr-1 size-4"
+                :class="{ 'animate-spin': previewing }"
+              />
+              Ver
             </Button>
             <a
               v-if="downloadUrl(documentDetail)"
@@ -300,5 +314,11 @@ onMounted(() => loadHome())
         </div>
       </DialogContent>
     </Dialog>
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>

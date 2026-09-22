@@ -11,6 +11,8 @@ import {
   isArchivalAreaFolderNode,
   partitionArchivalAreaChildren,
 } from '~/utils/archival-area-repository'
+import { toast } from 'vue-sonner'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = defineProps<{
   tree: ArchivalFileTreeNode | null
@@ -24,6 +26,15 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const { hasPermission } = usePermissions()
+const { fetchDocumentViewBlob } = useArchivalDocumentBlob()
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
+const viewingDocumentId = ref<string | null>(null)
 
 const selectedNodeId = ref('')
 const selectedDocument = ref<ArchivalFileTreeNode | null>(null)
@@ -97,6 +108,31 @@ function selectDocument(node: ArchivalFileTreeNode) {
 
 function openExpediente(fileId: number) {
   router.push(`/expedientes/${fileId}`)
+}
+
+async function openDocumentView(document: ArchivalFileTreeNode) {
+  if (!document.archival_file_id || !document.archival_file_document_id) {
+    toast.error('No se pudo abrir el documento.')
+    return
+  }
+
+  if (document.can_view_content === false) {
+    toast.error('No tiene permiso para ver este documento.')
+    return
+  }
+
+  viewingDocumentId.value = document.id
+
+  try {
+    const blob = await fetchDocumentViewBlob(document.archival_file_id, document.archival_file_document_id)
+    presentBlob(blob, document.name || 'documento', document.mime_type)
+  }
+  catch (error) {
+    toast.error(error instanceof Error ? error.message : 'No se pudo abrir el documento.')
+  }
+  finally {
+    viewingDocumentId.value = null
+  }
 }
 
 function formatBytes(size?: number): string {
@@ -301,6 +337,20 @@ function formatBytes(size?: number): string {
 
                     <div class="mt-3 flex flex-wrap gap-2">
                       <Button
+                        v-if="document.archival_file_id && document.archival_file_document_id && document.can_view_content !== false"
+                        variant="outline"
+                        size="sm"
+                        :disabled="viewingDocumentId === document.id"
+                        @click.stop="openDocumentView(document)"
+                      >
+                        <Icon
+                          :name="viewingDocumentId === document.id ? 'i-lucide-loader-2' : 'i-lucide-eye'"
+                          class="mr-1 size-4"
+                          :class="{ 'animate-spin': viewingDocumentId === document.id }"
+                        />
+                        Ver
+                      </Button>
+                      <Button
                         v-if="document.archival_file_id"
                         variant="outline"
                         size="sm"
@@ -353,5 +403,11 @@ function formatBytes(size?: number): string {
         </div>
       </ResizablePanel>
     </ResizablePanelGroup>
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>

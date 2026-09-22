@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { WorkflowBoardData, WorkflowTaskCard } from '~/types/workflow'
+import type { WorkflowBoardData, WorkflowBoardFlow, WorkflowTaskCard } from '~/types/workflow'
+import WorkflowFlowWorkspace from '~/components/workflow/WorkflowFlowWorkspace.vue'
 
 definePageMeta({
   layout: 'default',
@@ -13,43 +14,52 @@ const { hasPermission } = usePermissions()
 const workflowApi = useWorkflowApi()
 
 const loading = ref(true)
-const board = ref<WorkflowBoardData>({ definition: null, columns: [] })
-const definitions = ref<Array<{ id: number, key: string, name: string }>>([])
+const board = ref<WorkflowBoardData>({ definition: null, columns: [], flows: [] })
 const ALL_DEFINITIONS = 'all'
 const definitionId = ref<string>(ALL_DEFINITIONS)
 const { scope, canViewTeam, canViewAllTasks } = useWorkflowInboxScope()
 const statusFilter = ref<'open' | 'overdue' | 'due_soon'>('open')
-const functionalTypeKey = ref<string>('')
 
 const canManage = computed(() => hasPermission('workflow_gestionar'))
 const { ensureLoaded } = useVentanillaFunctionalTypeLabels()
+const showingAllTypes = computed(() => definitionId.value === ALL_DEFINITIONS)
+const typeFlows = computed<WorkflowBoardFlow[]>(() => board.value.flows ?? [])
+const selectedFlow = computed(() =>
+  typeFlows.value.find(flow => String(flow.id) === definitionId.value) ?? null,
+)
+const visibleColumns = computed(() => {
+  if (showingAllTypes.value) {
+    return []
+  }
 
-async function loadDefinitions() {
-  try {
-    definitions.value = await workflowApi.fetchActiveDefinitions()
-  }
-  catch {
-    definitions.value = []
-  }
-}
+  return board.value.columns
+    .filter(column => String(column.definition_id) === definitionId.value)
+    .map((column) => {
+      const stageName = selectedFlow.value?.stages.find(stage => stage.id === column.id)?.name
+
+      return {
+        ...column,
+        title: stageName || column.title,
+      }
+    })
+})
 
 async function loadBoard() {
   loading.value = true
 
   try {
-    const query: Record<string, string> = {
+    board.value = await workflowApi.fetchBoard({
       scope: scope.value,
       status: statusFilter.value,
+    })
+
+    if (
+      definitionId.value === ALL_DEFINITIONS
+      || !typeFlows.value.some(flow => String(flow.id) === definitionId.value)
+    ) {
+      const preferred = typeFlows.value.find(flow => flow.task_count > 0) ?? typeFlows.value[0]
+      definitionId.value = preferred ? String(preferred.id) : ALL_DEFINITIONS
     }
-
-    if (functionalTypeKey.value)
-      query.functional_type_key = functionalTypeKey.value
-
-    if (definitionId.value && definitionId.value !== ALL_DEFINITIONS) {
-      query.workflow_definition_id = definitionId.value
-    }
-
-    board.value = await workflowApi.fetchBoard(query)
   }
   catch {
     toast.error('No se pudo cargar el tablero de tareas.')
@@ -71,26 +81,25 @@ function openManage(task: WorkflowTaskCard) {
   })
 }
 
-watch([scope, statusFilter, functionalTypeKey, definitionId], () => {
-  loadBoard()
+watch([scope, statusFilter], () => {
+  void loadBoard()
 })
 
 onMounted(async () => {
-  await Promise.all([ensureLoaded(), loadDefinitions()])
+  await ensureLoaded()
   await loadBoard()
 })
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-      <div>
+  <div class="min-w-0 space-y-6">
+    <div class="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div class="min-w-0">
         <h1 class="text-2xl font-semibold tracking-tight">
           Workflow y tareas
         </h1>
         <p class="text-sm text-muted-foreground">
-          Tablero por etapas
-          <span v-if="board.definition"> · {{ board.definition.name }}</span>
+          Tipos a la izquierda, recorrido del flujo a la derecha.
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
@@ -113,11 +122,11 @@ onMounted(async () => {
       </div>
     </div>
 
-    <Card>
+    <Card class="min-w-0 overflow-hidden">
       <CardHeader class="pb-3">
-        <div class="flex flex-wrap gap-3">
-          <Tabs v-model="scope" default-value="mine" class="w-auto">
-            <TabsList>
+        <div class="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Tabs v-model="scope" default-value="mine" class="min-w-0 sm:col-span-2 xl:col-span-1">
+            <TabsList class="flex h-auto w-full flex-wrap justify-start">
               <TabsTrigger value="mine">
                 Mis tareas
               </TabsTrigger>
@@ -131,7 +140,7 @@ onMounted(async () => {
           </Tabs>
 
           <Select v-model="statusFilter">
-            <SelectTrigger class="w-[180px]">
+            <SelectTrigger class="w-full min-w-0">
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
             <SelectContent>
@@ -146,37 +155,16 @@ onMounted(async () => {
               </SelectItem>
             </SelectContent>
           </Select>
-
-          <Select v-if="definitions.length" v-model="definitionId">
-            <SelectTrigger class="w-[220px]">
-              <SelectValue placeholder="Flujo de trabajo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem :value="ALL_DEFINITIONS">
-                Todos los flujos
-              </SelectItem>
-              <SelectItem
-                v-for="def in definitions"
-                :key="def.id"
-                :value="String(def.id)"
-              >
-                {{ def.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Input
-            v-model="functionalTypeKey"
-            class="w-[200px]"
-            placeholder="Tipo funcional (clave)"
-          />
         </div>
       </CardHeader>
-      <CardContent>
-        <WorkflowBoard
-          :columns="board.columns"
+      <CardContent class="p-0 sm:p-0">
+        <WorkflowFlowWorkspace
+          :flows="typeFlows"
+          :selected-id="definitionId"
+          :columns="visibleColumns"
           :loading="loading"
           :can-manage="canManage"
+          @select="definitionId = $event"
           @refresh="loadBoard"
           @open-task="openTask"
           @manage="openManage"

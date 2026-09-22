@@ -5,7 +5,9 @@ import {
   ventanillaIntakeSourceLabel,
   ventanillaIntakeStatusLabel,
 } from '~/utils/ventanilla-intake-display'
-import type { VentanillaCatalogData, VentanillaFunctionalTypeRow, VentanillaIntakeRow } from '~/types/ventanilla'
+import type { VentanillaCatalogData, VentanillaFunctionalTypeRow, VentanillaIntakeFileRow, VentanillaIntakeRow } from '~/types/ventanilla'
+import { canPreviewDocumentInline } from '~/utils/document-preview'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 interface OrgUnitOption {
   id: number
@@ -33,6 +35,13 @@ const loading = ref(true)
 const errorMessage = ref('')
 const successMessage = ref('')
 const openingIntakeFileId = ref<number | null>(null)
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
 
 function functionalTypeLabel(key: string | null | undefined): string {
   if (!key) {
@@ -70,16 +79,21 @@ async function loadPageData() {
   }
 }
 
-async function viewIntakeFile(fileId: number, mimeType?: string | null) {
+function intakeFileCanPreview(file: VentanillaIntakeFileRow): boolean {
+  return canPreviewDocumentInline(file.original_name || file.title, file.mime_type ?? '')
+}
+
+async function viewIntakeFile(file: VentanillaIntakeFileRow) {
   if (!intake.value) {
     return
   }
 
-  openingIntakeFileId.value = fileId
+  openingIntakeFileId.value = file.id
   errorMessage.value = ''
 
   try {
-    await ventanillaApi.viewIntakeFileInNewTab(intake.value.id, fileId, mimeType ?? undefined)
+    const blob = await ventanillaApi.fetchIntakeFileBlob(intake.value.id, file.id)
+    presentBlob(blob, file.original_name || file.title || 'documento', file.mime_type)
   }
   catch {
     errorMessage.value = 'No se pudo abrir el archivo.'
@@ -206,10 +220,10 @@ onMounted(() => {
                 size="sm"
                 class="shrink-0"
                 :disabled="openingIntakeFileId === file.id"
-                @click="viewIntakeFile(file.id, file.mime_type)"
+                @click="viewIntakeFile(file)"
               >
                 <Icon
-                  :name="openingIntakeFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+                  :name="openingIntakeFileId === file.id ? 'i-lucide-loader-2' : (intakeFileCanPreview(file) ? 'i-lucide-eye' : 'i-lucide-download')"
                   class="size-4"
                   :class="{ 'animate-spin': openingIntakeFileId === file.id }"
                 />
@@ -240,5 +254,11 @@ onMounted(() => {
         </CardContent>
       </Card>
     </div>
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>

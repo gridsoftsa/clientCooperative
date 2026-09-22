@@ -55,7 +55,7 @@ export function useCommunicationAttachmentView() {
     window.setTimeout(() => URL.revokeObjectURL(objectUrl), 120_000)
   }
 
-  async function viewAttachmentInNewTab(attachmentId: number): Promise<void> {
+  async function fetchAttachmentBlob(attachmentId: number): Promise<Blob> {
     await ensureCsrfCookie()
     const xsrf = readXsrfCookie()
     const url = `${apiBase}/api/communications/attachments/${attachmentId}/view`
@@ -87,11 +87,16 @@ export function useCommunicationAttachmentView() {
       throw new Error(message)
     }
 
-    const blob = await response.blob()
+    return await response.blob()
+  }
+
+  async function viewAttachmentInNewTab(attachmentId: number): Promise<void> {
+    const blob = await fetchAttachmentBlob(attachmentId)
     openBlobInNewTab(blob)
   }
 
   return {
+    fetchAttachmentBlob,
     viewAttachmentInNewTab,
     openBlobInNewTab,
   }

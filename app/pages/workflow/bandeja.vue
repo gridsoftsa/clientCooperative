@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { WorkflowTaskCard, WorkflowTaskCollaboratorRow } from '~/types/workflow'
+import type { WorkflowBoardFlow, WorkflowTaskCard, WorkflowTaskCollaboratorRow } from '~/types/workflow'
+import WorkflowTypeFlowCards from '~/components/workflow/WorkflowTypeFlowCards.vue'
 
 definePageMeta({
   layout: 'default',
@@ -19,7 +20,7 @@ const pendingCollaborations = ref<WorkflowTaskCollaboratorRow[]>([])
 const meta = ref({ current_page: 1, last_page: 1, per_page: 20, total: 0 })
 const { scope, canViewTeam, canViewAllTasks } = useWorkflowInboxScope()
 const statusFilter = ref<'open' | 'overdue' | 'due_soon' | 'completed'>('open')
-const definitions = ref<Array<{ id: number, key: string, name: string }>>([])
+const typeFlows = ref<WorkflowBoardFlow[]>([])
 const ALL_DEFINITIONS = 'all'
 const definitionId = ref<string>(ALL_DEFINITIONS)
 const filterVentanillaFilingId = ref<number | null>(null)
@@ -62,12 +63,16 @@ function clearVentanillaFilingFilter(): void {
   router.replace({ query: nextQuery })
 }
 
-async function loadDefinitions() {
+async function loadTypeFlows() {
   try {
-    definitions.value = await workflowApi.fetchActiveDefinitions()
+    const board = await workflowApi.fetchBoard({
+      scope: scope.value,
+      status: statusFilter.value === 'completed' ? 'open' : statusFilter.value,
+    })
+    typeFlows.value = board.flows ?? []
   }
   catch {
-    definitions.value = []
+    typeFlows.value = []
   }
 }
 
@@ -153,7 +158,14 @@ function trafficClass(status: WorkflowTaskCard['traffic_light_status']) {
   return 'text-emerald-600'
 }
 
-watch([scope, statusFilter, definitionId], () => loadTasks(1))
+watch([scope, statusFilter], () => {
+  void loadTasks(1)
+  void loadTypeFlows()
+})
+
+watch(definitionId, () => {
+  void loadTasks(1)
+})
 
 watch(() => route.query.ventanilla_filing_id, () => {
   applyVentanillaFilingFilterFromRoute()
@@ -162,7 +174,7 @@ watch(() => route.query.ventanilla_filing_id, () => {
 
 onMounted(async () => {
   applyVentanillaFilingFilterFromRoute()
-  await Promise.all([ensureLoaded(), loadDefinitions(), loadPendingCollaborations()])
+  await Promise.all([ensureLoaded(), loadPendingCollaborations(), loadTypeFlows()])
   await loadTasks()
 })
 </script>
@@ -301,20 +313,13 @@ onMounted(async () => {
               </SelectItem>
             </SelectContent>
           </Select>
-
-          <Select v-if="definitions.length" v-model="definitionId">
-            <SelectTrigger class="w-[220px]">
-              <SelectValue placeholder="Todos los flujos" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem :value="ALL_DEFINITIONS">
-                Todos los flujos
-              </SelectItem>
-              <SelectItem v-for="def in definitions" :key="def.id" :value="String(def.id)">
-                {{ def.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+        </div>
+        <div v-if="typeFlows.length" class="mt-4">
+          <WorkflowTypeFlowCards
+            :flows="typeFlows"
+            :selected-id="definitionId"
+            @select="definitionId = $event"
+          />
         </div>
       </CardHeader>
       <CardContent>

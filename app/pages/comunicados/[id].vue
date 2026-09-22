@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { CommunicationItem } from '~/types/communications'
+import { canPreviewDocumentInline } from '~/utils/document-preview'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 definePageMeta({
   layout: 'default',
@@ -15,7 +17,14 @@ const loading = ref(true)
 const confirming = ref(false)
 const item = ref<CommunicationItem | null>(null)
 const openingAttachmentId = ref<number | null>(null)
-const { viewAttachmentInNewTab } = useCommunicationAttachmentView()
+const { fetchAttachmentBlob } = useCommunicationAttachmentView()
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
 
 const id = computed(() => Number(route.params.id))
 
@@ -58,7 +67,8 @@ async function openAttachment(file: NonNullable<CommunicationItem['attachments']
 
   openingAttachmentId.value = file.id
   try {
-    await viewAttachmentInNewTab(file.id)
+    const blob = await fetchAttachmentBlob(file.id)
+    presentBlob(blob, file.original_name || file.title || 'adjunto', file.mime_type)
   }
   catch {
     toast.error('No se pudo abrir el adjunto.')
@@ -66,6 +76,14 @@ async function openAttachment(file: NonNullable<CommunicationItem['attachments']
   finally {
     openingAttachmentId.value = null
   }
+}
+
+function attachmentCanPreview(file: NonNullable<CommunicationItem['attachments']>[number]): boolean {
+  if (file.kind === 'link') {
+    return true
+  }
+
+  return canPreviewDocumentInline(file.original_name || file.title || '', file.mime_type ?? '')
 }
 
 function formatDate(value?: string | null) {
@@ -204,7 +222,7 @@ onMounted(load)
                 :disabled="openingAttachmentId === file.id"
                 @click="openAttachment(file)"
               >
-                <Icon :name="file.kind === 'link' ? 'i-lucide-link' : 'i-lucide-paperclip'" class="size-4 shrink-0" />
+                <Icon :name="file.kind === 'link' ? 'i-lucide-link' : (attachmentCanPreview(file) ? 'i-lucide-eye' : 'i-lucide-download')" class="size-4 shrink-0" />
                 <span class="min-w-0 truncate">
                   {{ file.title || file.original_name || 'Adjunto' }}
                 </span>
@@ -416,5 +434,11 @@ onMounted(load)
     <div v-else class="rounded-xl border border-dashed py-16 text-center text-muted-foreground">
       Comunicado no encontrado.
     </div>
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>

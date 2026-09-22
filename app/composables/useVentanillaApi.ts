@@ -605,13 +605,25 @@ export function useVentanillaApi() {
     return fetchAuthenticatedBlob(filingFileViewUrl(filingId, fileId))
   }
 
+  async function fetchIntakeFileBlob(intakeId: number, fileId: number): Promise<Blob> {
+    return fetchAuthenticatedBlob(intakeFileViewUrl(intakeId, fileId))
+  }
+
+  async function fetchReceiptBlob(filingId: number): Promise<Blob> {
+    return fetchAuthenticatedBlob(filingReceiptUrl(filingId))
+  }
+
+  async function fetchStickerBlob(filingId: number): Promise<Blob> {
+    return fetchAuthenticatedBlob(filingStickerUrl(filingId))
+  }
+
   async function viewFilingFileInNewTab(filingId: number, fileId: number, mimeType?: string): Promise<void> {
     const blob = await fetchFilingFileBlob(filingId, fileId)
     openBlobInNewTab(blob, mimeType)
   }
 
   async function viewIntakeFileInNewTab(intakeId: number, fileId: number, mimeType?: string): Promise<void> {
-    const blob = await fetchAuthenticatedBlob(intakeFileViewUrl(intakeId, fileId))
+    const blob = await fetchIntakeFileBlob(intakeId, fileId)
     openBlobInNewTab(blob, mimeType)
   }
 
@@ -714,6 +726,9 @@ export function useVentanillaApi() {
     intakeFileViewUrl,
     intakeFileDownloadUrl,
     fetchFilingFileBlob,
+    fetchIntakeFileBlob,
+    fetchReceiptBlob,
+    fetchStickerBlob,
     viewFilingFileInNewTab,
     viewIntakeFileInNewTab,
     downloadFilingFile,

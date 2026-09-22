@@ -15,7 +15,9 @@ import {
   validateDocumentAttachmentFolios,
 } from '~/utils/document-attachment-folio'
 import { VENTANILLA_FILING_UPLOAD_CONSTRAINTS } from '~/utils/document-upload-constraints'
-import type { VentanillaCatalogData, VentanillaFilingDetail } from '~/types/ventanilla'
+import { canPreviewDocumentInline } from '~/utils/document-preview'
+import type { VentanillaCatalogData, VentanillaFilingDetail, VentanillaFilingFileRow } from '~/types/ventanilla'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 definePageMeta({
   layout: 'default',
@@ -42,6 +44,13 @@ const actionLoading = ref('')
 const openingFileId = ref<number | null>(null)
 const openingReceipt = ref(false)
 const openingSticker = ref(false)
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
 const selectedAssignedUserId = ref<number | null>(null)
 const assignmentNote = ref('')
 const responseText = ref('')
@@ -389,13 +398,18 @@ async function refreshSla() {
   })
 }
 
-async function viewFile(fileId: number, mimeType?: string | null) {
+function fileCanPreview(file: Pick<VentanillaFilingFileRow, 'original_name' | 'title' | 'mime_type'>): boolean {
+  return canPreviewDocumentInline(file.original_name || file.title, file.mime_type ?? '')
+}
+
+async function viewFile(file: VentanillaFilingFileRow) {
   if (!hasPermission('ventanilla_archivos_ver')) {
     return
   }
-  openingFileId.value = fileId
+  openingFileId.value = file.id
   try {
-    await ventanillaApi.viewFilingFileInNewTab(id.value, fileId, mimeType ?? undefined)
+    const blob = await ventanillaApi.fetchFilingFileBlob(id.value, file.id)
+    presentBlob(blob, file.original_name || file.title || 'documento', file.mime_type)
   } catch (err) {
     errorMessage.value = err instanceof Error && err.message
       ? err.message
@@ -412,7 +426,8 @@ async function viewReceipt() {
 
   openingReceipt.value = true
   try {
-    await ventanillaApi.viewReceiptInNewTab(filing.value.id)
+    const blob = await ventanillaApi.fetchReceiptBlob(filing.value.id)
+    presentBlob(blob, `comprobante-${filing.value.filing_number || filing.value.id}.pdf`, 'application/pdf')
   } catch {
     errorMessage.value = 'No se pudo abrir el comprobante'
   } finally {
@@ -427,7 +442,8 @@ async function viewSticker() {
 
   openingSticker.value = true
   try {
-    await ventanillaApi.viewStickerInNewTab(filing.value.id)
+    const blob = await ventanillaApi.fetchStickerBlob(filing.value.id)
+    presentBlob(blob, `etiqueta-${filing.value.filing_number || filing.value.id}.pdf`, 'application/pdf')
   } catch {
     errorMessage.value = 'No se pudo abrir la etiqueta'
   } finally {
@@ -961,14 +977,14 @@ async function viewSticker() {
                     variant="outline"
                     size="sm"
                     :disabled="openingFileId === file.id"
-                    @click="viewFile(file.id, file.mime_type)"
+                    @click="viewFile(file)"
                   >
                     <Icon
-                      :name="openingFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+                      :name="openingFileId === file.id ? 'i-lucide-loader-2' : (fileCanPreview(file) ? 'i-lucide-eye' : 'i-lucide-download')"
                       class="mr-1 size-4"
                       :class="{ 'animate-spin': openingFileId === file.id }"
                     />
-                    {{ openingFileId === file.id ? 'Abriendo…' : 'Ver' }}
+                    {{ openingFileId === file.id ? 'Abriendo…' : (fileCanPreview(file) ? 'Ver' : 'Descargar') }}
                   </Button>
                 </li>
               </ul>
@@ -1251,5 +1267,11 @@ async function viewSticker() {
         </div>
       </div>
     </template>
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>
