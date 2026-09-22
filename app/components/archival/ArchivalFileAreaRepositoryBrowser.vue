@@ -308,7 +308,7 @@ function formatBytes(size?: number): string {
                         Ver expediente
                       </Button>
                       <a
-                        v-if="canDownload && document.download_url"
+                        v-if="canDownload && document.can_download_content !== false && document.download_url"
                         :href="document.download_url"
                         class="inline-flex"
                         @click.stop

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import CatalogConfidentialityFields from '~/components/archival/CatalogConfidentialityFields.vue'
 import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
 import { buildCatalogCode, catalogCodeSuffix } from '~/utils/archival-catalog-code'
 import type { DocSeriesRow } from '~/types/archival-catalog'
@@ -35,6 +36,14 @@ const form = ref({
   is_active: true,
 })
 const saving = ref(false)
+const confidentialityFields = ref<{
+  validate: () => string | null
+  toPayload: () => {
+    inherited: boolean
+    confidentiality_level?: import('~/types/archival-catalog').DocumentConfidentialityLevel
+    grants?: import('~/types/archival-catalog').ClassificationAccessGrantRow[]
+  }
+} | null>(null)
 
 const seriesCodePrefix = computed(() => series.value?.code ?? '')
 
@@ -71,7 +80,7 @@ async function submit() {
   saving.value = true
   try {
     const code = buildCatalogCode(seriesCodePrefix.value, suffix)
-    await $api('/archival/catalog/subseries', {
+    const created = await $api<{ data: { id: number } }>('/archival/catalog/subseries', {
       method: 'POST',
       body: {
         doc_series_id: seriesId.value,
@@ -81,6 +90,7 @@ async function submit() {
         is_active: form.value.is_active,
       },
     })
+    await catalogApi.persistClassification(confidentialityFields.value, 'subseries', created.data.id)
     toast.success('Subserie creada')
     await catalogApi.navigateAfterCatalogSave(
       router,
@@ -88,7 +98,7 @@ async function submit() {
       catalogApi.subseriesListPath(seriesId.value),
     )
   } catch (e: any) {
-    toast.error(e?.data?.message || 'No se pudo crear la subserie')
+    toast.error(e?.message && !e?.data ? e.message : (e?.data?.message || 'No se pudo crear la subserie'))
   } finally {
     saving.value = false
   }
@@ -161,6 +171,10 @@ onMounted(loadSeries)
             <Label for="active" class="font-normal">{{ form.is_active ? 'Activa' : 'Inactiva' }}</Label>
           </div>
           </div>
+          <CatalogConfidentialityFields
+            ref="confidentialityFields"
+            subject-type="subseries"
+          />
           <div class="flex gap-2 justify-end">
             <Button type="button" variant="outline" @click="router.back()">
               Cancelar

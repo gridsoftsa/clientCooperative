@@ -1,4 +1,4 @@
-import type { DocDocumentTypeRow, DocSeriesRow, DocSubseriesRow } from '~/types/archival-catalog'
+import type { DocDocumentTypeRow, DocSeriesRow, DocSubseriesRow, CatalogConfidentialityPayload } from '~/types/archival-catalog'
 
 export interface TrdTableRow {
   id: number
@@ -50,10 +50,10 @@ export interface EffectiveRetentionPayload {
   inherited_from: 'document_type' | 'subseries' | 'series'
 }
 
-export interface CatalogTreeSeries extends Pick<DocSeriesRow, 'id' | 'code' | 'name' | 'is_active' | 'publishable_to_institutional_library'> {
+export interface CatalogTreeSeries extends Pick<DocSeriesRow, 'id' | 'code' | 'name' | 'is_active' | 'publishable_to_institutional_library' | 'confidentiality'> {
   subseries: Array<
-    Pick<DocSubseriesRow, 'id' | 'doc_series_id' | 'code' | 'name' | 'is_active'> & {
-      document_types: DocDocumentTypeRow[]
+    Pick<DocSubseriesRow, 'id' | 'doc_series_id' | 'code' | 'name' | 'is_active' | 'confidentiality'> & {
+      document_types: Array<DocDocumentTypeRow & { confidentiality?: CatalogConfidentialityPayload }>
     }
   >
 }

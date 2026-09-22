@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
-import { catalogCodeSuffix } from '~/utils/archival-catalog-code'
+import CatalogConfidentialityFields from '~/components/archival/CatalogConfidentialityFields.vue'
 
 definePageMeta({
   layout: 'default',
@@ -34,6 +33,14 @@ const form = ref({
 })
 
 const saving = ref(false)
+const confidentialityFields = ref<{
+  validate: () => string | null
+  toPayload: () => {
+    inherited: boolean
+    confidentiality_level?: import('~/types/archival-catalog').DocumentConfidentialityLevel
+    grants?: import('~/types/archival-catalog').ClassificationAccessGrantRow[]
+  }
+} | null>(null)
 
 const selectedUnit = computed(() =>
   units.value.find(u => u.id === form.value.org_unit_id) ?? null,
@@ -48,8 +55,6 @@ const returnToPath = computed(() => catalogApi.returnToPath(route))
 
 /** Área fijada por query (p. ej. al crear serie desde la TRD de un área). */
 const isOrgUnitLocked = computed(() => queryOrgUnitId.value != null)
-
-const orgUnitCodePrefix = computed(() => selectedUnit.value?.code ?? '')
 
 function cancelPath(): string {
   if (returnToPath.value) {
@@ -91,18 +96,18 @@ async function submit() {
   }
   saving.value = true
   try {
-    const code = catalogCodeSuffix(orgUnitCodePrefix.value, form.value.code)
-    await $api('/archival/catalog/series', {
+    const created = await $api<{ data: { id: number } }>('/archival/catalog/series', {
       method: 'POST',
       body: {
         org_unit_id: form.value.org_unit_id,
-        code,
+        code: form.value.code.trim(),
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
         is_active: form.value.is_active,
         publishable_to_institutional_library: form.value.publishable_to_institutional_library,
       },
     })
+    await catalogApi.persistClassification(confidentialityFields.value, 'series', created.data.id)
     toast.success('Serie creada')
     const listQuery = form.value.org_unit_id != null ? `?org_unit_id=${form.value.org_unit_id}` : ''
     await catalogApi.navigateAfterCatalogSave(
@@ -111,7 +116,7 @@ async function submit() {
       `/settings/archival/catalog/series${listQuery}`,
     )
   } catch (e: any) {
-    toast.error(e?.data?.message || 'No se pudo crear la serie')
+    toast.error(e?.message && !e?.data ? e.message : (e?.data?.message || 'No se pudo crear la serie'))
   } finally {
     saving.value = false
   }
@@ -132,8 +137,8 @@ onMounted(fetchProducerUnits)
           Nueva serie documental
         </h2>
         <p class="text-muted-foreground text-sm leading-relaxed max-w-3xl">
-          Cadena de códigos: área + serie + subserie + tipo.
-          Ejemplo: área <span class="font-mono">045</span> → serie <span class="font-mono">045-02</span> → subserie <span class="font-mono">045-02-02</span> → tipo <span class="font-mono">045-02-02-01</span>.
+          El código de serie es el de la TRD (p. ej. <span class="font-mono">005-16</span>).
+          El área productora se elige aparte; la confidencialidad se configura más abajo y no cambia el código.
         </p>
       </div>
 
@@ -181,19 +186,16 @@ onMounted(fetchProducerUnits)
           </div>
           <div class="flex min-w-0 flex-col gap-2">
             <Label for="code">Código *</Label>
-            <p v-if="!form.org_unit_id" class="flex h-10 items-center text-xs text-muted-foreground">
-              Seleccione el área para habilitar el código.
-            </p>
-            <CatalogPrefixedCodeInput
-              v-else
+            <Input
               id="code"
               v-model="form.code"
-              :prefix="orgUnitCodePrefix"
               maxlength="64"
-              placeholder="02"
+              placeholder="005-16"
+              class="font-mono"
+              :disabled="!form.org_unit_id"
             />
-            <p v-if="form.org_unit_id" class="text-xs text-muted-foreground">
-              Prefijo: código del área (<span class="font-mono">{{ orgUnitCodePrefix }}</span>). Digite solo el sufijo a la derecha.
+            <p class="text-xs text-muted-foreground">
+              Escriba el código de serie de la TRD. No se antepone el código interno del área.
             </p>
           </div>
           <div class="flex min-w-0 flex-col gap-2">
@@ -227,6 +229,10 @@ onMounted(fetchProducerUnits)
             </div>
           </div>
           </div>
+          <CatalogConfidentialityFields
+            ref="confidentialityFields"
+            subject-type="series"
+          />
           <div class="flex gap-2 justify-end">
             <Button type="button" variant="outline" @click="router.push(cancelPath())">
               Cancelar

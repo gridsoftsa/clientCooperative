@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import CatalogConfidentialityFields from '~/components/archival/CatalogConfidentialityFields.vue'
 import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
 import {
   serializeAllowedSupport,
@@ -42,6 +43,14 @@ const form = ref({
   is_active: true,
 })
 const saving = ref(false)
+const confidentialityFields = ref<{
+  validate: () => string | null
+  toPayload: () => {
+    inherited: boolean
+    confidentiality_level?: import('~/types/archival-catalog').DocumentConfidentialityLevel
+    grants?: import('~/types/archival-catalog').ClassificationAccessGrantRow[]
+  }
+} | null>(null)
 const codeShowErrors = ref(false)
 const codeInvalid = ref(false)
 const codeInputRef = ref<{ isValid: () => boolean, focus: () => void } | null>(null)
@@ -122,7 +131,7 @@ async function submit() {
   saving.value = true
   try {
     const code = codeSuffix.value
-    await $api('/archival/catalog/document-types', {
+    const created = await $api<{ data: { id: number } }>('/archival/catalog/document-types', {
       method: 'POST',
       body: {
         doc_subseries_id: subseriesId.value,
@@ -133,6 +142,7 @@ async function submit() {
         is_active: form.value.is_active,
       },
     })
+    await catalogApi.persistClassification(confidentialityFields.value, 'document_type', created.data.id)
     toast.success('Tipo documental creado')
     await catalogApi.navigateAfterCatalogSave(
       router,
@@ -140,7 +150,7 @@ async function submit() {
       catalogApi.documentTypesListPath(seriesId.value, subseriesId.value),
     )
   } catch (e: any) {
-    toast.error(e?.data?.message || 'No se pudo crear el tipo documental')
+    toast.error(e?.message && !e?.data ? e.message : (e?.data?.message || 'No se pudo crear el tipo documental'))
   } finally {
     saving.value = false
   }
@@ -228,6 +238,10 @@ onMounted(loadSubseries)
             <Label for="active" class="font-normal">{{ form.is_active ? 'Activo' : 'Inactivo' }}</Label>
           </div>
           </div>
+          <CatalogConfidentialityFields
+            ref="confidentialityFields"
+            subject-type="document_type"
+          />
           <div class="flex gap-2 justify-end">
             <Button type="button" variant="outline" @click="router.back()">
               Cancelar

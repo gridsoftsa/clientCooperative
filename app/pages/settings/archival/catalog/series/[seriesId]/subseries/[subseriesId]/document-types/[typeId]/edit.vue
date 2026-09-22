@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import CatalogConfidentialityFields from '~/components/archival/CatalogConfidentialityFields.vue'
 import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
 import {
   parseAllowedSupport,
   serializeAllowedSupport,
 } from '~/constants/archival-document-support'
 import { catalogCodeSuffix } from '~/utils/archival-catalog-code'
-import type { DocSubseriesRow } from '~/types/archival-catalog'
+import type { CatalogConfidentialityPayload, DocDocumentTypeRow, DocSubseriesRow } from '~/types/archival-catalog'
 
 definePageMeta({
   layout: 'default',
@@ -43,15 +44,25 @@ const form = ref({
   is_active: true,
 })
 const initialIsActive = ref(true)
+const storedCode = ref('')
 const loading = ref(true)
 const saving = ref(false)
+const confidentialityFields = ref<{
+  validate: () => string | null
+  toPayload: () => {
+    inherited: boolean
+    confidentiality_level?: import('~/types/archival-catalog').DocumentConfidentialityLevel
+    grants?: import('~/types/archival-catalog').ClassificationAccessGrantRow[]
+  }
+} | null>(null)
+const loadedConfidentiality = ref<CatalogConfidentialityPayload | null>(null)
 
 const subseriesCodePrefix = computed(() => subseries.value?.code ?? '')
 
 async function load() {
   loading.value = true
   try {
-    const res = await $api<{ data: { code: string, name: string, description?: string, allowed_support?: string, is_active: boolean, doc_subseries_id: number } }>(
+    const res = await $api<{ data: DocDocumentTypeRow }>(
       `/archival/catalog/document-types/${typeId.value}`,
     )
     const row = res.data
@@ -69,6 +80,8 @@ async function load() {
       is_active: row.is_active,
     }
     initialIsActive.value = row.is_active
+    storedCode.value = row.code
+    loadedConfidentiality.value = row.confidentiality ?? null
   } catch {
     toast.error('Tipo no encontrado')
     await router.push(catalogApi.documentTypesListPath(seriesId.value, subseriesId.value))
@@ -81,16 +94,18 @@ async function submit() {
   saving.value = true
   try {
     const code = catalogCodeSuffix(subseriesCodePrefix.value, form.value.code)
+    const storedSuffix = catalogCodeSuffix(subseriesCodePrefix.value, storedCode.value)
     await $api(`/archival/catalog/document-types/${typeId.value}`, {
       method: 'PUT',
       body: {
-        code,
+        ...(code !== storedSuffix ? { code } : {}),
         name: form.value.name.trim(),
         description: form.value.description.trim() || undefined,
         allowed_support: serializeAllowedSupport(allowedSupportSelected.value),
         is_active: form.value.is_active,
       },
     })
+    await catalogApi.persistClassification(confidentialityFields.value, 'document_type', typeId.value)
     toast.success('Tipo documental actualizado')
     await catalogApi.navigateAfterCatalogSave(
       router,
@@ -100,7 +115,7 @@ async function submit() {
   } catch (e: unknown) {
     const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
     const first = err.data?.errors?.is_active?.[0]
-    toast.error(first ?? err.data?.message ?? 'No se pudo guardar')
+    toast.error(first ?? err.data?.message ?? (e instanceof Error ? e.message : 'No se pudo guardar'))
     if (first && initialIsActive.value) {
       form.value.is_active = true
     }
@@ -180,6 +195,11 @@ onMounted(load)
             Si está en TRD o tiene reglas de retención, el sistema rechazará la inactivación.
           </p>
           </div>
+          <CatalogConfidentialityFields
+            ref="confidentialityFields"
+            subject-type="document_type"
+            :confidentiality="loadedConfidentiality"
+          />
           <div class="flex justify-end gap-2">
             <Button variant="outline" @click="router.push(cancelPath())">
               Cancelar

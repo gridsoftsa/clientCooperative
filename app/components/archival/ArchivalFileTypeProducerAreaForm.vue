@@ -2,8 +2,7 @@
 import { toast } from 'vue-sonner'
 import type { ArchivalFileTypeProducerAreaDraft } from '~/types/archival-file'
 import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
-import type { DocSeriesRow, DocSubseriesRow, DocDocumentTypeRow } from '~/types/archival-catalog'
-import type { TrdTableRow } from '~/types/archival-trd'
+import type { CatalogTreeSeries, TrdTableRow } from '~/types/archival-trd'
 
 const props = defineProps<{
   orgUnits: OrgUnitRow[]
@@ -14,14 +13,10 @@ const props = defineProps<{
 
 const model = defineModel<ArchivalFileTypeProducerAreaDraft>({ required: true })
 
-const catalogApi = useArchivalCatalogApi()
+const trdApi = useTrdApi()
 
-const series = ref<DocSeriesRow[]>([])
-const subseries = ref<DocSubseriesRow[]>([])
-const docTypes = ref<DocDocumentTypeRow[]>([])
-const loadingSeries = ref(false)
-const loadingSubseries = ref(false)
-const loadingDocTypes = ref(false)
+const catalogTree = ref<CatalogTreeSeries[]>([])
+const loadingTree = ref(false)
 
 const orgUnitOptions = computed(() => {
   const excluded = new Set(props.excludeOrgUnitIds ?? [])
@@ -47,92 +42,52 @@ const trdTableOptions = computed(() => {
     }))
 })
 
-function withCurrentOption<T extends { id: number, code: string, name: string }>(
-  list: T[],
-  current: { id: number, code: string, name: string } | null | undefined,
-  currentId: number | null,
-): Array<{ value: string, label: string }> {
-  const items = [...list]
+const selectedSeries = computed(() =>
+  catalogTree.value.find(series => series.id === model.value.doc_series_id) ?? null,
+)
 
-  if (current && currentId === current.id && !items.some(item => item.id === current.id)) {
-    items.push(current as T)
-  }
-
-  return items.map(item => ({
-    value: String(item.id),
-    label: `${item.code} — ${item.name}`,
-  }))
-}
+const selectedSubseries = computed(() =>
+  selectedSeries.value?.subseries.find(sub => sub.id === model.value.doc_subseries_id) ?? null,
+)
 
 const seriesOptions = computed(() =>
-  withCurrentOption(series.value, model.value.doc_series, model.value.doc_series_id),
+  catalogTree.value.map(series => ({
+    value: String(series.id),
+    label: `${series.code} — ${series.name}`,
+  })),
 )
 
 const subseriesOptions = computed(() =>
-  withCurrentOption(subseries.value, model.value.doc_subseries, model.value.doc_subseries_id),
+  (selectedSeries.value?.subseries ?? []).map(sub => ({
+    value: String(sub.id),
+    label: `${sub.code} — ${sub.name}`,
+  })),
 )
 
 const docTypeOptions = computed(() =>
-  withCurrentOption(docTypes.value, model.value.doc_document_type, model.value.doc_document_type_id),
+  (selectedSubseries.value?.document_types ?? []).map(type => ({
+    value: String(type.id),
+    label: `${type.code} — ${type.name}`,
+  })),
 )
 
-async function loadSeries(orgUnitId: number | null) {
+async function loadTree(orgUnitId: number | null) {
   if (!orgUnitId) {
-    series.value = []
+    catalogTree.value = []
     return
   }
 
-  loadingSeries.value = true
+  loadingTree.value = true
 
   try {
-    series.value = await catalogApi.fetchSeries(300, orgUnitId)
+    catalogTree.value = await trdApi.fetchCatalogTree(orgUnitId, false)
   }
   catch {
-    series.value = []
-    toast.error('No se pudieron cargar las series del área.')
+    catalogTree.value = []
+    toast.error('No se pudo cargar el catálogo TRD del área.')
   }
   finally {
-    loadingSeries.value = false
-  }
-}
-
-async function loadSubseries(seriesId: number | null) {
-  if (!seriesId) {
-    subseries.value = []
-    return
-  }
-
-  loadingSubseries.value = true
-
-  try {
-    subseries.value = await catalogApi.fetchSubseries(seriesId)
-  }
-  catch {
-    subseries.value = []
-    toast.error('No se pudieron cargar las subseries.')
-  }
-  finally {
-    loadingSubseries.value = false
-  }
-}
-
-async function loadDocTypes(subseriesId: number | null) {
-  if (!subseriesId) {
-    docTypes.value = []
-    return
-  }
-
-  loadingDocTypes.value = true
-
-  try {
-    docTypes.value = await catalogApi.fetchDocumentTypes(subseriesId)
-  }
-  catch {
-    docTypes.value = []
-    toast.error('No se pudieron cargar los tipos documentales.')
-  }
-  finally {
-    loadingDocTypes.value = false
+    loadingTree.value = false
   }
 }
 
@@ -149,12 +104,10 @@ async function onOrgUnitChange(value: string | null) {
     doc_subseries: null,
     doc_document_type: null,
   }
-  subseries.value = []
-  docTypes.value = []
-  await loadSeries(model.value.org_unit_id)
+  await loadTree(model.value.org_unit_id)
 }
 
-async function onSeriesChange(value: string | null) {
+function onSeriesChange(value: string | null) {
   model.value = {
     ...model.value,
     doc_series_id: value ? Number(value) : null,
@@ -164,11 +117,9 @@ async function onSeriesChange(value: string | null) {
     doc_subseries: null,
     doc_document_type: null,
   }
-  docTypes.value = []
-  await loadSubseries(model.value.doc_series_id)
 }
 
-async function onSubseriesChange(value: string | null) {
+function onSubseriesChange(value: string | null) {
   model.value = {
     ...model.value,
     doc_subseries_id: value ? Number(value) : null,
@@ -176,7 +127,6 @@ async function onSubseriesChange(value: string | null) {
     doc_subseries: null,
     doc_document_type: null,
   }
-  await loadDocTypes(model.value.doc_subseries_id)
 }
 
 function onDocTypeChange(value: string | null) {
@@ -195,9 +145,7 @@ function onTrdTableChange(value: string | null) {
 }
 
 async function hydrate() {
-  await loadSeries(model.value.org_unit_id)
-  await loadSubseries(model.value.doc_series_id)
-  await loadDocTypes(model.value.doc_subseries_id)
+  await loadTree(model.value.org_unit_id)
 }
 
 onMounted(() => {
@@ -205,10 +153,14 @@ onMounted(() => {
 })
 
 watch(
-  () => [model.value.org_unit_id, model.value.doc_series_id, model.value.doc_subseries_id],
-  async ([orgUnitId], [prevOrgUnitId]) => {
-    if (orgUnitId !== prevOrgUnitId && orgUnitId && series.value.length === 0) {
-      await hydrate()
+  () => model.value.org_unit_id,
+  async (orgUnitId, previousOrgUnitId) => {
+    if (orgUnitId === previousOrgUnitId) {
+      return
+    }
+
+    if (orgUnitId && catalogTree.value.length === 0) {
+      await loadTree(orgUnitId)
     }
   },
 )
@@ -252,7 +204,7 @@ defineExpose({ hydrate })
         :options="seriesOptions"
         placeholder="Buscar serie…"
         no-options-text="Seleccione un área primero"
-        :disabled="disabled || !model.org_unit_id || loadingSeries"
+        :disabled="disabled || !model.org_unit_id || loadingTree"
         @update:model-value="onSeriesChange($event)"
       />
     </div>
@@ -261,11 +213,12 @@ defineExpose({ hydrate })
       <Label for="producer_area_subseries">Subserie *</Label>
       <ArchivalCatalogSearchSelect
         id="producer_area_subseries"
+        :key="`producer-subseries-${model.doc_series_id ?? 'none'}`"
         :model-value="model.doc_subseries_id != null ? String(model.doc_subseries_id) : null"
         :options="subseriesOptions"
         placeholder="Buscar subserie…"
-        no-options-text="Seleccione una serie primero"
-        :disabled="disabled || !model.doc_series_id || loadingSubseries"
+        no-options-text="No hay subseries en esta serie"
+        :disabled="disabled || !model.doc_series_id || loadingTree"
         @update:model-value="onSubseriesChange($event)"
       />
     </div>
@@ -274,11 +227,12 @@ defineExpose({ hydrate })
       <Label for="producer_area_doctype">Tipo documental</Label>
       <ArchivalCatalogSearchSelect
         id="producer_area_doctype"
+        :key="`producer-doctype-${model.doc_subseries_id ?? 'none'}`"
         :model-value="model.doc_document_type_id != null ? String(model.doc_document_type_id) : null"
         :options="docTypeOptions"
         placeholder="Buscar tipo documental…"
-        no-options-text="Seleccione una subserie primero"
-        :disabled="disabled || !model.doc_subseries_id || loadingDocTypes"
+        no-options-text="No hay tipos documentales en esta subserie"
+        :disabled="disabled || !model.doc_subseries_id || loadingTree"
         @update:model-value="onDocTypeChange($event)"
       />
     </div>
