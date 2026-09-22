@@ -197,6 +197,12 @@ function confirmCascadeDeactivate() {
                       >
                         Tipos documentales
                       </Button>
+                      <PermissionGate v-if="r.in_published_trd" permission="trd_restrictions_manage">
+                        <CatalogPublishedRestrictionsButton
+                          :edit-href="`/settings/archival/catalog/series/${seriesId}/subseries/${r.id}/edit`"
+                          :confidentiality="r.confidentiality"
+                        />
+                      </PermissionGate>
                       <PermissionGate permission="trd_catalogo_editar">
                         <Button
                           variant="warning"
@@ -206,6 +212,8 @@ function confirmCascadeDeactivate() {
                         >
                           Editar
                         </Button>
+                      </PermissionGate>
+                      <PermissionGate permission="trd_catalogo_editar">
                         <Button
                           v-if="r.is_active"
                           type="button"

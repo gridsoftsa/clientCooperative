@@ -35,6 +35,7 @@ function formatDate(value?: string | null) {
         Versión {{ document.version_number }}
         <span v-if="document.effective_from"> · Vigente desde {{ formatDate(document.effective_from) }}</span>
         <span v-if="document.featured_until"> · Destacado hasta {{ formatDate(document.featured_until) }}</span>
+        <span v-else-if="document.is_featured"> · Destacado de forma indefinida</span>
       </p>
       <p v-if="document.org_unit" class="text-sm text-primary-foreground/75">
         {{ document.org_unit.name }}

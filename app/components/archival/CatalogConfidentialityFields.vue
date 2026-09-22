@@ -28,7 +28,7 @@ const catalogApi = useArchivalCatalogApi()
 const options = ref<DocumentClassificationOptions | null>(null)
 const loading = ref(false)
 const inherited = ref(props.subjectType !== 'series')
-const level = ref<DocumentConfidentialityLevel>('public')
+const level = ref<DocumentConfidentialityLevel>('internal_by_area')
 const grants = ref<ClassificationAccessGrantRow[]>([])
 const areaPicks = ref<AreaPick[]>([])
 const permissionByKey = ref<Record<string, { view: boolean, edit: boolean }>>({})
@@ -240,8 +240,8 @@ function syncGrantsFromPicks(): void {
 function hydrateFrom(payload?: CatalogConfidentialityPayload | null) {
   inherited.value = isSeries.value ? false : Boolean(payload?.inherited ?? true)
   level.value = payload?.inherited
-    ? (payload.effective_level ?? 'public')
-    : (payload?.level ?? payload?.effective_level ?? 'public')
+    ? (payload.effective_level ?? 'internal_by_area')
+    : (payload?.level ?? payload?.effective_level ?? 'internal_by_area')
   const rows = [...(payload?.inherited ? [] : (payload?.grants ?? []))]
   rememberPermissions(rows)
   grants.value = rows
@@ -399,7 +399,7 @@ defineExpose({ validate, toPayload })
     <div v-else class="space-y-3">
       <p v-if="confidentiality?.inherited && !isSeries" class="text-xs text-muted-foreground">
         Hoy hereda de la {{ sourceLabel }}
-        ({{ confidentiality.effective_level === 'public' ? 'público' : confidentiality.effective_level === 'restricted' ? 'restringido' : 'uso interno por área' }}).
+        ({{ confidentiality.effective_level === 'public' ? 'público' : confidentiality.effective_level === 'restricted' ? 'restringido' : 'uso interno' }}).
       </p>
 
       <Checkbox
@@ -413,21 +413,21 @@ defineExpose({ validate, toPayload })
       <div v-if="isSeries || !inherited" class="space-y-3">
         <RadioGroup :model-value="level" @update:model-value="onLevelChange">
           <label class="flex items-start gap-2">
-            <RadioGroupItem value="public" />
-            <span class="text-sm leading-snug">
-              <strong>Público.</strong> Quien tenga acceso al módulo puede consultar el documento.
-            </span>
-          </label>
-          <label class="flex items-start gap-2">
             <RadioGroupItem value="internal_by_area" />
             <span class="text-sm leading-snug">
-              <strong>Uso interno por área.</strong> Por defecto, todos los usuarios asignados al área productora de la serie.
+              <strong>Uso interno.</strong> Solo los usuarios asignados al área productora de la serie pueden consultar el documento.
             </span>
           </label>
           <label class="flex items-start gap-2">
             <RadioGroupItem value="restricted" />
             <span class="text-sm leading-snug">
-              <strong>Restringido.</strong> Primero elija áreas; luego toda el área o solo algunos usuarios.
+              <strong>Restringido.</strong> El área productora conserva el acceso. Además, autorice otras áreas o usuarios puntuales.
+            </span>
+          </label>
+          <label class="flex items-start gap-2">
+            <RadioGroupItem value="public" />
+            <span class="text-sm leading-snug">
+              <strong>Público.</strong> Pensado para documentos publicados en la biblioteca institucional que, si se habilita una biblioteca abierta, podrán consultarse con o sin inicio de sesión.
             </span>
           </label>
         </RadioGroup>
@@ -435,7 +435,10 @@ defineExpose({ validate, toPayload })
 
       <div v-if="(isSeries || !inherited) && level === 'restricted'" class="space-y-3 rounded-md border bg-background p-3">
         <p class="text-sm font-medium">
-          Destinatarios
+          Destinatarios adicionales
+        </p>
+        <p class="text-xs text-muted-foreground leading-snug">
+          El área productora de la serie ya tiene acceso. Aquí suma otras áreas o personas.
         </p>
         <div class="space-y-1">
           <Label class="text-xs">Áreas</Label>
@@ -453,7 +456,7 @@ defineExpose({ validate, toPayload })
               :append-to-body="false"
               :can-clear="true"
               :create-option="false"
-              placeholder="Buscar y seleccionar áreas…"
+              placeholder="Buscar áreas adicionales…"
               no-options-text="No hay áreas"
               no-results-text="Sin coincidencias"
               class="multiselect-confidentiality w-full"
@@ -463,7 +466,7 @@ defineExpose({ validate, toPayload })
         </div>
 
         <div v-if="areaPicks.length === 0" class="text-xs text-muted-foreground">
-          Agregue al menos un área. Luego puede incluir toda el área o elegir usuarios.
+          Agregue al menos un área o usuario adicional. El área productora ya puede consultar.
         </div>
 
         <div

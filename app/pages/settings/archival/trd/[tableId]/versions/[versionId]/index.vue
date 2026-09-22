@@ -13,6 +13,7 @@ import { coerceBoolean } from '~/utils/coerce-boolean'
 import { resolveEffectiveRetentionFromRules } from '~/utils/archival-trd-version'
 import { isTrdVersionTab, trdVersionPathWithTab } from '~/utils/archival-trd-navigation'
 import { catalogConfidentialityParenthetical } from '~/utils/catalog-confidentiality'
+import CatalogPublishedRestrictionsButton from '~/components/archival/CatalogPublishedRestrictionsButton.vue'
 import type { DocDocumentTypeRow } from '~/types/archival-catalog'
 import type {
   CatalogTreeSeries,
@@ -100,8 +101,11 @@ const ruleForm = ref({
 })
 
 const isDraft = computed(() => version.value?.status === 'draft' && !version.value?.is_locked)
+const catalogIsPublished = computed(() => !isDraft.value)
 const canEdit = computed(() => isDraft.value && hasPermission('trd_tablas_editar'))
 const canManageCatalog = computed(() => hasPermission('trd_catalogo_editar'))
+const canMutateCatalog = computed(() => isDraft.value && canManageCatalog.value)
+const canShowRestrictions = computed(() => catalogIsPublished.value && hasPermission('trd_restrictions_manage'))
 
 const producerOrgUnitId = computed(() => table.value?.org_unit_id ?? null)
 
@@ -153,7 +157,7 @@ function canDeactivateSeries(serie: CatalogTreeSeries): boolean {
 }
 
 async function setSeriesActive(serie: CatalogTreeSeries, isActive: boolean) {
-  if (!canManageCatalog.value) {
+  if (!canMutateCatalog.value) {
     return
   }
 
@@ -189,7 +193,7 @@ function isSeriesPublishableToLibrary(serie: CatalogTreeSeries): boolean {
 }
 
 async function toggleSeriesLibraryPublishable(serie: CatalogTreeSeries, enabled: boolean) {
-  if (!canManageCatalog.value) {
+  if (!canMutateCatalog.value) {
     return
   }
 
@@ -1526,17 +1530,15 @@ watch(
                   — serie → subserie → tipo.
                 </CardDescription>
               </div>
-              <PermissionGate v-if="catalogTree.length > 0" permission="trd_catalogo_editar">
-                <div class="flex flex-wrap gap-2 shrink-0">
-                  <Button variant="outline" size="sm" @click="router.push(catalogSeriesListPath)">
-                    Administrar catálogo
-                  </Button>
-                  <Button size="sm" @click="router.push(catalogCreateSeriesPath)">
-                    <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-                    Nueva serie
-                  </Button>
-                </div>
-              </PermissionGate>
+              <div v-if="canMutateCatalog && catalogTree.length > 0" class="flex flex-wrap gap-2 shrink-0">
+                <Button variant="outline" size="sm" @click="router.push(catalogSeriesListPath)">
+                  Administrar catálogo
+                </Button>
+                <Button size="sm" @click="router.push(catalogCreateSeriesPath)">
+                  <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                  Nueva serie
+                </Button>
+              </div>
             </CardHeader>
             <CardContent class="space-y-4">
               <p
@@ -1545,6 +1547,9 @@ watch(
               >
                 Solo lectura: la versión no está en borrador o no tiene permiso para editar tablas TRD.
                 Los checkboxes no se pueden modificar.
+                <template v-if="catalogIsPublished">
+                  No se crean series, subseries ni tipos. Use «Añadir restricciones» o «Cambiar restricciones» en cada nivel.
+                </template>
               </p>
               <div
                 v-if="catalogTree.length > 0"
@@ -1607,7 +1612,7 @@ watch(
                   <li>En cada subserie: tipos documentales</li>
                 </ol>
                 <div class="flex flex-wrap justify-center gap-2">
-                  <PermissionGate permission="trd_catalogo_editar">
+                  <template v-if="canMutateCatalog">
                     <Button @click="router.push(catalogCreateSeriesPath)">
                       <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
                       Nueva serie para esta área
@@ -1615,7 +1620,7 @@ watch(
                     <Button variant="outline" @click="router.push(catalogSeriesListPath)">
                       Administrar catálogo del área
                     </Button>
-                  </PermissionGate>
+                  </template>
                   <Button variant="ghost" :disabled="loading" @click="reloadCatalogTree">
                     Actualizar lista
                   </Button>
@@ -1662,7 +1667,7 @@ watch(
                     </div>
                     <div class="flex flex-wrap items-center gap-3">
                       <div
-                        v-if="canManageCatalog"
+                        v-if="canMutateCatalog"
                         class="flex items-start gap-2"
                       >
                         <Checkbox
@@ -1689,74 +1694,78 @@ watch(
                       </Badge>
                     </div>
                   </div>
-                  <PermissionGate permission="trd_catalogo_editar">
-                    <div :class="catalogActionPairClass">
-                      <Button
-                        variant="warning"
-                        size="sm"
-                        :class="catalogRowActionClass"
-                        @click="router.push(`/settings/archival/catalog/series/${serie.id}/edit?return_to=${encodeURIComponent(catalogReturnTo)}`)"
-                      >
-                        <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
-                        Editar
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        :class="catalogRowActionClass"
-                        @click="router.push(`/settings/archival/catalog/series/${serie.id}/subseries/create?return_to=${encodeURIComponent(catalogReturnTo)}`)"
-                      >
-                        <Icon name="i-lucide-plus" class="size-4 shrink-0" />
-                        Nueva subserie
-                      </Button>
-                      <Button
-                        v-if="serie.is_active !== false && canDeactivateSeries(serie)"
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        class="col-span-2"
-                        :class="catalogRowActionClass"
-                        :disabled="savingSeriesActiveId === serie.id"
-                        @click="setSeriesActive(serie, false)"
-                      >
-                        <Icon name="i-lucide-ban" class="size-4 shrink-0" />
-                        Inactivar
-                      </Button>
-                      <Button
-                        v-else-if="serie.is_active === false"
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        class="col-span-2"
-                        :class="catalogRowActionClass"
-                        :disabled="savingSeriesActiveId === serie.id"
-                        @click="setSeriesActive(serie, true)"
-                      >
-                        <Icon name="i-lucide-check" class="size-4 shrink-0" />
-                        Activar
-                      </Button>
-                    </div>
-                  </PermissionGate>
+                  <CatalogPublishedRestrictionsButton
+                    v-if="canShowRestrictions"
+                    :edit-href="`/settings/archival/catalog/series/${serie.id}/edit?return_to=${encodeURIComponent(catalogReturnTo)}`"
+                    :confidentiality="serie.confidentiality"
+                    :button-class="catalogRowActionClass"
+                    class="w-[15.5rem] shrink-0"
+                  />
+                  <div v-else-if="canMutateCatalog" :class="catalogActionPairClass">
+                    <Button
+                      variant="warning"
+                      size="sm"
+                      :class="catalogRowActionClass"
+                      @click="router.push(`/settings/archival/catalog/series/${serie.id}/edit?return_to=${encodeURIComponent(catalogReturnTo)}`)"
+                    >
+                      <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
+                      Editar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      :class="catalogRowActionClass"
+                      @click="router.push(`/settings/archival/catalog/series/${serie.id}/subseries/create?return_to=${encodeURIComponent(catalogReturnTo)}`)"
+                    >
+                      <Icon name="i-lucide-plus" class="size-4 shrink-0" />
+                      Nueva subserie
+                    </Button>
+                    <Button
+                      v-if="serie.is_active !== false && canDeactivateSeries(serie)"
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      class="col-span-2"
+                      :class="catalogRowActionClass"
+                      :disabled="savingSeriesActiveId === serie.id"
+                      @click="setSeriesActive(serie, false)"
+                    >
+                      <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                      Inactivar
+                    </Button>
+                    <Button
+                      v-else-if="serie.is_active === false"
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      class="col-span-2"
+                      :class="catalogRowActionClass"
+                      :disabled="savingSeriesActiveId === serie.id"
+                      @click="setSeriesActive(serie, true)"
+                    >
+                      <Icon name="i-lucide-check" class="size-4 shrink-0" />
+                      Activar
+                    </Button>
+                  </div>
                 </div>
                 <p
-                  v-if="serie.is_active !== false && !canDeactivateSeries(serie)"
+                  v-if="canMutateCatalog && serie.is_active !== false && !canDeactivateSeries(serie)"
                   class="text-xs text-amber-700 dark:text-amber-400 pl-1"
                 >
                   {{ serieDeactivationBlockReason(serie) }}
                 </p>
                 <p v-if="serie.subseries.length === 0" class="text-sm text-muted-foreground pl-1">
                   Sin subseries.
-                  <PermissionGate permission="trd_catalogo_editar">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      class="ml-2 inline-flex h-8 gap-1.5 px-2 text-xs"
-                      @click="router.push(`/settings/archival/catalog/series/${serie.id}/subseries/create?return_to=${encodeURIComponent(catalogReturnTo)}`)"
-                    >
-                      <Icon name="i-lucide-plus" class="size-4 shrink-0" />
-                      Crear subserie
-                    </Button>
-                  </PermissionGate>
+                  <Button
+                    v-if="canMutateCatalog"
+                    variant="outline"
+                    size="sm"
+                    class="ml-2 inline-flex h-8 gap-1.5 px-2 text-xs"
+                    @click="router.push(`/settings/archival/catalog/series/${serie.id}/subseries/create?return_to=${encodeURIComponent(catalogReturnTo)}`)"
+                  >
+                    <Icon name="i-lucide-plus" class="size-4 shrink-0" />
+                    Crear subserie
+                  </Button>
                 </p>
                 <div v-for="sub in serie.subseries" :key="sub.id" class="space-y-2 border-l pl-3">
                   <div class="flex items-start gap-2">
@@ -1778,28 +1787,33 @@ watch(
                         {{ catalogConfidentialityParenthetical(sub.confidentiality) }}
                       </span>
                     </span>
-                    <PermissionGate permission="trd_catalogo_editar">
-                      <div :class="catalogActionPairClass">
-                        <Button
-                          variant="warning"
-                          size="sm"
-                          :class="catalogRowActionClass"
-                          @click="router.push(catalogApi.subseriesEditPath(serie.id, sub.id, catalogReturnTo))"
-                        >
-                          <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
-                          Editar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          :class="catalogRowActionClass"
-                          @click="router.push(catalogApi.documentTypesCreatePath(serie.id, sub.id, catalogReturnTo))"
-                        >
-                          <Icon name="i-lucide-plus" class="size-4 shrink-0" />
-                          Nuevo tipo
-                        </Button>
-                      </div>
-                    </PermissionGate>
+                    <CatalogPublishedRestrictionsButton
+                      v-if="canShowRestrictions"
+                      :edit-href="catalogApi.subseriesEditPath(serie.id, sub.id, catalogReturnTo)"
+                      :confidentiality="sub.confidentiality"
+                      :button-class="catalogRowActionClass"
+                      class="w-[15.5rem] shrink-0"
+                    />
+                    <div v-else-if="canMutateCatalog" :class="catalogActionPairClass">
+                      <Button
+                        variant="warning"
+                        size="sm"
+                        :class="catalogRowActionClass"
+                        @click="router.push(catalogApi.subseriesEditPath(serie.id, sub.id, catalogReturnTo))"
+                      >
+                        <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
+                        Editar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        :class="catalogRowActionClass"
+                        @click="router.push(catalogApi.documentTypesCreatePath(serie.id, sub.id, catalogReturnTo))"
+                      >
+                        <Icon name="i-lucide-plus" class="size-4 shrink-0" />
+                        Nuevo tipo
+                      </Button>
+                    </div>
                   </div>
                   <p v-if="sub.document_types.length === 0" class="pl-6 text-xs text-muted-foreground">
                     Sin tipos documentales.
@@ -1826,21 +1840,26 @@ watch(
                         {{ catalogConfidentialityParenthetical(tipo.confidentiality) }}
                       </span>
                     </span>
-                    <PermissionGate permission="trd_catalogo_editar">
-                      <div :class="catalogActionPairClass">
-                        <Button
-                          type="button"
-                          variant="warning"
-                          size="sm"
-                          :class="catalogRowActionClass"
-                          @click.stop="router.push(catalogApi.documentTypeEditPath(serie.id, sub.id, tipo.id, catalogReturnTo))"
-                        >
-                          <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
-                          Editar
-                        </Button>
-                        <span class="h-8" aria-hidden="true" />
-                      </div>
-                    </PermissionGate>
+                    <CatalogPublishedRestrictionsButton
+                      v-if="canShowRestrictions"
+                      :edit-href="catalogApi.documentTypeEditPath(serie.id, sub.id, tipo.id, catalogReturnTo)"
+                      :confidentiality="tipo.confidentiality"
+                      :button-class="catalogRowActionClass"
+                      class="w-[15.5rem] shrink-0"
+                    />
+                    <div v-else-if="canMutateCatalog" :class="catalogActionPairClass">
+                      <Button
+                        type="button"
+                        variant="warning"
+                        size="sm"
+                        :class="catalogRowActionClass"
+                        @click.stop="router.push(catalogApi.documentTypeEditPath(serie.id, sub.id, tipo.id, catalogReturnTo))"
+                      >
+                        <Icon name="i-lucide-pencil" class="size-4 shrink-0" />
+                        Editar
+                      </Button>
+                      <span class="h-8" aria-hidden="true" />
+                    </div>
                   </label>
                 </div>
               </div>

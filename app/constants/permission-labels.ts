@@ -313,6 +313,7 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   plantilla_score_editar: 'Editar plantilla SCORE',
   trd_catalogo_ver: 'Ver catálogo documental (TRD)',
   trd_catalogo_editar: 'Editar catálogo documental (TRD)',
+  trd_restrictions_manage: 'Añadir o cambiar restricciones de confidencialidad (TRD publicada)',
   trd_tablas_ver: 'Ver tablas de retención (TRD)',
   trd_tablas_editar: 'Editar tablas de retención (TRD)',
   trd_reportes_ver: 'Ver reportes archivísticos (TRD)',

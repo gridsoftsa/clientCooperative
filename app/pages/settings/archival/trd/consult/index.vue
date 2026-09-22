@@ -9,6 +9,8 @@ import {
 } from '~/constants/archival-trd'
 import type { TrdActiveVersionConsultData } from '~/types/archival-trd'
 import { buildTrdSpreadsheetFilename } from '~/utils/trd-spreadsheet-view'
+import { catalogConfidentialityStatus } from '~/utils/catalog-confidentiality'
+import type { CatalogConfidentialityPayload } from '~/types/archival-catalog'
 
 definePageMeta({
   layout: 'default',
@@ -129,6 +131,14 @@ function dispositionLabel(v: string): string {
 
 function inheritedLabel(v: string): string {
   return TRD_INHERITED_FROM_LABELS[v] ?? v
+}
+
+function confidentialityStatus(payload?: CatalogConfidentialityPayload | null) {
+  return catalogConfidentialityStatus(payload)
+}
+
+function confidentialityIsRestricted(payload?: CatalogConfidentialityPayload | null): boolean {
+  return catalogConfidentialityStatus(payload).level !== 'public'
 }
 
 function toggleSeries(id: number) {
@@ -359,8 +369,18 @@ onMounted(loadUnits)
                     class="h-4 w-4 shrink-0"
                   />
                   <span class="font-mono text-sm font-semibold">{{ serie.code }}</span>
-                  <span class="text-sm">{{ serie.name }}</span>
-                  <Badge v-if="!serie.is_active" variant="outline" class="ml-auto text-xs">
+                  <span class="min-w-0 truncate text-sm">{{ serie.name }}</span>
+                  <span
+                    class="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+                    :title="confidentialityStatus(serie.confidentiality).label"
+                  >
+                    <Icon
+                      :name="confidentialityIsRestricted(serie.confidentiality) ? 'i-lucide-lock' : 'i-lucide-unlock'"
+                      class="size-3.5"
+                    />
+                    {{ confidentialityStatus(serie.confidentiality).shortLabel }}
+                  </span>
+                  <Badge v-if="!serie.is_active" variant="outline" class="text-xs">
                     Inactiva
                   </Badge>
                 </button>
@@ -383,7 +403,17 @@ onMounted(loadUnits)
                       <span class="font-mono text-xs font-medium pl-2 border-l-2 border-primary/40">
                         {{ sub.code }}
                       </span>
-                      <span class="text-sm text-muted-foreground">{{ sub.name }}</span>
+                      <span class="min-w-0 truncate text-sm text-muted-foreground">{{ sub.name }}</span>
+                      <span
+                        class="ml-auto inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground"
+                        :title="confidentialityStatus(sub.confidentiality).label"
+                      >
+                        <Icon
+                          :name="confidentialityIsRestricted(sub.confidentiality) ? 'i-lucide-lock' : 'i-lucide-unlock'"
+                          class="size-3.5"
+                        />
+                        {{ confidentialityStatus(sub.confidentiality).shortLabel }}
+                      </span>
                     </button>
 
                     <div v-show="expandedSubseries[sub.id]" class="overflow-x-auto">
@@ -392,6 +422,9 @@ onMounted(loadUnits)
                           <TableRow class="hover:bg-transparent">
                             <TableHead class="min-w-[10rem]">
                               Tipo documental
+                            </TableHead>
+                            <TableHead class="w-36">
+                              Confidencialidad
                             </TableHead>
                             <TableHead class="w-20 text-center">
                               Gestión
@@ -419,6 +452,21 @@ onMounted(loadUnits)
                               <span class="font-mono text-xs block">{{ tipo.code }}</span>
                               <span class="text-sm">{{ tipo.name }}</span>
                             </TableCell>
+                            <TableCell class="align-top">
+                              <p class="inline-flex items-center gap-1.5 text-xs">
+                                <Icon
+                                  :name="confidentialityIsRestricted(tipo.confidentiality) ? 'i-lucide-lock' : 'i-lucide-unlock'"
+                                  class="size-3.5 text-muted-foreground"
+                                />
+                                {{ confidentialityStatus(tipo.confidentiality).shortLabel }}
+                              </p>
+                              <p
+                                v-if="confidentialityStatus(tipo.confidentiality).inheritNote"
+                                class="mt-0.5 pl-5 text-[11px] text-muted-foreground"
+                              >
+                                {{ confidentialityStatus(tipo.confidentiality).inheritNote }}
+                              </p>
+                            </TableCell>
                             <template v-if="tipo.effective_retention">
                               <TableCell class="text-center tabular-nums">
                                 {{ tipo.effective_retention.years_management }} a
@@ -438,7 +486,7 @@ onMounted(loadUnits)
                                 </Badge>
                               </TableCell>
                             </template>
-                            <TableCell v-else colspan="5" class="text-destructive text-sm">
+                            <TableCell v-else colspan="6" class="text-destructive text-sm">
                               Sin regla de retención efectiva
                             </TableCell>
                           </TableRow>

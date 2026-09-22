@@ -262,6 +262,12 @@ onMounted(async () => {
                       >
                         Subseries
                       </Button>
+                      <PermissionGate v-if="r.in_published_trd" permission="trd_restrictions_manage">
+                        <CatalogPublishedRestrictionsButton
+                          :edit-href="`/settings/archival/catalog/series/${r.id}/edit`"
+                          :confidentiality="r.confidentiality"
+                        />
+                      </PermissionGate>
                       <PermissionGate permission="trd_catalogo_editar">
                         <Button
                           variant="warning"

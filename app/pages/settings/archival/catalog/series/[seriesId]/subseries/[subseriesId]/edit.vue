@@ -3,18 +3,21 @@ import { toast } from 'vue-sonner'
 import CatalogConfidentialityFields from '~/components/archival/CatalogConfidentialityFields.vue'
 import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
 import { catalogCodeSuffix } from '~/utils/archival-catalog-code'
-import type { DocSeriesRow } from '~/types/archival-catalog'
+import type { DocSeriesRow, DocSubseriesRow } from '~/types/archival-catalog'
+import { isCatalogRestrictionsOnlyQuery } from '~/utils/catalog-published-restrictions'
+import { coerceBoolean } from '~/utils/coerce-boolean'
 
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'trd_catalogo_editar',
+  permissions: ['trd_catalogo_editar', 'trd_restrictions_manage'],
 })
 
 const route = useRoute()
 const router = useRouter()
 const catalogApi = useArchivalCatalogApi()
 const { $api } = useNuxtApp()
+const { hasPermission } = usePermissions()
 
 const seriesId = computed(() => Number(route.params.seriesId))
 const subseriesId = computed(() => Number(route.params.subseriesId))
@@ -30,6 +33,7 @@ function cancelPath(): string {
 }
 
 const series = ref<DocSeriesRow | null>(null)
+const subseriesRow = ref<DocSubseriesRow | null>(null)
 const form = ref({ code: '', name: '', description: '', is_active: true })
 const storedCode = ref('')
 const initialIsActive = ref(true)
@@ -49,6 +53,10 @@ const loadedConfidentiality = ref<import('~/types/archival-catalog').CatalogConf
 
 const seriesCodePrefix = computed(() => series.value?.code ?? '')
 
+const restrictionsOnly = computed(() => isCatalogRestrictionsOnlyQuery(route.query))
+
+const canManageRestrictions = computed(() => hasPermission('trd_restrictions_manage'))
+
 const isDeactivating = computed(() => initialIsActive.value && form.value.is_active === false)
 
 async function load() {
@@ -61,14 +69,15 @@ async function load() {
       return
     }
     series.value = await catalogApi.fetchSeriesById(seriesId.value)
+    subseriesRow.value = row
     form.value = {
       code: row.code,
       name: row.name,
       description: row.description ?? '',
-      is_active: row.is_active,
+      is_active: coerceBoolean(row.is_active),
     }
     storedCode.value = row.code
-    initialIsActive.value = row.is_active
+    initialIsActive.value = coerceBoolean(row.is_active)
     activeDocumentTypesCount.value = row.active_document_types_count ?? 0
     loadedConfidentiality.value = row.confidentiality ?? null
   }
@@ -82,6 +91,32 @@ async function load() {
 }
 
 async function persist(cascadeDeactivateChildren: boolean) {
+  if (restrictionsOnly.value) {
+    if (!canManageRestrictions.value) {
+      toast.error('No tiene permiso para añadir o cambiar restricciones de una TRD publicada.')
+      return
+    }
+    saving.value = true
+    try {
+      await catalogApi.persistClassification(confidentialityFields.value, 'subseries', subseriesId.value)
+      toast.success('Restricciones actualizadas')
+      await catalogApi.navigateAfterCatalogSave(
+        router,
+        route,
+        catalogApi.subseriesListPath(seriesId.value),
+      )
+    }
+    catch (e: unknown) {
+      const err = e as { data?: { message?: string } }
+      toast.error(err.data?.message ?? (e instanceof Error ? e.message : 'No se pudo guardar'))
+    }
+    finally {
+      saving.value = false
+      cascadeDialogOpen.value = false
+    }
+    return
+  }
+
   saving.value = true
   try {
     const code = catalogCodeSuffix(seriesCodePrefix.value, form.value.code)
@@ -98,7 +133,9 @@ async function persist(cascadeDeactivateChildren: boolean) {
           : {}),
       },
     })
-    await catalogApi.persistClassification(confidentialityFields.value, 'subseries', subseriesId.value)
+    if (subseriesRow.value?.in_published_trd !== true || canManageRestrictions.value) {
+      await catalogApi.persistClassification(confidentialityFields.value, 'subseries', subseriesId.value)
+    }
     toast.success('Subserie actualizada')
     await catalogApi.navigateAfterCatalogSave(
       router,
@@ -152,7 +189,7 @@ onMounted(load)
           Volver a subseries
         </Button>
         <h2 class="text-2xl font-bold tracking-tight">
-          Editar subserie
+          {{ restrictionsOnly ? 'Restricciones de la subserie' : 'Editar subserie' }}
         </h2>
         <p v-if="series" class="text-sm text-muted-foreground">
           Serie <span class="font-mono">{{ series.code }}</span> — {{ series.name }}
@@ -160,13 +197,18 @@ onMounted(load)
       </div>
       <Card v-if="!loading">
         <CardHeader>
-          <CardTitle>Datos de la subserie</CardTitle>
+          <CardTitle>{{ restrictionsOnly ? 'Confidencialidad' : 'Datos de la subserie' }}</CardTitle>
           <CardDescription>
-            Código y nombre dentro de la serie seleccionada.
+            <template v-if="restrictionsOnly">
+              La TRD ya está publicada: no se edita el texto del catálogo. Solo se añaden o cambian restricciones.
+            </template>
+            <template v-else>
+              Código y nombre dentro de la serie seleccionada.
+            </template>
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-6">
-          <div class="grid items-start gap-6 lg:grid-cols-2">
+          <div v-if="!restrictionsOnly" class="grid items-start gap-6 lg:grid-cols-2">
           <div class="flex min-w-0 flex-col gap-2">
             <Label>Código *</Label>
             <CatalogPrefixedCodeInput
@@ -209,7 +251,7 @@ onMounted(load)
             <Button variant="outline" @click="router.push(cancelPath())">
               Cancelar
             </Button>
-            <Button :disabled="saving" @click="submit">
+            <Button :disabled="saving || (restrictionsOnly && !canManageRestrictions)" @click="submit">
               Guardar
             </Button>
           </div>

@@ -2,17 +2,20 @@
 import { toast } from 'vue-sonner'
 import CatalogConfidentialityFields from '~/components/archival/CatalogConfidentialityFields.vue'
 import type { DocSeriesRow } from '~/types/archival-catalog'
+import { isCatalogRestrictionsOnlyQuery } from '~/utils/catalog-published-restrictions'
+import { coerceBoolean } from '~/utils/coerce-boolean'
 
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'trd_catalogo_editar',
+  permissions: ['trd_catalogo_editar', 'trd_restrictions_manage'],
 })
 
 const route = useRoute()
 const router = useRouter()
 const { $api } = useNuxtApp()
 const catalogApi = useArchivalCatalogApi()
+const { hasPermission } = usePermissions()
 
 const id = computed(() => Number(route.params.id))
 const series = ref<DocSeriesRow | null>(null)
@@ -48,6 +51,10 @@ const seriesDeactivationBlockReason = computed(() => {
 
 const returnToPath = computed(() => catalogApi.returnToPath(route))
 
+const restrictionsOnly = computed(() => isCatalogRestrictionsOnlyQuery(route.query))
+
+const canManageRestrictions = computed(() => hasPermission('trd_restrictions_manage'))
+
 function cancelPath(): string {
   if (returnToPath.value) {
     return returnToPath.value
@@ -68,10 +75,10 @@ async function load() {
       code: res.data.code,
       name: res.data.name,
       description: res.data.description ?? '',
-      is_active: res.data.is_active,
-      publishable_to_institutional_library: res.data.publishable_to_institutional_library ?? false,
+      is_active: coerceBoolean(res.data.is_active),
+      publishable_to_institutional_library: coerceBoolean(res.data.publishable_to_institutional_library),
     }
-    initialIsActive.value = res.data.is_active
+    initialIsActive.value = coerceBoolean(res.data.is_active)
     subseriesCount.value = res.data.subseries_count ?? 0
   }
   catch {
@@ -84,6 +91,27 @@ async function load() {
 }
 
 async function persist() {
+  if (restrictionsOnly.value) {
+    if (!canManageRestrictions.value) {
+      toast.error('No tiene permiso para añadir o cambiar restricciones de una TRD publicada.')
+      return
+    }
+    saving.value = true
+    try {
+      await catalogApi.persistClassification(confidentialityFields.value, 'series', id.value)
+      toast.success('Restricciones actualizadas')
+      await catalogApi.navigateAfterCatalogSave(router, route, cancelPath())
+    }
+    catch (e: unknown) {
+      const err = e as { data?: { message?: string } }
+      toast.error(err.data?.message ?? (e instanceof Error ? e.message : 'No se pudo guardar'))
+    }
+    finally {
+      saving.value = false
+    }
+    return
+  }
+
   if (isDeactivating.value && seriesDeactivationBlockReason.value) {
     toast.error(seriesDeactivationBlockReason.value)
     form.value.is_active = true
@@ -104,7 +132,9 @@ async function persist() {
         publishable_to_institutional_library: form.value.publishable_to_institutional_library,
       },
     })
-    await catalogApi.persistClassification(confidentialityFields.value, 'series', id.value)
+    if (series.value?.in_published_trd !== true || canManageRestrictions.value) {
+      await catalogApi.persistClassification(confidentialityFields.value, 'series', id.value)
+    }
     toast.success('Serie actualizada')
     await catalogApi.navigateAfterCatalogSave(router, route, cancelPath())
   }
@@ -148,7 +178,7 @@ onMounted(load)
           Volver a series
         </Button>
         <h2 class="text-2xl font-bold tracking-tight">
-          Editar serie
+          {{ restrictionsOnly ? 'Restricciones de la serie' : 'Editar serie' }}
         </h2>
         <p v-if="series?.org_unit" class="text-sm text-muted-foreground">
           {{ series.org_unit.name }}
@@ -157,13 +187,18 @@ onMounted(load)
       </div>
       <Card v-if="!loading">
         <CardHeader>
-          <CardTitle>Datos de la serie</CardTitle>
+          <CardTitle>{{ restrictionsOnly ? 'Confidencialidad' : 'Datos de la serie' }}</CardTitle>
           <CardDescription>
-            Código, nombre y publicación en biblioteca institucional.
+            <template v-if="restrictionsOnly">
+              La TRD ya está publicada: no se edita el texto del catálogo. Solo se añaden o cambian restricciones.
+            </template>
+            <template v-else>
+              Código, nombre y publicación en biblioteca institucional.
+            </template>
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-6">
-          <div class="grid items-start gap-6 lg:grid-cols-2">
+          <div v-if="!restrictionsOnly" class="grid items-start gap-6 lg:grid-cols-2">
           <div class="flex min-w-0 flex-col gap-2">
             <Label for="series-code">Código *</Label>
             <Input
@@ -190,7 +225,7 @@ onMounted(load)
             <Switch
               id="active"
               :checked="form.is_active"
-              @update:checked="onActiveToggle($event === true)"
+              @update:checked="onActiveToggle"
             />
             <Label for="active" class="font-normal">{{ form.is_active ? 'Activa' : 'Inactiva' }}</Label>
           </div>
@@ -229,7 +264,7 @@ onMounted(load)
             <Button variant="outline" @click="router.push(cancelPath())">
               Cancelar
             </Button>
-            <Button :disabled="saving" @click="persist">
+            <Button :disabled="saving || (restrictionsOnly && !canManageRestrictions)" @click="persist">
               Guardar
             </Button>
           </div>

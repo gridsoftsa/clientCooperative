@@ -179,6 +179,12 @@ onMounted(load)
                   </TableCell>
                   <TableCell class="text-right !whitespace-normal">
                     <div class="flex flex-wrap justify-end gap-1">
+                      <PermissionGate v-if="r.in_published_trd" permission="trd_restrictions_manage">
+                        <CatalogPublishedRestrictionsButton
+                          :edit-href="`/settings/archival/catalog/series/${seriesId}/subseries/${subseriesId}/document-types/${r.id}/edit`"
+                          :confidentiality="r.confidentiality"
+                        />
+                      </PermissionGate>
                       <PermissionGate permission="trd_catalogo_editar">
                         <Button
                           variant="warning"
@@ -188,6 +194,8 @@ onMounted(load)
                         >
                           Editar
                         </Button>
+                      </PermissionGate>
+                      <PermissionGate permission="trd_catalogo_editar">
                         <Button
                           v-if="r.is_active"
                           type="button"

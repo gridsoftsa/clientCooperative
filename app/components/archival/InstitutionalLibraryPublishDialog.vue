@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group'
 import type { InstitutionalLibraryCategoryValue } from '~/types/institutional-library'
 
 const props = defineProps<{
@@ -25,6 +26,7 @@ const form = ref({
   effective_from: new Date().toISOString().slice(0, 10),
   effective_to: '' as string,
   is_featured: false,
+  featured_duration: 'indefinite' as 'indefinite' | 'until',
   featured_until: '' as string,
 })
 
@@ -44,8 +46,20 @@ watch(() => props.open, async (isOpen) => {
   form.value.effective_from = new Date().toISOString().slice(0, 10)
   form.value.effective_to = ''
   form.value.is_featured = false
+  form.value.featured_duration = 'indefinite'
   form.value.featured_until = ''
 }, { immediate: true })
+
+function setFeatured(checked: boolean): void {
+  form.value.is_featured = checked
+  if (checked && form.value.featured_duration !== 'until') {
+    form.value.featured_duration = 'indefinite'
+  }
+  if (!checked) {
+    form.value.featured_duration = 'indefinite'
+    form.value.featured_until = ''
+  }
+}
 
 async function submit() {
   if (props.documentId == null) {
@@ -58,22 +72,30 @@ async function submit() {
     return
   }
 
-  if (form.value.is_featured && !form.value.featured_until.trim()) {
+  if (form.value.is_featured && form.value.featured_duration === 'until' && !form.value.featured_until.trim()) {
     toast.error('Indique hasta qué fecha debe mostrarse como destacado.')
     return
   }
 
   loading.value = true
   try {
+    const featuredUntil = form.value.is_featured && form.value.featured_duration === 'until'
+      ? form.value.featured_until
+      : null
+
     await libraryApi.publishDocument(props.documentId, {
       archival_file_id: props.fileId,
       institutional_category: form.value.institutional_category,
       effective_from: form.value.effective_from,
       effective_to: form.value.effective_to || null,
       is_featured: form.value.is_featured,
-      featured_until: form.value.is_featured ? form.value.featured_until : null,
+      featured_until: featuredUntil,
     })
-    toast.success('Documento publicado en la biblioteca institucional.')
+    toast.success(
+      form.value.is_featured
+        ? 'Documento publicado y destacado en la biblioteca institucional.'
+        : 'Documento publicado en la biblioteca institucional.',
+    )
     emit('update:open', false)
     emit('published')
   }
@@ -139,29 +161,53 @@ async function submit() {
         </div>
 
         <div class="rounded-lg border bg-muted/20 p-4 space-y-3">
-          <div class="flex items-start gap-3">
+          <label class="flex items-start gap-3">
             <Checkbox
               id="library-featured"
-              v-model="form.is_featured"
               bare
+              :checked="form.is_featured"
+              @update:checked="setFeatured($event === true)"
             />
-            <div class="space-y-1">
-              <Label for="library-featured" class="cursor-pointer">
+            <span class="space-y-1">
+              <span class="block text-sm font-medium leading-none">
                 Destacar en biblioteca
-              </Label>
-              <p class="text-xs text-muted-foreground leading-relaxed">
+              </span>
+              <span class="block text-xs text-muted-foreground leading-relaxed">
                 El documento aparecerá en el banner principal de la biblioteca institucional.
-              </p>
+              </span>
+            </span>
+          </label>
+
+          <div v-if="form.is_featured" class="space-y-3 pl-8">
+            <p class="text-xs font-medium">
+              Duración del destacado
+            </p>
+            <RadioGroup
+              :model-value="form.featured_duration"
+              @update:model-value="form.featured_duration = $event === 'until' ? 'until' : 'indefinite'"
+            >
+              <label class="flex items-start gap-2">
+                <RadioGroupItem value="indefinite" />
+                <span class="text-sm leading-snug">
+                  <strong>Indefinido.</strong> Se mantiene destacado hasta que se quite la publicación o se edite.
+                </span>
+              </label>
+              <label class="flex items-start gap-2">
+                <RadioGroupItem value="until" />
+                <span class="text-sm leading-snug">
+                  <strong>Hasta una fecha.</strong> Deja de destacarse al día siguiente de esa fecha.
+                </span>
+              </label>
+            </RadioGroup>
+            <div v-if="form.featured_duration === 'until'" class="space-y-2 sm:max-w-xs">
+              <Label for="library-featured-until">Destacado hasta</Label>
+              <Input
+                id="library-featured-until"
+                v-model="form.featured_until"
+                type="date"
+                :min="form.effective_from"
+              />
             </div>
-          </div>
-          <div v-if="form.is_featured" class="space-y-2 sm:max-w-xs">
-            <Label for="library-featured-until">Destacado hasta *</Label>
-            <Input
-              id="library-featured-until"
-              v-model="form.featured_until"
-              type="date"
-              :min="form.effective_from"
-            />
           </div>
         </div>
       </div>

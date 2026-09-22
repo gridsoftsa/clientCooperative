@@ -56,7 +56,7 @@ const partitionedChildren = computed(() => {
 })
 
 const currentDocTypeId = computed(() => {
-  if (currentNode.value?.type === 'document_type') {
+  if (currentNode.value?.type === 'document_type' || currentNode.value?.type === 'filing') {
     return currentNode.value.doc_document_type_id
   }
 
@@ -238,6 +238,7 @@ function formatBytes(size?: number): string {
                         </p>
                         <p class="mt-1 text-xs text-muted-foreground">
                           {{ archivalAreaNodeTypeLabel(folder) }}
+                          <span v-if="folder.file_number"> · {{ folder.file_number }}</span>
                         </p>
                         <p class="mt-2 text-xs text-muted-foreground">
                           {{ folder.children?.length ?? 0 }} elementos

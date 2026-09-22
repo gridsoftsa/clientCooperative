@@ -50,10 +50,10 @@ export interface EffectiveRetentionPayload {
   inherited_from: 'document_type' | 'subseries' | 'series'
 }
 
-export interface CatalogTreeSeries extends Pick<DocSeriesRow, 'id' | 'code' | 'name' | 'is_active' | 'publishable_to_institutional_library' | 'confidentiality'> {
+export interface CatalogTreeSeries extends Pick<DocSeriesRow, 'id' | 'code' | 'name' | 'is_active' | 'publishable_to_institutional_library' | 'confidentiality' | 'in_published_trd'> {
   subseries: Array<
-    Pick<DocSubseriesRow, 'id' | 'doc_series_id' | 'code' | 'name' | 'is_active' | 'confidentiality'> & {
-      document_types: Array<DocDocumentTypeRow & { confidentiality?: CatalogConfidentialityPayload }>
+    Pick<DocSubseriesRow, 'id' | 'doc_series_id' | 'code' | 'name' | 'is_active' | 'confidentiality' | 'in_published_trd'> & {
+      document_types: Array<DocDocumentTypeRow & { confidentiality?: CatalogConfidentialityPayload, in_published_trd?: boolean }>
     }
   >
 }
@@ -82,6 +82,7 @@ export interface TrdConsultDocumentTypeNode {
   name: string
   allowed_support?: string | null
   is_active: boolean
+  confidentiality?: CatalogConfidentialityPayload
   effective_retention: EffectiveRetentionPayload | null
 }
 
@@ -91,6 +92,7 @@ export interface TrdConsultSubseriesNode {
   code: string
   name: string
   is_active: boolean
+  confidentiality?: CatalogConfidentialityPayload
   document_types: TrdConsultDocumentTypeNode[]
 }
 
@@ -99,6 +101,7 @@ export interface TrdConsultSeriesNode {
   code: string
   name: string
   is_active: boolean
+  confidentiality?: CatalogConfidentialityPayload
   subseries: TrdConsultSubseriesNode[]
 }
 

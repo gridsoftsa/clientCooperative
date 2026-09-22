@@ -150,7 +150,7 @@ export interface ArchivalFile {
 
 export interface ArchivalFileTreeNode {
   id: string
-  type: 'file' | 'child_file' | 'folder' | 'document' | 'document_reference' | 'area' | 'series' | 'subseries' | 'document_type'
+  type: 'file' | 'child_file' | 'folder' | 'document' | 'document_reference' | 'area' | 'series' | 'subseries' | 'document_type' | 'filing'
   name: string
   children: ArchivalFileTreeNode[]
   archival_file_id?: number

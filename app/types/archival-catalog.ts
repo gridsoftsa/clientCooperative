@@ -38,6 +38,7 @@ export interface DocSeriesRow {
   active_subseries_count?: number
   org_unit?: { id: number, name: string, code: string }
   confidentiality?: CatalogConfidentialityPayload
+  in_published_trd?: boolean
 }
 
 export interface DocSubseriesRow {
@@ -51,6 +52,7 @@ export interface DocSubseriesRow {
   active_document_types_count?: number
   series?: Pick<DocSeriesRow, 'id' | 'code' | 'name'>
   confidentiality?: CatalogConfidentialityPayload
+  in_published_trd?: boolean
 }
 
 export interface DocDocumentTypeRow {
@@ -63,6 +65,7 @@ export interface DocDocumentTypeRow {
   is_active: boolean
   subseries?: Pick<DocSubseriesRow, 'id' | 'code' | 'name' | 'doc_series_id'>
   confidentiality?: CatalogConfidentialityPayload
+  in_published_trd?: boolean
 }
 
 export interface ArchivalCatalogListMeta {

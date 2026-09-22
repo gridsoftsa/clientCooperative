@@ -3,20 +3,46 @@ import type { CatalogConfidentialityPayload } from '~/types/archival-catalog'
 export function catalogConfidentialityParenthetical(
   payload?: CatalogConfidentialityPayload | null,
 ): string {
-  const level = payload?.effective_level
-  if (!level || level === 'public') {
+  const status = catalogConfidentialityStatus(payload)
+  if (status.level === 'public') {
     return ''
   }
 
-  let label = level === 'restricted' ? 'Restringido' : 'Uso interno por área'
-  if (payload?.inherited) {
+  if (status.inheritNote) {
+    return `(${status.shortLabel}, ${status.inheritNote})`
+  }
+
+  return `(${status.shortLabel})`
+}
+
+export function catalogConfidentialityStatus(
+  payload?: CatalogConfidentialityPayload | null,
+): {
+  level: NonNullable<CatalogConfidentialityPayload['effective_level']>
+  shortLabel: string
+  inheritNote: string
+  label: string
+} {
+  const level = payload?.effective_level ?? 'public'
+  let shortLabel = 'Público'
+  if (level === 'restricted') {
+    shortLabel = 'Restringido'
+  }
+  else if (level === 'internal_by_area') {
+    shortLabel = 'Uso interno'
+  }
+
+  let inheritNote = ''
+  if (level !== 'public' && payload?.inherited) {
     if (payload.effective_source === 'series') {
-      label += ', hereda de serie'
+      inheritNote = 'Hereda de serie'
     }
     else if (payload.effective_source === 'subseries') {
-      label += ', hereda de subserie'
+      inheritNote = 'Hereda de subserie'
     }
   }
 
-  return `(${label})`
+  const label = inheritNote ? `${shortLabel}, ${inheritNote.toLowerCase()}` : shortLabel
+
+  return { level, shortLabel, inheritNote, label }
 }
