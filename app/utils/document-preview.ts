@@ -27,3 +27,9 @@ export function resolveDocumentPreviewKind(fileName: string, mime = ''): Documen
   }
   return 'unsupported'
 }
+
+export function canPreviewDocumentInline(fileName: string, mime = ''): boolean {
+  const kind = resolveDocumentPreviewKind(fileName, mime)
+
+  return kind === 'pdf' || kind === 'image'
+}

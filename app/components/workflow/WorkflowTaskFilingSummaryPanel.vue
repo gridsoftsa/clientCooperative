@@ -6,6 +6,8 @@ import {
 } from '~/constants/ventanilla'
 import type { WorkflowFilingContextSummary } from '~/types/workflow'
 import { formatFileSizeLabel } from '~/utils/document-attachment-folio'
+import { canPreviewDocumentInline } from '~/utils/document-preview'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = withDefaults(defineProps<{
   filing: WorkflowFilingContextSummary
@@ -23,6 +25,17 @@ const ventanillaApi = useVentanillaApi()
 const router = useRouter()
 
 const openingFileId = ref<number | null>(null)
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
+
+function fileCanPreview(fileName: string, mimeType?: string | null): boolean {
+  return canPreviewDocumentInline(fileName, mimeType ?? '')
+}
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) {
@@ -52,7 +65,7 @@ function folioLabel(start: number | null | undefined, end: number | null | undef
   return start === end ? `Folio ${start}` : `Folios ${start}–${end}`
 }
 
-async function viewFile(fileId: number, mimeType?: string | null) {
+async function viewFile(fileId: number, fileName: string, mimeType?: string | null) {
   if (!hasPermission('ventanilla_archivos_ver')) {
     toast.error('No tiene permiso para ver archivos de ventanilla.')
 
@@ -62,7 +75,8 @@ async function viewFile(fileId: number, mimeType?: string | null) {
   openingFileId.value = fileId
 
   try {
-    await ventanillaApi.viewFilingFileInNewTab(props.filing.id, fileId, mimeType ?? undefined)
+    const blob = await ventanillaApi.fetchFilingFileBlob(props.filing.id, fileId)
+    presentBlob(blob, fileName, mimeType)
   }
   catch {
     toast.error('No se pudo abrir el archivo.')
@@ -229,14 +243,14 @@ function openFilingDetail() {
             size="sm"
             class="shrink-0"
             :disabled="openingFileId === file.id"
-            @click="viewFile(file.id, file.mime_type)"
+            @click="viewFile(file.id, file.original_name || file.title, file.mime_type)"
           >
             <Icon
-              :name="openingFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+              :name="openingFileId === file.id ? 'i-lucide-loader-2' : (fileCanPreview(file.original_name || file.title, file.mime_type) ? 'i-lucide-eye' : 'i-lucide-download')"
               class="mr-1 size-4"
               :class="{ 'animate-spin': openingFileId === file.id }"
             />
-            Ver
+            {{ fileCanPreview(file.original_name || file.title, file.mime_type) ? 'Ver' : 'Descargar' }}
           </Button>
         </li>
       </ul>
@@ -245,4 +259,11 @@ function openFilingDetail() {
       </p>
     </div>
   </div>
+
+  <DocumentInlinePreviewDialog
+    v-model:open="inlinePreviewOpen"
+    :title="inlinePreviewTitle"
+    :preview-url="inlinePreviewUrl"
+    :preview-kind="inlinePreviewKind"
+  />
 </template>

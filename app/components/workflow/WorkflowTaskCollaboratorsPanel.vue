@@ -4,6 +4,8 @@ import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureAp
 import type { OrgStaffListItem } from '~/types/org-structure'
 import type { WorkflowTaskCollaboratorRow } from '~/types/workflow'
 import { extractApiErrorMessage } from '~/utils/workflow-task-ui'
+import { canPreviewDocumentInline } from '~/utils/document-preview'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = defineProps<{
   taskId?: number | null
@@ -32,6 +34,17 @@ const selectedStaffId = ref<string>('')
 const staffQuery = ref('')
 const requestNote = ref('')
 const openingFileId = ref<number | null>(null)
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
+
+function fileCanPreview(fileName: string, mimeType?: string | null): boolean {
+  return canPreviewDocumentInline(fileName, mimeType ?? '')
+}
 
 const selectedStaff = computed(() =>
   staffResults.value.find(item => String(item.id) === selectedStaffId.value) ?? null,
@@ -150,7 +163,8 @@ async function viewFile(row: WorkflowTaskCollaboratorRow, file: WorkflowTaskColl
   openingFileId.value = file.id
 
   try {
-    await workflowApi.viewCollaborationFileInNewTab(row.id, file.id, file.mime_type, file.original_name)
+    const { blob, filename } = await workflowApi.fetchCollaborationFile(row.id, file.id)
+    presentBlob(blob, file.original_name || filename || file.title, file.mime_type)
   }
   catch {
     toast.error('No se pudo abrir el archivo del colaborador.')
@@ -371,11 +385,11 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
               @click="viewFile(row, file)"
             >
               <Icon
-                :name="openingFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+                :name="openingFileId === file.id ? 'i-lucide-loader-2' : (fileCanPreview(file.original_name, file.mime_type) ? 'i-lucide-eye' : 'i-lucide-download')"
                 class="mr-1 size-4"
                 :class="{ 'animate-spin': openingFileId === file.id }"
               />
-              Ver
+              {{ fileCanPreview(file.original_name, file.mime_type) ? 'Ver' : 'Descargar' }}
             </Button>
           </li>
         </ul>
@@ -397,4 +411,11 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
       {{ readOnly ? 'No hubo colaboradores en este proceso.' : 'Aún no hay colaboradores en este proceso.' }}
     </p>
   </div>
+
+  <DocumentInlinePreviewDialog
+    v-model:open="inlinePreviewOpen"
+    :title="inlinePreviewTitle"
+    :preview-url="inlinePreviewUrl"
+    :preview-kind="inlinePreviewKind"
+  />
 </template>

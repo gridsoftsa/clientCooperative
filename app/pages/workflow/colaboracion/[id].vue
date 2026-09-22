@@ -8,6 +8,8 @@ import {
 } from '~/utils/document-attachment-folio'
 import { VENTANILLA_FILING_UPLOAD_CONSTRAINTS } from '~/utils/document-upload-constraints'
 import { extractApiErrorMessage } from '~/utils/workflow-task-ui'
+import { canPreviewDocumentInline } from '~/utils/document-preview'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 definePageMeta({
   layout: 'default',
@@ -27,6 +29,17 @@ const attachment = ref<DocumentAttachmentRow>(createDocumentAttachmentRow())
 const collaboration = ref<Awaited<ReturnType<typeof workflowApi.fetchCollaboration>> | null>(null)
 const activeTab = ref('responder')
 const openingFileId = ref<number | null>(null)
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
+
+function fileCanPreview(fileName: string, mimeType?: string | null): boolean {
+  return canPreviewDocumentInline(fileName, mimeType ?? '')
+}
 
 const isResponded = computed(() => collaboration.value?.status === 'responded')
 const filingFileCount = computed(() => collaboration.value?.filing?.files.length ?? 0)
@@ -107,12 +120,8 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
   openingFileId.value = file.id
 
   try {
-    await workflowApi.viewCollaborationFileInNewTab(
-      collaborationId.value,
-      file.id,
-      file.mime_type,
-      file.original_name,
-    )
+    const { blob, filename } = await workflowApi.fetchCollaborationFile(collaborationId.value, file.id)
+    presentBlob(blob, file.original_name || filename || 'documento', file.mime_type)
   }
   catch (error) {
     toast.error(extractApiErrorMessage(error))
@@ -232,11 +241,11 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
               @click="viewContributionFile(file)"
             >
               <Icon
-                :name="openingFileId === file.id ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+                :name="openingFileId === file.id ? 'i-lucide-loader-2' : (fileCanPreview(file.original_name, file.mime_type) ? 'i-lucide-eye' : 'i-lucide-download')"
                 class="mr-1 size-4"
                 :class="{ 'animate-spin': openingFileId === file.id }"
               />
-              Ver
+              {{ fileCanPreview(file.original_name, file.mime_type) ? 'Ver' : 'Descargar' }}
             </Button>
           </li>
         </ul>
@@ -266,5 +275,12 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
         </p>
       </TabsContent>
     </Tabs>
+
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>

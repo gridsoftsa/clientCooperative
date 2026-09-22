@@ -328,13 +328,20 @@ export function useWorkflowApi() {
     }
   }
 
+  async function fetchCollaborationFile(
+    collaborationId: number,
+    fileId: number,
+  ): Promise<{ blob: Blob, filename: string | null }> {
+    return fetchAuthenticatedBlob(collaborationFileViewUrl(collaborationId, fileId))
+  }
+
   async function viewCollaborationFileInNewTab(
     collaborationId: number,
     fileId: number,
     mimeType?: string | null,
     originalName?: string | null,
   ): Promise<void> {
-    const { blob, filename } = await fetchAuthenticatedBlob(collaborationFileViewUrl(collaborationId, fileId))
+    const { blob, filename } = await fetchCollaborationFile(collaborationId, fileId)
     openBlobInNewTab(blob, mimeType ?? undefined, originalName || filename)
   }
 
@@ -366,6 +373,7 @@ export function useWorkflowApi() {
     fetchMyPendingCollaborations,
     fetchCollaboration,
     respondCollaboration,
+    fetchCollaborationFile,
     viewCollaborationFileInNewTab,
   }
 }

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { WorkflowFilingContext } from '~/types/workflow'
+import { canPreviewDocumentInline } from '~/utils/document-preview'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 type WorkflowHistoryEvent = WorkflowFilingContext['events'][number]
 type WorkflowHistoryFile = NonNullable<NonNullable<WorkflowHistoryEvent['metadata']>['files']>[number]
@@ -13,6 +15,17 @@ const props = defineProps<{
 const workflowApi = useWorkflowApi()
 const ventanillaApi = useVentanillaApi()
 const openingFileKey = ref<string | null>(null)
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
+
+function fileCanPreview(fileName: string, mimeType?: string | null): boolean {
+  return canPreviewDocumentInline(fileName, mimeType ?? '')
+}
 
 const INITIAL_VISIBLE = 5
 const LOAD_MORE_STEP = 5
@@ -186,12 +199,11 @@ async function viewHistoryFile(event: WorkflowHistoryEvent, file: WorkflowHistor
 
   try {
     if (file.source === 'collaborator' || file.collaboration_id) {
-      await workflowApi.viewCollaborationFileInNewTab(
+      const { blob, filename } = await workflowApi.fetchCollaborationFile(
         file.collaboration_id ?? event.metadata?.collaboration_id ?? 0,
         file.id,
-        file.mime_type,
-        file.original_name,
       )
+      presentBlob(blob, file.original_name || filename || file.title, file.mime_type)
 
       return
     }
@@ -202,7 +214,8 @@ async function viewHistoryFile(event: WorkflowHistoryEvent, file: WorkflowHistor
       throw new Error('No se encontró el radicado del archivo.')
     }
 
-    await ventanillaApi.viewFilingFileInNewTab(filingId, file.id, file.mime_type ?? undefined)
+    const blob = await ventanillaApi.fetchFilingFileBlob(filingId, file.id)
+    presentBlob(blob, file.original_name || file.title, file.mime_type)
   }
   catch {
     toast.error('No se pudo abrir el archivo.')
@@ -362,11 +375,11 @@ function showLess() {
                   @click="viewHistoryFile(event, file)"
                 >
                   <Icon
-                    :name="openingFileKey === fileKey(event.id, file.id) ? 'i-lucide-loader-2' : 'i-lucide-external-link'"
+                    :name="openingFileKey === fileKey(event.id, file.id) ? 'i-lucide-loader-2' : (fileCanPreview(file.original_name, file.mime_type) ? 'i-lucide-eye' : 'i-lucide-download')"
                     class="mr-1 size-4"
                     :class="{ 'animate-spin': openingFileKey === fileKey(event.id, file.id) }"
                   />
-                  Ver
+                  {{ fileCanPreview(file.original_name, file.mime_type) ? 'Ver' : 'Descargar' }}
                 </Button>
               </li>
             </ul>
@@ -425,4 +438,11 @@ function showLess() {
       Las acciones sobre esta tarea y el radicado aparecerán aquí en orden cronológico.
     </p>
   </div>
+
+  <DocumentInlinePreviewDialog
+    v-model:open="inlinePreviewOpen"
+    :title="inlinePreviewTitle"
+    :preview-url="inlinePreviewUrl"
+    :preview-kind="inlinePreviewKind"
+  />
 </template>
