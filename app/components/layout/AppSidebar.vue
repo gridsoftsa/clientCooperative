@@ -20,6 +20,7 @@ const teams = computed(() => [
 ])
 
 const { sidebar } = useAppSettings()
+provideSidebarNavAccordion()
 const { user: authUser } = useAuth()
 const { hasRole, hasAnyRole, hasPermission, hasAnyPermission, isAdmin } = usePermissions()
 
@@ -122,6 +123,7 @@ const filteredNavMenu = computed(() => {
   <Sidebar :collapsible="sidebar?.collapsible" :side="sidebar?.side" :variant="sidebar?.variant">
     <SidebarHeader>
       <LayoutSidebarNavHeader :teams="teams" />
+      <LayoutSidebarScreenSearch :menu="filteredNavMenu" />
     </SidebarHeader>
     <SidebarContent>
       <SidebarGroup v-for="(nav, indexGroup) in filteredNavMenu" :key="indexGroup">

@@ -12,6 +12,8 @@ const props = withDefaults(defineProps<{
 
 const { setOpenMobile } = useSidebar()
 const route = useRoute()
+const accordion = useSidebarNavAccordion()
+const localOpen = ref(false)
 
 /** Marca activo el subítem si la ruta coincide o es una ruta hija (p. ej. formularios de edición). */
 function isSubRouteActive(link: string): boolean {
@@ -37,13 +39,31 @@ function isSubRouteActive(link: string): boolean {
   return route.path.startsWith(`${link}/`)
 }
 
-const openCollapsible = ref(false)
+const openCollapsible = computed({
+  get() {
+    if (!accordion) {
+      return localOpen.value
+    }
+
+    return accordion.openGroupId.value === props.item.title
+  },
+  set(open: boolean) {
+    if (!accordion) {
+      localOpen.value = open
+
+      return
+    }
+
+    accordion.setOpenGroup(open ? props.item.title : null)
+  },
+})
 
 watch(
   () => route.path,
   () => {
-    if (props.item.children.some((c: NavLink) => isSubRouteActive(c.link)))
+    if (props.item.children.some((c: NavLink) => isSubRouteActive(c.link))) {
       openCollapsible.value = true
+    }
   },
   { immediate: true },
 )
