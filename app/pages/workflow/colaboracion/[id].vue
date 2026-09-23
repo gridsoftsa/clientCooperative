@@ -41,6 +41,14 @@ function fileCanPreview(fileName: string, mimeType?: string | null): boolean {
   return canPreviewDocumentInline(fileName, mimeType ?? '')
 }
 
+function formatCollaborationDate(iso: string | null | undefined): string {
+  if (!iso) {
+    return '—'
+  }
+
+  return new Date(iso).toLocaleString('es-CO')
+}
+
 const isResponded = computed(() => collaboration.value?.status === 'responded')
 const filingFileCount = computed(() => collaboration.value?.filing?.files.length ?? 0)
 
@@ -149,6 +157,22 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
           <span v-if="collaboration?.filing?.subject"> · {{ collaboration.filing.subject }}</span>
           <span v-if="collaboration?.task?.stage"> · {{ collaboration.task.stage.name }}</span>
         </p>
+        <div v-if="collaboration?.filing" class="flex flex-wrap items-center gap-2 pt-1">
+          <VentanillaTrafficLightBadge
+            :status="collaboration.filing.traffic_light_status"
+            :requires-response="collaboration.filing.requires_response"
+            scope-label="SLA radicado"
+          />
+          <span
+            v-if="collaboration.filing.requires_response && collaboration.filing.response_deadline_at"
+            class="text-muted-foreground text-xs"
+          >
+            Vence {{ formatCollaborationDate(collaboration.filing.response_deadline_at) }}
+            <template v-if="collaboration.filing.sla_business_days">
+              · {{ collaboration.filing.sla_business_days }} días hábiles
+            </template>
+          </span>
+        </div>
       </div>
     </div>
 

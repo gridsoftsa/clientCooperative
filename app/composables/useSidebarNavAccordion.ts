@@ -3,16 +3,18 @@ const sidebarNavAccordionKey = Symbol('sidebar-nav-accordion')
 interface SidebarNavAccordion {
   openGroupId: Ref<string | null>
   setOpenGroup: (id: string | null) => void
+  searchQuery: Ref<string>
 }
 
 export function provideSidebarNavAccordion(): SidebarNavAccordion {
   const openGroupId = ref<string | null>(null)
+  const searchQuery = ref('')
 
   function setOpenGroup(id: string | null) {
     openGroupId.value = id
   }
 
-  const state: SidebarNavAccordion = { openGroupId, setOpenGroup }
+  const state: SidebarNavAccordion = { openGroupId, setOpenGroup, searchQuery }
   provide(sidebarNavAccordionKey, state)
 
   return state

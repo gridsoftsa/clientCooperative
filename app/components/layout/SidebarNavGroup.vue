@@ -39,8 +39,14 @@ function isSubRouteActive(link: string): boolean {
   return route.path.startsWith(`${link}/`)
 }
 
+const isSearching = computed(() => (accordion?.searchQuery.value.trim().length ?? 0) > 0)
+
 const openCollapsible = computed({
   get() {
+    if (isSearching.value) {
+      return true
+    }
+
     if (!accordion) {
       return localOpen.value
     }
@@ -48,6 +54,10 @@ const openCollapsible = computed({
     return accordion.openGroupId.value === props.item.title
   },
   set(open: boolean) {
+    if (isSearching.value) {
+      return
+    }
+
     if (!accordion) {
       localOpen.value = open
 

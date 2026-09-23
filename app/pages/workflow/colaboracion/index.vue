@@ -39,6 +39,14 @@ function statusLabel(status: WorkflowTaskCollaboratorRow['status']): string {
   return status === 'responded' ? 'Respondida' : 'Pendiente'
 }
 
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) {
+    return '—'
+  }
+
+  return new Date(iso).toLocaleString('es-CO')
+}
+
 function openCollaboration(row: WorkflowTaskCollaboratorRow) {
   void router.push(`/workflow/colaboracion/${row.id}`)
 }
@@ -120,8 +128,17 @@ onMounted(() => {
               <p v-if="row.request_note" class="mt-1 line-clamp-2 text-sm">
                 {{ row.request_note }}
               </p>
+              <p v-if="row.filing?.requires_response && row.filing.response_deadline_at" class="mt-1 text-xs text-muted-foreground">
+                Vence {{ formatDate(row.filing.response_deadline_at) }}
+              </p>
             </div>
             <div class="flex items-center gap-2">
+              <VentanillaTrafficLightBadge
+                v-if="row.filing"
+                :status="row.filing.traffic_light_status"
+                :requires-response="row.filing.requires_response"
+                scope-label="SLA"
+              />
               <Badge :variant="row.status === 'responded' ? 'secondary' : 'outline'">
                 {{ statusLabel(row.status) }}
               </Badge>
