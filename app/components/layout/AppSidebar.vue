@@ -20,7 +20,7 @@ const teams = computed(() => [
 ])
 
 const { sidebar } = useAppSettings()
-provideSidebarNavAccordion()
+const { searchQuery } = provideSidebarNavAccordion()
 const { user: authUser } = useAuth()
 const { hasRole, hasAnyRole, hasPermission, hasAnyPermission, isAdmin } = usePermissions()
 
@@ -117,20 +117,66 @@ const filteredNavMenu = computed(() => {
     return { ...section, items: filteredItems }
   }).filter(section => section.items.length > 0)
 })
+
+function normalizeSearchText(value: string): string {
+  return value.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+}
+
+const visibleNavMenu = computed(() => {
+  const query = normalizeSearchText(searchQuery.value.trim())
+
+  if (!query) {
+    return filteredNavMenu.value
+  }
+
+  return filteredNavMenu.value.map((section) => {
+    const items: NavMenuItems = []
+
+    for (const item of section.items) {
+      if ('children' in item) {
+        const groupMatches = normalizeSearchText(item.title).includes(query)
+        const matchingChildren = item.children.filter(child => normalizeSearchText(child.title).includes(query))
+        const children = matchingChildren.length > 0
+          ? matchingChildren
+          : (groupMatches ? item.children : [])
+
+        if (children.length > 0) {
+          items.push({ ...item, children })
+        }
+
+        continue
+      }
+
+      if ('link' in item && normalizeSearchText(item.title).includes(query)) {
+        items.push(item)
+      }
+    }
+
+    return { ...section, items }
+  }).filter(section => section.items.length > 0)
+})
+
+const isSearching = computed(() => searchQuery.value.trim().length > 0)
 </script>
 
 <template>
   <Sidebar :collapsible="sidebar?.collapsible" :side="sidebar?.side" :variant="sidebar?.variant">
     <SidebarHeader>
       <LayoutSidebarNavHeader :teams="teams" />
-      <LayoutSidebarScreenSearch :menu="filteredNavMenu" />
+      <LayoutSidebarScreenSearch />
     </SidebarHeader>
     <SidebarContent>
-      <SidebarGroup v-for="(nav, indexGroup) in filteredNavMenu" :key="indexGroup">
+      <p
+        v-if="isSearching && visibleNavMenu.length === 0"
+        class="text-muted-foreground px-4 py-6 text-center text-sm"
+      >
+        No hay pantallas que coincidan.
+      </p>
+      <SidebarGroup v-for="nav in visibleNavMenu" :key="nav.heading">
         <SidebarGroupLabel v-if="nav.heading">
           {{ nav.heading }}
         </SidebarGroupLabel>
-        <component :is="resolveNavItemComponent(item)" v-for="(item, index) in nav.items" :key="index" :item="item" />
+        <component :is="resolveNavItemComponent(item)" v-for="item in nav.items" :key="'title' in item ? item.title : nav.heading" :item="item" />
       </SidebarGroup>
       <SidebarGroup class="mt-auto">
         <component :is="resolveNavItemComponent(item)" v-for="(item, index) in navMenuBottom" :key="index" :item="item" size="sm" />

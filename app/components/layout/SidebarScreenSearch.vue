@@ -1,120 +1,88 @@
 <script setup lang="ts">
-import type { NavMenu } from '~/types/nav'
 import { useSidebar } from '~/components/ui/sidebar'
 
-const props = defineProps<{
-  menu: NavMenu[]
-}>()
-
-const router = useRouter()
-const { setOpenMobile, state } = useSidebar()
-const { metaSymbol } = useShortcuts()
-
-const open = ref(false)
-
-defineShortcuts({
-  meta_k: () => {
-    open.value = !open.value
+const accordion = useSidebarNavAccordion()
+const searchQuery = computed({
+  get: () => accordion?.searchQuery.value ?? '',
+  set: (value: string) => {
+    if (accordion) {
+      accordion.searchQuery.value = value
+    }
   },
 })
 
-interface ScreenEntry {
-  id: string
-  title: string
-  parent: string | null
-  link: string
-  icon?: string
+const inputRef = ref<HTMLInputElement | null>(null)
+const { setOpen, setOpenMobile, state, isMobile } = useSidebar()
+const { metaSymbol } = useShortcuts()
+
+function focusSearch() {
+  if (state.value === 'collapsed' && !isMobile.value) {
+    setOpen(true)
+  }
+
+  if (isMobile.value) {
+    setOpenMobile(true)
+  }
+
+  nextTick(() => {
+    inputRef.value?.focus()
+    inputRef.value?.select()
+  })
 }
 
-const groups = computed(() => {
-  return props.menu.map((section) => {
-    const screens: ScreenEntry[] = []
-
-    for (const item of section.items) {
-      if ('children' in item) {
-        for (const child of item.children) {
-          screens.push({
-            id: `${section.heading}:${item.title}:${child.link}:${child.title}`,
-            title: child.title,
-            parent: item.title,
-            link: child.link,
-            icon: child.icon || item.icon,
-          })
-        }
-        continue
-      }
-
-      if ('link' in item) {
-        screens.push({
-          id: `${section.heading}:${item.link}:${item.title}`,
-          title: item.title,
-          parent: null,
-          link: item.link,
-          icon: item.icon,
-        })
-      }
-    }
-
-    return {
-      heading: section.heading,
-      screens,
-    }
-  }).filter(group => group.screens.length > 0)
+defineShortcuts({
+  meta_k: {
+    handler: () => {
+      focusSearch()
+    },
+    usingInput: true,
+  },
 })
 
-function openScreen(link: string) {
-  open.value = false
-  setOpenMobile(false)
-  router.push(link)
+function clearSearch() {
+  searchQuery.value = ''
+  inputRef.value?.focus()
 }
 </script>
 
 <template>
-  <div>
+  <div class="relative group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
+    <Icon
+      name="i-lucide-search"
+      class="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 group-data-[collapsible=icon]:hidden"
+    />
+    <input
+      ref="inputRef"
+      v-model="searchQuery"
+      type="search"
+      placeholder="Buscar pantalla..."
+      aria-label="Buscar pantalla"
+      class="border-input bg-background placeholder:text-muted-foreground h-8 w-full rounded-md border pr-16 pl-8 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring group-data-[collapsible=icon]:hidden [&::-webkit-search-cancel-button]:appearance-none"
+      @keydown.escape="clearSearch"
+    >
+    <button
+      v-if="searchQuery"
+      type="button"
+      class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 inline-flex size-5 -translate-y-1/2 items-center justify-center rounded-sm group-data-[collapsible=icon]:hidden"
+      aria-label="Limpiar búsqueda"
+      @click="clearSearch"
+    >
+      <Icon name="i-lucide-x" class="size-3.5" />
+    </button>
+    <Kbd
+      v-else
+      class="pointer-events-none absolute top-1/2 right-1.5 -translate-y-1/2 group-data-[collapsible=icon]:hidden"
+    >
+      {{ metaSymbol.trim() || 'Ctrl' }} K
+    </Kbd>
     <button
       type="button"
-      class="border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground flex h-8 w-full items-center gap-2 rounded-md border px-2.5 text-sm shadow-xs transition-colors group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
-      :title="state === 'collapsed' ? 'Buscar pantalla' : undefined"
-      @click="open = true"
-    >
-      <Icon name="i-lucide-search" class="size-4 shrink-0" />
-      <span class="min-w-0 flex-1 truncate text-left group-data-[collapsible=icon]:hidden">
-        Buscar pantalla...
-      </span>
-      <Kbd class="group-data-[collapsible=icon]:hidden">
-        {{ metaSymbol.trim() || 'Ctrl' }} K
-      </Kbd>
-    </button>
-
-    <CommandDialog
-      v-model:open="open"
+      class="text-muted-foreground hover:bg-accent hover:text-accent-foreground hidden size-8 items-center justify-center rounded-md group-data-[collapsible=icon]:inline-flex"
       title="Buscar pantalla"
-      description="Busque una pantalla del menú y ábrala"
+      aria-label="Buscar pantalla"
+      @click="focusSearch"
     >
-      <CommandInput placeholder="Buscar pantalla..." />
-      <CommandList>
-        <CommandEmpty>
-          No hay pantallas que coincidan.
-        </CommandEmpty>
-        <CommandGroup
-          v-for="group in groups"
-          :key="group.heading"
-          :heading="group.heading"
-        >
-          <CommandItem
-            v-for="screen in group.screens"
-            :key="screen.id"
-            :value="`${group.heading} ${screen.parent ?? ''} ${screen.title}`"
-            @select="openScreen(screen.link)"
-          >
-            <Icon v-if="screen.icon" :name="screen.icon" class="size-4" />
-            <span class="truncate">{{ screen.title }}</span>
-            <span v-if="screen.parent" class="text-muted-foreground ml-auto truncate text-xs">
-              {{ screen.parent }}
-            </span>
-          </CommandItem>
-        </CommandGroup>
-      </CommandList>
-    </CommandDialog>
+      <Icon name="i-lucide-search" class="size-4" />
+    </button>
   </div>
 </template>
