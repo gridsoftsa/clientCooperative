@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import type { ArchivalFileTreeNode } from '~/types/archival-file'
 import {
+  archivalAreaDocumentRecordId,
   archivalAreaNodeIcon,
   archivalAreaNodeTypeLabel,
+  canOpenArchivalAreaDocument,
+  canViewArchivalAreaDocument,
   countArchivalAreaDescendants,
   filterArchivalAreaChildren,
   findArchivalTreeNode,
   findArchivalTreePath,
-  isArchivalAreaDocumentNode,
-  isArchivalAreaFolderNode,
   partitionArchivalAreaChildren,
 } from '~/utils/archival-area-repository'
 import { toast } from 'vue-sonner'
@@ -111,20 +112,22 @@ function openExpediente(fileId: number) {
 }
 
 async function openDocumentView(document: ArchivalFileTreeNode) {
-  if (!document.archival_file_id || !document.archival_file_document_id) {
+  const documentId = archivalAreaDocumentRecordId(document)
+
+  if (!document.archival_file_id || documentId == null) {
     toast.error('No se pudo abrir el documento.')
     return
   }
 
-  if (document.can_view_content === false) {
-    toast.error('No tiene permiso para ver este documento.')
+  if (!canViewArchivalAreaDocument(document)) {
+    toast.error('Este documento está restringido. No tiene permiso para verlo.')
     return
   }
 
   viewingDocumentId.value = document.id
 
   try {
-    const blob = await fetchDocumentViewBlob(document.archival_file_id, document.archival_file_document_id)
+    const blob = await fetchDocumentViewBlob(document.archival_file_id, documentId)
     presentBlob(blob, document.name || 'documento', document.mime_type)
   }
   catch (error) {
@@ -325,6 +328,9 @@ function formatBytes(size?: number): string {
                           <Badge v-if="document.source_label" variant="outline" class="text-xs">
                             {{ document.source_label }}
                           </Badge>
+                          <Badge v-if="!canViewArchivalAreaDocument(document)" variant="secondary" class="text-xs">
+                            Restringido
+                          </Badge>
                         </div>
                         <p class="mt-2 text-xs text-muted-foreground">
                           {{ formatBytes(document.size_bytes) }}
@@ -335,21 +341,7 @@ function formatBytes(size?: number): string {
                       </div>
                     </div>
 
-                    <div class="mt-3 flex flex-wrap gap-2">
-                      <Button
-                        v-if="document.archival_file_id && document.archival_file_document_id && document.can_view_content !== false"
-                        variant="outline"
-                        size="sm"
-                        :disabled="viewingDocumentId === document.id"
-                        @click.stop="openDocumentView(document)"
-                      >
-                        <Icon
-                          :name="viewingDocumentId === document.id ? 'i-lucide-loader-2' : 'i-lucide-eye'"
-                          class="mr-1 size-4"
-                          :class="{ 'animate-spin': viewingDocumentId === document.id }"
-                        />
-                        Ver
-                      </Button>
+                    <div class="mt-3 flex flex-wrap items-center gap-1.5">
                       <Button
                         v-if="document.archival_file_id"
                         variant="outline"
@@ -358,14 +350,44 @@ function formatBytes(size?: number): string {
                       >
                         Ver expediente
                       </Button>
+                      <Button
+                        v-if="canOpenArchivalAreaDocument(document) && canViewArchivalAreaDocument(document)"
+                        variant="outline"
+                        size="icon"
+                        class="size-8"
+                        :disabled="viewingDocumentId === document.id"
+                        title="Ver documento"
+                        aria-label="Ver documento"
+                        @click.stop="openDocumentView(document)"
+                      >
+                        <Icon
+                          :name="viewingDocumentId === document.id ? 'i-lucide-loader-2' : 'i-lucide-eye'"
+                          class="size-4"
+                          :class="{ 'animate-spin': viewingDocumentId === document.id }"
+                        />
+                      </Button>
+                      <Button
+                        v-else-if="canOpenArchivalAreaDocument(document)"
+                        variant="outline"
+                        size="icon"
+                        class="size-8"
+                        disabled
+                        title="Documento restringido"
+                        aria-label="Documento restringido"
+                        @click.stop
+                      >
+                        <Icon name="i-lucide-lock" class="size-4" />
+                      </Button>
                       <a
                         v-if="canDownload && document.can_download_content !== false && document.download_url"
                         :href="document.download_url"
                         class="inline-flex"
+                        title="Descargar"
+                        aria-label="Descargar"
                         @click.stop
                       >
-                        <Button variant="ghost" size="sm">
-                          Descargar
+                        <Button variant="ghost" size="icon" class="size-8">
+                          <Icon name="i-lucide-download" class="size-4" />
                         </Button>
                       </a>
                     </div>

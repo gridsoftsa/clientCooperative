@@ -169,32 +169,13 @@ function functionalTypeLabel(task: WorkflowTaskCard) {
               :key="task.id"
               class="min-w-0 rounded-xl border bg-card px-3 py-2 shadow-sm"
             >
-              <div class="flex items-start justify-between gap-2">
-                <div class="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                  <span
-                    class="inline-block size-2.5 shrink-0 rounded-full"
-                    :class="trafficLightClass(task.traffic_light_status)"
-                    :title="task.traffic_light_status ?? 'sin semáforo'"
-                  />
-                  <span class="truncate">{{ taskReference(task) }}</span>
-                </div>
-                <DropdownMenu v-if="canManage" @click.stop>
-                  <DropdownMenuTrigger as-child>
-                    <Button size="icon-sm" variant="ghost" class="size-7 shrink-0 text-muted-foreground">
-                      <Icon name="lucide:ellipsis-vertical" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" class="min-w-[10rem]">
-                    <DropdownMenuItem @click="emit('openTask', task)">
-                      <Icon name="lucide:external-link" class="size-4" />
-                      Ventanilla
-                    </DropdownMenuItem>
-                    <DropdownMenuItem @click="emit('manage', task)">
-                      <Icon name="lucide:settings-2" class="size-4" />
-                      Gestionar tarea
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              <div class="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                <span
+                  class="inline-block size-2.5 shrink-0 rounded-full"
+                  :class="trafficLightClass(task.traffic_light_status)"
+                  :title="task.traffic_light_status ?? 'sin semáforo'"
+                />
+                <span class="truncate">{{ taskReference(task) }}</span>
               </div>
 
               <p class="mt-1 line-clamp-2 text-sm font-medium leading-5">
@@ -227,6 +208,28 @@ function functionalTypeLabel(task: WorkflowTaskCard) {
                   </Avatar>
                   <span class="max-w-[7rem] truncate">{{ task.assignee.name }}</span>
                 </div>
+              </div>
+
+              <div class="mt-3 flex gap-2">
+                <Button
+                  v-if="canManage"
+                  size="sm"
+                  class="h-8 min-w-0 flex-1"
+                  @click="emit('manage', task)"
+                >
+                  <Icon name="i-lucide-settings-2" class="mr-1 size-4 shrink-0" />
+                  Gestionar
+                </Button>
+                <Button
+                  v-if="task.subject?.id"
+                  size="sm"
+                  variant="outline"
+                  class="h-8 min-w-0 flex-1"
+                  @click="emit('openTask', task)"
+                >
+                  <Icon name="i-lucide-external-link" class="mr-1 size-4 shrink-0" />
+                  Ventanilla
+                </Button>
               </div>
             </div>
           </div>

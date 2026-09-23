@@ -22,6 +22,28 @@ export function isArchivalAreaDocumentNode(node: ArchivalFileTreeNode): boolean 
   return DOCUMENT_TYPES.has(node.type)
 }
 
+export function archivalAreaDocumentRecordId(node: ArchivalFileTreeNode): number | null {
+  if (typeof node.archival_file_document_id === 'number' && node.archival_file_document_id > 0) {
+    return node.archival_file_document_id
+  }
+
+  const match = /^doc-(\d+)$/.exec(node.id)
+
+  if (!match) {
+    return null
+  }
+
+  return Number(match[1])
+}
+
+export function canViewArchivalAreaDocument(node: ArchivalFileTreeNode): boolean {
+  return node.can_view_content !== false
+}
+
+export function canOpenArchivalAreaDocument(node: ArchivalFileTreeNode): boolean {
+  return node.archival_file_id != null && archivalAreaDocumentRecordId(node) != null
+}
+
 export function archivalAreaNodeIcon(node: ArchivalFileTreeNode, open = false): string {
   if (node.type === 'filing') {
     return 'i-lucide-inbox'
