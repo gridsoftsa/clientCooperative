@@ -41,14 +41,6 @@ function fileCanPreview(fileName: string, mimeType?: string | null): boolean {
   return canPreviewDocumentInline(fileName, mimeType ?? '')
 }
 
-function formatCollaborationDate(iso: string | null | undefined): string {
-  if (!iso) {
-    return '—'
-  }
-
-  return new Date(iso).toLocaleString('es-CO')
-}
-
 const isResponded = computed(() => collaboration.value?.status === 'responded')
 const filingFileCount = computed(() => collaboration.value?.filing?.files.length ?? 0)
 
@@ -157,18 +149,21 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
           <span v-if="collaboration?.filing?.subject"> · {{ collaboration.filing.subject }}</span>
           <span v-if="collaboration?.task?.stage"> · {{ collaboration.task.stage.name }}</span>
         </p>
-        <div v-if="collaboration?.filing?.requires_response" class="max-w-lg pt-2">
-          <VentanillaSlaProgressBar
-            v-if="collaboration.filing.sla_business_days"
-            :sla-business-days="collaboration.filing.sla_business_days"
-            :elapsed-business-days="collaboration.filing.sla_elapsed_business_days"
-            :deadline="collaboration.filing.response_deadline_at"
-          />
-          <p v-else-if="collaboration.filing.response_deadline_at" class="text-muted-foreground text-xs">
-            Vence {{ formatCollaborationDate(collaboration.filing.response_deadline_at) }}
-          </p>
-        </div>
       </div>
+    </div>
+
+    <div
+      v-if="collaboration?.filing?.requires_response && collaboration.filing.sla_business_days"
+      class="sticky top-0 z-10 rounded-lg border bg-background/95 p-4 shadow-sm backdrop-blur"
+    >
+      <p class="mb-2 text-sm font-medium">
+        SLA del radicado
+      </p>
+      <VentanillaSlaProgressBar
+        :sla-business-days="collaboration.filing.sla_business_days"
+        :elapsed-business-days="collaboration.filing.sla_elapsed_business_days"
+        :deadline="collaboration.filing.response_deadline_at"
+      />
     </div>
 
     <Card v-if="loading">
