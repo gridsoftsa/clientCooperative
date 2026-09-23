@@ -21,12 +21,14 @@ import {
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 import { parseActivityTemplateList } from '~/types/credit-application'
 import { mergeApplicantFromApi, normalizeFinancialInfoAliases } from '~/utils/merge-applicant-search'
+import { cloneApplicantForm } from '~/utils/clone-applicant-form'
 import { messageFromFetchError } from '~/utils/http-error-message'
 import {
   filterFreeAttachmentDocuments,
   findDocumentIdByTitle,
   hasPendingRadicacionDocumentUploads,
   readDocumentIdMap,
+  resolveCodeudorApplicantId,
   runDocumentUpload,
 } from '~/utils/radicacion-document-upload'
 import {
@@ -210,27 +212,16 @@ const codeudorBeingAdded = ref<ApplicantForm>({
   documents: [],
 })
 
-/** null = nuevo codeudor en `codeudorBeingAdded`; número = editar `form.co_debtors[index]`. */
+/** null = nuevo codeudor; número = editar `form.co_debtors[index]`. El wizard siempre trabaja sobre un borrador clonado. */
 const codeudorEditIndex = ref<number | null>(null)
+const codeudorWizardSession = ref(0)
 
 const codeudorWizardApplicant = computed({
   get(): ApplicantForm {
-    const i = codeudorEditIndex.value
-    if (i != null) {
-      const co = form.value.co_debtors[i]
-      if (co != null) {
-        return co
-      }
-    }
     return codeudorBeingAdded.value
   },
   set(v: ApplicantForm) {
-    const i = codeudorEditIndex.value
-    if (i != null) {
-      form.value.co_debtors[i] = v
-    } else {
-      codeudorBeingAdded.value = v
-    }
+    codeudorBeingAdded.value = v
   },
 })
 
@@ -677,72 +668,45 @@ async function searchApplicantForCodeudor() {
   }
 }
 
-async function searchApplicantForCoDebtor(idx: number) {
-  const co = form.value.co_debtors[idx]
-  if (!co) return
-  const doc = co.document_number?.trim()
-  if (!doc) {
-    toast.error('Ingresa el número de documento del codeudor')
-    return
-  }
-  loadingSearch.value = true
-  try {
-    const res = await $api<{ data: ApplicantForm | null; found: boolean }>(
-      '/credit-applications/applicants/find',
-      { query: { document_number: doc } },
-    )
-    if (res.found && res.data && co) {
-      mergeApplicantFromApi(co, res.data)
-      toast.success('Codeudor encontrado. Revisa y completa los datos.')
-    } else {
-      toast.info('No encontrado. Completa el formulario con los datos del codeudor.')
-    }
-  } catch (e) {
-    console.error('Error buscando codeudor:', e)
-    toast.error('Error al buscar')
-  } finally {
-    loadingSearch.value = false
-  }
-}
-
-const emptyCodeudor = (): ApplicantForm => ({
+const emptyCodeudor = (): ApplicantForm => cloneApplicantForm({
   document_type: 'CC',
   document_number: '',
   first_name: '',
   first_last_name: '',
   dependents: 0,
   documents: [],
+  financial_info: {},
 })
 
 function startAddingCodeudor() {
   addingCodeudor.value = true
   codeudorEditIndex.value = null
   codeudorStep.value = 1
-  codeudorBeingAdded.value = { ...emptyCodeudor() }
+  codeudorBeingAdded.value = emptyCodeudor()
+  codeudorWizardSession.value += 1
 }
 
 function startEditingCodeudor(idx: number) {
-  if (!form.value.co_debtors[idx]) {
+  const current = form.value.co_debtors[idx]
+  if (!current) {
     return
   }
   addingCodeudor.value = true
   codeudorEditIndex.value = idx
   codeudorStep.value = 1
+  codeudorBeingAdded.value = cloneApplicantForm(current)
+  codeudorWizardSession.value += 1
 }
 
 function cancelAddingCodeudor() {
   addingCodeudor.value = false
   codeudorEditIndex.value = null
   codeudorStep.value = 1
+  codeudorBeingAdded.value = emptyCodeudor()
 }
 
 function searchApplicantForWizard() {
-  const i = codeudorEditIndex.value
-  if (i != null) {
-    searchApplicantForCoDebtor(i)
-  } else {
-    searchApplicantForCodeudor()
-  }
+  searchApplicantForCodeudor()
 }
 
 async function finalizeCodeudorWizard() {
@@ -779,9 +743,10 @@ async function finalizeCodeudorWizard() {
     return
   }
   if (codeudorEditIndex.value == null) {
-    form.value.co_debtors.push({ ...codeudorBeingAdded.value })
+    form.value.co_debtors.push(cloneApplicantForm(codeudorBeingAdded.value))
     toast.success('Codeudor agregado')
   } else {
+    form.value.co_debtors[codeudorEditIndex.value] = cloneApplicantForm(codeudorBeingAdded.value)
     toast.success('Cambios del codeudor guardados')
   }
   cancelAddingCodeudor()
@@ -857,15 +822,22 @@ function getActivityTemplatesFor(app: ApplicantForm): ActivityTemplateData[] {
 }
 
 function setActivityTemplatesFor(app: ApplicantForm, val: ActivityTemplateData[]): void {
-  if (!app.financial_info || typeof app.financial_info !== 'object') {
-    app.financial_info = {}
+  const prev = (app.financial_info && typeof app.financial_info === 'object')
+    ? { ...(app.financial_info as Record<string, unknown>) }
+    : {}
+  let clonedTemplates: ActivityTemplateData[] = []
+  try {
+    clonedTemplates = JSON.parse(JSON.stringify(val)) as ActivityTemplateData[]
+  } catch {
+    clonedTemplates = val.map(t => ({ ...t, data: { ...(t.data ?? {}) } }))
   }
-  const fi = app.financial_info as Record<string, unknown>
-  fi.activity_templates = val
-  fi.activity_templates_count = val.length
-  const sumUtilidad = sumUtilidadMensualFromTemplates(val)
-  const income = (fi.income ?? {}) as Record<string, unknown>
-  fi.income = { ...income, business: sumUtilidad }
+  const income = { ...((prev.income ?? {}) as Record<string, unknown>) }
+  app.financial_info = {
+    ...prev,
+    activity_templates: clonedTemplates,
+    activity_templates_count: clonedTemplates.length,
+    income: { ...income, business: sumUtilidadMensualFromTemplates(clonedTemplates) },
+  }
 }
 
 const debtorWithoutActivityTemplate = ref(false)
@@ -1147,7 +1119,6 @@ async function uploadAllDocuments(
   const pivots = app.application_applicants ?? app.applicationApplicants ?? []
   const debtorPivot = pivots.find((p: { role: string }) => (p.role ?? (p as any).Role) === 'DEUDOR')
   const coDebtorsList = app.co_debtors ?? app.coDebtors ?? []
-  const codeudorApplicantIds = coDebtorsList.map((c: any) => c.applicant_id ?? c.applicantId)
   const debtorApplicantId = debtorPivot
     ? Number((debtorPivot as { applicant_id?: number }).applicant_id ?? 0) || null
     : null
@@ -1314,9 +1285,9 @@ async function uploadAllDocuments(
   }
 
   const coDebtors = form.value.co_debtors ?? []
-  for (let i = 0; i < coDebtors.length && i < codeudorApplicantIds.length; i++) {
+  for (let i = 0; i < coDebtors.length; i++) {
     const co = coDebtors[i]
-    const applicantId = codeudorApplicantIds[i]
+    const applicantId = co ? resolveCodeudorApplicantId(co, i, coDebtorsList) : null
     if (!co || !applicantId) continue
     const docs = co.documents ?? []
     for (const doc of docs) {
@@ -2392,7 +2363,7 @@ onMounted(() => {
             <div v-else class="space-y-2">
               <div
                 v-for="(co, idx) in form.co_debtors"
-                :key="idx"
+                :key="`${idx}-${co.document_number || 'co'}`"
                 class="flex w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2.5 sm:gap-3"
               >
                 <Button
@@ -2467,6 +2438,7 @@ onMounted(() => {
 
             <div v-show="codeudorStep === 1" class="space-y-4">
               <ApplicantFormFields
+                :key="`codeudor-step1-${codeudorWizardSession}`"
                 ref="codeudorWizardStepOneFormRef"
                 v-model="codeudorWizardApplicant"
                 :credit-application-id="application?.id"
@@ -2482,13 +2454,16 @@ onMounted(() => {
             </div>
             <div v-show="codeudorStep === 2" class="space-y-4">
               <CreditsFinancialActivityFormList
+                :key="`codeudor-activity-${codeudorWizardSession}`"
                 ref="codeudorActivityTemplatesListRef"
                 :model-value="getActivityTemplatesFor(codeudorWizardApplicant)"
+                :dom-id-scope="`codeudor-${codeudorWizardSession}`"
                 @update:model-value="(v) => setActivityTemplatesFor(codeudorWizardApplicant, v)"
               />
             </div>
             <div v-show="codeudorStep === 3" class="space-y-4">
               <ApplicantFormFields
+                :key="`codeudor-step3-${codeudorWizardSession}`"
                 v-model="codeudorWizardApplicant"
                 :credit-application-id="application?.id"
                 :show-only-financial="true"

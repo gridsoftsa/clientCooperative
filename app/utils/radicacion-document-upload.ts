@@ -199,3 +199,32 @@ export function findDocumentIdByTitle(
   }
   return best
 }
+
+export type CodeudorApplicantIdRow = {
+  applicant_id?: number | null
+  applicantId?: number | null
+  document_number?: string | null
+  applicant?: { id?: number | null; document_number?: string | null } | null
+}
+
+/** Resuelve el applicant_id del codeudor por cédula (no por índice, para no cruzar archivos). */
+export function resolveCodeudorApplicantId(
+  co: { document_number?: string },
+  index: number,
+  rows: CodeudorApplicantIdRow[],
+): number | null {
+  const doc = String(co.document_number ?? '').trim()
+  if (doc !== '') {
+    const match = rows.find((row) => {
+      const rowDoc = String(row.document_number ?? row.applicant?.document_number ?? '').trim()
+      return rowDoc === doc
+    })
+    const matchedId = Number(match?.applicant_id ?? match?.applicantId ?? match?.applicant?.id ?? 0)
+    if (Number.isInteger(matchedId) && matchedId > 0) {
+      return matchedId
+    }
+  }
+  const fallback = rows[index]
+  const fallbackId = Number(fallback?.applicant_id ?? fallback?.applicantId ?? fallback?.applicant?.id ?? 0)
+  return Number.isInteger(fallbackId) && fallbackId > 0 ? fallbackId : null
+}
