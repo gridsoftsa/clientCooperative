@@ -22,7 +22,7 @@ export default defineNuxtRouteMiddleware(async () => {
 
   if (!user.value.must_change_password) {
     const { hasPermission } = usePermissions()
-    const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
+    const target = resolveAppHomePath(hasPermission)
     return navigateTo(target)
   }
 })

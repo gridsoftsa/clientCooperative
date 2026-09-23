@@ -13,6 +13,7 @@ type FunctionalDraft = {
   sla_business_days: string | number
   sort_order: string | number
   is_active: boolean
+  show_in_public_form: boolean
   archival_file_type_id: string
   _isNew?: boolean
   _removed?: boolean
@@ -52,7 +53,7 @@ const catalogTitle = computed(() =>
 
 const helperText = computed(() =>
   props.kind === 'functional-types'
-    ? `Opciones del desplegable «Tipo funcional» en nuevo radicado. La clave técnica se asigna sola al guardar. Configure respuesta, SLA, tipo de expediente automático y orden.`
+    ? `Opciones del desplegable «Tipo funcional» en nuevo radicado. La clave técnica se asigna sola al guardar. Configure respuesta, SLA, tipo de expediente automático y orden. «Formulario público» controla si el tipo sale en /ventanilla/formulario.`
     : `Mismo texto que aparece en el desplegable de «Medio de recepción» al radicar.`,
 )
 
@@ -88,6 +89,7 @@ function cloneFunctional(rows: VentanillaFunctionalTypeRow[]): FunctionalDraft[]
       sla_business_days: row.sla_business_days != null ? String(row.sla_business_days) : '',
       sort_order: String(row.sort_order ?? 0),
       is_active: row.is_active === undefined ? true : coerceBoolean(row.is_active),
+      show_in_public_form: row.show_in_public_form === undefined ? true : coerceBoolean(row.show_in_public_form),
       archival_file_type_id: row.archival_file_type_id != null
         ? String(row.archival_file_type_id)
         : NONE_ARCHIVAL_FILE_TYPE,
@@ -158,6 +160,7 @@ function addFunctionalRow() {
     sla_business_days: '',
     sort_order: String(maxOrder + 10),
     is_active: true,
+    show_in_public_form: true,
     archival_file_type_id: NONE_ARCHIVAL_FILE_TYPE,
     _isNew: true,
   })
@@ -395,7 +398,7 @@ watch(
     <template v-else>
       <div class="overflow-x-auto rounded-md border bg-background">
         <div
-          class="grid min-w-[48rem] grid-cols-[minmax(10rem,1.2fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_auto] gap-2 border-b bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground"
+          class="grid min-w-[56rem] grid-cols-[minmax(10rem,1.2fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_7rem_auto] gap-2 border-b bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground"
         >
           <span>Texto en el formulario</span>
           <span>Tipo de expediente</span>
@@ -403,12 +406,13 @@ watch(
           <span>SLA</span>
           <span>Orden</span>
           <span>Activo</span>
+          <span title="Si está marcado, el tipo aparece en el formulario público">Formulario público</span>
           <span v-if="editing && canEdit" class="w-9 shrink-0" />
         </div>
         <div
           v-for="(row, idx) in visibleFunctionalRows"
           :key="`${functionalRowKey(row) || 'new'}-${idx}`"
-          class="grid min-w-[48rem] grid-cols-[minmax(10rem,1.2fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
+          class="grid min-w-[56rem] grid-cols-[minmax(10rem,1.2fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_7rem_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
         >
           <Input
             v-model="row.label"
@@ -459,6 +463,13 @@ watch(
           <div class="flex justify-center py-0.5">
             <Checkbox
               v-model="row.is_active"
+              bare
+              :disabled="!editing || !canEdit"
+            />
+          </div>
+          <div class="flex justify-center py-0.5">
+            <Checkbox
+              v-model="row.show_in_public_form"
               bare
               :disabled="!editing || !canEdit"
             />

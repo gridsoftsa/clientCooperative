@@ -40,7 +40,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
         return navigateTo(changePasswordPage)
       }
       const { hasPermission } = usePermissions()
-      const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
+      const target = resolveAppHomePath(hasPermission)
       return navigateTo(target)
     }
     return
@@ -80,7 +80,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   if (!user.value?.must_change_password && to.path === changePasswordPage) {
     const { hasPermission } = usePermissions()
-    const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
+    const target = resolveAppHomePath(hasPermission)
     return navigateTo(target)
   }
 

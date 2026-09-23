@@ -14,7 +14,7 @@ function goBack() {
 function goHome() {
   // Ir a Radicación si no tienen dashboard_ver (evita bucle con /)
   const { hasPermission } = usePermissions()
-  const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
+  const target = resolveAppHomePath(hasPermission)
   router.push(target)
 }
 </script>

@@ -27,8 +27,10 @@ const senderEmail = ref('')
 const senderIdentifier = ref('')
 const subject = ref('')
 const body = ref('')
-const fileRows = ref<DocumentAttachmentRow[]>([createDocumentAttachmentRow('Documento principal')])
+const PUBLIC_INTAKE_MAX_ATTACHMENTS = 2
+const fileRows = ref<DocumentAttachmentRow[]>([])
 const intakeUploadConstraints = VENTANILLA_PUBLIC_INTAKE_UPLOAD_CONSTRAINTS
+const canAddAttachment = computed(() => fileRows.value.length < PUBLIC_INTAKE_MAX_ATTACHMENTS)
 const submitAttempted = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
@@ -66,13 +68,13 @@ const functionalTypeOptions = computed(() =>
 )
 
 function addFileRow() {
+  if (!canAddAttachment.value) {
+    return
+  }
   fileRows.value.push(createDocumentAttachmentRow())
 }
 
 function removeFileRow(index: number) {
-  if (fileRows.value.length <= 1) {
-    return
-  }
   fileRows.value.splice(index, 1)
 }
 
@@ -104,8 +106,8 @@ async function submit() {
   }
 
   const withFiles = fileRows.value.filter(row => row.file)
-  if (withFiles.length === 0) {
-    errorMessage.value = 'Adjunte al menos un documento.'
+  if (withFiles.length > PUBLIC_INTAKE_MAX_ATTACHMENTS) {
+    errorMessage.value = `Puede adjuntar como máximo ${PUBLIC_INTAKE_MAX_ATTACHMENTS} anexos.`
     return
   }
 
@@ -157,14 +159,14 @@ async function submit() {
     receivedId.value = created.id
     receivedCode.value = created.receipt_code
     confirmationEmailSent.value = created.confirmation_email_sent
-    successMessage.value = created.message
+    successMessage.value = created.message ?? ''
     senderName.value = ''
     senderEmail.value = ''
     senderIdentifier.value = ''
     subject.value = ''
     body.value = ''
     functionalTypeKey.value = null
-    fileRows.value = [createDocumentAttachmentRow('Documento principal')]
+    fileRows.value = []
   } catch (e: unknown) {
     const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
     const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
@@ -186,7 +188,7 @@ async function submit() {
           Formulario web de radicación
         </h1>
         <p class="mt-2 text-sm text-muted-foreground">
-          Envíe su solicitud y anexos. El equipo de ventanilla la clasificará antes de generar el radicado oficial.
+          Envíe su solicitud. Los anexos son opcionales (máximo dos). El equipo de ventanilla la clasificará antes de generar el radicado oficial.
         </p>
       </div>
 
@@ -269,12 +271,18 @@ async function submit() {
         <div class="space-y-4">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <Label>Documentos anexos *</Label>
+              <Label>Anexos (opcional)</Label>
               <p class="text-xs text-muted-foreground">
-                Indique título, folios y archivo de cada documento. {{ intakeUploadConstraints.pickerHint }}
+                Puede adjuntar hasta {{ PUBLIC_INTAKE_MAX_ATTACHMENTS }} anexos. {{ intakeUploadConstraints.pickerHint }}
               </p>
             </div>
-            <Button type="button" variant="outline" size="sm" @click="addFileRow">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              :disabled="!canAddAttachment"
+              @click="addFileRow"
+            >
               <Icon name="i-lucide-plus" class="mr-1 size-4" />
               Agregar anexo
             </Button>
@@ -283,10 +291,10 @@ async function submit() {
           <DocumentsDocumentAttachmentUploadCard
             v-for="(row, index) in fileRows"
             :key="index"
-            :label="index === 0 ? 'Documento principal' : `Anexo ${index}`"
-            :primary="index === 0"
-            :removable="fileRows.length > 1"
-            :submit-attempted="submitAttempted"
+            :label="`Anexo ${index + 1}`"
+            :primary="false"
+            :removable="true"
+            :submit-attempted="submitAttempted && Boolean(row.file)"
             :upload-constraints="intakeUploadConstraints"
             :title="row.title"
             :folio-start="row.folioStart"

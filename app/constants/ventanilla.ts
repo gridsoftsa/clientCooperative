@@ -76,3 +76,23 @@ export function ventanillaTrafficLightBadgeClass(
 
   return ''
 }
+
+/** Fondo de fila de listados según semáforo SLA (no solo la columna). */
+export function ventanillaTrafficLightRowClass(
+  status: VentanillaTrafficLightValue | null | undefined,
+  requiresResponse?: boolean,
+): string {
+  if (requiresResponse === false || !status) {
+    return ''
+  }
+
+  if (status === 'red') {
+    return 'border-l-4 border-l-red-600 bg-red-500/12 hover:bg-red-500/18 dark:bg-red-950/40 dark:hover:bg-red-950/55'
+  }
+
+  if (status === 'orange') {
+    return 'border-l-4 border-l-amber-500 bg-amber-500/12 hover:bg-amber-500/18 dark:bg-amber-950/40 dark:hover:bg-amber-950/55'
+  }
+
+  return 'border-l-4 border-l-emerald-600 bg-emerald-500/12 hover:bg-emerald-500/18 dark:bg-emerald-950/35 dark:hover:bg-emerald-950/50'
+}

@@ -49,7 +49,7 @@ async function onSubmit(event: Event) {
       return
     }
 
-    const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
+    const target = resolveAppHomePath(hasPermission)
     await navigateTo(target)
   } catch (e: any) {
     const firstFieldError =

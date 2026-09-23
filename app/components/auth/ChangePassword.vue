@@ -42,7 +42,7 @@ async function onSubmit(event: Event) {
     })
     await refetchUserSilently()
 
-    const target = hasPermission('dashboard_ver') ? '/' : '/radicacion'
+    const target = resolveAppHomePath(hasPermission)
     await navigateTo(target)
   } catch (e: any) {
     const firstFieldError =

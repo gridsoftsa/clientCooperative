@@ -3,6 +3,7 @@ import {
   VENTANILLA_FILING_STATUS_LABELS,
   VENTANILLA_FILING_TYPE_LABELS,
   VENTANILLA_TRAFFIC_LIGHT_LABELS,
+  ventanillaTrafficLightRowClass,
 } from '~/constants/ventanilla'
 import type {
   VentanillaCatalogData,
@@ -25,6 +26,7 @@ definePageMeta({
 })
 
 const router = useRouter()
+const route = useRoute()
 const ventanillaApi = useVentanillaApi()
 const { $api } = useNuxtApp()
 const { hasPermission } = usePermissions()
@@ -191,6 +193,11 @@ watch(filterOrgUnitId, async (orgUnitId, previousOrgUnitId) => {
 })
 
 onMounted(async () => {
+  const trafficFromQuery = String(route.query.traffic_light_status ?? '')
+  if (trafficFromQuery === 'green' || trafficFromQuery === 'orange' || trafficFromQuery === 'red') {
+    filterTrafficLight.value = trafficFromQuery
+  }
+
   try {
     const [catalogData, orgUnitsRes] = await Promise.all([
       ventanillaApi.fetchCatalog(),
@@ -630,6 +637,7 @@ function statusLabel(status: string): string {
               v-for="row in filings"
               :key="row.id"
               class="cursor-pointer"
+              :class="ventanillaTrafficLightRowClass(row.traffic_light_status, row.requires_response)"
               @click="router.push(`/ventanilla/${row.id}`)"
             >
               <TableCell class="font-mono text-xs">

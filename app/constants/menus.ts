@@ -9,7 +9,7 @@ export const navMenu: NavMenu[] = [
         title: 'Dashboard',
         icon: 'i-lucide-home',
         link: '/',
-        permission: 'dashboard_ver',
+        anyPermission: ['dashboard_ver', 'ventanilla_dashboard_ver'],
       },
       {
         title: 'Comunicados',

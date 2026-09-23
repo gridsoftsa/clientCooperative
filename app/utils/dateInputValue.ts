@@ -44,11 +44,30 @@ export function startOfCurrentMonthIsoDateString(): string {
   return `${y}-${m}-01`
 }
 
+/** Último día del mes actual en zona local (`YYYY-MM-DD`). */
+export function endOfCurrentMonthIsoDateString(): string {
+  const d = new Date()
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0)
+  const y = last.getFullYear()
+  const m = String(last.getMonth() + 1).padStart(2, '0')
+  const day = String(last.getDate()).padStart(2, '0')
+
+  return `${y}-${m}-${day}`
+}
+
 /** Rango por defecto: inicio del mes actual hasta hoy. */
 export function defaultCurrentMonthDateRange(): { from: string, to: string } {
   return {
     from: startOfCurrentMonthIsoDateString(),
     to: todayIsoDateString(),
+  }
+}
+
+/** Mes calendario completo (día 1 al último día del mes actual). */
+export function currentCalendarMonthDateRange(): { from: string, to: string } {
+  return {
+    from: startOfCurrentMonthIsoDateString(),
+    to: endOfCurrentMonthIsoDateString(),
   }
 }
 

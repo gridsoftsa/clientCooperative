@@ -25,6 +25,7 @@ export interface VentanillaFunctionalTypeRow {
   sla_business_days: number | null
   has_active_workflow_binding?: boolean
   is_active?: boolean
+  show_in_public_form?: boolean
   sort_order?: number
   archival_file_type_id?: number | null
   archival_file_type?: {
@@ -385,6 +386,36 @@ export interface VentanillaSlaComplianceDashboardData {
     red: number
   }
   compliance_trend: VentanillaSlaComplianceTrendRow[]
+}
+
+export interface VentanillaHomeDashboardRecentFiling {
+  id: number
+  filing_number: string
+  filing_type: VentanillaFilingTypeValue
+  functional_type_key: string
+  functional_type_label: string | null
+  status: VentanillaFilingStatusValue
+  subject: string
+  filed_at: string | null
+  requires_response: boolean
+  traffic_light_status: VentanillaTrafficLightValue | null
+  org_unit_responsible: { id: number; name: string; code: string | null } | null
+}
+
+export interface VentanillaHomeDashboardData {
+  filters?: {
+    filed_from: string | null
+    filed_to: string | null
+  }
+  pending_classification: number
+  open_filings: number
+  total_filings: number
+  sla: VentanillaSlaComplianceDashboardData['kpis']
+  by_traffic_light: VentanillaSlaComplianceDashboardData['by_traffic_light']
+  by_filing_status: VentanillaSlaComplianceDashboardData['by_filing_status']
+  by_filing_type: Record<VentanillaFilingTypeValue, number>
+  by_functional_type: Array<{ key: string; label: string; total: number }>
+  recent: VentanillaHomeDashboardRecentFiling[]
 }
 
 export interface VentanillaFilingEscalationRow {

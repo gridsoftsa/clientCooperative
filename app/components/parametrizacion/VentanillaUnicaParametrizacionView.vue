@@ -118,6 +118,7 @@ async function saveFunctional(rows: Array<{
   sla_business_days: string | number
   sort_order: string | number
   is_active: boolean
+  show_in_public_form: boolean
   archival_file_type_id: string
   _isNew?: boolean
   _removed?: boolean
@@ -139,6 +140,7 @@ async function saveFunctional(rows: Array<{
         requires_response_default: row.requires_response_default === true,
         sla_business_days: slaPayload(row.sla_business_days, row.requires_response_default),
         is_active: row._removed ? false : row.is_active !== false,
+        show_in_public_form: row.show_in_public_form !== false,
         sort_order: Number(row.sort_order) || 0,
         archival_file_type_id: row.archival_file_type_id === 'none' || row.archival_file_type_id === ''
           ? null
