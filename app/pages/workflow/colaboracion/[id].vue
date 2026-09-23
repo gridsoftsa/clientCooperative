@@ -157,21 +157,16 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
           <span v-if="collaboration?.filing?.subject"> · {{ collaboration.filing.subject }}</span>
           <span v-if="collaboration?.task?.stage"> · {{ collaboration.task.stage.name }}</span>
         </p>
-        <div v-if="collaboration?.filing" class="flex flex-wrap items-center gap-2 pt-1">
-          <VentanillaTrafficLightBadge
-            :status="collaboration.filing.traffic_light_status"
-            :requires-response="collaboration.filing.requires_response"
-            scope-label="SLA radicado"
+        <div v-if="collaboration?.filing?.requires_response" class="max-w-lg pt-2">
+          <VentanillaSlaProgressBar
+            v-if="collaboration.filing.sla_business_days"
+            :sla-business-days="collaboration.filing.sla_business_days"
+            :elapsed-business-days="collaboration.filing.sla_elapsed_business_days"
+            :deadline="collaboration.filing.response_deadline_at"
           />
-          <span
-            v-if="collaboration.filing.requires_response && collaboration.filing.response_deadline_at"
-            class="text-muted-foreground text-xs"
-          >
+          <p v-else-if="collaboration.filing.response_deadline_at" class="text-muted-foreground text-xs">
             Vence {{ formatCollaborationDate(collaboration.filing.response_deadline_at) }}
-            <template v-if="collaboration.filing.sla_business_days">
-              · {{ collaboration.filing.sla_business_days }} días hábiles
-            </template>
-          </span>
+          </p>
         </div>
       </div>
     </div>

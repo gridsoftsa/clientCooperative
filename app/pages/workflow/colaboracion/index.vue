@@ -128,17 +128,19 @@ onMounted(() => {
               <p v-if="row.request_note" class="mt-1 line-clamp-2 text-sm">
                 {{ row.request_note }}
               </p>
-              <p v-if="row.filing?.requires_response && row.filing.response_deadline_at" class="mt-1 text-xs text-muted-foreground">
+              <div v-if="row.filing?.requires_response && row.filing.sla_business_days" class="mt-2 max-w-md">
+                <VentanillaSlaProgressBar
+                  compact
+                  :sla-business-days="row.filing.sla_business_days"
+                  :elapsed-business-days="row.filing.sla_elapsed_business_days"
+                  :deadline="row.filing.response_deadline_at"
+                />
+              </div>
+              <p v-else-if="row.filing?.requires_response && row.filing.response_deadline_at" class="mt-1 text-xs text-muted-foreground">
                 Vence {{ formatDate(row.filing.response_deadline_at) }}
               </p>
             </div>
             <div class="flex items-center gap-2">
-              <VentanillaTrafficLightBadge
-                v-if="row.filing"
-                :status="row.filing.traffic_light_status"
-                :requires-response="row.filing.requires_response"
-                scope-label="SLA"
-              />
               <Badge :variant="row.status === 'responded' ? 'secondary' : 'outline'">
                 {{ statusLabel(row.status) }}
               </Badge>

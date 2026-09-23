@@ -186,19 +186,18 @@ function openFilingDetail() {
             {{ filing.doc_document_type.name }}
           </dd>
         </div>
-        <div v-if="filing.requires_response">
+        <div v-if="filing.requires_response" class="sm:col-span-2">
           <dt class="text-muted-foreground text-xs">
             SLA del radicado
           </dt>
-          <dd class="mt-1 space-y-1">
-            <VentanillaTrafficLightBadge
-              :status="filing.traffic_light_status"
-              :requires-response="filing.requires_response"
+          <dd class="mt-2 space-y-1">
+            <VentanillaSlaProgressBar
+              v-if="filing.sla_business_days"
+              :sla-business-days="filing.sla_business_days"
+              :elapsed-business-days="filing.sla_elapsed_business_days"
+              :deadline="filing.response_deadline_at"
             />
-            <p v-if="filing.sla_business_days" class="font-medium">
-              {{ filing.sla_business_days }} días hábiles
-            </p>
-            <p v-if="filing.response_deadline_at" class="text-muted-foreground text-xs">
+            <p v-else-if="filing.response_deadline_at" class="text-muted-foreground text-xs">
               Vence {{ formatDate(filing.response_deadline_at) }}
             </p>
           </dd>
