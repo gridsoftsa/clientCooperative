@@ -188,10 +188,19 @@ function openFilingDetail() {
         </div>
         <div v-if="filing.requires_response">
           <dt class="text-muted-foreground text-xs">
-            Respuesta requerida
+            SLA del radicado
           </dt>
-          <dd class="mt-1 font-medium">
-            Sí · vence {{ formatDate(filing.response_deadline_at) }}
+          <dd class="mt-1 space-y-1">
+            <VentanillaTrafficLightBadge
+              :status="filing.traffic_light_status"
+              :requires-response="filing.requires_response"
+            />
+            <p v-if="filing.sla_business_days" class="font-medium">
+              {{ filing.sla_business_days }} días hábiles
+            </p>
+            <p v-if="filing.response_deadline_at" class="text-muted-foreground text-xs">
+              Vence {{ formatDate(filing.response_deadline_at) }}
+            </p>
           </dd>
         </div>
         <div v-if="filing.notes" class="sm:col-span-2">
