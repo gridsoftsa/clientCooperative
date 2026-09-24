@@ -172,6 +172,20 @@ export function readDocumentIdMap(
  * Busca un documento existente por título (p. ej. al reemplazar checklist sin id en el mapa).
  * Prefiere el id más alto si hay varios (el más reciente).
  */
+/** True si el documento es de ese solicitante. Con `applicantId` no se aceptan filas de otro ni `applicant_id` vacío. */
+export function documentBelongsToApplicant(
+  doc: { applicant_id?: number | null },
+  applicantId?: number | null,
+): boolean {
+  if (applicantId == null || !Number.isFinite(Number(applicantId)) || Number(applicantId) < 1) {
+    return false
+  }
+  if (doc.applicant_id == null) {
+    return false
+  }
+  return Number(doc.applicant_id) === Number(applicantId)
+}
+
 export function findDocumentIdByTitle(
   documents: Array<{ id?: number; title?: string | null; applicant_id?: number | null }>,
   title: string,
@@ -181,12 +195,15 @@ export function findDocumentIdByTitle(
   if (!needle) {
     return null
   }
+  if (applicantId == null || !Number.isFinite(Number(applicantId)) || Number(applicantId) < 1) {
+    return null
+  }
   let best: number | null = null
   for (const doc of documents) {
     if ((doc.title ?? '').trim() !== needle) {
       continue
     }
-    if (applicantId != null && doc.applicant_id != null && Number(doc.applicant_id) !== Number(applicantId)) {
+    if (!documentBelongsToApplicant(doc, applicantId)) {
       continue
     }
     const id = typeof doc.id === 'number' ? doc.id : Number(doc.id)

@@ -326,6 +326,16 @@ type AuxiliaryDocumentsSectionExpose = {
 }
 
 const auxiliaryDocumentsSectionRef = ref<AuxiliaryDocumentsSectionExpose | null>(null)
+
+/** Checklist auxiliar: solo archivos de este solicitante (no reutilizar el CTL de otro codeudor). */
+const auxiliaryDocumentsForThisApplicant = computed(() => {
+  const docs = props.creditApplicationDocuments ?? []
+  const aid = Number(props.modelValue.id)
+  if (!Number.isInteger(aid) || aid < 1) {
+    return []
+  }
+  return docs.filter(d => Number(d.applicant_id) === aid)
+})
 const submitValidationAttempted = ref(false)
 /** Tras cualquier cambio en fecha de nacimiento o expedición: validación en vivo (sin esperar blur ni envío). */
 const liveApplicantDateCheckRequested = ref(false)
@@ -1308,7 +1318,7 @@ function formatFileSize(bytes: number): string {
           ref="auxiliaryDocumentsSectionRef"
           :applicant="modelValue"
           :credit-application-id="creditApplicationId ?? undefined"
-          :application-documents="creditApplicationDocuments ?? []"
+          :application-documents="auxiliaryDocumentsForThisApplicant"
           :economic-activity-options="economicActivityOptions"
           :auxiliary-pending-upload-hint="auxiliaryPendingUploadHint"
           :interaction-mode="auxiliaryInteractionMode"

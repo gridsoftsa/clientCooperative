@@ -2466,11 +2466,14 @@ async function flushCodeudorAuxiliaryDocumentUploads(applicantId: number): Promi
     if (Number.isFinite(newId) && newId > 0) {
       docMap[key] = newId
       if (typeof prevId === 'number' && prevId > 0 && prevId !== newId) {
-        try {
-          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
-          removeInsurabilityDocumentFromApplicationState(prevId)
-        } catch (e) {
-          console.error(e)
+        const prevDoc = (application.value?.documents ?? []).find((d: { id?: number }) => Number(d.id) === Number(prevId)) as { applicant_id?: number | null } | undefined
+        if (prevDoc && Number(prevDoc.applicant_id) === Number(applicantId)) {
+          try {
+            await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+            removeInsurabilityDocumentFromApplicationState(prevId)
+          } catch (e) {
+            console.error(e)
+          }
         }
       }
     }

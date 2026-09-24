@@ -21,15 +21,14 @@ function findDocMeta(
   documents: AuxiliaryApplicationDocumentRef[],
   applicantId?: number | null,
 ): AuxiliaryApplicationDocumentRef | null {
-  const list = documents ?? []
-  const byIdAndApplicant = list.find(d =>
-    creditApplicationDocumentIdEquals(d.id, docId)
-    && (applicantId == null || d.applicant_id == null || Number(d.applicant_id) === Number(applicantId)),
-  )
-  if (byIdAndApplicant) {
-    return byIdAndApplicant
+  if (applicantId == null || !Number.isFinite(Number(applicantId)) || Number(applicantId) < 1) {
+    return null
   }
-  return list.find(d => creditApplicationDocumentIdEquals(d.id, docId)) ?? null
+  const list = documents ?? []
+  return list.find(d =>
+    creditApplicationDocumentIdEquals(d.id, docId)
+    && Number(d.applicant_id) === Number(applicantId),
+  ) ?? null
 }
 
 /** True si el `label` aparece una sola vez en el checklist (seguro recuperar por título). */
@@ -64,15 +63,14 @@ function findAuxiliaryDocIdByUniqueLabelTitle(options: {
     // el título «Auxiliar — …» es idéntico y no puede distinguirlas.
     return null
   }
+  if (options.applicantId == null || Number(options.applicantId) < 1) {
+    return null
+  }
   const uploadTitle = titleForAuxiliaryDocumentUpload(options.label)
   return findDocumentIdByTitle(
     options.applicationDocuments,
     uploadTitle,
     options.applicantId,
-  ) ?? findDocumentIdByTitle(
-    options.applicationDocuments,
-    uploadTitle,
-    null,
   )
 }
 
