@@ -450,6 +450,7 @@ export interface VentanillaFilingVerificationData {
 export interface VentanillaFilingDetail extends VentanillaFilingSummary {
   requires_response_manual: boolean
   sla_business_days: number | null
+  sla_elapsed_business_days: number | null
   producer_org_unit?: { id: number; name: string; code: string } | null
   recipient_org_unit?: { id: number; name: string; code: string } | null
   sender_name: string | null

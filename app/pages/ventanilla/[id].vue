@@ -525,6 +525,12 @@ async function viewSticker() {
           </Button>
         </div>
       </div>
+      <VentanillaSlaProgressBar
+        v-if="filing.requires_response && filing.sla_business_days"
+        :sla-business-days="filing.sla_business_days"
+        :elapsed-business-days="filing.sla_elapsed_business_days"
+        :deadline="filing.response_deadline_at"
+      />
     </div>
 
     <div v-if="loading" class="text-muted-foreground text-sm">
@@ -638,12 +644,16 @@ async function viewSticker() {
                 {{ formatDate(filing.response_deadline_at) }}
               </dd>
             </div>
-            <div v-if="filing.sla_business_days">
+            <div v-if="filing.requires_response && filing.sla_business_days" class="sm:col-span-2 xl:col-span-3">
               <dt class="text-muted-foreground text-xs">
-                SLA radicado
+                SLA del radicado
               </dt>
-              <dd class="mt-1 font-medium">
-                {{ filing.sla_business_days }} días hábiles
+              <dd class="mt-2">
+                <VentanillaSlaProgressBar
+                  :sla-business-days="filing.sla_business_days"
+                  :elapsed-business-days="filing.sla_elapsed_business_days"
+                  :deadline="filing.response_deadline_at"
+                />
               </dd>
             </div>
             <div v-if="filing.workflow?.workflow_name">

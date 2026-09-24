@@ -194,10 +194,19 @@ export function useWorkflowApi() {
     await api(`/workflow/tasks/${taskId}/collaborators/${collaboratorId}`, { method: 'DELETE' })
   }
 
-  async function fetchMyCollaborations(status?: 'pending' | 'responded'): Promise<WorkflowTaskCollaboratorRow[]> {
+  async function fetchMyCollaborations(
+    status?: 'pending' | 'responded',
+    dates?: { createdFrom?: string, createdTo?: string },
+  ): Promise<WorkflowTaskCollaboratorRow[]> {
     const query: Record<string, string> = {}
     if (status) {
       query.status = status
+    }
+    if (dates?.createdFrom) {
+      query.created_from = dates.createdFrom
+    }
+    if (dates?.createdTo) {
+      query.created_to = dates.createdTo
     }
 
     const res = await api<{ data: WorkflowTaskCollaboratorRow[] }>('/workflow/collaborations/mine', { query })
