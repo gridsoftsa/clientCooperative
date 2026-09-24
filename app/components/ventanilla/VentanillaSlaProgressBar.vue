@@ -10,11 +10,13 @@ const props = withDefaults(defineProps<{
   elapsedBusinessDays?: number | null
   deadline?: string | null
   compact?: boolean
+  dense?: boolean
 }>(), {
   slaBusinessDays: null,
   elapsedBusinessDays: null,
   deadline: null,
   compact: false,
+  dense: false,
 })
 
 const toneClass: Record<SlaSectionTone, string> = {
@@ -52,16 +54,24 @@ const activeIndex = computed(() => {
 
 const activeSection = computed(() => sections.value[activeIndex.value] ?? null)
 
+const dayLabel = computed(() => {
+  if (overdue.value) {
+    return `Vencido · día ${elapsed.value} de ${total.value}`
+  }
+
+  return `Día ${Math.min(elapsed.value, total.value)} de ${total.value}`
+})
+
 const progressLabel = computed(() => {
   if (!activeSection.value) {
     return ''
   }
 
-  const dayLabel = overdue.value
-    ? `Vencido · día ${elapsed.value} de ${total.value}`
-    : `Día ${Math.min(elapsed.value, total.value)} de ${total.value}`
+  if (props.dense) {
+    return dayLabel.value
+  }
 
-  return `${dayLabel} · ${activeSection.value.label}`
+  return `${dayLabel.value} · ${activeSection.value.label}`
 })
 
 const formattedDeadline = computed(() => {
@@ -92,9 +102,10 @@ function dayRange(fromDay: number, toDay: number): string {
 </script>
 
 <template>
-  <div v-if="sections.length" class="min-w-0 space-y-1">
+  <div v-if="sections.length" class="min-w-0" :class="dense ? 'space-y-1.5' : 'space-y-1'">
     <div
-      class="relative h-2.5 w-full"
+      class="relative w-full"
+      :class="dense ? 'h-2' : 'h-2.5'"
       role="img"
       :aria-label="progressLabel"
     >
@@ -112,7 +123,7 @@ function dayRange(fromDay: number, toDay: number): string {
         :style="{ left: progress >= 100 ? 'calc(100% - 2px)' : `${progress}%` }"
       />
     </div>
-    <div class="text-muted-foreground flex text-[10px] leading-tight">
+    <div v-if="!dense" class="text-muted-foreground flex text-[10px] leading-tight">
       <span
         v-for="(section, index) in sections"
         :key="`${section.tone}-label`"
@@ -124,9 +135,9 @@ function dayRange(fromDay: number, toDay: number): string {
         <template v-if="!compact"> · {{ section.label }}</template>
       </span>
     </div>
-    <p class="text-muted-foreground text-xs">
+    <p class="text-muted-foreground text-xs leading-tight">
       {{ progressLabel }}
-      <template v-if="deadline">
+      <template v-if="deadline && !dense">
         · vence {{ formattedDeadline }}
       </template>
     </p>

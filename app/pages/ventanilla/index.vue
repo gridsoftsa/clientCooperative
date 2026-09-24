@@ -626,7 +626,7 @@ function statusLabel(status: string): string {
               <TableHead>Área responsable</TableHead>
               <TableHead>Fecha</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead>SLA radicado</TableHead>
+              <TableHead class="min-w-[9.5rem]">SLA radicado</TableHead>
               <TableHead>Etapa workflow</TableHead>
               <TableHead>SLA etapa</TableHead>
               <TableHead />
@@ -663,8 +663,15 @@ function statusLabel(status: string): string {
                   {{ statusLabel(row.status) }}
                 </Badge>
               </TableCell>
-              <TableCell>
+              <TableCell class="min-w-[9.5rem] py-3 align-middle">
+                <VentanillaSlaProgressBar
+                  v-if="row.requires_response && row.sla_business_days"
+                  dense
+                  :sla-business-days="row.sla_business_days"
+                  :elapsed-business-days="row.sla_elapsed_business_days"
+                />
                 <VentanillaTrafficLightBadge
+                  v-else
                   :status="row.traffic_light_status"
                   :requires-response="row.requires_response"
                 />

@@ -310,6 +310,8 @@ export interface VentanillaFilingSummary {
   filed_at: string
   requires_response: boolean
   response_deadline_at: string | null
+  sla_business_days: number | null
+  sla_elapsed_business_days: number | null
   traffic_light_status: VentanillaTrafficLightValue | null
   filed_by?: { id: number; name: string }
   org_unit_responsible?: { id: number; name: string; code: string }
@@ -449,8 +451,6 @@ export interface VentanillaFilingVerificationData {
 
 export interface VentanillaFilingDetail extends VentanillaFilingSummary {
   requires_response_manual: boolean
-  sla_business_days: number | null
-  sla_elapsed_business_days: number | null
   producer_org_unit?: { id: number; name: string; code: string } | null
   recipient_org_unit?: { id: number; name: string; code: string } | null
   sender_name: string | null
