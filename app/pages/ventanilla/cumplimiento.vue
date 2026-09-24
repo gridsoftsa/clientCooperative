@@ -50,6 +50,7 @@ const trafficLightChartData = computed(() => {
 
   return [
     { label: VENTANILLA_TRAFFIC_LIGHT_LABELS.green, cantidad: data.value.by_traffic_light.green },
+    { label: VENTANILLA_TRAFFIC_LIGHT_LABELS.yellow, cantidad: data.value.by_traffic_light.yellow },
     { label: VENTANILLA_TRAFFIC_LIGHT_LABELS.orange, cantidad: data.value.by_traffic_light.orange },
     { label: VENTANILLA_TRAFFIC_LIGHT_LABELS.red, cantidad: data.value.by_traffic_light.red },
   ].filter((row) => row.cantidad > 0)

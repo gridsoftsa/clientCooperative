@@ -437,6 +437,16 @@ export function useVentanillaApi() {
     escalation_notify_immediate_supervisor: boolean
     escalation_notify_unit_manager: boolean
     escalation_functional_type_keys: string[] | null
+    alert_rules?: Array<{
+      id?: number
+      name: string
+      alert_kind: 'first_notice' | 'reminder' | 'urgent' | 'follow_up'
+      tone: 'green' | 'yellow' | 'orange' | 'red'
+      trigger_mode: 'days_after_filed' | 'progress_percentage'
+      trigger_value: number
+      repeat_mode: 'none' | 'every_12_hours' | 'every_24_hours'
+      is_active: boolean
+    }>
   }): Promise<VentanillaSlaSettingsData> {
     const res = await api<{ data: VentanillaSlaSettingsData }>('/ventanilla/sla-settings', {
       method: 'PUT',

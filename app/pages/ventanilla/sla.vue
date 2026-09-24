@@ -4,6 +4,7 @@ import type {
   VentanillaCatalogData,
   VentanillaColombiaHolidayPreviewData,
   VentanillaNotificationSettingsRow,
+  VentanillaSlaAlertRuleRow,
   VentanillaSlaSettingsData,
   VentanillaSlaSettingsRow,
 } from '~/types/ventanilla'
@@ -30,6 +31,32 @@ const catalogPreview = ref<VentanillaColombiaHolidayPreviewData | null>(null)
 const catalogLoading = ref(false)
 const replaceCatalogYear = ref(false)
 const activeTab = ref('general')
+const alertRules = ref<VentanillaSlaAlertRuleRow[]>([])
+
+const alertKindOptions = [
+  { value: 'first_notice', label: 'Primer aviso' },
+  { value: 'reminder', label: 'Recordatorio' },
+  { value: 'urgent', label: 'Urgente' },
+  { value: 'follow_up', label: 'Seguimiento' },
+] as const
+
+const alertToneOptions = [
+  { value: 'green', label: 'Verde', dot: 'bg-emerald-500' },
+  { value: 'yellow', label: 'Amarillo', dot: 'bg-yellow-400' },
+  { value: 'orange', label: 'Naranja', dot: 'bg-orange-500' },
+  { value: 'red', label: 'Rojo', dot: 'bg-red-500' },
+] as const
+
+const alertTriggerOptions = [
+  { value: 'days_after_filed', label: 'Días después de creado' },
+  { value: 'progress_percentage', label: 'Porcentaje de la barra' },
+] as const
+
+const alertRepeatOptions = [
+  { value: 'none', label: 'Sin repetir' },
+  { value: 'every_12_hours', label: 'Cada 12 horas' },
+  { value: 'every_24_hours', label: 'Cada 24 horas' },
+] as const
 const catalog = ref<VentanillaCatalogData | null>(null)
 
 const escalationFunctionalTypeKeys = computed({
@@ -144,6 +171,31 @@ function assignSlaData(payload: VentanillaSlaSettingsData): void {
     ...payload,
     settings: normalizeSlaSettings(payload.settings),
   }
+  alertRules.value = (payload.alert_rules ?? []).map(rule => ({
+    ...rule,
+    is_active: coerceBoolean(rule.is_active),
+    trigger_value: Number(rule.trigger_value) || 0,
+  }))
+}
+
+function addAlertRule(): void {
+  alertRules.value.push({
+    name: 'Primer aviso',
+    alert_kind: 'first_notice',
+    tone: 'green',
+    trigger_mode: 'days_after_filed',
+    trigger_value: 3,
+    repeat_mode: 'none',
+    is_active: true,
+  })
+}
+
+function removeAlertRule(index: number): void {
+  alertRules.value.splice(index, 1)
+}
+
+function toneDot(tone: string): string {
+  return alertToneOptions.find(option => option.value === tone)?.dot ?? 'bg-muted-foreground'
 }
 
 onMounted(() => load())
@@ -236,6 +288,19 @@ async function saveSettings() {
     return
   }
 
+  for (const rule of alertRules.value) {
+    if (!rule.name.trim()) {
+      toast.error('Cada alerta necesita un nombre.')
+      activeTab.value = 'semaphore'
+      return
+    }
+    if (rule.trigger_mode === 'progress_percentage' && (rule.trigger_value < 1 || rule.trigger_value > 100)) {
+      toast.error('El porcentaje de progreso debe estar entre 1 y 100.')
+      activeTab.value = 'semaphore'
+      return
+    }
+  }
+
   saving.value = true
   try {
     const updated = await api.updateSlaSettings({
@@ -254,6 +319,16 @@ async function saveSettings() {
       escalation_notify_immediate_supervisor: data.value.settings.escalation_notify_immediate_supervisor,
       escalation_notify_unit_manager: data.value.settings.escalation_notify_unit_manager,
       escalation_functional_type_keys: data.value.settings.escalation_functional_type_keys,
+      alert_rules: alertRules.value.map(rule => ({
+        id: rule.id,
+        name: rule.name.trim(),
+        alert_kind: rule.alert_kind,
+        tone: rule.tone,
+        trigger_mode: rule.trigger_mode,
+        trigger_value: Number(rule.trigger_value) || 0,
+        repeat_mode: rule.repeat_mode,
+        is_active: rule.is_active,
+      })),
     })
     assignSlaData(updated)
     toast.success('Configuración SLA guardada')
@@ -355,7 +430,7 @@ function formatHolidayDate(value: string): string {
         </div>
       </div>
       <Button
-        v-if="data && activeTab === 'general'"
+        v-if="data && (activeTab === 'general' || activeTab === 'semaphore')"
         :disabled="saving"
         class="shrink-0"
         @click="saveSettings"
@@ -379,9 +454,12 @@ function formatHolidayDate(value: string): string {
 
     <template v-else-if="data">
       <Tabs v-model="activeTab" default-value="general">
-        <TabsList class="grid h-auto w-full max-w-md grid-cols-2">
+        <TabsList class="grid h-auto w-full max-w-xl grid-cols-3">
           <TabsTrigger value="general">
-            Calendario y semáforo
+            Calendario
+          </TabsTrigger>
+          <TabsTrigger value="semaphore">
+            Semáforo
           </TabsTrigger>
           <TabsTrigger value="holidays">
             Festivos
@@ -389,93 +467,39 @@ function formatHolidayDate(value: string): string {
         </TabsList>
 
         <TabsContent value="general" class="mt-4 space-y-4">
-          <div class="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader class="pb-3">
-                <CardTitle class="text-base">
-                  Calendario laboral
-                </CardTitle>
-              </CardHeader>
-              <CardContent class="space-y-3">
-                <div class="space-y-1.5">
-                  <Label>Nombre del calendario</Label>
-                  <Input v-model="data.settings.calendar_name" />
-                </div>
-                <div class="space-y-1.5">
-                  <Label>Días laborales</Label>
-                  <div class="flex flex-wrap gap-1.5">
-                    <label
-                      v-for="day in weekDays"
-                      :key="day.value"
-                      class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors hover:bg-muted/50 sm:text-sm"
-                      :class="isWorkingDaySelected(day.value)
-                        ? 'border-primary/40 bg-primary/5'
-                        : ''"
-                    >
-                      <StyledNativeCheckbox
-                        bare
-                        :checked="isWorkingDaySelected(day.value)"
-                        @update:checked="toggleWorkingDay(day.value, $event)"
-                      />
-                      {{ day.label }}
-                    </label>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader class="pb-3">
-                <CardTitle class="text-base">
-                  Semáforo
-                </CardTitle>
-              </CardHeader>
-              <CardContent class="space-y-3">
-                <div class="grid gap-3 sm:grid-cols-3">
-                  <div class="space-y-1.5 sm:col-span-3">
-                    <Label>Modelo naranja</Label>
-                    <Select v-model="data.settings.orange_model">
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="percentage">
-                          Porcentaje consumido
-                        </SelectItem>
-                        <SelectItem value="days_before">
-                          Días antes del vencimiento
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div class="space-y-1.5">
-                    <Label>Umbral %</Label>
-                    <Input v-model.number="data.settings.orange_percentage" type="number" min="1" max="100" />
-                  </div>
-                  <div class="space-y-1.5">
-                    <Label>Días antes</Label>
-                    <Input v-model.number="data.settings.orange_days_before" type="number" min="0" max="365" />
-                  </div>
-                  <div class="space-y-1.5">
-                    <Label>Recordatorio rojo</Label>
-                    <Input
-                      v-model.number="data.settings.red_reminder_interval_days"
-                      type="number"
-                      min="0"
-                      max="30"
-                      title="Cada N días hábiles, 0 = desactivado"
+          <Card>
+            <CardHeader class="pb-3">
+              <CardTitle class="text-base">
+                Calendario laboral
+              </CardTitle>
+            </CardHeader>
+            <CardContent class="space-y-3">
+              <div class="space-y-1.5">
+                <Label>Nombre del calendario</Label>
+                <Input v-model="data.settings.calendar_name" />
+              </div>
+              <div class="space-y-1.5">
+                <Label>Días laborales</Label>
+                <div class="flex flex-wrap gap-1.5">
+                  <label
+                    v-for="day in weekDays"
+                    :key="day.value"
+                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors hover:bg-muted/50 sm:text-sm"
+                    :class="isWorkingDaySelected(day.value)
+                      ? 'border-primary/40 bg-primary/5'
+                      : ''"
+                  >
+                    <StyledNativeCheckbox
+                      bare
+                      :checked="isWorkingDaySelected(day.value)"
+                      @update:checked="toggleWorkingDay(day.value, $event)"
                     />
-                  </div>
+                    {{ day.label }}
+                  </label>
                 </div>
-                <StyledNativeCheckbox
-                  :checked="data.settings.alerts_enabled"
-                  @update:checked="data.settings.alerts_enabled = $event"
-                >
-                  Generar alertas naranja/rojo
-                </StyledNativeCheckbox>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
 
           <Card v-if="notificationSettings">
             <CardHeader class="pb-3">
@@ -657,6 +681,138 @@ function formatHolidayDate(value: string): string {
                   </label>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="semaphore" class="mt-4 space-y-4">
+          <Card>
+            <CardHeader class="flex flex-row items-start justify-between gap-3 space-y-0 pb-3">
+              <div class="space-y-1">
+                <CardTitle class="text-base">
+                  Alertas de la barra
+                </CardTitle>
+                <CardDescription>
+                  Cada alerta usa un color de la barra y se dispara por días desde el radicado o por el porcentaje de avance.
+                </CardDescription>
+              </div>
+              <Button type="button" variant="outline" size="sm" class="shrink-0" @click="addAlertRule">
+                <Icon name="i-lucide-plus" class="mr-1 size-4" />
+                Añadir
+              </Button>
+            </CardHeader>
+            <CardContent class="space-y-3">
+              <StyledNativeCheckbox
+                :checked="data.settings.alerts_enabled"
+                @update:checked="data.settings.alerts_enabled = $event"
+              >
+                Enviar estas alertas
+              </StyledNativeCheckbox>
+              <p
+                v-if="alertRules.length === 0"
+                class="rounded-xl border border-dashed px-3 py-8 text-center text-sm text-muted-foreground"
+              >
+                Todavía no hay alertas. Un ejemplo: primer aviso, verde, 3 días después de creado, sin repetir.
+              </p>
+              <article
+                v-for="(rule, index) in alertRules"
+                :key="rule.id ?? `new-${index}`"
+                class="rounded-xl border bg-card px-3 py-3"
+              >
+                <div class="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_10rem_8.5rem_12rem_5.5rem_10rem_auto_auto] lg:items-end">
+                  <div class="space-y-1">
+                    <Label class="text-xs">Nombre</Label>
+                    <Input v-model="rule.name" class="h-9" placeholder="Primer aviso" />
+                  </div>
+                  <div class="space-y-1">
+                    <Label class="text-xs">Tipo</Label>
+                    <Select v-model="rule.alert_kind">
+                      <SelectTrigger class="h-9 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="option in alertKindOptions" :key="option.value" :value="option.value">
+                          {{ option.label }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div class="space-y-1">
+                    <Label class="text-xs">Color en la barra</Label>
+                    <Select v-model="rule.tone">
+                      <SelectTrigger class="h-9 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="option in alertToneOptions" :key="option.value" :value="option.value">
+                          <span class="inline-flex items-center gap-2">
+                            <span class="size-2 rounded-full" :class="option.dot" />
+                            {{ option.label }}
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div class="space-y-1">
+                    <Label class="text-xs">Se dispara</Label>
+                    <Select v-model="rule.trigger_mode">
+                      <SelectTrigger class="h-9 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="option in alertTriggerOptions" :key="option.value" :value="option.value">
+                          {{ option.label }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div class="space-y-1">
+                    <Label class="text-xs">
+                      {{ rule.trigger_mode === 'progress_percentage' ? '%' : 'Días' }}
+                    </Label>
+                    <Input
+                      v-model.number="rule.trigger_value"
+                      type="number"
+                      min="0"
+                      :max="rule.trigger_mode === 'progress_percentage' ? 100 : 365"
+                      class="h-9"
+                    />
+                  </div>
+                  <div class="space-y-1">
+                    <Label class="text-xs">Repetir</Label>
+                    <Select v-model="rule.repeat_mode">
+                      <SelectTrigger class="h-9 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="option in alertRepeatOptions" :key="option.value" :value="option.value">
+                          {{ option.label }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <StyledNativeCheckbox
+                    :checked="rule.is_active"
+                    @update:checked="rule.is_active = $event"
+                  >
+                    Activa
+                  </StyledNativeCheckbox>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    class="justify-self-end"
+                    :aria-label="`Quitar ${rule.name || 'alerta'}`"
+                    @click="removeAlertRule(index)"
+                  >
+                    <Icon name="i-lucide-trash-2" class="size-4" />
+                  </Button>
+                </div>
+                <p class="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span class="size-2 rounded-full" :class="toneDot(rule.tone)" />
+                  {{ rule.name || 'Alerta' }}
+                </p>
+              </article>
             </CardContent>
           </Card>
         </TabsContent>

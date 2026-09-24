@@ -441,14 +441,12 @@ function statusLabel(status: string): string {
                   <SelectItem value="all">
                     Todos
                   </SelectItem>
-                  <SelectItem value="green">
-                    En término
-                  </SelectItem>
-                  <SelectItem value="orange">
-                    Próximo a vencer
-                  </SelectItem>
-                  <SelectItem value="red">
-                    Vencido
+                  <SelectItem
+                    v-for="(label, key) in VENTANILLA_TRAFFIC_LIGHT_LABELS"
+                    :key="key"
+                    :value="key"
+                  >
+                    {{ label }}
                   </SelectItem>
                 </SelectContent>
               </Select>

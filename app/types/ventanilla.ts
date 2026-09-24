@@ -2,7 +2,7 @@ import type { ArchivalMetadataSchemaRow } from '~/composables/useArchivalMetadat
 
 export type VentanillaFilingTypeValue = 'incoming' | 'outgoing' | 'internal'
 
-export type VentanillaTrafficLightValue = 'green' | 'orange' | 'red'
+export type VentanillaTrafficLightValue = 'green' | 'yellow' | 'orange' | 'red'
 
 export type VentanillaFilingStatusValue = 'registered' | 'in_progress' | 'closed' | 'voided'
 
@@ -131,8 +131,21 @@ export interface VentanillaBusinessHolidayRow {
   is_active: boolean
 }
 
+export interface VentanillaSlaAlertRuleRow {
+  id?: number
+  name: string
+  alert_kind: 'first_notice' | 'reminder' | 'urgent' | 'follow_up'
+  tone: 'green' | 'yellow' | 'orange' | 'red'
+  trigger_mode: 'days_after_filed' | 'progress_percentage'
+  trigger_value: number
+  repeat_mode: 'none' | 'every_12_hours' | 'every_24_hours'
+  is_active: boolean
+  sort_order?: number
+}
+
 export interface VentanillaSlaSettingsData {
   settings: VentanillaSlaSettingsRow
+  alert_rules?: VentanillaSlaAlertRuleRow[]
   holidays: VentanillaBusinessHolidayRow[]
 }
 
@@ -368,6 +381,7 @@ export interface VentanillaSlaComplianceDashboardData {
   kpis: {
     total: number
     green: number
+    yellow: number
     orange: number
     red: number
     overdue: number
@@ -384,6 +398,7 @@ export interface VentanillaSlaComplianceDashboardData {
   }
   by_traffic_light: {
     green: number
+    yellow: number
     orange: number
     red: number
   }

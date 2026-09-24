@@ -262,7 +262,7 @@ export interface WorkflowFilingContextSummary {
   sla_business_days: number | null
   sla_elapsed_business_days: number | null
   response_deadline_at: string | null
-  traffic_light_status: 'green' | 'orange' | 'red' | null
+  traffic_light_status: 'green' | 'yellow' | 'orange' | 'red' | null
   sender_name: string | null
   sender_identifier: string | null
   recipient_name: string | null

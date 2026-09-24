@@ -32,6 +32,7 @@ const trafficLightChartData = computed(() => {
 
   return [
     { label: VENTANILLA_TRAFFIC_LIGHT_LABELS.green, cantidad: data.value.by_traffic_light.green },
+    { label: VENTANILLA_TRAFFIC_LIGHT_LABELS.yellow, cantidad: data.value.by_traffic_light.yellow },
     { label: VENTANILLA_TRAFFIC_LIGHT_LABELS.orange, cantidad: data.value.by_traffic_light.orange },
     { label: VENTANILLA_TRAFFIC_LIGHT_LABELS.red, cantidad: data.value.by_traffic_light.red },
   ].filter(row => row.cantidad > 0)
@@ -167,7 +168,7 @@ onUnmounted(() => {
             {{ summaryLine }}
           </p>
 
-          <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <button
               type="button"
               class="rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-4 text-left shadow-xs transition hover:bg-emerald-500/15 sm:p-5"
@@ -180,7 +181,22 @@ onUnmounted(() => {
                 {{ data.sla.green }}
               </p>
               <p class="mt-1 text-xs text-emerald-900/70 dark:text-emerald-200/70">
-                Abiertos dentro de plazo
+                Primer tramo de la barra
+              </p>
+            </button>
+            <button
+              type="button"
+              class="rounded-2xl border border-yellow-400/50 bg-yellow-400/10 p-4 text-left shadow-xs transition hover:bg-yellow-400/15 sm:p-5"
+              @click="router.push('/ventanilla?traffic_light_status=yellow')"
+            >
+              <p class="text-sm font-medium text-yellow-900 dark:text-yellow-200">
+                {{ VENTANILLA_TRAFFIC_LIGHT_LABELS.yellow }}
+              </p>
+              <p class="mt-2 text-3xl font-bold tabular-nums text-yellow-800 dark:text-yellow-300 sm:text-4xl">
+                {{ data.sla.yellow }}
+              </p>
+              <p class="mt-1 text-xs text-yellow-950/70 dark:text-yellow-100/70">
+                Segundo tramo de la barra
               </p>
             </button>
             <button
@@ -195,7 +211,7 @@ onUnmounted(() => {
                 {{ data.sla.orange }}
               </p>
               <p class="mt-1 text-xs text-amber-900/70 dark:text-amber-200/70">
-                Abiertos por vencer
+                Tercer tramo de la barra
               </p>
             </button>
             <button

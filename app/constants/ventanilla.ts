@@ -26,9 +26,10 @@ export const VENTANILLA_INFORMATIVE_TYPE_HINT
   = 'Documento informativo: no aplica SLA ni obligación de respuesta. Puede cerrarse desde la gestión del radicado.'
 
 export const VENTANILLA_TRAFFIC_LIGHT_LABELS: Record<VentanillaTrafficLightValue, string> = {
-  green: 'En término',
-  orange: 'Próximo a vencer',
-  red: 'Vencido',
+  green: 'Verde',
+  yellow: 'Amarillo',
+  orange: 'Naranja',
+  red: 'Rojo',
 }
 
 export const VENTANILLA_NOTIFICATION_CHANNEL_LABELS: Record<string, string> = {
@@ -56,7 +57,7 @@ export function ventanillaTrafficLightBadgeVariant(
   if (status === 'red') {
     return 'destructive'
   }
-  if (status === 'orange') {
+  if (status === 'orange' || status === 'yellow') {
     return 'warning'
   }
 
@@ -72,6 +73,10 @@ export function ventanillaTrafficLightBadgeClass(
 ): string {
   if (status === 'green') {
     return 'border-emerald-600/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300'
+  }
+
+  if (status === 'yellow') {
+    return 'border-yellow-500/50 bg-yellow-400/15 text-yellow-900 dark:text-yellow-200'
   }
 
   return ''
@@ -92,6 +97,10 @@ export function ventanillaTrafficLightRowClass(
 
   if (status === 'orange') {
     return 'border-l-4 border-l-amber-500 bg-amber-500/12 hover:bg-amber-500/18 dark:bg-amber-950/40 dark:hover:bg-amber-950/55'
+  }
+
+  if (status === 'yellow') {
+    return 'border-l-4 border-l-yellow-400 bg-yellow-400/15 hover:bg-yellow-400/22 dark:bg-yellow-950/40 dark:hover:bg-yellow-950/55'
   }
 
   return 'border-l-4 border-l-emerald-600 bg-emerald-500/12 hover:bg-emerald-500/18 dark:bg-emerald-950/35 dark:hover:bg-emerald-950/50'
