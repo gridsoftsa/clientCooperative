@@ -441,11 +441,17 @@ export function useVentanillaApi() {
       id?: number
       name: string
       alert_kind: 'first_notice' | 'reminder' | 'urgent' | 'follow_up'
-      tone: 'green' | 'yellow' | 'orange' | 'red'
+      tone: 'green' | 'yellow' | 'orange' | 'red' | 'blue'
       trigger_mode: 'days_after_filed' | 'progress_percentage'
       trigger_value: number
       repeat_mode: 'none' | 'every_12_hours' | 'every_24_hours'
+      repeat_until_mode?: 'until_closed' | 'until_percentage'
+      repeat_until_percentage?: number | null
       is_active: boolean
+      notify_collaborators?: boolean
+      channel_email_enabled?: boolean
+      channel_whatsapp_enabled?: boolean
+      channel_internal_enabled?: boolean
     }>
   }): Promise<VentanillaSlaSettingsData> {
     const res = await api<{ data: VentanillaSlaSettingsData }>('/ventanilla/sla-settings', {

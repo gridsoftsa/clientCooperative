@@ -32,30 +32,25 @@ const catalogLoading = ref(false)
 const replaceCatalogYear = ref(false)
 const activeTab = ref('general')
 const alertRules = ref<VentanillaSlaAlertRuleRow[]>([])
+const previewOpen = ref(false)
+const previewRule = ref<VentanillaSlaAlertRuleRow | null>(null)
 
 const alertKindOptions = [
-  { value: 'first_notice', label: 'Primer aviso' },
-  { value: 'reminder', label: 'Recordatorio' },
-  { value: 'urgent', label: 'Urgente' },
-  { value: 'follow_up', label: 'Seguimiento' },
-] as const
-
-const alertToneOptions = [
-  { value: 'green', label: 'Verde', dot: 'bg-emerald-500' },
-  { value: 'yellow', label: 'Amarillo', dot: 'bg-yellow-400' },
-  { value: 'orange', label: 'Naranja', dot: 'bg-orange-500' },
-  { value: 'red', label: 'Rojo', dot: 'bg-red-500' },
-] as const
-
-const alertTriggerOptions = [
-  { value: 'days_after_filed', label: 'Días después de creado' },
-  { value: 'progress_percentage', label: 'Porcentaje de la barra' },
+  { value: 'first_notice', label: 'Primer aviso', tone: 'green', dot: 'bg-emerald-500' },
+  { value: 'reminder', label: 'Recordatorio', tone: 'yellow', dot: 'bg-yellow-400' },
+  { value: 'follow_up', label: 'Seguimiento', tone: 'blue', dot: 'bg-blue-500' },
+  { value: 'urgent', label: 'Urgente', tone: 'red', dot: 'bg-red-500' },
 ] as const
 
 const alertRepeatOptions = [
   { value: 'none', label: 'Sin repetir' },
   { value: 'every_12_hours', label: 'Cada 12 horas' },
   { value: 'every_24_hours', label: 'Cada 24 horas' },
+] as const
+
+const alertRepeatUntilOptions = [
+  { value: 'until_closed', label: 'Hasta que se cierre' },
+  { value: 'until_percentage', label: 'Hasta un porcentaje' },
 ] as const
 const catalog = ref<VentanillaCatalogData | null>(null)
 
@@ -173,20 +168,51 @@ function assignSlaData(payload: VentanillaSlaSettingsData): void {
   }
   alertRules.value = (payload.alert_rules ?? []).map(rule => ({
     ...rule,
+    name: rule.name ?? '',
+    tone: toneForKind(rule.alert_kind),
+    trigger_mode: 'progress_percentage',
+    trigger_value: Number(rule.trigger_value) || 1,
+    repeat_until_mode: rule.repeat_until_mode === 'until_percentage' ? 'until_percentage' : 'until_closed',
+    repeat_until_percentage: Number(rule.repeat_until_percentage) || Number(rule.trigger_value) || 100,
     is_active: coerceBoolean(rule.is_active),
-    trigger_value: Number(rule.trigger_value) || 0,
+    notify_collaborators: coerceBoolean(rule.notify_collaborators),
+    channel_email_enabled: rule.channel_email_enabled === undefined ? true : coerceBoolean(rule.channel_email_enabled),
+    channel_whatsapp_enabled: coerceBoolean(rule.channel_whatsapp_enabled),
+    channel_internal_enabled: rule.channel_internal_enabled === undefined ? true : coerceBoolean(rule.channel_internal_enabled),
   }))
+}
+
+function toneForKind(kind: string): VentanillaSlaAlertRuleRow['tone'] {
+  return alertKindOptions.find(option => option.value === kind)?.tone ?? 'green'
+}
+
+function kindLabel(kind: string): string {
+  return alertKindOptions.find(option => option.value === kind)?.label ?? 'Alerta'
+}
+
+function applyAlertKind(rule: VentanillaSlaAlertRuleRow, kind: unknown): void {
+  const value = String(kind)
+  rule.alert_kind = alertKindOptions.some(option => option.value === value)
+    ? value as VentanillaSlaAlertRuleRow['alert_kind']
+    : 'first_notice'
+  rule.tone = toneForKind(rule.alert_kind)
 }
 
 function addAlertRule(): void {
   alertRules.value.push({
-    name: 'Primer aviso',
+    name: '',
     alert_kind: 'first_notice',
     tone: 'green',
-    trigger_mode: 'days_after_filed',
-    trigger_value: 3,
+    trigger_mode: 'progress_percentage',
+    trigger_value: 25,
     repeat_mode: 'none',
+    repeat_until_mode: 'until_closed',
+    repeat_until_percentage: 100,
     is_active: true,
+    notify_collaborators: false,
+    channel_email_enabled: true,
+    channel_whatsapp_enabled: false,
+    channel_internal_enabled: true,
   })
 }
 
@@ -195,7 +221,41 @@ function removeAlertRule(index: number): void {
 }
 
 function toneDot(tone: string): string {
-  return alertToneOptions.find(option => option.value === tone)?.dot ?? 'bg-muted-foreground'
+  return alertKindOptions.find(option => option.tone === tone)?.dot ?? 'bg-muted-foreground'
+}
+
+function openAlertPreview(rule: VentanillaSlaAlertRuleRow): void {
+  previewRule.value = rule
+  previewOpen.value = true
+}
+
+function previewHeading(rule: VentanillaSlaAlertRuleRow): string {
+  const name = rule.name.trim()
+
+  return name || kindLabel(rule.alert_kind)
+}
+
+function previewChannels(rule: VentanillaSlaAlertRuleRow): string {
+  const channels = [
+    rule.channel_email_enabled ? 'correo' : '',
+    rule.channel_whatsapp_enabled ? 'WhatsApp' : '',
+    rule.channel_internal_enabled ? 'notificación interna' : '',
+  ].filter(Boolean)
+
+  return channels.length > 0 ? channels.join(', ') : 'ningún canal'
+}
+
+function previewRepeat(rule: VentanillaSlaAlertRuleRow): string {
+  if (rule.repeat_mode === 'none') {
+    return 'Se envía una sola vez.'
+  }
+
+  const cadence = rule.repeat_mode === 'every_12_hours' ? 'cada 12 horas' : 'cada 24 horas'
+  if (rule.repeat_until_mode === 'until_percentage') {
+    return `Se repite ${cadence} hasta el ${rule.repeat_until_percentage ?? rule.trigger_value}% de la barra.`
+  }
+
+  return `Se repite ${cadence} hasta que el radicado se cierre.`
 }
 
 onMounted(() => load())
@@ -289,15 +349,18 @@ async function saveSettings() {
   }
 
   for (const rule of alertRules.value) {
-    if (!rule.name.trim()) {
-      toast.error('Cada alerta necesita un nombre.')
+    if (rule.trigger_value < 1 || rule.trigger_value > 100) {
+      toast.error('El porcentaje de la barra debe estar entre 1 y 100.')
       activeTab.value = 'semaphore'
       return
     }
-    if (rule.trigger_mode === 'progress_percentage' && (rule.trigger_value < 1 || rule.trigger_value > 100)) {
-      toast.error('El porcentaje de progreso debe estar entre 1 y 100.')
-      activeTab.value = 'semaphore'
-      return
+    if (rule.repeat_mode !== 'none' && rule.repeat_until_mode === 'until_percentage') {
+      const cap = Number(rule.repeat_until_percentage) || 0
+      if (cap < rule.trigger_value || cap > 100) {
+        toast.error('El porcentaje final debe ser igual o mayor al porcentaje en que se dispara.')
+        activeTab.value = 'semaphore'
+        return
+      }
     }
   }
 
@@ -323,11 +386,17 @@ async function saveSettings() {
         id: rule.id,
         name: rule.name.trim(),
         alert_kind: rule.alert_kind,
-        tone: rule.tone,
-        trigger_mode: rule.trigger_mode,
-        trigger_value: Number(rule.trigger_value) || 0,
+        tone: toneForKind(rule.alert_kind),
+        trigger_mode: 'progress_percentage' as const,
+        trigger_value: Number(rule.trigger_value) || 1,
         repeat_mode: rule.repeat_mode,
+        repeat_until_mode: rule.repeat_mode === 'none' ? 'until_closed' as const : (rule.repeat_until_mode ?? 'until_closed'),
+        repeat_until_percentage: rule.repeat_until_mode === 'until_percentage' ? Number(rule.repeat_until_percentage) || null : null,
         is_active: rule.is_active,
+        notify_collaborators: rule.notify_collaborators === true,
+        channel_email_enabled: rule.channel_email_enabled === true,
+        channel_whatsapp_enabled: rule.channel_whatsapp_enabled === true,
+        channel_internal_enabled: rule.channel_internal_enabled === true,
       })),
     })
     assignSlaData(updated)
@@ -693,7 +762,7 @@ function formatHolidayDate(value: string): string {
                   Alertas de la barra
                 </CardTitle>
                 <CardDescription>
-                  Cada alerta usa un color de la barra y se dispara por días desde el radicado o por el porcentaje de avance.
+                  Cada alerta se dispara cuando la barra de progreso del radicado llega al porcentaje indicado. El color lo define el tipo: primer aviso verde, recordatorio amarillo, seguimiento azul y urgente rojo.
                 </CardDescription>
               </div>
               <Button type="button" variant="outline" size="sm" class="shrink-0" @click="addAlertRule">
@@ -712,39 +781,26 @@ function formatHolidayDate(value: string): string {
                 v-if="alertRules.length === 0"
                 class="rounded-xl border border-dashed px-3 py-8 text-center text-sm text-muted-foreground"
               >
-                Todavía no hay alertas. Un ejemplo: primer aviso, verde, 3 días después de creado, sin repetir.
+                Todavía no hay alertas. Un ejemplo: primer aviso, al 25% de la barra, sin repetir.
               </p>
               <article
                 v-for="(rule, index) in alertRules"
                 :key="rule.id ?? `new-${index}`"
-                class="rounded-xl border bg-card px-3 py-3"
+                class="space-y-3 rounded-xl border bg-card px-3 py-3"
               >
-                <div class="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_10rem_8.5rem_12rem_5.5rem_10rem_auto_auto] lg:items-end">
+                <div class="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_11rem_6rem_11rem_auto] md:items-end">
                   <div class="space-y-1">
                     <Label class="text-xs">Nombre</Label>
-                    <Input v-model="rule.name" class="h-9" placeholder="Primer aviso" />
+                    <Input v-model="rule.name" class="h-9" placeholder="Opcional" />
                   </div>
                   <div class="space-y-1">
                     <Label class="text-xs">Tipo</Label>
-                    <Select v-model="rule.alert_kind">
+                    <Select :model-value="rule.alert_kind" @update:model-value="applyAlertKind(rule, $event)">
                       <SelectTrigger class="h-9 w-full">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem v-for="option in alertKindOptions" :key="option.value" :value="option.value">
-                          {{ option.label }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div class="space-y-1">
-                    <Label class="text-xs">Color en la barra</Label>
-                    <Select v-model="rule.tone">
-                      <SelectTrigger class="h-9 w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem v-for="option in alertToneOptions" :key="option.value" :value="option.value">
                           <span class="inline-flex items-center gap-2">
                             <span class="size-2 rounded-full" :class="option.dot" />
                             {{ option.label }}
@@ -754,29 +810,8 @@ function formatHolidayDate(value: string): string {
                     </Select>
                   </div>
                   <div class="space-y-1">
-                    <Label class="text-xs">Se dispara</Label>
-                    <Select v-model="rule.trigger_mode">
-                      <SelectTrigger class="h-9 w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem v-for="option in alertTriggerOptions" :key="option.value" :value="option.value">
-                          {{ option.label }}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div class="space-y-1">
-                    <Label class="text-xs">
-                      {{ rule.trigger_mode === 'progress_percentage' ? '%' : 'Días' }}
-                    </Label>
-                    <Input
-                      v-model.number="rule.trigger_value"
-                      type="number"
-                      min="0"
-                      :max="rule.trigger_mode === 'progress_percentage' ? 100 : 365"
-                      class="h-9"
-                    />
+                    <Label class="text-xs">Porcentaje</Label>
+                    <Input v-model.number="rule.trigger_value" type="number" min="1" max="100" class="h-9" />
                   </div>
                   <div class="space-y-1">
                     <Label class="text-xs">Repetir</Label>
@@ -791,30 +826,109 @@ function formatHolidayDate(value: string): string {
                       </SelectContent>
                     </Select>
                   </div>
-                  <StyledNativeCheckbox
-                    :checked="rule.is_active"
-                    @update:checked="rule.is_active = $event"
-                  >
-                    Activa
-                  </StyledNativeCheckbox>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    class="justify-self-end"
-                    :aria-label="`Quitar ${rule.name || 'alerta'}`"
-                    @click="removeAlertRule(index)"
-                  >
-                    <Icon name="i-lucide-trash-2" class="size-4" />
-                  </Button>
+                  <div class="flex items-center justify-end gap-1">
+                    <Button type="button" variant="outline" size="sm" @click="openAlertPreview(rule)">
+                      Vista previa
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      :aria-label="`Quitar ${rule.name || 'alerta'}`"
+                      @click="removeAlertRule(index)"
+                    >
+                      <Icon name="i-lucide-trash-2" class="size-4" />
+                    </Button>
+                  </div>
                 </div>
-                <p class="mt-2 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span class="size-2 rounded-full" :class="toneDot(rule.tone)" />
-                  {{ rule.name || 'Alerta' }}
-                </p>
+                <div v-if="rule.repeat_mode !== 'none'" class="grid gap-3 sm:grid-cols-[14rem_6rem] sm:items-end">
+                  <div class="space-y-1">
+                    <Label class="text-xs">Repetir hasta</Label>
+                    <Select v-model="rule.repeat_until_mode">
+                      <SelectTrigger class="h-9 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="option in alertRepeatUntilOptions" :key="option.value" :value="option.value">
+                          {{ option.label }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div v-if="rule.repeat_until_mode === 'until_percentage'" class="space-y-1">
+                    <Label class="text-xs">Hasta %</Label>
+                    <Input v-model.number="rule.repeat_until_percentage" type="number" min="1" max="100" class="h-9" />
+                  </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+                  <div class="inline-flex items-center gap-2">
+                    <Switch
+                      :id="`alert-active-${index}`"
+                      :model-value="rule.is_active"
+                      @update:model-value="rule.is_active = $event"
+                    />
+                    <Label :for="`alert-active-${index}`" class="text-sm font-normal">Activa</Label>
+                  </div>
+                  <StyledNativeCheckbox
+                    :checked="rule.notify_collaborators === true"
+                    @update:checked="rule.notify_collaborators = $event"
+                  >
+                    Notificar también a los colaboradores
+                  </StyledNativeCheckbox>
+                </div>
+                <div class="flex flex-wrap gap-x-5 gap-y-2">
+                  <StyledNativeCheckbox
+                    :checked="rule.channel_email_enabled === true"
+                    @update:checked="rule.channel_email_enabled = $event"
+                  >
+                    Correo electrónico
+                  </StyledNativeCheckbox>
+                  <StyledNativeCheckbox
+                    :checked="rule.channel_whatsapp_enabled === true"
+                    @update:checked="rule.channel_whatsapp_enabled = $event"
+                  >
+                    WhatsApp
+                  </StyledNativeCheckbox>
+                  <StyledNativeCheckbox
+                    :checked="rule.channel_internal_enabled === true"
+                    @update:checked="rule.channel_internal_enabled = $event"
+                  >
+                    Notificación interna
+                  </StyledNativeCheckbox>
+                </div>
               </article>
             </CardContent>
           </Card>
+
+          <Dialog v-model:open="previewOpen">
+            <DialogContent class="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Vista previa</DialogTitle>
+                <DialogDescription>
+                  Así se vería el aviso. Es un ejemplo; no se envía nada.
+                </DialogDescription>
+              </DialogHeader>
+              <div v-if="previewRule" class="space-y-3 rounded-xl border bg-muted/30 p-4">
+                <p class="inline-flex items-center gap-2 text-sm font-medium">
+                  <span class="size-2.5 rounded-full" :class="toneDot(previewRule.tone)" />
+                  {{ previewHeading(previewRule) }}
+                </p>
+                <p class="text-sm text-foreground">
+                  Alerta SLA: IN-2026-000001
+                </p>
+                <p class="text-sm text-muted-foreground">
+                  {{ previewHeading(previewRule) }} · la barra va en {{ previewRule.trigger_value }}%.
+                </p>
+                <p class="text-xs text-muted-foreground">
+                  Canales: {{ previewChannels(previewRule) }}.
+                  {{ previewRule.notify_collaborators ? 'También llega a los colaboradores.' : 'Llega a los responsables configurados en el calendario.' }}
+                </p>
+                <p class="text-xs text-muted-foreground">
+                  {{ previewRepeat(previewRule) }}
+                </p>
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="holidays" class="mt-4 space-y-4">
