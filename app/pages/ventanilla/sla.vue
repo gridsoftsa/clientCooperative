@@ -875,7 +875,7 @@ function formatHolidayDate(value: string): string {
                     :checked="rule.notify_collaborators === true"
                     @update:checked="rule.notify_collaborators = $event"
                   >
-                    Notificar también a los colaboradores
+                    Notificar a colaboradores
                   </StyledNativeCheckbox>
                 </div>
                 <div class="flex flex-wrap gap-x-5 gap-y-2">
