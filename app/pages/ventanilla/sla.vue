@@ -867,7 +867,9 @@ function formatHolidayDate(value: string): string {
                       :model-value="rule.is_active"
                       @update:model-value="rule.is_active = $event"
                     />
-                    <Label :for="`alert-active-${index}`" class="text-sm font-normal">Activa</Label>
+                    <Label :for="`alert-active-${index}`" class="text-sm font-normal">
+                      {{ rule.is_active ? 'Activa' : 'Inactiva' }}
+                    </Label>
                   </div>
                   <StyledNativeCheckbox
                     :checked="rule.notify_collaborators === true"
