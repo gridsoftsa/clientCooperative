@@ -15,6 +15,7 @@ type FunctionalDraft = {
   is_active: boolean
   show_in_public_form: boolean
   archival_file_type_id: string
+  _clientId?: string
   _isNew?: boolean
   _removed?: boolean
 }
@@ -53,8 +54,8 @@ const catalogTitle = computed(() =>
 
 const helperText = computed(() =>
   props.kind === 'functional-types'
-    ? `Opciones del desplegable «Tipo funcional» en nuevo radicado. La clave técnica se asigna sola al guardar. Configure respuesta, SLA, tipo de expediente automático y orden. «Formulario público» controla si el tipo sale en /ventanilla/formulario.`
-    : `Mismo texto que aparece en el desplegable de «Medio de recepción» al radicar.`,
+    ? 'Son las opciones de «Tipo funcional» cuando alguien crea un radicado.'
+    : 'Son las opciones de «Medio de recepción» cuando alguien crea un radicado.',
 )
 
 const NONE_ARCHIVAL_FILE_TYPE = 'none'
@@ -93,6 +94,7 @@ function cloneFunctional(rows: VentanillaFunctionalTypeRow[]): FunctionalDraft[]
       archival_file_type_id: row.archival_file_type_id != null
         ? String(row.archival_file_type_id)
         : NONE_ARCHIVAL_FILE_TYPE,
+      _clientId: typeKey || `saved-${row.label}`,
     }
   })
 }
@@ -144,11 +146,27 @@ const visibleFunctionalRows = computed(() => functionalDraft.value.filter(row =>
 
 const visibleReceptionRows = computed(() => receptionDraft.value.filter(row => !row._removed))
 
+const functionalQuery = ref('')
+
+const displayedFunctionalRows = computed(() => {
+  const query = functionalQuery.value.trim().toLowerCase()
+  if (!query) {
+    return visibleFunctionalRows.value
+  }
+
+  return visibleFunctionalRows.value.filter((row) => {
+    const label = row.label.toLowerCase()
+    const key = functionalRowKey(row).toLowerCase()
+    return label.includes(query) || key.includes(query)
+  })
+})
+
 function functionalRowKey(row: FunctionalDraft): string {
   return String(row.originalKey ?? row.typeKey ?? '').trim()
 }
 
 function addFunctionalRow() {
+  functionalQuery.value = ''
   const maxOrder = visibleFunctionalRows.value.reduce(
     (max, row) => Math.max(max, Number(row.sort_order) || 0),
     0,
@@ -162,6 +180,7 @@ function addFunctionalRow() {
     is_active: true,
     show_in_public_form: true,
     archival_file_type_id: NONE_ARCHIVAL_FILE_TYPE,
+    _clientId: `new-${Date.now()}`,
     _isNew: true,
   })
 }
@@ -180,11 +199,7 @@ function addReceptionRow() {
   })
 }
 
-function removeFunctionalRow(index: number) {
-  const row = visibleFunctionalRows.value[index]
-  if (!row) {
-    return
-  }
+function removeFunctionalRow(row: FunctionalDraft) {
   if (row._isNew) {
     const idx = functionalDraft.value.indexOf(row)
     if (idx >= 0) {
@@ -256,6 +271,28 @@ function ensureUniqueFunctionalKey(base: string, row: FunctionalDraft): string {
   return candidate
 }
 
+function archivalFileTypeLabel(id: string): string {
+  if (!id || id === NONE_ARCHIVAL_FILE_TYPE) {
+    return 'Sin expediente'
+  }
+
+  return props.archivalFileTypes.find(type => String(type.id) === id)?.name ?? 'Sin expediente automático'
+}
+
+function responseShort(row: FunctionalDraft): string {
+  if (!row.requires_response_default) {
+    return 'Sin respuesta'
+  }
+
+  const days = String(row.sla_business_days ?? '').trim()
+
+  return days ? `${days} días hábiles` : 'Sin plazo'
+}
+
+function audienceShort(row: FunctionalDraft): string {
+  return row.show_in_public_form ? 'Formulario público' : 'Solo personal'
+}
+
 function validateAndSave() {
   if (props.kind === 'functional-types') {
     const active = visibleFunctionalRows.value
@@ -311,15 +348,14 @@ watch(
 </script>
 
 <template>
-  <div class="rounded-lg border bg-muted/30 p-4 space-y-4">
+  <div class="space-y-4">
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h4 class="font-medium text-sm">
+      <div class="min-w-0 space-y-1">
+        <h3 class="text-lg font-semibold tracking-tight">
           {{ catalogTitle }}
-        </h4>
-        <p class="text-xs text-muted-foreground">
+        </h3>
+        <p class="max-w-3xl text-sm text-muted-foreground">
           {{ helperText }}
-          <span v-if="canEdit && !editing"> Pulse <strong>Editar</strong> para cambiar respuesta, SLA y estado activo.</span>
         </p>
       </div>
       <div v-if="canEdit" class="flex gap-2">
@@ -346,22 +382,20 @@ watch(
     </div>
 
     <template v-if="kind === 'reception-media'">
-      <div class="overflow-x-auto rounded-md border bg-background">
-        <div
-          class="grid min-w-[12rem] grid-cols-[1fr_auto] gap-2 border-b bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground"
-        >
-          <span>Texto en el formulario de radicación</span>
-          <span v-if="editing && canEdit" class="w-9 shrink-0" />
-        </div>
+      <div class="flex flex-col gap-2">
         <div
           v-for="(row, idx) in visibleReceptionRows"
           :key="`${row.value || 'new'}-${idx}`"
-          class="grid min-w-[12rem] grid-cols-[1fr_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
+          class="flex items-center gap-3 rounded-2xl border bg-card px-4 py-3"
         >
+          <Icon name="i-lucide-inbox" class="size-4 shrink-0 text-muted-foreground" />
+          <p v-if="!editing || !canEdit" class="min-w-0 flex-1 truncate text-sm font-medium">
+            {{ row.label || 'Sin nombre' }}
+          </p>
           <Input
+            v-else
             v-model="row.label"
             class="h-9"
-            :disabled="!editing || !canEdit"
             placeholder="Ej.: Presencial"
           />
           <Button
@@ -376,13 +410,13 @@ watch(
             <Icon name="i-lucide-trash-2" class="size-4" />
           </Button>
         </div>
-        <p
-          v-if="visibleReceptionRows.length === 0"
-          class="px-3 py-6 text-center text-sm text-muted-foreground"
-        >
-          No hay medios de recepción configurados.
-        </p>
       </div>
+      <p
+        v-if="visibleReceptionRows.length === 0"
+        class="rounded-xl border border-dashed px-3 py-10 text-center text-sm text-muted-foreground"
+      >
+        No hay medios de recepción configurados.
+      </p>
       <Button
         v-if="editing && canEdit"
         type="button"
@@ -396,103 +430,144 @@ watch(
     </template>
 
     <template v-else>
-      <div class="overflow-x-auto rounded-md border bg-background">
-        <div
-          class="grid min-w-[56rem] grid-cols-[minmax(10rem,1.2fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_7rem_auto] gap-2 border-b bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground"
-        >
-          <span>Texto en el formulario</span>
-          <span>Tipo de expediente</span>
-          <span>Respuesta</span>
-          <span>SLA</span>
-          <span>Orden</span>
-          <span>Activo</span>
-          <span title="Si está marcado, el tipo aparece en el formulario público">Formulario público</span>
-          <span v-if="editing && canEdit" class="w-9 shrink-0" />
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="relative w-full max-w-sm">
+          <Icon name="i-lucide-search" class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            v-model="functionalQuery"
+            class="h-9 pl-9"
+            placeholder="Buscar por nombre…"
+          />
         </div>
-        <div
-          v-for="(row, idx) in visibleFunctionalRows"
-          :key="`${functionalRowKey(row) || 'new'}-${idx}`"
-          class="grid min-w-[56rem] grid-cols-[minmax(10rem,1.2fr)_minmax(11rem,1.2fr)_5.5rem_5rem_4.5rem_4.5rem_7rem_auto] items-center gap-2 border-b border-border/80 px-3 py-2 last:border-b-0"
-        >
-          <Input
-            v-model="row.label"
-            class="h-9"
-            :disabled="!editing || !canEdit"
-            placeholder="Ej.: PQRSFD"
-          />
-          <Select v-model="row.archival_file_type_id" :disabled="!editing || !canEdit">
-            <SelectTrigger class="h-9">
-              <SelectValue placeholder="Sin expediente" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem :value="NONE_ARCHIVAL_FILE_TYPE">
-                Sin expediente automático
-              </SelectItem>
-              <SelectItem
-                v-for="fileType in archivalFileTypes"
-                :key="fileType.id"
-                :value="String(fileType.id)"
-              >
-                {{ fileType.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <div class="flex justify-center py-0.5">
-            <Checkbox
-              v-model="row.requires_response_default"
-              bare
-              :disabled="!editing || !canEdit"
-            />
-          </div>
-          <Input
-            v-model="row.sla_business_days"
-            type="number"
-            min="1"
-            max="365"
-            class="h-9"
-            :disabled="!editing || !canEdit || !row.requires_response_default"
-            placeholder="—"
-          />
-          <Input
-            v-model="row.sort_order"
-            type="number"
-            min="0"
-            class="h-9"
-            :disabled="!editing || !canEdit"
-          />
-          <div class="flex justify-center py-0.5">
-            <Checkbox
-              v-model="row.is_active"
-              bare
-              :disabled="!editing || !canEdit"
-            />
-          </div>
-          <div class="flex justify-center py-0.5">
-            <Checkbox
-              v-model="row.show_in_public_form"
-              bare
-              :disabled="!editing || !canEdit"
-            />
-          </div>
-          <Button
-            v-if="editing && canEdit"
-            type="button"
-            variant="ghost"
-            size="icon"
-            class="shrink-0"
-            :aria-label="`Eliminar tipo ${idx + 1}`"
-            @click="removeFunctionalRow(idx)"
-          >
-            <Icon name="i-lucide-trash-2" class="size-4" />
-          </Button>
-        </div>
-        <p
-          v-if="visibleFunctionalRows.length === 0"
-          class="px-3 py-6 text-center text-sm text-muted-foreground"
-        >
-          No hay tipos funcionales configurados.
+        <p v-if="functionalQuery.trim()" class="text-xs text-muted-foreground">
+          {{ displayedFunctionalRows.length }} de {{ visibleFunctionalRows.length }}
         </p>
       </div>
+
+      <div class="flex flex-col gap-2">
+        <div
+          v-if="!editing"
+          class="hidden px-4 text-xs text-muted-foreground md:grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_9rem_4rem_6.5rem] md:gap-4"
+        >
+          <span>Nombre</span>
+          <span>Respuesta</span>
+          <span>Expediente</span>
+          <span>Quién lo elige</span>
+          <span>Orden</span>
+          <span>Estado</span>
+        </div>
+        <article
+          v-for="row in displayedFunctionalRows"
+          :key="row._clientId || functionalRowKey(row)"
+          class="rounded-xl border bg-card px-4 py-3"
+          :class="!editing && !row.is_active ? 'opacity-70' : ''"
+        >
+          <div
+            v-if="!editing"
+            class="grid gap-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_9rem_4rem_6.5rem] md:items-center md:gap-4"
+          >
+            <p class="truncate font-medium">
+              {{ row.label || 'Sin nombre' }}
+            </p>
+            <p class="truncate text-sm text-muted-foreground">
+              <span class="md:hidden">Respuesta · </span>{{ responseShort(row) }}
+            </p>
+            <p class="truncate text-sm text-muted-foreground">
+              <span class="md:hidden">Expediente · </span>{{ archivalFileTypeLabel(row.archival_file_type_id) }}
+            </p>
+            <p class="truncate text-sm text-muted-foreground">
+              {{ audienceShort(row) }}
+            </p>
+            <p class="text-sm tabular-nums text-muted-foreground">
+              <span class="md:hidden">Orden · </span>{{ row.sort_order || '0' }}
+            </p>
+            <p class="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+              <span
+                class="size-2 rounded-full"
+                :class="row.is_active ? 'bg-emerald-500' : 'bg-muted-foreground/40'"
+              />
+              {{ row.is_active ? 'En uso' : 'Oculto' }}
+            </p>
+          </div>
+
+          <div
+            v-else
+            class="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(8rem,0.8fr)_minmax(0,1.1fr)_auto_5.5rem_auto_auto] lg:items-center"
+          >
+            <Input
+              v-model="row.label"
+              class="h-9"
+              placeholder="Nombre que verá la persona"
+            />
+            <div class="flex items-center gap-2">
+              <label class="flex shrink-0 items-center gap-2 text-sm">
+                <Checkbox v-model="row.requires_response_default" bare />
+                Respuesta
+              </label>
+              <Input
+                v-model="row.sla_business_days"
+                type="number"
+                min="1"
+                max="365"
+                class="h-9 w-20"
+                :disabled="!row.requires_response_default"
+                placeholder="Días"
+              />
+            </div>
+            <Select v-model="row.archival_file_type_id">
+              <SelectTrigger class="h-9 w-full">
+                <SelectValue placeholder="Sin expediente" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="NONE_ARCHIVAL_FILE_TYPE">
+                  Sin expediente
+                </SelectItem>
+                <SelectItem
+                  v-for="fileType in archivalFileTypes"
+                  :key="fileType.id"
+                  :value="String(fileType.id)"
+                >
+                  {{ fileType.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <label class="flex items-center gap-2 text-sm whitespace-nowrap">
+              <Checkbox v-model="row.show_in_public_form" bare />
+              Público
+            </label>
+            <Input
+              v-model="row.sort_order"
+              type="number"
+              min="0"
+              class="h-9"
+              aria-label="Orden"
+            />
+            <label class="flex items-center gap-2 text-sm whitespace-nowrap">
+              <Checkbox v-model="row.is_active" bare />
+              En uso
+            </label>
+            <Button
+              v-if="canEdit"
+              type="button"
+              variant="ghost"
+              size="icon"
+              class="justify-self-end"
+              :aria-label="`Eliminar ${row.label || 'tipo funcional'}`"
+              @click="removeFunctionalRow(row)"
+            >
+              <Icon name="i-lucide-trash-2" class="size-4" />
+            </Button>
+          </div>
+        </article>
+      </div>
+
+      <p
+        v-if="displayedFunctionalRows.length === 0"
+        class="rounded-xl border border-dashed px-3 py-10 text-center text-sm text-muted-foreground"
+      >
+        {{ visibleFunctionalRows.length === 0 ? 'No hay tipos funcionales configurados.' : 'Ningún tipo coincide con la búsqueda.' }}
+      </p>
+
       <Button
         v-if="editing && canEdit"
         type="button"
@@ -501,7 +576,7 @@ watch(
         @click="addFunctionalRow"
       >
         <Icon name="i-lucide-plus" class="mr-1 size-4" />
-        Añadir opción
+        Añadir tipo funcional
       </Button>
     </template>
   </div>

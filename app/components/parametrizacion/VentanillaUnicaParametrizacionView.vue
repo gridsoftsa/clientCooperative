@@ -15,7 +15,7 @@ const props = withDefaults(
   }>(),
   {
     pageTitle: 'Ventanilla única',
-    pageDescription: 'Catálogos del formulario de radicación: tipo funcional y medio de recepción. Los valores activos se muestran en Nuevo radicado.',
+    pageDescription: 'Opciones que aparecen al crear un radicado: el tipo de trámite y cómo llegó el documento.',
     breadcrumbLabel: 'Ventanilla única',
     sisterLink: () => ({ to: '/parametrizacion/estructura', label: 'Estructura' }),
     backTo: '/ventanilla/nueva',
@@ -70,10 +70,6 @@ const catalogSections: Array<{ value: CatalogSection, label: string, icon: strin
   { value: 'functional-types', label: 'Tipos funcionales', icon: 'i-lucide-tags' },
   { value: 'reception-media', label: 'Medios de recepción', icon: 'i-lucide-radio' },
 ]
-
-const selectedCatalogLabel = computed(() =>
-  visibleCatalogSections.value.find(s => s.value === selectedSection.value)?.label ?? '',
-)
 
 async function loadCatalog() {
   loading.value = true
@@ -220,7 +216,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-6xl px-4 pb-10 pt-4 md:px-6">
+  <div class="mx-auto w-full max-w-7xl px-4 pb-10 pt-4 md:px-6">
     <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div class="space-y-1">
         <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -262,67 +258,44 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="space-y-6">
-      <Tabs default-value="catalogos" class="w-full">
-        <TabsContent value="catalogos" class="mt-0">
-          <div v-if="loading" class="flex justify-center py-12">
-            <Icon name="i-lucide-loader-2" class="h-10 w-10 animate-spin text-muted-foreground" />
-          </div>
+    <Tabs v-model="selectedSection" class="w-full gap-4">
+      <TabsList v-if="visibleCatalogSections.length > 1" class="h-auto w-full justify-start sm:w-fit">
+        <TabsTrigger
+          v-for="section in visibleCatalogSections"
+          :key="section.value"
+          :value="section.value"
+          class="gap-2 px-3 py-2"
+        >
+          <Icon :name="section.icon" class="size-4" />
+          {{ section.label }}
+          <span class="text-muted-foreground text-xs tabular-nums">
+            {{ section.value === 'functional-types' ? functionalTypes.length : receptionMedia.length }}
+          </span>
+        </TabsTrigger>
+      </TabsList>
 
-          <div v-else class="flex flex-col gap-4 lg:flex-row lg:gap-6">
-            <nav class="shrink-0 lg:w-64 xl:w-72 lg:sticky lg:top-4 lg:self-start">
-              <div class="rounded-lg border bg-muted/30 p-2">
-                <p class="mb-2 px-2 text-xs font-medium text-muted-foreground">
-                  Seleccionar plantilla
-                </p>
-                <div class="max-h-[280px] space-y-0.5 overflow-y-auto lg:max-h-[calc(100vh-12rem)]">
-                  <p class="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Ventanilla única
-                  </p>
-                  <button
-                    v-for="section in visibleCatalogSections"
-                    :key="section.value"
-                    type="button"
-                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
-                    :class="selectedSection === section.value ? 'bg-accent font-medium' : ''"
-                    @click="selectedSection = section.value"
-                  >
-                    <Icon
-                      :name="section.icon"
-                      class="h-4 w-4 shrink-0 text-muted-foreground"
-                    />
-                    <span class="truncate">{{ section.label }}</span>
-                  </button>
-                </div>
-              </div>
-            </nav>
+      <div v-if="loading" class="flex justify-center py-16">
+        <Icon name="i-lucide-loader-2" class="h-10 w-10 animate-spin text-muted-foreground" />
+      </div>
 
-            <div class="min-w-0 flex-1">
-              <div class="rounded-lg border">
-                <div class="flex items-center justify-between border-b bg-muted/30 px-4 py-3">
-                  <h3 class="font-semibold">
-                    {{ selectedCatalogLabel }}
-                  </h3>
-                </div>
-                <div class="p-4">
-                  <ParametrizacionVentanillaCatalogConfigEditor
-                    :key="selectedSection"
-                    :kind="selectedSection"
-                    :functional-types="functionalTypes"
-                    :reception-media="receptionMedia"
-                    :archival-file-types="archivalFileTypes"
-                    :can-edit="canEdit"
-                    :saving="saving"
-                    :saved-version="savedVersion"
-                    @save-functional="saveFunctional"
-                    @save-reception="saveReception"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
-    </div>
+      <TabsContent
+        v-else
+        :value="selectedSection"
+        class="mt-0"
+      >
+        <ParametrizacionVentanillaCatalogConfigEditor
+          :key="selectedSection"
+          :kind="selectedSection"
+          :functional-types="functionalTypes"
+          :reception-media="receptionMedia"
+          :archival-file-types="archivalFileTypes"
+          :can-edit="canEdit"
+          :saving="saving"
+          :saved-version="savedVersion"
+          @save-functional="saveFunctional"
+          @save-reception="saveReception"
+        />
+      </TabsContent>
+    </Tabs>
   </div>
 </template>
