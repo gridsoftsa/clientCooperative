@@ -14,7 +14,7 @@ import {
 } from '~/constants/auxiliary-documents-checklist'
 import { messageFromFetchError } from '~/utils/http-error-message'
 import { creditApplicationDocumentIdEquals, parseFinancialChecklistDocumentIdMap } from '~/utils/financial-checklist-document-id-map'
-import { findDocumentIdByTitle } from '~/utils/radicacion-document-upload'
+import { coerceApplicantId, documentBelongsToApplicant, findDocumentIdByTitle } from '~/utils/radicacion-document-upload'
 import { isAuxiliaryChecklistLabelUnique } from '~/utils/auxiliary-documents-validation'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
@@ -31,6 +31,8 @@ const props = withDefaults(
       is_reviewed?: boolean
       review_comment?: string | null
     }>
+    /** El deudor incluye filas históricas sin applicant_id; los codeudores no. */
+    allowUnscopedApplicantDocuments?: boolean
     /** Mismo catálogo que «Tipo de actividad económica» — alinea valores con las claves de `itemsByActivity`. */
     economicActivityOptions?: EconomicActivityCatalogOption[]
     disabled?: boolean
@@ -48,6 +50,7 @@ const props = withDefaults(
   {
     creditApplicationId: null,
     applicationDocuments: () => [],
+    allowUnscopedApplicantDocuments: false,
     economicActivityOptions: () => [],
     disabled: false,
     auxiliaryPendingUploadHint: 'draftSave',
@@ -93,8 +96,7 @@ const docIdsByKey = computed((): Record<string, number | null> =>
 )
 
 function applicantIdForDocs(): number | undefined {
-  const id = Number(props.applicant.id)
-  return Number.isInteger(id) && id >= 1 ? id : undefined
+  return coerceApplicantId(props.applicant.id)
 }
 
 function documentsForThisApplicant() {
@@ -103,7 +105,7 @@ function documentsForThisApplicant() {
   if (aid == null) {
     return []
   }
-  return list.filter(d => Number(d.applicant_id) === aid)
+  return list.filter(d => documentBelongsToApplicant(d, aid, props.allowUnscopedApplicantDocuments))
 }
 
 function docMetaById(id: number) {
@@ -113,7 +115,7 @@ function docMetaById(id: number) {
   }
   return documentsForThisApplicant().find(d =>
     creditApplicationDocumentIdEquals(d.id, id)
-    && Number(d.applicant_id) === aid,
+    && documentBelongsToApplicant(d, aid, props.allowUnscopedApplicantDocuments),
   ) ?? null
 }
 
@@ -136,7 +138,12 @@ function resolvedDocIdForKey(key: string): number | null {
   // un solo PDF se mostraría en todas las filas de ESTA persona.
   if (isAuxiliaryChecklistLabelUnique(checklistRows.value, label)) {
     const title = titleForAuxiliaryDocumentUpload(label)
-    const byTitle = findDocumentIdByTitle(documentsForThisApplicant(), title, aid)
+    const byTitle = findDocumentIdByTitle(
+      documentsForThisApplicant(),
+      title,
+      aid,
+      props.allowUnscopedApplicantDocuments,
+    )
     if (byTitle != null) {
       return byTitle
     }

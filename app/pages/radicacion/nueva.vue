@@ -938,7 +938,7 @@ async function uploadAllDocuments(
         const labelRows = Object.entries(labelByKey).map(([k, lab]) => ({ key: k, label: lab }))
         const prevId = docMap[key]
           ?? (isAuxiliaryChecklistLabelUnique(labelRows, label)
-            ? findDocumentIdByTitle(serverDocuments, uploadTitle, debtorApplicantId)
+            ? findDocumentIdByTitle(serverDocuments, uploadTitle, debtorApplicantId, true)
             : null)
         await deleteDocIfPresent(prevId)
         const fd = new FormData()
@@ -992,7 +992,7 @@ async function uploadAllDocuments(
           const labelFng = labelByKeyFng[key] ?? key
           const uploadTitleFng = titleForFngDocumentUpload(labelFng)
           const prevIdFng = fngDocMap[key]
-            ?? findDocumentIdByTitle(serverDocuments, uploadTitleFng, debtorApplicantId)
+            ?? findDocumentIdByTitle(serverDocuments, uploadTitleFng, debtorApplicantId, true)
           await deleteDocIfPresent(prevIdFng)
           const fdFng = new FormData()
           fdFng.append('title', uploadTitleFng)

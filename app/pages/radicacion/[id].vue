@@ -47,7 +47,10 @@ import {
 } from '~/constants/documentation-approver-entity-checklist'
 import { appendFileToFormData } from '~/utils/safe-upload-file-name'
 import {
+  coerceApplicantId,
+  collectChecklistDocumentIds,
   filterFreeAttachmentDocuments,
+  groupDocumentsByApplicantId,
 } from '~/utils/radicacion-document-upload'
 import {
   itemsByActivityFromCatalogResponse,
@@ -1006,8 +1009,9 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
   const residenceName = (typeof api?.residence_city_name === 'string' && api.residence_city_name?.trim())
     ? api.residence_city_name
     : (api?.residence_city as { name?: string } | null)?.name ?? ''
+  const applicantId = coerceApplicantId(api?.id)
   return {
-    id: typeof api?.id === 'number' ? api.id : undefined,
+    id: applicantId,
     document_type: api?.document_type ?? 'CC',
     document_number: api?.document_number ?? '',
     expedition_date: toDateInputFormat(api?.expedition_date) ?? api?.expedition_date,
@@ -1115,30 +1119,9 @@ const coDebtors = computed(() => {
     }))
 })
 
-const documentsByApplicant = computed(() => {
-  const docs = application.value?.documents ?? []
-  const byApplicant: Record<string, any[]> = {}
-  const seenByApplicant: Record<string, Set<number>> = {}
-  for (const doc of docs) {
-    const aid = doc.applicant_id
-    if (aid == null) continue
-    const key = String(aid)
-    const id = Number(doc.id)
-    if (!Number.isFinite(id)) {
-      continue
-    }
-    if (!byApplicant[key]) {
-      byApplicant[key] = []
-      seenByApplicant[key] = new Set()
-    }
-    if (seenByApplicant[key]!.has(id)) {
-      continue
-    }
-    seenByApplicant[key]!.add(id)
-    byApplicant[key].push(doc)
-  }
-  return byApplicant
-})
+const documentsByApplicant = computed(() =>
+  groupDocumentsByApplicantId(application.value?.documents ?? [], debtor.value?.id),
+)
 
 function getDocumentsForApplicant(applicantId: number | string | null | undefined): any[] {
   if (applicantId == null) return []
@@ -1155,6 +1138,40 @@ function getFreeDocumentsForApplicant(
 ): any[] {
   return filterFreeAttachmentDocuments(getDocumentsForApplicant(applicantId), financialInfo)
 }
+
+/**
+ * Adjuntos del expediente en consulta/aprobación: los mismos archivos de Documentación
+ * que no están ya en el checklist (p. ej. cédula, CIFIN, referencias subidos con título libre).
+ * No se filtra por applicant_id: si quedaron etiquetados como codeudor, el ente aprobador
+ * igual debe verlos al abrir la radicación.
+ */
+const consultaExpedienteDocuments = computed(() => {
+  const docs = application.value?.documents ?? []
+  const mappedIds = new Set<number>()
+  const financialInfos = [
+    form.value.debtor?.financial_info,
+    ...(form.value.co_debtors ?? []).map(c => c.financial_info),
+  ]
+  for (const fi of financialInfos) {
+    for (const id of collectChecklistDocumentIds(fi)) {
+      mappedIds.add(id)
+    }
+  }
+  const seen = new Set<number>()
+  const out: any[] = []
+  for (const doc of docs) {
+    const id = Number(doc?.id)
+    if (!Number.isInteger(id) || id < 1 || seen.has(id)) {
+      continue
+    }
+    if (mappedIds.has(id)) {
+      continue
+    }
+    seen.add(id)
+    out.push(doc)
+  }
+  return out
+})
 
 function creditMortgageSummaryText(opts: unknown): string {
   if (!Array.isArray(opts) || opts.length !== 1) {
@@ -1776,12 +1793,13 @@ async function repairLoadedAuxiliaryDocumentMapsOnDetail(): Promise<void> {
   } catch {
     return
   }
-  const repairOne = (applicant: ApplicantForm) => {
+  const repairOne = (applicant: ApplicantForm, allowUnscoped: boolean) => {
     const repaired = repairAuxiliaryDocumentsMapFromExisting({
       itemsByActivity,
       financialInfo: applicant.financial_info,
       applicationDocuments: docs,
       applicantId: applicant.id,
+      allowUnscoped,
     })
     if (!repaired) {
       return
@@ -1795,9 +1813,9 @@ async function repairLoadedAuxiliaryDocumentMapsOnDetail(): Promise<void> {
       : {}
     applicant.financial_info = { ...fi, auxiliaryDocuments: repaired }
   }
-  repairOne(form.value.debtor)
+  repairOne(form.value.debtor, true)
   for (const co of form.value.co_debtors ?? []) {
-    repairOne(co)
+    repairOne(co, false)
   }
 }
 
@@ -4133,26 +4151,24 @@ onMounted(() => {
               :credit-application-documents="application?.documents ?? []"
             />
             <div
-              v-if="!documentationReviewFlowActive && getFreeDocumentsForApplicant(debtor.id, debtor.financial_info ?? form.debtor?.financial_info).length > 0"
+              v-if="consultaExpedienteDocuments.length > 0"
               class="space-y-3 border-t pt-4"
             >
               <div class="space-y-1">
                 <p class="text-sm font-semibold">
-                  {{ documentationUploadMode ? 'Archivos de la solicitud (descarga y revisión)' : 'Documentos adjuntos' }}
+                  Archivos del expediente
                 </p>
-                <p
-                  v-if="documentationUploadMode"
-                  class="text-xs text-muted-foreground leading-snug"
-                >
-                  Enlaces a los mismos archivos de la solicitud. Si el checklist de arriba ya muestra la carga, use esta zona para abrir el archivo y, si aplica, registrar la revisión documental.
+                <p class="text-xs text-muted-foreground leading-snug">
+                  Adjuntos guardados en Documentación que no están en el checklist de arriba. Ábralos para revisarlos.
                 </p>
               </div>
               <div class="flex min-w-0 flex-wrap gap-2">
                 <PermissionGate
-                  v-for="doc in getFreeDocumentsForApplicant(debtor.id, debtor.financial_info ?? form.debtor?.financial_info)"
+                  v-for="doc in consultaExpedienteDocuments"
                   :key="doc.id"
-                  permission="radicacion_descargar_documentos"
-                >                  <div class="min-w-0 max-w-full space-y-2 rounded-md border p-2">
+                  :any-permission="['radicacion_descargar_documentos', 'documentacion_ver']"
+                >
+                  <div class="min-w-0 max-w-full space-y-2 rounded-md border p-2">
                     <Button
                       variant="outline"
                       size="sm"

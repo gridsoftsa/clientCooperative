@@ -25,6 +25,7 @@ import {
 /** Import explícito: Nuxt auto-importa como `RadicacionAuxiliaryDocumentsSection`, no como `AuxiliaryDocumentsSection`. */
 import AuxiliaryDocumentsSection from '~/components/radicacion/AuxiliaryDocumentsSection.vue'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
+import { coerceApplicantId, documentsForApplicant } from '~/utils/radicacion-document-upload'
 
 const props = withDefaults(
   defineProps<{
@@ -330,11 +331,11 @@ const auxiliaryDocumentsSectionRef = ref<AuxiliaryDocumentsSectionExpose | null>
 /** Checklist auxiliar: solo archivos de este solicitante (no reutilizar el CTL de otro codeudor). */
 const auxiliaryDocumentsForThisApplicant = computed(() => {
   const docs = props.creditApplicationDocuments ?? []
-  const aid = Number(props.modelValue.id)
-  if (!Number.isInteger(aid) || aid < 1) {
+  const aid = coerceApplicantId(props.modelValue.id)
+  if (aid == null) {
     return []
   }
-  return docs.filter(d => Number(d.applicant_id) === aid)
+  return documentsForApplicant(docs, aid, !props.showCoDebtorConcept)
 })
 const submitValidationAttempted = ref(false)
 /** Tras cualquier cambio en fecha de nacimiento o expedición: validación en vivo (sin esperar blur ni envío). */
@@ -1319,6 +1320,7 @@ function formatFileSize(bytes: number): string {
           :applicant="modelValue"
           :credit-application-id="creditApplicationId ?? undefined"
           :application-documents="auxiliaryDocumentsForThisApplicant"
+          :allow-unscoped-applicant-documents="!showCoDebtorConcept"
           :economic-activity-options="economicActivityOptions"
           :auxiliary-pending-upload-hint="auxiliaryPendingUploadHint"
           :interaction-mode="auxiliaryInteractionMode"

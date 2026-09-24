@@ -172,24 +172,82 @@ export function readDocumentIdMap(
  * Busca un documento existente por título (p. ej. al reemplazar checklist sin id en el mapa).
  * Prefiere el id más alto si hay varios (el más reciente).
  */
-/** True si el documento es de ese solicitante. Con `applicantId` no se aceptan filas de otro ni `applicant_id` vacío. */
+export function coerceApplicantId(value: unknown): number | undefined {
+  const n = Number(value)
+  return Number.isInteger(n) && n >= 1 ? n : undefined
+}
+
+/** True si el documento no está anclado a un solicitante (histórico: se trataba como deudor). */
+export function isUnscopedApplicantId(value: unknown): boolean {
+  return coerceApplicantId(value) == null
+}
+
+/**
+ * Agrupa documentos por solicitante. Filas sin `applicant_id` se asignan al deudor
+ * (carga antigua); los codeudores no las heredan.
+ */
+export function groupDocumentsByApplicantId<T extends { id?: number | null, applicant_id?: number | null }>(
+  documents: T[],
+  debtorApplicantId?: number | null,
+): Record<string, T[]> {
+  const debtorId = coerceApplicantId(debtorApplicantId)
+  const byApplicant: Record<string, T[]> = {}
+  const seenByApplicant: Record<string, Set<number>> = {}
+  for (const doc of documents) {
+    const aid = coerceApplicantId(doc.applicant_id) ?? debtorId
+    if (aid == null) {
+      continue
+    }
+    const key = String(aid)
+    const id = Number(doc.id)
+    if (!byApplicant[key]) {
+      byApplicant[key] = []
+      seenByApplicant[key] = new Set()
+    }
+    if (Number.isFinite(id)) {
+      if (seenByApplicant[key]!.has(id)) {
+        continue
+      }
+      seenByApplicant[key]!.add(id)
+    }
+    byApplicant[key].push(doc)
+  }
+  return byApplicant
+}
+
+/**
+ * True si el documento es de ese solicitante.
+ * `allowUnscoped`: el deudor también reconoce filas sin `applicant_id` (carga antigua).
+ * Los codeudores nunca heredan esas filas.
+ */
 export function documentBelongsToApplicant(
   doc: { applicant_id?: number | null },
   applicantId?: number | null,
+  allowUnscoped = false,
 ): boolean {
   if (applicantId == null || !Number.isFinite(Number(applicantId)) || Number(applicantId) < 1) {
     return false
   }
-  if (doc.applicant_id == null) {
-    return false
+  if (isUnscopedApplicantId(doc.applicant_id)) {
+    return allowUnscoped
   }
   return Number(doc.applicant_id) === Number(applicantId)
+}
+
+/** Filtra documentos de un solicitante; el deudor puede incluir filas sin applicant_id. */
+export function documentsForApplicant<T extends { applicant_id?: number | null }>(
+  documents: T[],
+  applicantId?: number | null,
+  allowUnscoped = false,
+): T[] {
+  return (documents ?? []).filter(d => documentBelongsToApplicant(d, applicantId, allowUnscoped))
 }
 
 export function findDocumentIdByTitle(
   documents: Array<{ id?: number; title?: string | null; applicant_id?: number | null }>,
   title: string,
   applicantId?: number | null,
+  allowUnscoped = false,
 ): number | null {
   const needle = title.trim()
   if (!needle) {
@@ -203,7 +261,7 @@ export function findDocumentIdByTitle(
     if ((doc.title ?? '').trim() !== needle) {
       continue
     }
-    if (!documentBelongsToApplicant(doc, applicantId)) {
+    if (!documentBelongsToApplicant(doc, applicantId, allowUnscoped)) {
       continue
     }
     const id = typeof doc.id === 'number' ? doc.id : Number(doc.id)

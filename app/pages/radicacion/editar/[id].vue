@@ -26,6 +26,7 @@ import { messageFromFetchError } from '~/utils/http-error-message'
 import {
   filterFreeAttachmentDocuments,
   findDocumentIdByTitle,
+  groupDocumentsByApplicantId,
   hasPendingRadicacionDocumentUploads,
   readDocumentIdMap,
   resolveCodeudorApplicantId,
@@ -474,18 +475,9 @@ const coDebtors = computed(() => {
     }))
 })
 
-const documentsByApplicant = computed(() => {
-  const docs = application.value?.documents ?? []
-  const byApplicant: Record<string, any[]> = {}
-  for (const doc of docs) {
-    const aid = doc.applicant_id
-    if (aid == null) continue
-    const key = String(aid)
-    if (!byApplicant[key]) byApplicant[key] = []
-    byApplicant[key].push(doc)
-  }
-  return byApplicant
-})
+const documentsByApplicant = computed(() =>
+  groupDocumentsByApplicantId(application.value?.documents ?? [], debtor.value?.id),
+)
 
 function getDocumentsForApplicant(applicantId: number | string | null | undefined): any[] {
   if (applicantId == null) return []
@@ -561,12 +553,13 @@ async function repairLoadedAuxiliaryDocumentMaps(): Promise<void> {
     return
   }
 
-  const repairOne = (applicant: ApplicantForm) => {
+  const repairOne = (applicant: ApplicantForm, allowUnscoped: boolean) => {
     const repaired = repairAuxiliaryDocumentsMapFromExisting({
       itemsByActivity,
       financialInfo: applicant.financial_info,
       applicationDocuments: docs,
       applicantId: applicant.id,
+      allowUnscoped,
     })
     if (!repaired) {
       return
@@ -581,9 +574,9 @@ async function repairLoadedAuxiliaryDocumentMaps(): Promise<void> {
     applicant.financial_info = { ...fi, auxiliaryDocuments: repaired }
   }
 
-  repairOne(form.value.debtor)
+  repairOne(form.value.debtor, true)
   for (const co of form.value.co_debtors ?? []) {
-    repairOne(co)
+    repairOne(co, false)
   }
 }
 
@@ -1185,7 +1178,7 @@ async function uploadAllDocuments(
         const labelRows = Object.entries(labelByKey).map(([k, lab]) => ({ key: k, label: lab }))
         const prevId = docMap[key]
           ?? (isAuxiliaryChecklistLabelUnique(labelRows, label)
-            ? findDocumentIdByTitle(serverDocuments, uploadTitle, debtorApplicantId)
+            ? findDocumentIdByTitle(serverDocuments, uploadTitle, debtorApplicantId, true)
             : null)
         await deleteDocIfPresent(prevId)
         const fd = new FormData()
@@ -1245,7 +1238,7 @@ async function uploadAllDocuments(
           const labelFng = labelByKeyFng[key] ?? key
           const uploadTitleFng = titleForFngDocumentUpload(labelFng)
           const prevIdFng = fngDocMap[key]
-            ?? findDocumentIdByTitle(serverDocuments, uploadTitleFng, debtorApplicantId)
+            ?? findDocumentIdByTitle(serverDocuments, uploadTitleFng, debtorApplicantId, true)
           await deleteDocIfPresent(prevIdFng)
           const fdFng = new FormData()
           fdFng.append('title', uploadTitleFng)
@@ -1455,6 +1448,7 @@ async function validateAllApplicantsAuxiliaryChecklists(): Promise<boolean> {
     pendingFiles: form.value.debtor.auxiliaryDocumentFiles,
     applicationDocuments: docs,
     applicantId: form.value.debtor.id,
+    allowUnscoped: true,
   })
   if (debtorMissing.length > 0) {
     addingCodeudor.value = false
