@@ -919,7 +919,7 @@ function formatHolidayDate(value: string): string {
                   Alerta SLA: IN-2026-000001
                 </p>
                 <p class="text-sm text-muted-foreground">
-                  {{ previewHeading(previewRule) }} · la barra va en {{ previewRule.trigger_value }}%.
+                  {{ previewHeading(previewRule) }} · la barra va en {{ previewRule.trigger_value }}%. Fecha límite: 30/09/2026. Quedan 6 días hábiles.
                 </p>
                 <p class="text-xs text-muted-foreground">
                   Canales: {{ previewChannels(previewRule) }}.
