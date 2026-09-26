@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY } from '~/constants/ventanilla'
 import { onDigitsOnlyInput, filterDigitsOnly } from '~/utils/digits-only-input'
 import { isDigitsOnlyIdentifier } from '~/utils/ventanilla-party-validation'
 import {
@@ -64,12 +65,16 @@ onMounted(async () => {
   }
 })
 
-const functionalTypeOptions = computed(() =>
-  functionalTypes.value.map(type => ({
+const functionalTypeOptions = computed(() => {
+  const options = functionalTypes.value.map(type => ({
     value: type.key,
     label: type.label,
-  })),
-)
+  }))
+  const rest = options.filter(option => option.value !== VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY)
+  const other = options.filter(option => option.value === VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY)
+
+  return [...rest, ...other]
+})
 
 const bodyMissing = computed(() => submitAttempted.value && !body.value.trim())
 

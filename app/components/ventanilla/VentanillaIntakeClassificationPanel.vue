@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import { VENTANILLA_FILING_TYPE_LABELS } from '~/constants/ventanilla'
+import { VENTANILLA_FILING_TYPE_LABELS, VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY } from '~/constants/ventanilla'
 import { onDigitsOnlyInput, filterDigitsOnly } from '~/utils/digits-only-input'
 import { validateVentanillaCoreFilingForm } from '~/utils/ventanilla-filing-form-validation'
 import {
@@ -77,12 +77,16 @@ const selectableFunctionalTypes = computed(() =>
   ),
 )
 
-const functionalTypeOptions = computed(() =>
-  selectableFunctionalTypes.value.map((type: VentanillaFunctionalTypeRow) => ({
+const functionalTypeOptions = computed(() => {
+  const options = selectableFunctionalTypes.value.map((type: VentanillaFunctionalTypeRow) => ({
     value: type.key,
     label: type.label,
-  })),
-)
+  }))
+  const rest = options.filter(option => option.value !== VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY)
+  const other = options.filter(option => option.value === VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY)
+
+  return [...rest, ...other]
+})
 
 const selectedFunctionalType = computed(() =>
   props.catalog?.functional_types.find((type: VentanillaFunctionalTypeRow) => type.key === functionalTypeKey.value),

@@ -82,13 +82,7 @@ function resolvePartyValidationIssue(
       message: 'El nombre del remitente es obligatorio',
     }
   }
-  if (!senderId) {
-    return {
-      field: filingType === 'incoming' ? 'sender_identifier' : 'sender_staff',
-      message: 'La identificación del remitente es obligatoria',
-    }
-  }
-  if (!isDigitsOnlyIdentifier(senderId)) {
+  if (senderId && !isDigitsOnlyIdentifier(senderId)) {
     return {
       field: filingType === 'incoming' ? 'sender_identifier' : 'sender_staff',
       message: 'La identificación del remitente debe contener solo números',
@@ -105,13 +99,7 @@ function resolvePartyValidationIssue(
       message: 'El nombre del destinatario es obligatorio',
     }
   }
-  if (!recipientId) {
-    return {
-      field: filingType === 'outgoing' ? 'recipient_identifier' : 'recipient_staff',
-      message: 'La identificación del destinatario es obligatoria',
-    }
-  }
-  if (!isDigitsOnlyIdentifier(recipientId)) {
+  if (recipientId && !isDigitsOnlyIdentifier(recipientId)) {
     return {
       field: filingType === 'outgoing' ? 'recipient_identifier' : 'recipient_staff',
       message: 'La identificación del destinatario debe contener solo números',
@@ -157,24 +145,6 @@ export function resolveFirstVentanillaFilingValidationIssue(
     }
     if (!values.recipientStaffId) {
       return { field: 'recipient_staff', message: 'Seleccione destinatario del área' }
-    }
-  }
-
-  if (values.filingType !== 'incoming' && values.senderStaffId && values.senderStaffHasDocument === false) {
-    return {
-      field: 'sender_staff',
-      message: 'El remitente seleccionado no tiene número de documento registrado en nómina',
-    }
-  }
-
-  if (
-    (values.filingType === 'incoming' || values.filingType === 'internal')
-    && values.recipientStaffId
-    && values.recipientStaffHasDocument === false
-  ) {
-    return {
-      field: 'recipient_staff',
-      message: 'El destinatario seleccionado no tiene número de documento registrado en nómina',
     }
   }
 
@@ -229,30 +199,21 @@ export function isVentanillaFilingFieldMissing(
       if (values.filingType === 'incoming') {
         return false
       }
-      if (!values.senderStaffId) {
-        return true
-      }
-
-      return values.senderStaffHasDocument === false
+      return !values.senderStaffId
     case 'recipient_staff':
       if (values.filingType === 'outgoing') {
         return false
       }
-      if (!values.recipientStaffId) {
-        return true
-      }
 
-      return values.recipientStaffHasDocument === false
+      return !values.recipientStaffId
     case 'sender_name':
       return values.filingType === 'incoming' && !parties.senderName
     case 'sender_identifier':
-      return values.filingType === 'incoming'
-        && (!parties.senderIdentifier || !isDigitsOnlyIdentifier(parties.senderIdentifier))
+      return false
     case 'recipient_name':
       return values.filingType === 'outgoing' && !parties.recipientName
     case 'recipient_identifier':
-      return values.filingType === 'outgoing'
-        && (!parties.recipientIdentifier || !isDigitsOnlyIdentifier(parties.recipientIdentifier))
+      return false
     case 'subject':
       return !values.subject.trim()
     case 'trd_document_type':

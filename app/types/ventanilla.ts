@@ -90,6 +90,7 @@ export interface VentanillaCatalogOrgUnitRow {
   name: string
   code: string
   is_document_producer?: boolean
+  manager_staff_id?: number | null
 }
 
 export interface VentanillaCatalogData {

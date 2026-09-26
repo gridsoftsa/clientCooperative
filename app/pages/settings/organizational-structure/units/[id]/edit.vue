@@ -70,10 +70,21 @@ async function loadCatalogs() {
 }
 
 function onManagerStaffReady() {
-  managerStaffSelectRef.value?.ensureManagerInList(pendingManagerStaff.value ?? undefined)
+  const select = managerStaffSelectRef.value
+  if (!select) {
+    return
+  }
+
+  select.ensureManagerInList(pendingManagerStaff.value ?? undefined)
+
+  const pendingId = pendingManagerStaff.value?.id ?? null
+  if (form.value.manager_staff_id == null && pendingId != null && select.containsStaff(pendingId)) {
+    form.value.manager_staff_id = pendingId
+  }
+
   if (
     form.value.manager_staff_id != null
-    && !managerStaffSelectRef.value?.containsStaff(form.value.manager_staff_id)
+    && !select.containsStaff(form.value.manager_staff_id)
   ) {
     form.value.manager_staff_id = null
   }
@@ -113,8 +124,6 @@ async function loadUnit() {
       related_org_unit_ids: (u.related_units ?? []).map(x => x.id),
     }
     await refreshUnitsForOffice(u.org_office_id)
-    await nextTick()
-    onManagerStaffReady()
   }
   catch {
     toast.error('No se encontró el área')

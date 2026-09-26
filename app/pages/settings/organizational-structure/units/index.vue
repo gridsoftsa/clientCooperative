@@ -47,6 +47,17 @@ watch(filterOfficeId, () => {
   fetchUnits()
 })
 
+function managerLabel(unit: OrgUnitRow): string {
+  const manager = unit.manager_staff
+  if (!manager) {
+    return '—'
+  }
+
+  const name = [manager.first_name, manager.first_last_name].filter(Boolean).join(' ')
+
+  return name || '—'
+}
+
 async function deactivateUnit(id: number) {
   if (!hasPermission('estructura_org_editar') || deactivatingId.value != null)
     return
@@ -137,6 +148,7 @@ onMounted(async () => {
                 <TableHead>Código</TableHead>
                 <TableHead>Agencia</TableHead>
                 <TableHead>Padre</TableHead>
+                <TableHead>Responsable</TableHead>
                 <TableHead>Productora doc.</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead class="text-right">
@@ -152,6 +164,7 @@ onMounted(async () => {
                 <TableCell>{{ u.code }}</TableCell>
                 <TableCell>{{ u.org_office?.name ?? '—' }}</TableCell>
                 <TableCell>{{ u.parent?.name ?? '—' }}</TableCell>
+                <TableCell>{{ managerLabel(u) }}</TableCell>
                 <TableCell>
                   {{ u.is_document_producer ? 'Sí' : 'No' }}
                 </TableCell>
