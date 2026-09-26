@@ -92,17 +92,63 @@ const configuredProducerAreas = computed(() =>
   configuredProducerAreasForFunctionalType(selectedFunctionalType.value),
 )
 
+const publicAreaAssignment = computed(() => {
+  if (props.intake.source !== 'web_form' || !selectedFunctionalType.value?.show_in_public_form) {
+    return null
+  }
+
+  const orgUnitId = selectedFunctionalType.value.public_org_unit_id
+  if (orgUnitId == null) {
+    return null
+  }
+
+  return {
+    orgUnitId,
+    managerUserId: selectedFunctionalType.value.public_manager_user_id ?? null,
+  }
+})
+
+function withPublicAreaOption(options: OrgUnitOption[]): OrgUnitOption[] {
+  const assignment = publicAreaAssignment.value
+  if (!assignment || options.some(unit => unit.id === assignment.orgUnitId)) {
+    return options
+  }
+
+  const unit = props.orgUnits.find(item => item.id === assignment.orgUnitId)
+
+  return unit ? [...options, unit] : options
+}
+
 const recipientOrgUnitOptions = computed(() =>
-  filterOrgUnitsByFunctionalTypeAreas(props.orgUnits, configuredProducerAreas.value),
+  withPublicAreaOption(filterOrgUnitsByFunctionalTypeAreas(props.orgUnits, configuredProducerAreas.value)),
 )
 
 const producerOrgUnitOptions = computed(() => {
-  if (configuredProducerAreas.value.length > 0) {
-    return filterOrgUnitsByFunctionalTypeAreas(props.orgUnits, configuredProducerAreas.value)
+  const options = configuredProducerAreas.value.length > 0
+    ? filterOrgUnitsByFunctionalTypeAreas(props.orgUnits, configuredProducerAreas.value)
+    : producerOrgUnits.value
+
+  return withPublicAreaOption(options)
+})
+
+function applyPublicResponsibleArea(): void {
+  const assignment = publicAreaAssignment.value
+  if (!assignment) {
+    return
   }
 
-  return producerOrgUnits.value
-})
+  if (filingType.value === 'incoming' || filingType.value === 'internal') {
+    recipientOrgUnitId.value = assignment.orgUnitId
+  }
+
+  if (filingType.value !== 'incoming') {
+    producerOrgUnitId.value = assignment.orgUnitId
+  }
+
+  if (assignment.managerUserId != null) {
+    assignedUserId.value = assignment.managerUserId
+  }
+}
 
 function clearInvalidOrgUnitSelections(): void {
   const cleared = clearInvalidOrgUnitSelectionsForFunctionalType(
@@ -172,6 +218,7 @@ function resetFormFromIntake(intake: VentanillaIntakeRow): void {
   discardReason.value = ''
   discardDialogOpen.value = false
   errorMessage.value = ''
+  applyPublicResponsibleArea()
 }
 
 watch(
@@ -185,7 +232,13 @@ watch(
 )
 
 watch(responsibleOrgUnitId, async (orgUnitId) => {
-  await loadResponsibleUsers(orgUnitId)
+  const assignment = publicAreaAssignment.value
+  const managerUserId = assignment?.orgUnitId === orgUnitId ? assignment.managerUserId : null
+  await loadResponsibleUsers(orgUnitId, managerUserId)
+  if (managerUserId != null && publicAreaAssignment.value?.orgUnitId === orgUnitId) {
+    assignedUserId.value = managerUserId
+    return
+  }
   clearAssignedUserIfMissing(assignedUserId)
 })
 
@@ -193,11 +246,13 @@ watch(filingType, () => {
   assignedUserId.value = null
   docDocumentTypeId.value = null
   clearInvalidOrgUnitSelections()
+  applyPublicResponsibleArea()
 })
 
 watch(functionalTypeKey, () => {
   docDocumentTypeId.value = null
   clearInvalidOrgUnitSelections()
+  applyPublicResponsibleArea()
 })
 
 async function classifyIntake(): Promise<void> {
@@ -369,12 +424,16 @@ async function discardIntake(): Promise<void> {
       <p v-if="selectedFunctionalType" class="text-muted-foreground text-xs">
         SLA sugerido: {{ selectedFunctionalType.sla_business_days ?? '—' }} días hábiles.
       </p>
+      <p v-if="publicAreaAssignment" class="text-muted-foreground text-xs">
+        Este tipo público asigna el área encargada y a su encargado como responsable.
+      </p>
 
       <div class="grid gap-4 md:grid-cols-2">
         <div class="space-y-2">
           <Label>{{ filingType === 'incoming' ? 'Área destinataria *' : 'Área productora *' }}</Label>
           <Select
             v-if="filingType === 'incoming'"
+            :disabled="publicAreaAssignment != null"
             :model-value="recipientOrgUnitId != null ? String(recipientOrgUnitId) : undefined"
             @update:model-value="recipientOrgUnitId = $event ? Number($event) : null"
           >
@@ -387,6 +446,7 @@ async function discardIntake(): Promise<void> {
           </Select>
           <Select
             v-else
+            :disabled="publicAreaAssignment != null"
             :model-value="producerOrgUnitId != null ? String(producerOrgUnitId) : undefined"
             @update:model-value="producerOrgUnitId = $event ? Number($event) : null"
           >
@@ -402,6 +462,7 @@ async function discardIntake(): Promise<void> {
         <div v-if="filingType === 'internal'" class="space-y-2">
           <Label>Área destinataria *</Label>
           <Select
+            :disabled="publicAreaAssignment != null"
             :model-value="recipientOrgUnitId != null ? String(recipientOrgUnitId) : undefined"
             @update:model-value="recipientOrgUnitId = $event ? Number($event) : null"
           >
@@ -418,7 +479,7 @@ async function discardIntake(): Promise<void> {
           <Label>Responsable</Label>
           <Select
             :model-value="assignedUserId != null ? String(assignedUserId) : undefined"
-            :disabled="!responsibleOrgUnitId || loadingResponsibleUsers"
+            :disabled="publicAreaAssignment != null || !responsibleOrgUnitId || loadingResponsibleUsers"
             @update:model-value="assignedUserId = $event ? Number($event) : null"
           >
             <SelectTrigger>

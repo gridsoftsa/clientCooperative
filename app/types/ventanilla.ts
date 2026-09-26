@@ -26,6 +26,9 @@ export interface VentanillaFunctionalTypeRow {
   has_active_workflow_binding?: boolean
   is_active?: boolean
   show_in_public_form?: boolean
+  public_org_unit_id?: number | null
+  public_org_unit?: { id: number, name: string, code?: string } | null
+  public_manager_user_id?: number | null
   sort_order?: number
   archival_file_type_id?: number | null
   archival_file_type?: {
@@ -102,6 +105,7 @@ export interface VentanillaCatalogData {
 export interface VentanillaCatalogSettingsData {
   functional_types: Required<VentanillaFunctionalTypeRow>[]
   reception_media: Required<VentanillaReceptionMediumRow>[]
+  org_units: Array<{ id: number, name: string, code: string }>
 }
 
 export interface VentanillaSlaSettingsRow {

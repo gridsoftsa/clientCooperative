@@ -946,7 +946,7 @@ async function submit() {
             class="space-y-2"
             :class="filingType === 'internal' ? '' : 'md:col-span-2'"
           >
-            <Label>Área productora *</Label>
+            <Label>Área *</Label>
             <Multiselect
               id="ventanilla_producer_org_unit"
               v-model="producerOrgUnitId"
