@@ -349,6 +349,10 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
               Invitado por {{ row.invited_by?.name ?? '—' }}
               <span v-if="row.task?.stage"> · {{ row.task.stage.name }}</span>
             </p>
+            <p v-if="row.reassignment_requested_at" class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+              Pidió cambio de encargado{{ row.reassignment_request_note ? `: ${row.reassignment_request_note}` : '.' }}
+              Reasigne o quite este colaborador y elija a la persona correcta.
+            </p>
             <p v-if="row.request_note" class="mt-2 whitespace-pre-wrap text-sm">
               {{ row.request_note }}
             </p>

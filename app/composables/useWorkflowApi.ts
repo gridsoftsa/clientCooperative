@@ -224,6 +224,46 @@ export function useWorkflowApi() {
     return res.data
   }
 
+  async function fetchCollaborationReassignCandidates(id: number): Promise<{
+    org_unit: { id: number, name: string, code?: string | null } | null
+    users: Array<{ id: number, name: string, email?: string | null }>
+  }> {
+    const res = await api<{
+      data: {
+        org_unit: { id: number, name: string, code?: string | null } | null
+        users: Array<{ id: number, name: string, email?: string | null }>
+      }
+    }>(`/workflow/collaborations/${id}/reassign-candidates`)
+
+    return res.data
+  }
+
+  async function requestCollaborationChange(id: number, note: string): Promise<WorkflowTaskCollaboratorRow> {
+    const res = await api<{ data: WorkflowTaskCollaboratorRow, message: string }>(
+      `/workflow/collaborations/${id}/request-change`,
+      { method: 'POST', body: { note } },
+    )
+
+    return res.data
+  }
+
+  async function reassignCollaboration(
+    id: number,
+    payload: {
+      user_id: number
+      org_unit_id?: number | null
+      org_position_id?: number | null
+      note?: string | null
+    },
+  ): Promise<WorkflowTaskCollaboratorRow> {
+    const res = await api<{ data: WorkflowTaskCollaboratorRow, message: string }>(
+      `/workflow/collaborations/${id}/reassign`,
+      { method: 'POST', body: payload },
+    )
+
+    return res.data
+  }
+
   async function respondCollaboration(id: number, formData: FormData): Promise<WorkflowTaskCollaboratorRow> {
     const res = await api<{ data: WorkflowTaskCollaboratorRow, message: string }>(
       `/workflow/collaborations/${id}/respond`,
@@ -381,6 +421,9 @@ export function useWorkflowApi() {
     fetchMyCollaborations,
     fetchMyPendingCollaborations,
     fetchCollaboration,
+    fetchCollaborationReassignCandidates,
+    requestCollaborationChange,
+    reassignCollaboration,
     respondCollaboration,
     fetchCollaborationFile,
     viewCollaborationFileInNewTab,

@@ -18,13 +18,22 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const workflowApi = useWorkflowApi()
+const { user } = useAuth()
 
 const collaborationId = computed(() => Number(route.params.id))
 
 const loading = ref(true)
 const saving = ref(false)
+const reassigning = ref(false)
+const requestingChange = ref(false)
 const submitAttempted = ref(false)
 const responseNote = ref('')
+const reassignUserId = ref('')
+const reassignNote = ref('')
+const changeRequestNote = ref('')
+const notResponsibleMode = ref<'peer' | 'ask'>('peer')
+const assignableUsers = ref<Array<{ id: number, name: string, email?: string | null }>>([])
+const areaName = ref<string | null>(null)
 const attachment = ref<DocumentAttachmentRow>(createDocumentAttachmentRow())
 const collaboration = ref<Awaited<ReturnType<typeof workflowApi.fetchCollaboration>> | null>(null)
 const activeTab = ref('responder')
@@ -43,6 +52,12 @@ function fileCanPreview(fileName: string, mimeType?: string | null): boolean {
 
 const isResponded = computed(() => collaboration.value?.status === 'responded')
 const filingFileCount = computed(() => collaboration.value?.filing?.files.length ?? 0)
+const canAct = computed(() =>
+  collaboration.value?.status === 'pending'
+  && collaboration.value.user?.id === user.value?.id,
+)
+const changeAlreadyRequested = computed(() => Boolean(collaboration.value?.reassignment_requested_at))
+const inviterName = computed(() => collaboration.value?.invited_by?.name ?? 'quien solicitó la colaboración')
 
 async function load() {
   loading.value = true
@@ -50,6 +65,19 @@ async function load() {
   try {
     collaboration.value = await workflowApi.fetchCollaboration(collaborationId.value)
     activeTab.value = collaboration.value.status === 'responded' ? 'aporte' : 'responder'
+    if (collaboration.value.status === 'pending' && collaboration.value.user?.id === user.value?.id) {
+      try {
+        const candidates = await workflowApi.fetchCollaborationReassignCandidates(collaborationId.value)
+        assignableUsers.value = candidates.users
+        areaName.value = candidates.org_unit?.name ?? null
+        notResponsibleMode.value = candidates.users.length > 0 ? 'peer' : 'ask'
+      }
+      catch {
+        assignableUsers.value = []
+        areaName.value = collaboration.value.org_unit?.name ?? null
+        notResponsibleMode.value = 'ask'
+      }
+    }
   }
   catch (error) {
     toast.error(extractApiErrorMessage(error))
@@ -92,6 +120,60 @@ function buildFormData(): FormData | null {
   appendDocumentFoliosToFormData(fd, 0, attachment.value.folioStart, attachment.value.folioEnd)
 
   return fd
+}
+
+async function submitReassign() {
+  if (!reassignUserId.value) {
+    toast.error('Seleccione un compañero del área.')
+
+    return
+  }
+
+  if (reassignNote.value.trim().length < 10) {
+    toast.error('Explique el motivo con al menos 10 caracteres.')
+
+    return
+  }
+
+  reassigning.value = true
+
+  try {
+    await workflowApi.reassignCollaboration(collaborationId.value, {
+      user_id: Number(reassignUserId.value),
+      note: reassignNote.value.trim(),
+    })
+    toast.success('Colaboración reasignada. El nuevo encargado fue notificado.')
+    await router.push('/workflow/colaboracion')
+  }
+  catch (error) {
+    toast.error(extractApiErrorMessage(error))
+  }
+  finally {
+    reassigning.value = false
+  }
+}
+
+async function submitChangeRequest() {
+  const note = changeRequestNote.value.trim()
+
+  if (note.length < 10) {
+    toast.error('Explique el motivo con al menos 10 caracteres.')
+
+    return
+  }
+
+  requestingChange.value = true
+
+  try {
+    collaboration.value = await workflowApi.requestCollaborationChange(collaborationId.value, note)
+    toast.success(`Se informó a ${inviterName.value} para que asigne al encargado correcto.`)
+  }
+  catch (error) {
+    toast.error(extractApiErrorMessage(error))
+  }
+  finally {
+    requestingChange.value = false
+  }
 }
 
 async function submitResponse() {
@@ -182,6 +264,9 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
         <TabsTrigger v-if="!isResponded" value="responder" class="flex-1 sm:flex-none">
           Responder
         </TabsTrigger>
+        <TabsTrigger v-if="canAct" value="cambiar-encargado" class="flex-1 sm:flex-none">
+          Cambiar encargado
+        </TabsTrigger>
         <TabsTrigger v-else value="aporte" class="flex-1 sm:flex-none">
           Aporte
         </TabsTrigger>
@@ -205,7 +290,9 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
           </AlertDescription>
         </Alert>
         <p class="text-sm text-muted-foreground">
-          Solicitado por {{ collaboration.invited_by?.name ?? '—' }} · Pendiente de su aporte
+          Solicitado por {{ collaboration.invited_by?.name ?? '—' }}
+          <span v-if="collaboration.org_unit"> · {{ collaboration.org_unit.name }}</span>
+          · Pendiente de su aporte
         </p>
 
         <div class="space-y-2">
@@ -229,7 +316,106 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
         </Button>
       </TabsContent>
 
-      <TabsContent v-else value="aporte" class="mt-4 space-y-3">
+      <TabsContent v-if="canAct" value="cambiar-encargado" class="mt-4 space-y-4">
+        <Alert>
+          <Icon name="i-lucide-user-round-cog" class="size-4" />
+          <AlertTitle>Esta colaboración no le corresponde</AlertTitle>
+          <AlertDescription>
+            Pásela a un compañero de{{ areaName ? ` ${areaName}` : ' su área' }}
+            o informe a {{ inviterName }} para que elija a otra persona.
+          </AlertDescription>
+        </Alert>
+
+        <Alert v-if="changeAlreadyRequested" class="border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+          <Icon name="i-lucide-bell" class="size-4" />
+          <AlertTitle>Cambio solicitado</AlertTitle>
+          <AlertDescription>
+            Ya se informó a {{ inviterName }} para que asigne al encargado correcto.
+            <span v-if="collaboration.reassignment_request_note"> Motivo: {{ collaboration.reassignment_request_note }}</span>
+          </AlertDescription>
+        </Alert>
+
+        <div class="grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            size="sm"
+            :variant="notResponsibleMode === 'peer' ? 'default' : 'outline'"
+            :disabled="assignableUsers.length === 0"
+            @click="notResponsibleMode = 'peer'"
+          >
+            Compañero del área
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            :variant="notResponsibleMode === 'ask' ? 'default' : 'outline'"
+            :disabled="changeAlreadyRequested"
+            @click="notResponsibleMode = 'ask'"
+          >
+            Informar al solicitante
+          </Button>
+        </div>
+
+        <div v-if="notResponsibleMode === 'peer'" class="space-y-3">
+          <p v-if="assignableUsers.length === 0" class="text-sm text-muted-foreground">
+            No hay otros usuarios del área para reasignar. Informe a {{ inviterName }}.
+          </p>
+          <template v-else>
+            <div class="space-y-2">
+              <Label>Reasignar a</Label>
+              <Select v-model="reassignUserId">
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione compañero del área" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="candidate in assignableUsers"
+                    :key="candidate.id"
+                    :value="String(candidate.id)"
+                  >
+                    {{ candidate.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="space-y-2">
+              <Label>Motivo</Label>
+              <Textarea
+                v-model="reassignNote"
+                rows="2"
+                placeholder="Ej. Esta solicitud la atiende el analista de contratos."
+              />
+            </div>
+            <Button
+              type="button"
+              :disabled="reassigning || !reassignUserId || reassignNote.trim().length < 10"
+              @click="submitReassign"
+            >
+              {{ reassigning ? 'Reasignando…' : 'Reasignar' }}
+            </Button>
+          </template>
+        </div>
+
+        <div v-else class="space-y-3">
+          <div class="space-y-2">
+            <Label>Motivo</Label>
+            <Textarea
+              v-model="changeRequestNote"
+              rows="3"
+              placeholder="Ej. Esta solicitud corresponde a Jurídica, no a esta área."
+            />
+          </div>
+          <Button
+            type="button"
+            :disabled="requestingChange || changeAlreadyRequested || changeRequestNote.trim().length < 10"
+            @click="submitChangeRequest"
+          >
+            {{ requestingChange ? 'Enviando…' : `Informar a ${inviterName}` }}
+          </Button>
+        </div>
+      </TabsContent>
+
+      <TabsContent v-if="isResponded" value="aporte" class="mt-4 space-y-3">
         <p v-if="collaboration.response_note" class="whitespace-pre-wrap text-sm">
           {{ collaboration.response_note }}
         </p>

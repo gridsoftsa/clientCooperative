@@ -288,6 +288,8 @@ export interface WorkflowTaskCollaboratorRow {
   org_unit: { id: number, name: string, code?: string } | null
   org_position: { id: number, name: string, code?: string } | null
   invited_by: { id: number, name: string } | null
+  reassignment_requested_at?: string | null
+  reassignment_request_note?: string | null
   files: Array<{
     id: number
     title: string

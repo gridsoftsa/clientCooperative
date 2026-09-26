@@ -77,6 +77,20 @@ const EVENT_PRESENTATION: Record<string, EventPresentation> = {
     badgeClass: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-200',
     accentClass: 'border-l-blue-500',
   },
+  collaboration_reassigned: {
+    label: 'Colaboración reasignada',
+    icon: 'i-lucide-user-round-cog',
+    nodeClass: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/60 dark:text-blue-300',
+    badgeClass: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-200',
+    accentClass: 'border-l-blue-500',
+  },
+  collaboration_reassignment_requested: {
+    label: 'Cambio de colaborador',
+    icon: 'i-lucide-bell',
+    nodeClass: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/60 dark:text-amber-300',
+    badgeClass: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
+    accentClass: 'border-l-amber-500',
+  },
   collaboration_responded: {
     label: 'Aporte de colaborador',
     icon: 'i-lucide-paperclip',

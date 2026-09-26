@@ -18,6 +18,7 @@ const props = withDefaults(defineProps<{
   disabled?: boolean
   fileInputId?: string
   uploadConstraints?: DocumentUploadConstraints
+  compact?: boolean
 }>(), {
   label: 'Documento',
   primary: false,
@@ -25,6 +26,7 @@ const props = withDefaults(defineProps<{
   submitAttempted: false,
   disabled: false,
   uploadConstraints: () => VENTANILLA_FILING_UPLOAD_CONSTRAINTS,
+  compact: false,
 })
 
 const emit = defineEmits<{
@@ -88,10 +90,13 @@ function onFileChange(event: Event) {
 
 <template>
   <div
-    class="rounded-xl border bg-card p-4 shadow-sm transition-colors"
-    :class="primary ? 'border-primary/30 ring-1 ring-primary/10' : 'border-border'"
+    class="rounded-xl border bg-card shadow-sm transition-colors"
+    :class="[
+      compact ? 'p-3' : 'p-4',
+      primary ? 'border-primary/30 ring-1 ring-primary/10' : 'border-border',
+    ]"
   >
-    <div class="mb-4 flex items-start justify-between gap-3">
+    <div class="mb-3 flex items-start justify-between gap-3" :class="compact ? 'mb-2' : 'mb-4'">
       <div class="min-w-0">
         <div class="flex flex-wrap items-center gap-2">
           <p class="text-sm font-semibold text-foreground">
@@ -101,7 +106,7 @@ function onFileChange(event: Event) {
             Principal
           </Badge>
         </div>
-        <p class="mt-1 text-xs text-muted-foreground">
+        <p v-if="!compact" class="mt-1 text-xs text-muted-foreground">
           Indique título, rango de folios y seleccione el archivo. {{ uploadHint }}
         </p>
       </div>
@@ -177,8 +182,9 @@ function onFileChange(event: Event) {
 
       <button
         type="button"
-        class="flex w-full items-center gap-4 rounded-xl border border-dashed px-4 py-4 text-left transition-colors"
+        class="flex w-full items-center gap-4 rounded-xl border border-dashed px-4 text-left transition-colors"
         :class="[
+          compact ? 'py-2.5' : 'py-4',
           fileMissing ? 'border-amber-500 bg-amber-500/5' : 'border-muted-foreground/30 bg-muted/20 hover:bg-muted/35',
           disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
         ]"

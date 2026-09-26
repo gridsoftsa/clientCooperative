@@ -14,10 +14,12 @@ const props = withDefaults(defineProps<{
   showOpenFilingButton?: boolean
   showDetails?: boolean
   showFiles?: boolean
+  compact?: boolean
 }>(), {
   showOpenFilingButton: true,
   showDetails: true,
   showFiles: true,
+  compact: false,
 })
 
 const { hasPermission } = usePermissions()
@@ -103,9 +105,9 @@ function openFilingDetail() {
       </Button>
     </div>
 
-    <div v-if="showDetails" class="rounded-lg border bg-muted/20 p-4">
-      <dl class="grid gap-3 text-sm sm:grid-cols-2">
-        <div>
+    <div v-if="showDetails" class="rounded-lg border bg-muted/20" :class="compact ? 'p-3' : 'p-4'">
+      <dl class="grid gap-3 text-sm" :class="compact ? 'grid-cols-1' : 'sm:grid-cols-2'">
+        <div v-if="!compact">
           <dt class="text-muted-foreground text-xs">
             Número
           </dt>
@@ -186,7 +188,7 @@ function openFilingDetail() {
             {{ filing.doc_document_type.name }}
           </dd>
         </div>
-        <div v-if="filing.requires_response" class="sm:col-span-2">
+        <div v-if="filing.requires_response && !compact" class="sm:col-span-2">
           <dt class="text-muted-foreground text-xs">
             SLA del radicado
           </dt>
@@ -202,7 +204,7 @@ function openFilingDetail() {
             </p>
           </dd>
         </div>
-        <div v-if="filing.notes" class="sm:col-span-2">
+        <div v-if="filing.notes && !compact" class="sm:col-span-2">
           <dt class="text-muted-foreground text-xs">
             Notas
           </dt>
@@ -223,11 +225,12 @@ function openFilingDetail() {
         </Badge>
       </div>
 
-      <ul v-if="filing.files.length" class="divide-y rounded-lg border bg-card">
+      <ul v-if="filing.files.length" class="divide-y rounded-lg border bg-card" :class="compact ? 'max-h-56 overflow-y-auto' : ''">
         <li
           v-for="file in filing.files"
           :key="file.id"
-          class="flex items-start justify-between gap-3 px-4 py-3 text-sm"
+          class="flex items-start justify-between gap-3 text-sm"
+          :class="compact ? 'px-3 py-2' : 'px-4 py-3'"
         >
           <div class="min-w-0">
             <p class="font-medium">

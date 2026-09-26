@@ -84,6 +84,8 @@ export function inboxNotificationEventLabel(eventType?: string | null): string |
     escalated: 'Escalamiento',
     workflow_task_assigned: 'Tarea de workflow',
     task_collaborator_invited: 'Colaboración solicitada',
+    task_collaborator_reassigned: 'Colaboración reasignada',
+    task_collaborator_reassignment_requested: 'Cambio de colaborador',
     workflow_sla_alert: 'Alerta SLA de etapa',
     workflow_sla_reminder: 'Recordatorio SLA de etapa',
     workflow_escalated: 'Escalamiento de etapa',

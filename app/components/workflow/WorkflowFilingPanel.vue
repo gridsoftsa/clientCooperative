@@ -101,6 +101,8 @@ function eventLabel(type: string) {
     reassigned: 'Reasignación',
     comment: 'Comentario',
     collaboration_responded: 'Aporte de colaborador',
+    collaboration_reassigned: 'Colaboración reasignada',
+    collaboration_reassignment_requested: 'Cambio de colaborador solicitado',
     files_attached: 'Documentos adjuntos',
     completed: 'Proceso cerrado',
     cancelled: 'Proceso cancelado',
