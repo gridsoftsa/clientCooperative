@@ -286,10 +286,14 @@ export function useVentanillaApi() {
   async function respondFiling(
     id: number,
     responseText: string,
+    copyEmails: string[] = [],
   ): Promise<{ data: VentanillaFilingDetail; message: string }> {
     return api<{ data: VentanillaFilingDetail; message: string }>(`/ventanilla/filings/${id}/respond`, {
       method: 'PATCH',
-      body: { response_text: responseText },
+      body: {
+        response_text: responseText,
+        copy_emails: copyEmails,
+      },
     })
   }
 

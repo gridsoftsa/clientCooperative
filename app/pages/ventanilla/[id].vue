@@ -54,6 +54,7 @@ const {
 const selectedAssignedUserId = ref<number | null>(null)
 const assignmentNote = ref('')
 const responseText = ref('')
+const responseCopyEmails = ref<string[]>([])
 const closeReason = ref('')
 const voidReason = ref('')
 const voidDialogOpen = ref(false)
@@ -81,6 +82,9 @@ const id = computed(() => Number(route.params.id))
 const isTerminal = computed(() => filing.value?.status === 'closed' || filing.value?.status === 'voided')
 const latestSenderNotification = computed(() =>
   filing.value?.events?.find(event => event.event_type === 'sender_notified') ?? null,
+)
+const responseCopyDeliveries = computed(() =>
+  (filing.value?.notification_deliveries ?? []).filter(delivery => delivery.recipient_role === 'response_copy'),
 )
 const canAssign = computed(() => hasPermission('ventanilla_asignar') && !isTerminal.value)
 const canManage = computed(() => hasPermission('ventanilla_gestionar') && !isTerminal.value)
@@ -236,9 +240,22 @@ function alertRecipientRoleLabel(role: string): string {
     assignee: 'responsable',
     immediate_supervisor: 'jefe inmediato',
     sender: 'interesado',
+    response_copy: 'copia',
   }
 
   return labels[role] ?? role
+}
+
+function responseCopyStatusLabel(status: string): string {
+  if (status === 'sent') {
+    return 'Enviado'
+  }
+
+  if (status === 'failed') {
+    return 'No se pudo enviar'
+  }
+
+  return 'No enviado'
 }
 
 function notificationChannelLabel(channel: string): string {
@@ -349,11 +366,12 @@ async function respondAndClose() {
   errorMessage.value = ''
   actionMessage.value = ''
   try {
-    const res = await ventanillaApi.respondFiling(id.value, responseText.value.trim())
+    const res = await ventanillaApi.respondFiling(id.value, responseText.value.trim(), responseCopyEmails.value)
     filing.value = res.data
     selectedAssignedUserId.value = filing.value.assigned_user?.id ?? selectedAssignedUserId.value
     actionMessage.value = res.message
     responseText.value = ''
+    responseCopyEmails.value = []
   }
   catch (e: unknown) {
     const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
@@ -735,6 +753,18 @@ async function viewSticker() {
                 {{ filing.response_text }}
               </dd>
             </div>
+            <div v-if="responseCopyDeliveries.length" class="sm:col-span-2">
+              <dt class="text-muted-foreground text-xs">
+                Copias de la respuesta
+              </dt>
+              <dd class="mt-1 space-y-1 text-sm">
+                <p v-for="delivery in responseCopyDeliveries" :key="delivery.id">
+                  <span class="font-medium">{{ delivery.recipient_address }}</span>
+                  <span class="text-muted-foreground"> · {{ responseCopyStatusLabel(delivery.status) }}</span>
+                  <span v-if="delivery.sent_at" class="text-muted-foreground"> · {{ formatDate(delivery.sent_at) }}</span>
+                </p>
+              </dd>
+            </div>
             <div v-if="latestSenderNotification" class="sm:col-span-2">
               <dt class="text-muted-foreground text-xs">
                 Correo al interesado
@@ -862,9 +892,12 @@ async function viewSticker() {
                     {{ actionLoading === 'start' ? 'Iniciando…' : 'Iniciar gestión' }}
                   </Button>
 
-                  <div v-if="filing.requires_response" class="space-y-2">
-                    <Label>Respuesta</Label>
-                    <Textarea v-model="responseText" rows="4" placeholder="Registre la respuesta dada al remitente…" />
+                  <div v-if="filing.requires_response" class="space-y-3">
+                    <div class="space-y-2">
+                      <Label>Respuesta</Label>
+                      <Textarea v-model="responseText" rows="4" placeholder="Registre la respuesta dada al remitente…" />
+                    </div>
+                    <VentanillaResponseCopyEmails v-model="responseCopyEmails" />
                     <Button :disabled="actionLoading === 'respond'" @click="respondAndClose">
                       {{ actionLoading === 'respond' ? 'Cerrando…' : 'Registrar respuesta y cerrar' }}
                     </Button>

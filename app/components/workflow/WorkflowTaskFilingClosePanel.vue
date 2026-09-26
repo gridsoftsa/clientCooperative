@@ -16,6 +16,7 @@ const emit = defineEmits<{
 const ventanillaApi = useVentanillaApi()
 
 const responseText = ref('')
+const responseCopyEmails = ref<string[]>([])
 const closeReason = ref('')
 const saving = ref(false)
 
@@ -38,9 +39,10 @@ async function submit(): Promise<void> {
     }
 
     if (props.requiresResponse) {
-      const res = await ventanillaApi.respondFiling(props.filingId, responseText.value.trim())
+      const res = await ventanillaApi.respondFiling(props.filingId, responseText.value.trim(), responseCopyEmails.value)
       toast.success(res.message)
       responseText.value = ''
+      responseCopyEmails.value = []
     }
     else {
       await ventanillaApi.closeFiling(props.filingId, closeReason.value.trim() || undefined)
@@ -76,14 +78,17 @@ async function submit(): Promise<void> {
       </p>
     </div>
 
-    <div v-if="requiresResponse" class="space-y-2">
-      <Label>Respuesta *</Label>
-      <Textarea
-        v-model="responseText"
-        rows="4"
-        placeholder="Registre la respuesta dada al remitente…"
-        :disabled="saving"
-      />
+    <div v-if="requiresResponse" class="space-y-3">
+      <div class="space-y-2">
+        <Label>Respuesta *</Label>
+        <Textarea
+          v-model="responseText"
+          rows="4"
+          placeholder="Registre la respuesta dada al remitente…"
+          :disabled="saving"
+        />
+      </div>
+      <VentanillaResponseCopyEmails v-model="responseCopyEmails" />
     </div>
     <div v-else class="space-y-2">
       <Label>Motivo de cierre</Label>
