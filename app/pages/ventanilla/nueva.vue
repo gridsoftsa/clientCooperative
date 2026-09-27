@@ -3,10 +3,11 @@ import {
   VENTANILLA_FILING_TYPE_LABELS,
   VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY,
   VENTANILLA_INFORMATIVE_TYPE_HINT,
+  VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY,
 } from '~/constants/ventanilla'
 import type { VentanillaCatalogData, VentanillaFilingTypeValue, VentanillaFunctionalTypeRow } from '~/types/ventanilla'
 import type { OrgStaffListItem } from '~/types/org-structure'
-import { onDigitsOnlyInput, filterDigitsOnly } from '~/utils/digits-only-input'
+import { filterDigitsOnly } from '~/utils/digits-only-input'
 import {
   isVentanillaFilingFieldMissing,
   resolveFirstVentanillaFilingValidationIssue,
@@ -42,6 +43,7 @@ interface VentanillaOrgUnitOption {
   name: string
   code: string
   is_document_producer?: boolean
+  manager_staff_id?: number | null
 }
 
 definePageMeta({
@@ -54,6 +56,7 @@ const router = useRouter()
 const ventanillaApi = useVentanillaApi()
 const orgApi = useOrgStructureApi()
 const { hasPermission } = usePermissions()
+const { user } = useAuth()
 const {
   responsibleUsers,
   loadingResponsibleUsers,
@@ -68,6 +71,7 @@ const submitAttempted = ref(false)
 const filingType = ref<VentanillaFilingTypeValue>('incoming')
 const functionalTypeKey = ref('')
 const requiresResponseOverride = ref<boolean | null>(null)
+const slaBusinessDaysInput = ref('')
 const producerOrgUnitId = ref<number | null>(null)
 const recipientOrgUnitId = ref<number | null>(null)
 const docDocumentTypeId = ref<number | null>(null)
@@ -102,7 +106,7 @@ const metadataFieldsRef = ref<{
   focusMissingField?: (fieldCode: string, fieldIndex: number) => void
 } | null>(null)
 
-type FilingFormSectionId = 'clasificacion' | 'datos' | 'trd' | 'metadatos' | 'archivos'
+type FilingFormSectionId = 'clasificacion' | 'trd' | 'metadatos' | 'archivos'
 
 const FILING_FORM_SECTIONS: Array<{
   id: FilingFormSectionId
@@ -110,7 +114,6 @@ const FILING_FORM_SECTIONS: Array<{
   icon: string
 }> = [
   { id: 'clasificacion', label: 'Clasificación', icon: 'i-lucide-layers' },
-  { id: 'datos', label: 'Datos', icon: 'i-lucide-file-text' },
   { id: 'trd', label: 'TRD', icon: 'i-lucide-folder-tree' },
   { id: 'metadatos', label: 'Metadatos', icon: 'i-lucide-list' },
   { id: 'archivos', label: 'Archivos', icon: 'i-lucide-paperclip' },
@@ -118,15 +121,15 @@ const FILING_FORM_SECTIONS: Array<{
 
 const FIELD_TO_SECTION: Record<VentanillaFilingFieldKey, FilingFormSectionId> = {
   functional_type: 'clasificacion',
-  recipient_org_unit: 'datos',
-  producer_org_unit: 'datos',
-  sender_staff: 'datos',
-  recipient_staff: 'datos',
-  sender_name: 'datos',
-  sender_identifier: 'datos',
-  recipient_name: 'datos',
-  recipient_identifier: 'datos',
-  subject: 'datos',
+  recipient_org_unit: 'clasificacion',
+  producer_org_unit: 'clasificacion',
+  sender_staff: 'clasificacion',
+  recipient_staff: 'clasificacion',
+  sender_name: 'clasificacion',
+  sender_identifier: 'clasificacion',
+  recipient_name: 'clasificacion',
+  recipient_identifier: 'clasificacion',
+  subject: 'clasificacion',
   trd_document_type: 'trd',
   metadata: 'metadatos',
   file: 'archivos',
@@ -157,12 +160,21 @@ const senderStaffChoices = computed(() => {
   if (!sourceUnitId) {
     return []
   }
-  return staffOptions.value
-    .filter((s) => s.current_assignment?.org_unit?.id === sourceUnitId)
+  const choices = staffOptions.value
+    .filter(s => assignmentOrgUnitId(s) === Number(sourceUnitId))
     .map((s) => ({
       value: Number(s.id),
       label: staffOptionLabel(s),
     }))
+  const loggedStaff = filingType.value === 'internal' ? currentUserStaff.value : null
+  if (loggedStaff && !choices.some(choice => choice.value === Number(loggedStaff.id))) {
+    choices.unshift({
+      value: Number(loggedStaff.id),
+      label: staffOptionLabel(loggedStaff),
+    })
+  }
+
+  return choices
 })
 
 const recipientStaffChoices = computed(() => {
@@ -170,12 +182,21 @@ const recipientStaffChoices = computed(() => {
   if (!targetUnitId) {
     return []
   }
-  return staffOptions.value
-    .filter((s) => s.current_assignment?.org_unit?.id === targetUnitId)
+  const choices = staffOptions.value
+    .filter(s => assignmentOrgUnitId(s) === Number(targetUnitId))
     .map((s) => ({
       value: Number(s.id),
       label: staffOptionLabel(s),
     }))
+  const manager = functionalTypeManagerStaff.value
+  if (manager && !choices.some(choice => choice.value === Number(manager.id))) {
+    choices.unshift({
+      value: Number(manager.id),
+      label: staffOptionLabel(manager),
+    })
+  }
+
+  return choices
 })
 
 const responsibleOrgUnitId = computed(() => {
@@ -202,16 +223,35 @@ const configuredProducerAreas = computed(() =>
   configuredProducerAreasForFunctionalType(selectedFunctionalType.value),
 )
 
+function withPinnedOrgUnit(
+  options: VentanillaOrgUnitOption[],
+  unitId: number | null,
+): VentanillaOrgUnitOption[] {
+  if (unitId == null || options.some(unit => unit.id === unitId)) {
+    return options
+  }
+
+  const unit = orgUnits.value.find(item => item.id === unitId)
+
+  return unit ? [...options, unit] : options
+}
+
 const recipientOrgUnitOptions = computed(() =>
-  filterOrgUnitsByFunctionalTypeAreas(orgUnits.value, configuredProducerAreas.value),
+  withPinnedOrgUnit(
+    filterOrgUnitsByFunctionalTypeAreas(orgUnits.value, configuredProducerAreas.value),
+    functionalTypeDestinationOrgUnitId.value,
+  ),
 )
 
 const producerOrgUnitOptions = computed(() => {
-  if (configuredProducerAreas.value.length > 0) {
-    return filterOrgUnitsByFunctionalTypeAreas(orgUnits.value, configuredProducerAreas.value)
-  }
+  const options = configuredProducerAreas.value.length > 0
+    ? filterOrgUnitsByFunctionalTypeAreas(orgUnits.value, configuredProducerAreas.value)
+    : producerAreaOptions.value
 
-  return producerAreaOptions.value
+  return withPinnedOrgUnit(
+    options,
+    filingType.value === 'internal' ? internalSenderOrgUnitId.value : null,
+  )
 })
 
 function clearInvalidOrgUnitSelections(): void {
@@ -238,12 +278,100 @@ const excludedFunctionalTypes = computed(() =>
   ),
 )
 
-const functionalTypeOptions = computed(() =>
-  selectableFunctionalTypes.value.map((t: VentanillaFunctionalTypeRow) => ({
+const functionalTypeOptions = computed(() => {
+  const options = selectableFunctionalTypes.value.map((t: VentanillaFunctionalTypeRow) => ({
     value: t.key,
     label: t.label,
-  })),
+  }))
+  const rest = options.filter(option => option.value !== VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY)
+  const other = options.filter(option => option.value === VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY)
+
+  return [...rest, ...other]
+})
+
+const isOtherFunctionalType = computed(() => functionalTypeKey.value === VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY)
+
+function assignmentOrgUnitId(staff: OrgStaffListItem | null | undefined): number | null {
+  const unitId = staff?.current_assignment?.org_unit?.id
+  if (unitId == null || !Number.isFinite(Number(unitId))) {
+    return null
+  }
+
+  return Number(unitId)
+}
+
+function normalizeStaffRow(staff: OrgStaffListItem): OrgStaffListItem {
+  const raw = staff as OrgStaffListItem & { currentAssignment?: Record<string, unknown> | null }
+  const assignment = (staff.current_assignment ?? raw.currentAssignment ?? null) as {
+    org_unit?: { id: number, name: string, code: string } | null
+    orgUnit?: { id: number, name: string, code: string } | null
+    org_office?: { id: number, name: string, code: string } | null
+    orgOffice?: { id: number, name: string, code: string } | null
+    org_position?: { id: number, name: string, code: string } | null
+    orgPosition?: { id: number, name: string, code: string } | null
+  } | null
+  if (!assignment) {
+    return {
+      ...staff,
+      user_id: staff.user_id ?? staff.user?.id ?? null,
+    }
+  }
+
+  return {
+    ...staff,
+    user_id: staff.user_id ?? staff.user?.id ?? null,
+    current_assignment: {
+      ...staff.current_assignment,
+      org_unit: assignment.org_unit ?? assignment.orgUnit ?? null,
+      org_office: assignment.org_office ?? assignment.orgOffice ?? null,
+      org_position: assignment.org_position ?? assignment.orgPosition ?? null,
+    },
+  }
+}
+
+const currentUserStaff = computed(() =>
+  staffOptions.value.find((staff) => {
+    if (staff.is_active === false) {
+      return false
+    }
+
+    const staffUserId = staff.user_id ?? staff.user?.id
+
+    return staffUserId != null && Number(staffUserId) === Number(user.value?.id)
+  }) ?? null,
 )
+
+const internalSenderOrgUnitId = computed(() => assignmentOrgUnitId(currentUserStaff.value))
+
+const senderAreaHasManager = computed(() => {
+  const unitId = internalSenderOrgUnitId.value
+  if (unitId == null) {
+    return false
+  }
+
+  const unit = orgUnits.value.find(item => item.id === unitId)
+
+  return unit?.manager_staff_id != null
+})
+
+const functionalTypeDestinationOrgUnitId = computed(() =>
+  selectedFunctionalType.value?.public_org_unit_id ?? null,
+)
+
+const functionalTypeManagerStaff = computed(() => {
+  const destinationId = functionalTypeDestinationOrgUnitId.value
+  const managerUserId = selectedFunctionalType.value?.public_manager_user_id
+  if (destinationId == null || managerUserId == null) {
+    return null
+  }
+
+  return staffOptions.value.find(staff =>
+    Number(staff.user_id ?? staff.user?.id) === Number(managerUserId),
+  ) ?? null
+})
+
+const applyingInternalDefaults = ref(false)
+let lastAutoSubject = ''
 
 function syncFunctionalTypeSelection(): void {
   if (!functionalTypeKey.value) {
@@ -287,17 +415,35 @@ const receptionMediumSelectOptions = computed(() =>
   })),
 )
 
-const requiresResponseSelectOptions = [
-  { value: true, label: 'Requiere respuesta' },
-  { value: false, label: 'No requiere respuesta' },
-] as const
-
 const effectiveRequiresResponse = computed(() => {
   if (requiresResponseOverride.value !== null) {
     return requiresResponseOverride.value
   }
 
   return selectedFunctionalType.value?.requires_response_default ?? true
+})
+
+const needsManualSlaDays = computed(() => {
+  const configuredDays = selectedFunctionalType.value?.sla_business_days
+
+  return effectiveRequiresResponse.value
+    && selectedFunctionalType.value != null
+    && (configuredDays == null || configuredDays < 1)
+})
+
+const displayedSlaDays = computed(() => {
+  if (!effectiveRequiresResponse.value) {
+    return null
+  }
+
+  const configuredDays = selectedFunctionalType.value?.sla_business_days
+  if (configuredDays != null && configuredDays > 0) {
+    return configuredDays
+  }
+
+  const typed = Number(slaBusinessDaysInput.value)
+
+  return Number.isFinite(typed) && typed > 0 ? typed : null
 })
 
 const computedFilingParties = computed(() => {
@@ -353,12 +499,12 @@ const orgUnitsComplete = computed(() => {
 const partiesComplete = computed(() => {
   const parties = computedFilingParties.value
 
-  if (!parties.senderName || !parties.senderIdentifier) {
+  if (!parties.senderName) {
     return false
   }
 
   if (filingType.value === 'outgoing' || filingType.value === 'internal') {
-    return Boolean(parties.recipientName && parties.recipientIdentifier)
+    return Boolean(parties.recipientName)
   }
 
   return true
@@ -384,10 +530,7 @@ const filesComplete = computed(() => attachedFileCount.value > 0)
 
 function isSectionComplete(id: FilingFormSectionId): boolean {
   if (id === 'clasificacion') {
-    return classificationComplete.value
-  }
-  if (id === 'datos') {
-    return datosComplete.value
+    return classificationComplete.value && datosComplete.value
   }
   if (id === 'trd') {
     return trdComplete.value
@@ -450,10 +593,73 @@ function multiselectErrorClass(field: VentanillaFilingFieldKey): string {
   return ventanillaMultiselectErrorClass(isMissing(field))
 }
 
+function applySubjectForFunctionalType(): void {
+  const type = selectedFunctionalType.value
+  if (!type) {
+    subject.value = ''
+    lastAutoSubject = ''
+    return
+  }
+
+  if (type.key === VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY) {
+    if (subject.value === lastAutoSubject) {
+      subject.value = ''
+    }
+    lastAutoSubject = ''
+    return
+  }
+
+  subject.value = type.label
+  lastAutoSubject = type.label
+}
+
+function applyInternalSender(): void {
+  if (filingType.value !== 'internal') {
+    return
+  }
+
+  const staff = currentUserStaff.value
+  const unitId = assignmentOrgUnitId(staff)
+  if (!staff || unitId == null) {
+    return
+  }
+
+  applyingInternalDefaults.value = true
+  producerOrgUnitId.value = unitId
+  senderStaffId.value = Number(staff.id)
+  applyStaffToPartyFields(staff, senderName, senderIdentifier)
+  applyingInternalDefaults.value = false
+}
+
+function applyFunctionalTypeRecipient(): void {
+  const destinationId = functionalTypeDestinationOrgUnitId.value
+  if (destinationId == null) {
+    recipientOrgUnitId.value = null
+    return
+  }
+
+  applyingInternalDefaults.value = true
+  recipientOrgUnitId.value = destinationId
+  const managerStaff = functionalTypeManagerStaff.value
+  if (managerStaff && filingType.value !== 'outgoing') {
+    recipientStaffId.value = Number(managerStaff.id)
+  }
+  if (managerStaff) {
+    applyStaffToPartyFields(managerStaff, recipientName, recipientIdentifier)
+  }
+  applyingInternalDefaults.value = false
+}
+
 watch(functionalTypeKey, () => {
   requiresResponseOverride.value = null
+  slaBusinessDaysInput.value = ''
   docDocumentTypeId.value = null
   clearInvalidOrgUnitSelections()
+  applySubjectForFunctionalType()
+  if (filingType.value === 'internal') {
+    applyInternalSender()
+  }
+  applyFunctionalTypeRecipient()
 })
 
 watch(filingType, (nextType) => {
@@ -470,6 +676,10 @@ watch(filingType, (nextType) => {
   }
 
   clearInvalidOrgUnitSelections()
+  if (nextType === 'internal') {
+    applyInternalSender()
+  }
+  applyFunctionalTypeRecipient()
 })
 
 watch(producerOrgUnitId, () => {
@@ -477,18 +687,26 @@ watch(producerOrgUnitId, () => {
     docDocumentTypeId.value = null
   }
 
+  if (applyingInternalDefaults.value) {
+    return
+  }
+
   senderStaffId.value = null
   applyStaffToPartyFields(null, senderName, senderIdentifier)
-})
+}, { flush: 'sync' })
 
 watch(recipientOrgUnitId, () => {
   if (filingType.value === 'incoming') {
     docDocumentTypeId.value = null
   }
 
+  if (applyingInternalDefaults.value) {
+    return
+  }
+
   recipientStaffId.value = null
   applyStaffToPartyFields(null, recipientName, recipientIdentifier)
-})
+}, { flush: 'sync' })
 
 watch(responsibleOrgUnitId, async (orgUnitId) => {
   await loadResponsibleUsers(orgUnitId)
@@ -533,7 +751,7 @@ onMounted(async () => {
   try {
     catalog.value = await ventanillaApi.fetchCatalog()
     orgUnits.value = catalog.value.org_units ?? []
-    staffOptions.value = catalog.value.org_staff ?? []
+    staffOptions.value = (catalog.value.org_staff ?? []).map(staff => normalizeStaffRow(staff))
     syncFunctionalTypeSelection()
   } catch {
     catalog.value = null
@@ -551,12 +769,17 @@ onMounted(async () => {
 
   if (staffOptions.value.length === 0) {
     try {
-      staffOptions.value = await orgApi.fetchStaff({ activeOnly: true })
+      staffOptions.value = (await orgApi.fetchStaff({ activeOnly: true })).map(staff => normalizeStaffRow(staff))
     } catch {
       staffOptions.value = []
       toast.error('No se pudieron cargar los funcionarios')
     }
   }
+
+  if (filingType.value === 'internal') {
+    applyInternalSender()
+  }
+  applyFunctionalTypeRecipient()
 })
 
 function addFileRow() {
@@ -574,14 +797,14 @@ function setFilingType(key: string) {
   filingType.value = key as VentanillaFilingTypeValue
 }
 
-function toggleResponseOverride(value: boolean | 'indeterminate') {
-  const enabled = value === true
-  if (!selectedFunctionalType.value) {
-    return
+function parsedSlaBusinessDays(): number | null {
+  const typed = Number(slaBusinessDaysInput.value)
+
+  if (!Number.isInteger(typed) || typed < 1 || typed > 365) {
+    return null
   }
-  requiresResponseOverride.value = enabled
-    ? !selectedFunctionalType.value.requires_response_default
-    : null
+
+  return typed
 }
 
 function validateFileAttachments(): VentanillaFilingValidationIssue | null {
@@ -663,6 +886,16 @@ async function submit() {
     return
   }
 
+  if (needsManualSlaDays.value && parsedSlaBusinessDays() == null) {
+    errorMessage.value = 'Indique los días hábiles de respuesta.'
+    submitAttempted.value = true
+    goToSection('clasificacion')
+    await nextTick()
+    document.getElementById('ventanilla_sla_days')?.focus()
+
+    return
+  }
+
   const issue = resolveFirstVentanillaFilingValidationIssue(validationInput.value)
   if (issue) {
     errorMessage.value = issue.message
@@ -690,6 +923,9 @@ async function submit() {
   if (requiresResponseOverride.value !== null) {
     fd.append('requires_response', requiresResponseOverride.value ? '1' : '0')
   }
+  if (needsManualSlaDays.value) {
+    fd.append('sla_business_days', String(parsedSlaBusinessDays()))
+  }
   if (producerOrgUnitId.value) {
     fd.append('producer_org_unit_id', String(producerOrgUnitId.value))
   }
@@ -697,11 +933,13 @@ async function submit() {
     fd.append('recipient_org_unit_id', String(recipientOrgUnitId.value))
   }
   fd.append('sender_name', parties.senderName)
-  fd.append('sender_identifier', parties.senderIdentifier)
+  if (parties.senderIdentifier) {
+    fd.append('sender_identifier', parties.senderIdentifier)
+  }
   if (parties.recipientName) {
     fd.append('recipient_name', parties.recipientName)
   }
-  if (parties.recipientIdentifier) {
+  if (parties.recipientName && parties.recipientIdentifier) {
     fd.append('recipient_identifier', parties.recipientIdentifier)
   }
   fd.append('subject', subject.value.trim())
@@ -788,7 +1026,7 @@ async function submit() {
 
       <Tabs v-model="activeSection" class="gap-4">
         <div class="sticky top-0 z-30 -mx-4 border-b bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
-          <TabsList class="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-5">
+          <TabsList class="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-4">
             <TabsTrigger
               v-for="section in FILING_FORM_SECTIONS"
               :key="section.id"
@@ -806,6 +1044,7 @@ async function submit() {
         </div>
 
         <TabsContent value="clasificacion" force-mount class="data-[state=inactive]:hidden">
+      <div class="space-y-4">
       <Card id="ventanilla-section-clasificacion" class="border-primary/20 shadow-sm">
         <CardHeader class="pb-3">
           <CardTitle class="text-base">
@@ -844,38 +1083,43 @@ async function submit() {
           </Alert>
 
           <div class="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] xl:items-start">
-            <div class="space-y-2">
-              <Label>Tipo funcional *</Label>
-              <Multiselect
-                id="ventanilla_functional_type"
-                v-model="functionalTypeKey"
-                mode="single"
-                :object="false"
-                :options="functionalTypeOptions"
-                value-prop="value"
-                label="label"
-                :searchable="true"
-                :can-clear="false"
-                placeholder="Seleccione…"
-                no-options-text="Sin opciones"
-                no-results-text="Sin coincidencias"
-                :class="multiselectErrorClass('functional_type')"
-              />
+            <div class="space-y-4">
+              <div class="space-y-2">
+                <Label>Tipo funcional *</Label>
+                <Multiselect
+                  id="ventanilla_functional_type"
+                  v-model="functionalTypeKey"
+                  mode="single"
+                  :object="false"
+                  :options="functionalTypeOptions"
+                  value-prop="value"
+                  label="label"
+                  :searchable="true"
+                  :can-clear="false"
+                  placeholder="Seleccione…"
+                  no-options-text="Sin opciones"
+                  no-results-text="Sin coincidencias"
+                  :class="multiselectErrorClass('functional_type')"
+                />
+              </div>
+              <div v-if="isOtherFunctionalType" class="space-y-2">
+                <Label for="ventanilla_subject">Asunto *</Label>
+                <Input
+                  id="ventanilla_subject"
+                  v-model="subject"
+                  maxlength="500"
+                  placeholder="Especifique de qué trata el radicado"
+                  :class="inputErrorClass('subject')"
+                />
+              </div>
             </div>
 
             <div class="space-y-3 rounded-lg border bg-muted/20 p-4">
-              <p v-if="selectedFunctionalType" class="text-sm">
-                <template v-if="effectiveRequiresResponse">
-                  <span class="font-medium text-foreground">Requiere respuesta</span>
-                  <span class="text-muted-foreground"> — SLA: {{ selectedFunctionalType.sla_business_days ?? '—' }} días hábiles</span>
-                </template>
-                <template v-else>
-                  <span class="font-medium text-foreground">No requiere respuesta</span>
-                  <span class="text-muted-foreground"> (sin SLA)</span>
-                </template>
+              <p v-if="selectedFunctionalType && effectiveRequiresResponse && !needsManualSlaDays" class="text-sm text-muted-foreground">
+                SLA: {{ displayedSlaDays ?? '—' }} días hábiles
               </p>
-              <p v-else class="text-sm text-muted-foreground">
-                Seleccione un tipo funcional para ver el SLA y las reglas de respuesta.
+              <p v-else-if="!selectedFunctionalType" class="text-sm text-muted-foreground">
+                Seleccione un tipo funcional para ver el plazo de respuesta.
               </p>
 
               <p
@@ -885,73 +1129,58 @@ async function submit() {
                 {{ VENTANILLA_INFORMATIVE_TYPE_HINT }}
               </p>
 
-              <div v-if="canOverrideResponse && selectedFunctionalType" class="space-y-2 border-t pt-3">
-                <label class="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    :checked="requiresResponseOverride !== null"
-                    @update:checked="toggleResponseOverride"
+              <div v-if="canOverrideResponse && selectedFunctionalType" class="space-y-3 border-t pt-3">
+                <div class="flex items-center gap-2">
+                  <Switch
+                    id="ventanilla_requires_response"
+                    :model-value="effectiveRequiresResponse"
+                    @update:model-value="requiresResponseOverride = $event === true"
                   />
-                  <span>Ajustar manualmente obligación de respuesta</span>
-                </label>
-                <Multiselect
-                  v-if="requiresResponseOverride !== null"
-                  v-model="requiresResponseOverride"
-                  mode="single"
-                  :object="false"
-                  :options="requiresResponseSelectOptions"
-                  value-prop="value"
-                  label="label"
-                  :can-clear="false"
-                  :searchable="false"
-                  class="ventanilla-single-multiselect w-full"
-                />
+                  <Label for="ventanilla_requires_response" class="font-normal">
+                    {{ effectiveRequiresResponse ? 'Requiere respuesta' : 'No requiere respuesta' }}
+                  </Label>
+                </div>
+                <div v-if="needsManualSlaDays" class="space-y-2">
+                  <Label for="ventanilla_sla_days">Días hábiles *</Label>
+                  <Input
+                    id="ventanilla_sla_days"
+                    v-model="slaBusinessDaysInput"
+                    type="number"
+                    min="1"
+                    max="365"
+                    class="h-9 w-28"
+                    placeholder="Días"
+                  />
+                  <p class="text-xs text-muted-foreground">
+                    Este tipo no tiene plazo. Indique los días hábiles para responder.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
-        </TabsContent>
-
-        <TabsContent value="datos" force-mount class="data-[state=inactive]:hidden">
           <Card id="ventanilla-section-datos">
             <CardHeader class="pb-3">
               <CardTitle class="text-base">
                 Datos del radicado
               </CardTitle>
               <CardDescription>
-                Áreas, partes y asunto. Lo opcional se abre aparte.
+                Áreas y partes. Lo opcional se abre aparte.
               </CardDescription>
             </CardHeader>
             <CardContent class="grid min-w-0 gap-4 md:grid-cols-2">
-          <div v-if="filingType === 'incoming'" class="space-y-2 md:col-span-2">
-            <Label>Área destinataria *</Label>
-            <Multiselect
-              id="ventanilla_recipient_org_unit"
-              v-model="recipientOrgUnitId"
-              mode="single"
-              :object="false"
-              :options="orgUnitSelectOptions"
-              value-prop="value"
-              label="label"
-              :searchable="true"
-              :can-clear="true"
-              placeholder="Seleccione área"
-              no-options-text="Sin áreas disponibles"
-              no-results-text="Sin coincidencias"
-              :class="multiselectErrorClass('recipient_org_unit')"
-            />
-          </div>
           <div
-            v-else
+            v-if="filingType !== 'incoming'"
             class="space-y-2"
-            :class="filingType === 'internal' ? '' : 'md:col-span-2'"
           >
-            <Label>Área productora *</Label>
+            <Label>{{ filingType === 'internal' ? 'Área remitente *' : 'Área *' }}</Label>
             <Multiselect
               id="ventanilla_producer_org_unit"
               v-model="producerOrgUnitId"
               mode="single"
               :object="false"
+              :disabled="filingType === 'internal' && internalSenderOrgUnitId != null"
               :options="producerAreaSelectOptions"
               value-prop="value"
               label="label"
@@ -963,25 +1192,7 @@ async function submit() {
               :class="multiselectErrorClass('producer_org_unit')"
             />
           </div>
-          <div v-if="filingType === 'internal'" class="space-y-2">
-            <Label>Área destinataria *</Label>
-            <Multiselect
-              id="ventanilla_recipient_org_unit"
-              v-model="recipientOrgUnitId"
-              mode="single"
-              :object="false"
-              :options="orgUnitSelectOptions"
-              value-prop="value"
-              label="label"
-              :searchable="true"
-              :can-clear="true"
-              placeholder="Seleccione área destino"
-              no-options-text="Sin áreas disponibles"
-              no-results-text="Sin coincidencias"
-              :class="multiselectErrorClass('recipient_org_unit')"
-            />
-          </div>
-          <div class="min-w-0 space-y-2">
+          <div class="min-w-0 space-y-2" :class="filingType === 'incoming' ? 'md:col-span-2' : ''">
             <Label>Remitente *</Label>
             <Multiselect
               v-if="filingType !== 'incoming'"
@@ -995,7 +1206,7 @@ async function submit() {
               label="label"
               :searchable="true"
               :can-clear="false"
-              :disabled="!producerOrgUnitId"
+              :disabled="!producerOrgUnitId || (filingType === 'internal' && currentUserStaff != null && senderAreaHasManager)"
               placeholder="Seleccione remitente"
               no-options-text="Sin funcionarios en el área"
               no-results-text="Sin coincidencias"
@@ -1009,16 +1220,22 @@ async function submit() {
             />
           </div>
           <div class="space-y-2">
-            <Label>Identificación remitente *</Label>
-            <Input
-              id="ventanilla_sender_identifier"
-              v-model="senderIdentifier"
-              inputmode="numeric"
-              maxlength="64"
-              :readonly="filingType !== 'incoming' && !!senderStaffId"
-              :placeholder="filingType !== 'incoming' ? 'Autocompletado' : 'Solo números'"
-              :class="inputErrorClass('sender_identifier')"
-              @input="onDigitsOnlyInput($event, v => (senderIdentifier = v))"
+            <Label>Área destinataria *</Label>
+            <Multiselect
+              id="ventanilla_recipient_org_unit"
+              v-model="recipientOrgUnitId"
+              mode="single"
+              :object="false"
+              :disabled="functionalTypeDestinationOrgUnitId != null"
+              :options="orgUnitSelectOptions"
+              value-prop="value"
+              label="label"
+              :searchable="true"
+              :can-clear="true"
+              placeholder="Seleccione área"
+              no-options-text="Sin áreas disponibles"
+              no-results-text="Sin coincidencias"
+              :class="multiselectErrorClass('recipient_org_unit')"
             />
           </div>
           <div class="min-w-0 space-y-2">
@@ -1048,26 +1265,24 @@ async function submit() {
               :class="inputErrorClass('recipient_name')"
             />
           </div>
-          <div class="space-y-2">
-            <Label>
-              Identificación destinatario
-              <span v-if="filingType === 'outgoing' || filingType === 'internal'">*</span>
-            </Label>
-            <Input
-              id="ventanilla_recipient_identifier"
-              v-model="recipientIdentifier"
-              inputmode="numeric"
-              maxlength="64"
-              :readonly="(filingType === 'incoming' || filingType === 'internal') && !!recipientStaffId"
-              :placeholder="(filingType === 'incoming' || filingType === 'internal') ? 'Autocompletado' : 'Solo números'"
-              :class="inputErrorClass('recipient_identifier')"
-              @input="onDigitsOnlyInput($event, v => (recipientIdentifier = v))"
-            />
-          </div>
-          <div class="space-y-2 md:col-span-2">
-            <Label>Asunto *</Label>
-            <Input id="ventanilla_subject" v-model="subject" maxlength="500" :class="inputErrorClass('subject')" />
-          </div>
+          <p
+            v-if="filingType === 'internal' && !currentUserStaff"
+            class="text-sm text-muted-foreground md:col-span-2"
+          >
+            Su usuario no tiene un funcionario activo con área asignada. Seleccione el área y el remitente.
+          </p>
+          <p
+            v-else-if="filingType !== 'outgoing' && functionalTypeKey && functionalTypeDestinationOrgUnitId == null"
+            class="text-sm text-muted-foreground md:col-span-2"
+          >
+            Este tipo no tiene área encargada. Seleccione el área destinataria.
+          </p>
+          <p
+            v-else-if="functionalTypeDestinationOrgUnitId != null && !functionalTypeManagerStaff"
+            class="text-sm text-muted-foreground md:col-span-2"
+          >
+            El área encargada no tiene un responsable con usuario activo. Seleccione el destinatario.
+          </p>
           <Collapsible v-model:open="optionalDetailsOpen" class="md:col-span-2">
             <CollapsibleTrigger as-child>
               <button
@@ -1138,6 +1353,7 @@ async function submit() {
           </Collapsible>
             </CardContent>
           </Card>
+      </div>
         </TabsContent>
 
         <TabsContent value="trd" force-mount class="data-[state=inactive]:hidden">

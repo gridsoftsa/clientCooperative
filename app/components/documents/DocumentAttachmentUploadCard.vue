@@ -14,6 +14,7 @@ const props = withDefaults(defineProps<{
   label?: string
   primary?: boolean
   removable?: boolean
+  clearable?: boolean
   submitAttempted?: boolean
   disabled?: boolean
   fileInputId?: string
@@ -23,6 +24,7 @@ const props = withDefaults(defineProps<{
   label: 'Documento',
   primary: false,
   removable: false,
+  clearable: false,
   submitAttempted: false,
   disabled: false,
   uploadConstraints: () => VENTANILLA_FILING_UPLOAD_CONSTRAINTS,
@@ -41,6 +43,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const fileError = ref<string | null>(null)
 
 const uploadHint = computed(() => props.uploadConstraints.pickerHint)
+const fieldsRequired = computed(() => props.primary || !props.clearable || props.file !== null)
 
 const folioStartMissing = computed(() => props.submitAttempted && !props.folioStart.trim())
 const folioEndMissing = computed(() => props.submitAttempted && !props.folioEnd.trim())
@@ -57,6 +60,17 @@ const folioRangeInvalid = computed(() => {
 
   return Number.isInteger(start) && Number.isInteger(end) && end < start
 })
+
+function clearFile() {
+  fileError.value = null
+  if (fileInputRef.value) {
+    fileInputRef.value.value = ''
+  }
+  emit('update:file', null)
+  emit('update:title', '')
+  emit('update:folioStart', '')
+  emit('update:folioEnd', '')
+}
 
 function openFilePicker() {
   if (!props.disabled) {
@@ -107,9 +121,21 @@ function onFileChange(event: Event) {
           </Badge>
         </div>
         <p v-if="!compact" class="mt-1 text-xs text-muted-foreground">
-          Indique título, rango de folios y seleccione el archivo. {{ uploadHint }}
+          {{ fieldsRequired ? 'Indique título, rango de folios y seleccione el archivo.' : 'Opcional. Si lo usa, indique título, folios y el archivo.' }}
+          {{ uploadHint }}
         </p>
       </div>
+      <Button
+        v-if="clearable && file"
+        type="button"
+        variant="ghost"
+        size="sm"
+        class="shrink-0"
+        :disabled="disabled"
+        @click="clearFile"
+      >
+        Quitar archivo
+      </Button>
       <Button
         v-if="removable"
         type="button"
@@ -126,7 +152,7 @@ function onFileChange(event: Event) {
 
     <div class="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.8fr)]">
       <div class="space-y-2">
-        <Label>Título *</Label>
+        <Label>Título{{ fieldsRequired ? ' *' : '' }}</Label>
         <Input
           :model-value="title"
           :disabled="disabled"
@@ -137,7 +163,7 @@ function onFileChange(event: Event) {
       </div>
 
       <div class="space-y-2">
-        <Label>Folio inicial *</Label>
+        <Label>Folio inicial{{ fieldsRequired ? ' *' : '' }}</Label>
         <Input
           :model-value="folioStart"
           type="number"
@@ -151,7 +177,7 @@ function onFileChange(event: Event) {
       </div>
 
       <div class="space-y-2">
-        <Label>Folio final *</Label>
+        <Label>Folio final{{ fieldsRequired ? ' *' : '' }}</Label>
         <Input
           :model-value="folioEnd"
           type="number"

@@ -64,6 +64,7 @@ const selectedSection = ref<CatalogSection>('functional-types')
 const functionalTypes = ref<VentanillaFunctionalTypeRow[]>([])
 const receptionMedia = ref<VentanillaReceptionMediumRow[]>([])
 const archivalFileTypes = ref<Array<{ id: number, name: string, type_key: string }>>([])
+const orgUnits = ref<Array<{ id: number, name: string, code: string }>>([])
 const savedVersion = ref(0)
 
 const catalogSections: Array<{ value: CatalogSection, label: string, icon: string }> = [
@@ -80,6 +81,7 @@ async function loadCatalog() {
     ])
     functionalTypes.value = data.functional_types ?? []
     receptionMedia.value = data.reception_media ?? []
+    orgUnits.value = data.org_units ?? []
     archivalFileTypes.value = (fileTypes ?? []).map(type => ({
       id: type.id,
       name: type.name,
@@ -115,6 +117,7 @@ async function saveFunctional(rows: Array<{
   sort_order: string | number
   is_active: boolean
   show_in_public_form: boolean
+  public_org_unit_id: number | null
   archival_file_type_id: string
   _isNew?: boolean
   _removed?: boolean
@@ -137,6 +140,7 @@ async function saveFunctional(rows: Array<{
         sla_business_days: slaPayload(row.sla_business_days, row.requires_response_default),
         is_active: row._removed ? false : row.is_active !== false,
         show_in_public_form: row.show_in_public_form !== false,
+        public_org_unit_id: row.public_org_unit_id,
         sort_order: Number(row.sort_order) || 0,
         archival_file_type_id: row.archival_file_type_id === 'none' || row.archival_file_type_id === ''
           ? null
@@ -289,6 +293,7 @@ onMounted(() => {
           :functional-types="functionalTypes"
           :reception-media="receptionMedia"
           :archival-file-types="archivalFileTypes"
+          :org-units="orgUnits"
           :can-edit="canEdit"
           :saving="saving"
           :saved-version="savedVersion"

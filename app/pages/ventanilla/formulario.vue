@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY } from '~/constants/ventanilla'
 import { onDigitsOnlyInput, filterDigitsOnly } from '~/utils/digits-only-input'
 import { isDigitsOnlyIdentifier } from '~/utils/ventanilla-party-validation'
 import {
@@ -28,9 +29,13 @@ const senderIdentifier = ref('')
 const subject = ref('')
 const body = ref('')
 const PUBLIC_INTAKE_MAX_ATTACHMENTS = 2
-const fileRows = ref<DocumentAttachmentRow[]>([])
+
+function emptyAttachmentRows(): DocumentAttachmentRow[] {
+  return Array.from({ length: PUBLIC_INTAKE_MAX_ATTACHMENTS }, () => createDocumentAttachmentRow())
+}
+
+const fileRows = ref<DocumentAttachmentRow[]>(emptyAttachmentRows())
 const intakeUploadConstraints = VENTANILLA_PUBLIC_INTAKE_UPLOAD_CONSTRAINTS
-const canAddAttachment = computed(() => fileRows.value.length < PUBLIC_INTAKE_MAX_ATTACHMENTS)
 const submitAttempted = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
@@ -60,23 +65,16 @@ onMounted(async () => {
   }
 })
 
-const functionalTypeOptions = computed(() =>
-  functionalTypes.value.map(type => ({
+const functionalTypeOptions = computed(() => {
+  const options = functionalTypes.value.map(type => ({
     value: type.key,
     label: type.label,
-  })),
-)
+  }))
+  const rest = options.filter(option => option.value !== VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY)
+  const other = options.filter(option => option.value === VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY)
 
-function addFileRow() {
-  if (!canAddAttachment.value) {
-    return
-  }
-  fileRows.value.push(createDocumentAttachmentRow())
-}
-
-function removeFileRow(index: number) {
-  fileRows.value.splice(index, 1)
-}
+  return [...rest, ...other]
+})
 
 const bodyMissing = computed(() => submitAttempted.value && !body.value.trim())
 
@@ -166,7 +164,7 @@ async function submit() {
     subject.value = ''
     body.value = ''
     functionalTypeKey.value = null
-    fileRows.value = []
+    fileRows.value = emptyAttachmentRows()
   } catch (e: unknown) {
     const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
     const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
@@ -269,23 +267,11 @@ async function submit() {
         </div>
 
         <div class="space-y-4">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <Label>Anexos (opcional)</Label>
-              <p class="text-xs text-muted-foreground">
-                Puede adjuntar hasta {{ PUBLIC_INTAKE_MAX_ATTACHMENTS }} anexos. {{ intakeUploadConstraints.pickerHint }}
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              :disabled="!canAddAttachment"
-              @click="addFileRow"
-            >
-              <Icon name="i-lucide-plus" class="mr-1 size-4" />
-              Agregar anexo
-            </Button>
+          <div>
+            <Label>Anexos (opcional)</Label>
+            <p class="text-xs text-muted-foreground">
+              Puede usar uno o los dos. {{ intakeUploadConstraints.pickerHint }}
+            </p>
           </div>
 
           <DocumentsDocumentAttachmentUploadCard
@@ -293,7 +279,7 @@ async function submit() {
             :key="index"
             :label="`Anexo ${index + 1}`"
             :primary="false"
-            :removable="true"
+            clearable
             :submit-attempted="submitAttempted && Boolean(row.file)"
             :upload-constraints="intakeUploadConstraints"
             :title="row.title"
@@ -304,7 +290,6 @@ async function submit() {
             @update:folio-start="row.folioStart = $event"
             @update:folio-end="row.folioEnd = $event"
             @update:file="row.file = $event"
-            @remove="removeFileRow(index)"
           />
         </div>
 

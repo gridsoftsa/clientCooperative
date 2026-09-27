@@ -19,6 +19,8 @@ export const VENTANILLA_FILING_STATUS_LABELS: Record<VentanillaFilingStatusValue
 
 export const VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY = 'informative'
 
+export const VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY = 'other'
+
 /** IMAP / ingesta automática por correo (pantalla `/ventanilla/canales`). */
 export const VENTANILLA_AUTOMATIC_CHANNELS_ENABLED = false
 

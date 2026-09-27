@@ -27,10 +27,7 @@ export function validateVentanillaPartyFields(
   if (!senderName) {
     return 'El nombre del remitente es obligatorio'
   }
-  if (!senderId) {
-    return 'La identificación del remitente es obligatoria'
-  }
-  if (!isDigitsOnlyIdentifier(senderId)) {
+  if (senderId && !isDigitsOnlyIdentifier(senderId)) {
     return 'La identificación del remitente debe contener solo números'
   }
 
@@ -38,10 +35,7 @@ export function validateVentanillaPartyFields(
     if (!recipientName) {
       return 'El nombre del destinatario es obligatorio'
     }
-    if (!recipientId) {
-      return 'La identificación del destinatario es obligatoria'
-    }
-    if (!isDigitsOnlyIdentifier(recipientId)) {
+    if (recipientId && !isDigitsOnlyIdentifier(recipientId)) {
       return 'La identificación del destinatario debe contener solo números'
     }
   }

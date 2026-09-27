@@ -14,6 +14,7 @@ type FunctionalDraft = {
   sort_order: string | number
   is_active: boolean
   show_in_public_form: boolean
+  public_org_unit_id: number | null
   archival_file_type_id: string
   _clientId?: string
   _isNew?: boolean
@@ -34,6 +35,7 @@ const props = defineProps<{
   functionalTypes: VentanillaFunctionalTypeRow[]
   receptionMedia: VentanillaReceptionMediumRow[]
   archivalFileTypes: Array<{ id: number, name: string, type_key: string }>
+  orgUnits: Array<{ id: number, name: string, code: string }>
   canEdit: boolean
   saving: boolean
   savedVersion?: number
@@ -91,6 +93,7 @@ function cloneFunctional(rows: VentanillaFunctionalTypeRow[]): FunctionalDraft[]
       sort_order: String(row.sort_order ?? 0),
       is_active: row.is_active === undefined ? true : coerceBoolean(row.is_active),
       show_in_public_form: row.show_in_public_form === undefined ? true : coerceBoolean(row.show_in_public_form),
+      public_org_unit_id: row.public_org_unit_id != null ? Number(row.public_org_unit_id) : null,
       archival_file_type_id: row.archival_file_type_id != null
         ? String(row.archival_file_type_id)
         : NONE_ARCHIVAL_FILE_TYPE,
@@ -179,6 +182,7 @@ function addFunctionalRow() {
     sort_order: String(maxOrder + 10),
     is_active: true,
     show_in_public_form: true,
+    public_org_unit_id: null,
     archival_file_type_id: NONE_ARCHIVAL_FILE_TYPE,
     _clientId: `new-${Date.now()}`,
     _isNew: true,
@@ -290,7 +294,10 @@ function responseShort(row: FunctionalDraft): string {
 }
 
 function audienceShort(row: FunctionalDraft): string {
-  return row.show_in_public_form ? 'Formulario público' : 'Solo personal'
+  const audience = row.show_in_public_form ? 'Formulario público' : 'Solo personal'
+  const unit = props.orgUnits.find(item => item.id === row.public_org_unit_id)
+
+  return unit ? `${audience} · ${unit.name}` : audience
 }
 
 function validateAndSave() {
@@ -303,6 +310,10 @@ function validateAndSave() {
     for (const row of active) {
       if (!row.label.trim()) {
         toast.error('Cada tipo funcional debe tener etiqueta.')
+        return
+      }
+      if (row.public_org_unit_id == null) {
+        toast.error(`«${row.label.trim()}» necesita un área encargada.`)
         return
       }
       const typeKey = validateFunctionalKey(row)
@@ -447,7 +458,7 @@ watch(
       <div class="flex flex-col gap-2">
         <div
           v-if="!editing"
-          class="hidden px-4 text-xs text-muted-foreground md:grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_9rem_4rem_6.5rem] md:gap-4"
+          class="hidden px-4 text-xs text-muted-foreground md:grid md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.3fr)_4rem_6.5rem] md:gap-4"
         >
           <span>Nombre</span>
           <span>Respuesta</span>
@@ -464,7 +475,7 @@ watch(
         >
           <div
             v-if="!editing"
-            class="grid gap-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_9rem_4rem_6.5rem] md:items-center md:gap-4"
+            class="grid gap-2 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.3fr)_4rem_6.5rem] md:items-center md:gap-4"
           >
             <p class="truncate font-medium">
               {{ row.label || 'Sin nombre' }}
@@ -557,6 +568,29 @@ watch(
             >
               <Icon name="i-lucide-trash-2" class="size-4" />
             </Button>
+            <div class="space-y-1.5 lg:col-span-full">
+              <Label>Área encargada *</Label>
+              <Select
+                :model-value="row.public_org_unit_id != null ? String(row.public_org_unit_id) : undefined"
+                @update:model-value="row.public_org_unit_id = $event ? Number($event) : null"
+              >
+                <SelectTrigger class="h-9 w-full max-w-md">
+                  <SelectValue placeholder="Seleccione el área" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="unit in orgUnits"
+                    :key="unit.id"
+                    :value="String(unit.id)"
+                  >
+                    {{ unit.code }} — {{ unit.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="text-xs text-muted-foreground">
+                Área encargada de este tipo. Si el tipo es público, el radicado del formulario queda aquí y el encargado del área es el responsable.
+              </p>
+            </div>
           </div>
         </article>
       </div>
