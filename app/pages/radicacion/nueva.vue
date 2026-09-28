@@ -799,6 +799,7 @@ const {
   saveStatus,
   lastSavedAt,
   hasLocalDraft,
+  flushSave,
 } = useAutoSaveCreditApplication(form, {
   canCreate: canCreateDraft,
   payloadWithoutDocuments: payloadForAutoSave,
@@ -1284,6 +1285,9 @@ async function saveCodeudor() {
 }
 
 async function saveDraft() {
+  if (saving.value) {
+    return
+  }
   if (mode.value === 'codeudor') {
     const identityErrCo = validateApplicantMinimalIdentityForDraftSave(form.value.debtor, 'co_debtor')
     if (identityErrCo) {
@@ -1314,6 +1318,7 @@ async function saveDraft() {
 
   saving.value = true
   try {
+    await flushSave()
     await $csrf()
     const body = payloadForAutoSave()
     let application: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> }
@@ -1329,6 +1334,9 @@ async function saveDraft() {
         body,
       })
       application = data
+    }
+    if (application?.id) {
+      draftId.value = application.id
     }
     await uploadAllDocuments(application.id, application)
     clearLocalDraft()
@@ -1351,6 +1359,9 @@ async function saveDraft() {
 
 /** Guarda borrador, sube documentos y pasa la solicitud a revisión del director de agencia. */
 async function submitApplication() {
+  if (saving.value) {
+    return
+  }
   if (mode.value === 'codeudor') {
     await saveCodeudor()
     return
@@ -1384,6 +1395,7 @@ async function submitApplication() {
 
   saving.value = true
   try {
+    await flushSave()
     await $csrf()
     let application: { id: number; code?: string; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> }
     if (draftId.value) {
@@ -1398,6 +1410,9 @@ async function submitApplication() {
         body: payloadWithoutDocuments('Draft'),
       })
       application = data
+    }
+    if (application?.id) {
+      draftId.value = application.id
     }
     await uploadAllDocuments(application.id, application)
     await $api(`/credit-applications/${application.id}/submit-to-director-review`, { method: 'PATCH' })
@@ -2223,29 +2238,29 @@ onMounted(() => {
               v-if="mode === 'codeudor'"
               type="button"
               variant="outline"
-              :disabled="saving"
+              :disabled="saving || saveStatus === 'saving'"
               @click="saveDraft"
             >
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              <Icon v-if="saving || saveStatus === 'saving'" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
               Guardar codeudor
             </Button>
             <Button
               v-if="mode === 'deudor'"
               type="button"
               variant="outline"
-              :disabled="saving"
+              :disabled="saving || saveStatus === 'saving'"
               @click="saveDraft"
             >
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              <Icon v-if="saving || saveStatus === 'saving'" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
               Guardar borrador
             </Button>
             <Button
               v-if="mode === 'deudor'"
               type="button"
-              :disabled="saving"
+              :disabled="saving || saveStatus === 'saving'"
               @click="openSubmitDirectorDialog"
             >
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              <Icon v-if="saving || saveStatus === 'saving'" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
               Enviar al director
             </Button>
           </div>

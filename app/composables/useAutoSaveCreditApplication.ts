@@ -11,6 +11,8 @@ export interface AutoSaveState {
   saveStatus: Ref<SaveStatus>
   lastSavedAt: Ref<Date | null>
   hasLocalDraft: Ref<boolean>
+  /** Cancela el debounce y espera el guardado en curso (para no crear otro borrador al pulsar Guardar). */
+  flushSave: () => Promise<void>
 }
 
 /** Serializa el formulario para localStorage (sin archivos File) */
@@ -80,6 +82,7 @@ export function clearLocalDraft(): void {
 /**
  * Composable para auto-guardado de solicitudes de crédito.
  * Crea el borrador cuando hay datos mínimos y actualiza con debounce.
+ * Nunca lanza dos POST a la vez: si ya hay uno en curso, espera y luego hace PUT.
  */
 export function useAutoSaveCreditApplication(
   form: Ref<CreditApplicationForm>,
@@ -98,8 +101,10 @@ export function useAutoSaveCreditApplication(
   const hasLocalDraft = ref(false)
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
+  let inFlight: Promise<void> | null = null
+  let queuedAfterFlight = false
 
-  async function performSave(): Promise<void> {
+  async function persistOnce(): Promise<void> {
     const enabled = options.enabled?.value ?? true
     if (!enabled) return
 
@@ -111,8 +116,9 @@ export function useAutoSaveCreditApplication(
     saveStatus.value = 'saving'
     try {
       await options.csrf()
-      if (id) {
-        await options.api(`/credit-applications/${id}`, {
+      const existingId = draftId.value
+      if (existingId) {
+        await options.api(`/credit-applications/${existingId}`, {
           method: 'PUT',
           body: options.payloadWithoutDocuments('Draft'),
         })
@@ -121,8 +127,11 @@ export function useAutoSaveCreditApplication(
           method: 'POST',
           body: options.payloadWithoutDocuments('Draft'),
         })
-        draftId.value = data.id
-        options.onDraftCreated?.(data.id)
+        const createdId = Number(data?.id)
+        if (Number.isInteger(createdId) && createdId > 0) {
+          draftId.value = createdId
+          options.onDraftCreated?.(createdId)
+        }
       }
       saveStatus.value = 'saved'
       lastSavedAt.value = new Date()
@@ -136,12 +145,44 @@ export function useAutoSaveCreditApplication(
     }
   }
 
+  async function performSave(): Promise<void> {
+    if (inFlight) {
+      queuedAfterFlight = true
+      await inFlight
+      if (!queuedAfterFlight) return
+      queuedAfterFlight = false
+    }
+
+    const task = persistOnce()
+    inFlight = task
+    try {
+      await task
+    } finally {
+      if (inFlight === task) {
+        inFlight = null
+      }
+    }
+
+    if (queuedAfterFlight) {
+      queuedAfterFlight = false
+      await performSave()
+    }
+  }
+
   function scheduleSave(): void {
     if (debounceTimer) clearTimeout(debounceTimer)
     debounceTimer = setTimeout(() => {
       debounceTimer = null
-      performSave()
+      void performSave()
     }, DEBOUNCE_MS)
+  }
+
+  async function flushSave(): Promise<void> {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer)
+      debounceTimer = null
+    }
+    await performSave()
   }
 
   watch(
@@ -163,5 +204,6 @@ export function useAutoSaveCreditApplication(
     saveStatus,
     lastSavedAt,
     hasLocalDraft,
+    flushSave,
   }
 }

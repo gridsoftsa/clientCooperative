@@ -16,7 +16,7 @@ definePageMeta({
 
 const router = useRouter()
 const { $api, $csrf } = useNuxtApp()
-const { hasAnyPermission, hasRole, hasPermission } = usePermissions()
+const { hasAnyPermission, hasRole, hasAnyRole, hasPermission } = usePermissions()
 /** Editar / continuar borrador: crear o editar (nueva solo exige crear) */
 const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
 const isDirectorAgencia = computed(() => hasRole('director_agencia'))
@@ -66,6 +66,9 @@ function verRadicacionListPrefersDocumentActionsIcon(app: { status?: string, doc
   return false
 }
 const isAnalista = computed(() => hasRole('analista'))
+const showStatusEntryDates = computed(() =>
+  hasAnyRole(['auxiliar_credito', 'analista', 'director_credito']),
+)
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
@@ -92,11 +95,13 @@ const pagination = ref({
 const filterStatus = ref<string>('all')
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
+const filterSearch = ref('')
 
 const hasActiveFilters = computed(() => {
   return filterStatus.value !== 'all'
     || Boolean(filterDateFrom.value?.trim())
     || Boolean(filterDateTo.value?.trim())
+    || Boolean(filterSearch.value?.trim())
 })
 
 const skipFilterWatch = ref(false)
@@ -117,6 +122,10 @@ function buildListQuery(): Record<string, string | number> {
   }
   if (to) {
     q.created_to = to
+  }
+  const search = filterSearch.value?.trim()
+  if (search) {
+    q.search = search
   }
   return q
 }
@@ -144,7 +153,7 @@ async function fetchApplications() {
   }
 }
 
-watch([filterStatus, filterDateFrom, filterDateTo], () => {
+watch([filterStatus, filterDateFrom, filterDateTo, filterSearch], () => {
   if (skipFilterWatch.value)
     return
   if (listFilterDebounce)
@@ -165,6 +174,7 @@ function clearFilters() {
   filterStatus.value = 'all'
   filterDateFrom.value = ''
   filterDateTo.value = ''
+  filterSearch.value = ''
   pagination.value.current_page = 1
   nextTick(() => {
     skipFilterWatch.value = false
@@ -395,6 +405,16 @@ watch(transferDialogOpen, (v) => {
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+          <div class="grid w-full gap-3 sm:max-w-sm sm:shrink-0">
+            <Label for="filter-search" class="text-xs text-muted-foreground">Buscar asociado</Label>
+            <Input
+              id="filter-search"
+              v-model="filterSearch"
+              type="search"
+              placeholder="Nombre o cédula del asociado"
+              class="h-9"
+            />
+          </div>
           <div class="grid w-full gap-3 sm:max-w-[220px] sm:shrink-0">
             <Label for="filter-status" class="text-xs text-muted-foreground">Estado</Label>
             <Select v-model="filterStatus">
@@ -452,16 +472,21 @@ watch(transferDialogOpen, (v) => {
             No hay solicitudes. Crea una nueva para comenzar.
           </template>
         </div>
-        <div v-else class="border rounded-lg overflow-hidden">
+        <div v-else class="border rounded-lg overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Código</TableHead>
+                <TableHead>Cédula</TableHead>
+                <TableHead>Asociado</TableHead>
+                <TableHead>Agencia</TableHead>
+                <TableHead>Asesor</TableHead>
                 <TableHead>Radicado externo</TableHead>
                 <TableHead>Monto</TableHead>
                 <TableHead>Plazo</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Fecha y hora</TableHead>
+                <TableHead v-if="showStatusEntryDates">Fechas de estado</TableHead>
                 <TableHead class="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -517,6 +542,12 @@ watch(transferDialogOpen, (v) => {
                   </NuxtLink>
                   <span v-else>{{ app.code || '-' }}</span>
                 </TableCell>
+                <TableCell class="whitespace-nowrap font-mono text-sm">{{ app.debtor_document_number || '—' }}</TableCell>
+                <TableCell class="min-w-40 max-w-[16rem]">
+                  <span class="line-clamp-2">{{ app.debtor_name || '—' }}</span>
+                </TableCell>
+                <TableCell class="min-w-32">{{ app.agency_name || '—' }}</TableCell>
+                <TableCell class="min-w-32">{{ app.adviser_name || '—' }}</TableCell>
                 <TableCell class="font-mono text-sm">{{ app.numero_radicado_externo || '-' }}</TableCell>
                 <TableCell>{{ formatCurrency(Number(app.amount_requested)) }}</TableCell>
                 <TableCell>{{ app.term_months }} meses</TableCell>
@@ -534,6 +565,21 @@ watch(transferDialogOpen, (v) => {
                 </TableCell>
                 <TableCell class="whitespace-nowrap text-sm tabular-nums">
                   {{ formatCreatedAt(app.created_at) }}
+                </TableCell>
+                <TableCell v-if="showStatusEntryDates" class="min-w-48 text-xs leading-snug text-muted-foreground">
+                  <div
+                    v-if="Array.isArray(app.status_entered_at) && app.status_entered_at.length > 0"
+                    class="space-y-0.5"
+                  >
+                    <p
+                      v-for="entry in app.status_entered_at"
+                      :key="`${app.id}-${entry.status}`"
+                    >
+                      <span class="font-medium text-foreground">{{ entry.label }}:</span>
+                      {{ formatCreatedAt(entry.entered_at) }}
+                    </p>
+                  </div>
+                  <span v-else>—</span>
                 </TableCell>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-1">
