@@ -9,6 +9,7 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
+const { goBack } = useNavigationBack('/settings/sucursales')
 
 const form = ref({
   name: '',
@@ -63,7 +64,7 @@ async function handleSubmit() {
           Registra una sede de la cooperativa
         </p>
       </div>
-      <Button variant="outline" @click="router.back()">
+      <Button variant="outline" @click="goBack">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>
@@ -105,7 +106,7 @@ async function handleSubmit() {
             </div>
           </div>
           <div class="flex justify-end gap-2">
-            <Button type="button" variant="outline" @click="router.back()">
+            <Button type="button" variant="outline" @click="goBack">
               Cancelar
             </Button>
             <Button type="submit" :disabled="saving">

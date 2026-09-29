@@ -22,6 +22,7 @@ const STATUS_CHART_COLORS = [
 definePageMeta({
   middleware: 'permission',
   permissions: 'dashboard_ver',
+  key: route => route.path,
 })
 
 interface CreditSummaryRow {
@@ -54,6 +55,8 @@ interface CreditSummaryData {
 
 const { $api } = useNuxtApp()
 const { hasPermission } = usePermissions()
+
+const dashTab = useRouteQueryState('tab', 'indicadores', ['indicadores', 'distribucion', 'recientes'] as const)
 
 const summaryLoading = ref(true)
 const summary = ref<CreditSummaryData | null>(null)
@@ -334,7 +337,7 @@ onUnmounted(() => {
           </div>
 
           <template v-else-if="summary">
-            <Tabs default-value="indicadores" class="w-full">
+            <Tabs v-model="dashTab" class="w-full">
               <TabsList class="grid h-auto w-full grid-cols-1 gap-1.5 p-1.5 @sm/main:grid-cols-3">
                 <TabsTrigger value="indicadores" class="gap-2 px-3 py-3 text-sm @sm/main:text-base">
                   <Icon name="i-lucide-layout-dashboard" class="size-4 shrink-0 opacity-70" />

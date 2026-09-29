@@ -12,6 +12,7 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
+const { goBack } = useNavigationBack('/settings/users')
 
 const form = ref({
   name: '',
@@ -173,7 +174,7 @@ watch(selectedRole, (role) => {
           Crea un nuevo usuario y asigna sus roles
         </p>
       </div>
-      <Button variant="outline" @click="router.back()">
+      <Button variant="outline" @click="goBack">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>
@@ -374,7 +375,7 @@ watch(selectedRole, (role) => {
         </Card>
 
         <div class="flex justify-end gap-4">
-          <Button type="button" variant="outline" @click="router.back()">
+          <Button type="button" variant="outline" @click="goBack">
             Cancelar
           </Button>
           <Button type="submit" :disabled="saving">

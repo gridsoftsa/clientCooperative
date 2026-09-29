@@ -66,6 +66,7 @@ definePageMeta({
   layout: 'default',
   middleware: 'permission',
   permissions: 'radicacion_analisis_ver',
+  key: route => route.path,
 })
 
 const route = useRoute()
@@ -542,6 +543,10 @@ const perfilDeudor = ref<AnalisisScorePerfilValue | undefined>(undefined)
 
 const currentStep = ref(1)
 const maxStep = 4
+useRouteSyncedStep(currentStep, maxStep)
+const { goBack } = useNavigationBack(() =>
+  solicitudId.value ? `/radicacion/${solicitudId.value}` : '/radicacion',
+)
 
 const variableRowsForIndep = ref<ImprimirVariableRow[]>(cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES))
 const variableRowsForEmp = ref<ImprimirVariableRow[]>(cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES))
@@ -1290,7 +1295,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
           Radicación — Análisis de riesgo
         </p>
       </div>
-      <Button variant="outline" class="shrink-0" @click="router.push('/radicacion')">
+      <Button variant="outline" class="shrink-0" @click="goBack">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>

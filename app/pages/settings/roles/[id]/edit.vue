@@ -12,6 +12,7 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const route = useRoute()
 const router = useRouter()
+const { goBack } = useNavigationBack('/settings/roles')
 const { refetchUserSilently } = useAuth()
 const roleId = route.params.id as string
 
@@ -136,7 +137,7 @@ onMounted(async () => {
         <h2 class="text-2xl font-bold tracking-tight">Editar Rol</h2>
         <p v-if="role" class="text-muted-foreground">Modifica el rol: {{ role.name }}</p>
       </div>
-      <Button variant="outline" @click="router.back()">
+      <Button variant="outline" @click="goBack">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>
@@ -204,7 +205,7 @@ onMounted(async () => {
             Los permisos ya se sincronizan con el servidor al marcarlos. Usa el botón solo para guardar el nombre del rol.
           </p>
           <div class="flex gap-4">
-            <Button type="button" variant="outline" @click="router.back()">Cancelar</Button>
+            <Button type="button" variant="outline" @click="goBack">Cancelar</Button>
             <Button type="submit" :disabled="saving">
               <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
               {{ saving ? 'Guardando...' : 'Guardar nombre del rol' }}

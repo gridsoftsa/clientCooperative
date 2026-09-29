@@ -66,6 +66,7 @@ definePageMeta({
   middleware: 'permission',
   /** Misma capacidad que crear borradores: quien puede crear puede retomar el formulario */
   permissions: ['radicacion_crear', 'radicacion_editar'],
+  key: route => route.path,
 })
 
 const route = useRoute()
@@ -296,6 +297,8 @@ const stepsCodeudor = [
 
 const steps = computed(() => (addingCodeudor.value ? stepsCodeudor : stepsDeudor))
 const maxStep = computed(() => steps.value.length)
+useRouteSyncedStep(currentStep, maxStep)
+const { goBack } = useNavigationBack('/radicacion')
 
 const canEdit = computed(() => isCreditApplicationAdviserEditableStatus(application.value?.status))
 const isTerminalClosed = computed(() => isCreditApplicationTerminalImmutable(application.value?.status))
@@ -1794,7 +1797,7 @@ onMounted(() => {
             </NuxtLink>
           </Button>
         </PermissionGate>
-        <Button variant="outline" @click="router.push('/radicacion')">
+        <Button variant="outline" @click="goBack">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>
@@ -1807,7 +1810,7 @@ onMounted(() => {
 
     <div v-else-if="error" class="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center">
       <p class="text-destructive font-medium">{{ error }}</p>
-      <Button variant="outline" class="mt-4" @click="router.push('/radicacion')">
+      <Button variant="outline" class="mt-4" @click="goBack">
         Volver
       </Button>
     </div>
@@ -1825,8 +1828,8 @@ onMounted(() => {
         </NuxtLink>
       </Button>
       <div>
-        <Button variant="outline" @click="router.push('/radicacion')">
-          Volver al listado
+        <Button variant="outline" @click="goBack">
+          Volver
         </Button>
       </div>
     </div>
@@ -1838,7 +1841,7 @@ onMounted(() => {
       <p class="text-destructive font-medium">
         Solo se pueden editar solicitudes en estado Borrador o Devolución. Esta solicitud tiene estado: {{ application.status }}.
       </p>
-      <Button variant="outline" class="mt-4" @click="router.push('/radicacion')">
+      <Button variant="outline" class="mt-4" @click="goBack">
         Volver
       </Button>
     </div>

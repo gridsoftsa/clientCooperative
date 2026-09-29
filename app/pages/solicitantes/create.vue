@@ -11,6 +11,7 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
+const { goBack } = useNavigationBack('/solicitantes')
 const { getByLabel } = useMunicipalities()
 
 const form = ref<ApplicantForm>({
@@ -131,7 +132,7 @@ async function handleSubmit() {
       <h2 class="text-2xl font-bold tracking-tight">
         Nuevo solicitante
       </h2>
-      <Button variant="outline" @click="router.push('/solicitantes')">
+      <Button variant="outline" @click="goBack">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>

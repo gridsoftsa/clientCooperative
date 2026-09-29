@@ -11,6 +11,7 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const route = useRoute()
 const router = useRouter()
+const { goBack } = useNavigationBack('/settings/sucursales')
 
 const id = route.params.id as string
 const sucursal = ref<Sucursal | null>(null)
@@ -94,7 +95,7 @@ onMounted(() => {
           {{ sucursal.name }}
         </p>
       </div>
-      <Button variant="outline" @click="router.back()">
+      <Button variant="outline" @click="goBack">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>
@@ -144,7 +145,7 @@ onMounted(() => {
             </div>
           </div>
           <div class="flex justify-end gap-2">
-            <Button type="button" variant="outline" @click="router.back()">
+            <Button type="button" variant="outline" @click="goBack">
               Cancelar
             </Button>
             <Button type="submit" :disabled="saving">

@@ -19,13 +19,19 @@ definePageMeta({
   layout: 'default',
   middleware: 'permission',
   permissions: 'plantilla_score_ver',
+  key: route => route.path,
 })
 
 const { $api } = useNuxtApp()
 const { hasAnyPermission } = usePermissions()
-const router = useRouter()
+const { goBack } = useNavigationBack('/parametrizacion/plantillas')
 
 const defaultTab = SCORE_TEMPLATE_MATRIX_TABS[0]?.value ?? 'independiente'
+const hojaTab = useRouteQueryState(
+  'hoja',
+  defaultTab,
+  SCORE_TEMPLATE_MATRIX_TABS.map(t => t.value),
+)
 
 const loading = ref(true)
 const linesIndep = ref<ScoreMatrixLine[]>(normalizeScoreMatrixLines(INDEPENDIENTE_MATRIX))
@@ -206,7 +212,7 @@ onMounted(() => {
             Plantillas
           </NuxtLink>
         </Button>
-        <Button variant="outline" @click="router.push('/radicacion')">
+        <Button variant="outline" @click="goBack">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>
@@ -220,7 +226,7 @@ onMounted(() => {
       Cargando matrices…
     </div>
 
-    <Tabs v-else :default-value="defaultTab" class="w-full" :unmount-on-hide="false">
+    <Tabs v-else v-model="hojaTab" class="w-full" :unmount-on-hide="false">
       <div class="overflow-x-auto pb-2">
         <TabsList
           class="inline-flex h-auto min-h-10 w-max flex-wrap justify-start gap-1 bg-muted p-1"

@@ -61,6 +61,7 @@ definePageMeta({
   layout: 'default',
   middleware: 'permission',
   permissions: 'radicacion_ver',
+  key: route => route.path,
 })
 
 const route = useRoute()
@@ -157,6 +158,8 @@ const stepsDeudor = [
   { num: 4, title: 'Datos de la Solicitud' },
   { num: 5, title: 'Codeudores' },
 ]
+useRouteSyncedStep(currentStep, stepsDeudor.length)
+const { goBack } = useNavigationBack('/radicacion')
 
 const stepsCodeudor = [
   { num: 1, title: 'Datos del Codeudor' },
@@ -2924,7 +2927,7 @@ onMounted(() => {
             {{ downloadingPdf ? 'Abriendo…' : 'Ver PDF' }}
           </Button>
         </PermissionGate>
-        <Button variant="outline" class="shrink-0" @click="router.push('/radicacion')">
+        <Button variant="outline" class="shrink-0" @click="goBack">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>

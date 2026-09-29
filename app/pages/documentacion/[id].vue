@@ -20,7 +20,7 @@ definePageMeta({
 })
 
 const route = useRoute()
-const router = useRouter()
+const { goBack } = useNavigationBack('/documentacion')
 const { $api } = useNuxtApp()
 const { viewVaultDocument, downloadVaultPdf } = useDocumentationVaultDownload()
 
@@ -173,9 +173,9 @@ watch(applicationId, () => {
   <div class="flex w-full flex-col gap-4">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="space-y-1">
-        <Button variant="ghost" size="sm" class="-ml-2 mb-1" @click="router.push('/documentacion')">
+        <Button variant="ghost" size="sm" class="-ml-2 mb-1" @click="goBack">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
-          Volver al listado
+          Volver
         </Button>
         <h2 class="text-2xl font-bold tracking-tight">
           Expediente documental
@@ -398,8 +398,8 @@ watch(applicationId, () => {
     <Card v-else>
       <CardContent class="py-12 text-center text-muted-foreground">
         No se encontró la radicación o no tiene acceso.
-        <Button variant="link" class="mt-2" @click="router.push('/documentacion')">
-          Volver al listado
+        <Button variant="link" class="mt-2" @click="goBack">
+          Volver
         </Button>
       </CardContent>
     </Card>

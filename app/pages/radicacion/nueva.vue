@@ -58,6 +58,7 @@ definePageMeta({
   layout: 'default',
   middleware: 'permission',
   permissions: 'radicacion_crear',
+  key: route => route.path,
 })
 
 const { $api, $csrf } = useNuxtApp()
@@ -224,6 +225,8 @@ const stepsCodeudor = [
 
 const steps = computed(() => (mode.value === 'codeudor' ? stepsCodeudor : stepsDeudor))
 const maxStep = computed(() => steps.value.length)
+useRouteSyncedStep(currentStep, maxStep)
+const { goBack } = useNavigationBack('/radicacion')
 
 async function fetchCatalogs() {
   await initRadicacionSucursalContext()
@@ -1596,7 +1599,7 @@ onMounted(() => {
           </span>
           <span v-else-if="saveStatus === 'error'">Error al guardar (datos en copia local)</span>
         </div>
-        <Button variant="outline" @click="router.push('/radicacion')">
+        <Button variant="outline" @click="goBack">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>
