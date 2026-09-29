@@ -5,6 +5,9 @@ import {
   creditApplicationStatusFilterOptions as statusFilterOptions,
   isCreditApplicationTerminalImmutable,
   isCreditApplicationAdviserEditableStatus,
+  radicacionStatusEntryColumns,
+  statusEnteredAtMap,
+  statusEntryDateForColumn,
 } from '~/constants/credit-application-status'
 import { toast } from 'vue-sonner'
 
@@ -479,14 +482,22 @@ watch(transferDialogOpen, (v) => {
                 <TableHead>Código</TableHead>
                 <TableHead>Cédula</TableHead>
                 <TableHead>Asociado</TableHead>
-                <TableHead>Agencia</TableHead>
+                <TableHead>Sucursal</TableHead>
                 <TableHead>Asesor</TableHead>
                 <TableHead>Radicado externo</TableHead>
                 <TableHead>Monto</TableHead>
                 <TableHead>Plazo</TableHead>
                 <TableHead>Estado</TableHead>
                 <TableHead>Fecha y hora</TableHead>
-                <TableHead v-if="showStatusEntryDates">Fechas de estado</TableHead>
+                <template v-if="showStatusEntryDates">
+                  <TableHead
+                    v-for="col in radicacionStatusEntryColumns"
+                    :key="`h-${col.key}`"
+                    class="whitespace-nowrap"
+                  >
+                    {{ col.label }}
+                  </TableHead>
+                </template>
                 <TableHead class="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -546,7 +557,7 @@ watch(transferDialogOpen, (v) => {
                 <TableCell class="min-w-40 max-w-[16rem]">
                   <span class="line-clamp-2">{{ app.debtor_name || '—' }}</span>
                 </TableCell>
-                <TableCell class="min-w-32">{{ app.agency_name || '—' }}</TableCell>
+                <TableCell class="min-w-32">{{ app.sucursal_name || app.sucursal?.name || '—' }}</TableCell>
                 <TableCell class="min-w-32">{{ app.adviser_name || '—' }}</TableCell>
                 <TableCell class="font-mono text-sm">{{ app.numero_radicado_externo || '-' }}</TableCell>
                 <TableCell>{{ formatCurrency(Number(app.amount_requested)) }}</TableCell>
@@ -566,21 +577,15 @@ watch(transferDialogOpen, (v) => {
                 <TableCell class="whitespace-nowrap text-sm tabular-nums">
                   {{ formatCreatedAt(app.created_at) }}
                 </TableCell>
-                <TableCell v-if="showStatusEntryDates" class="min-w-48 text-xs leading-snug text-muted-foreground">
-                  <div
-                    v-if="Array.isArray(app.status_entered_at) && app.status_entered_at.length > 0"
-                    class="space-y-0.5"
+                <template v-if="showStatusEntryDates">
+                  <TableCell
+                    v-for="col in radicacionStatusEntryColumns"
+                    :key="`${app.id}-${col.key}`"
+                    class="whitespace-nowrap text-xs tabular-nums"
                   >
-                    <p
-                      v-for="entry in app.status_entered_at"
-                      :key="`${app.id}-${entry.status}`"
-                    >
-                      <span class="font-medium text-foreground">{{ entry.label }}:</span>
-                      {{ formatCreatedAt(entry.entered_at) }}
-                    </p>
-                  </div>
-                  <span v-else>—</span>
-                </TableCell>
+                    {{ formatCreatedAt(statusEntryDateForColumn(statusEnteredAtMap(app.status_entered_at), col.statuses)) }}
+                  </TableCell>
+                </template>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-1">
                     <PermissionGate permission="radicacion_analisis_guardar">

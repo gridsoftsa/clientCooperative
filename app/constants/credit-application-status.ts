@@ -210,3 +210,61 @@ export const creditApplicationStatusOrder = [
   'Rejected',
   'Cancelled',
 ] as const
+
+/** Columnas de fecha de llegada a cada instancia (listado de radicación). */
+export const radicacionStatusEntryColumns: ReadonlyArray<{
+  key: string
+  label: string
+  statuses: readonly string[]
+}> = [
+  { key: 'Draft', label: 'Borrador', statuses: ['Draft'] },
+  { key: 'Director_Review', label: 'Dir. agencia', statuses: ['Director_Review', 'Submitted'] },
+  { key: 'Documentation_Review', label: 'Documentación', statuses: ['Documentation_Review'] },
+  { key: 'In_Analysis', label: 'Análisis', statuses: ['In_Analysis'] },
+  { key: 'Credit_Director_Review', label: 'Dir. crédito', statuses: ['Credit_Director_Review'] },
+  { key: 'Approved', label: 'Aprobada', statuses: ['Approved'] },
+  { key: 'Disbursement', label: 'Desembolso', statuses: ['Disbursement'] },
+  { key: 'Returned', label: 'Devuelta', statuses: ['Returned', 'Returned_Credit_Modification', 'Returned_Insurer_Response'] },
+  { key: 'Rejected', label: 'Rechazada', statuses: ['Rejected'] },
+]
+
+export function statusEnteredAtMap(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object') {
+    return {}
+  }
+  if (Array.isArray(raw)) {
+    const out: Record<string, string> = {}
+    for (const entry of raw) {
+      if (!entry || typeof entry !== 'object') {
+        continue
+      }
+      const row = entry as { status?: unknown, entered_at?: unknown }
+      const status = String(row.status ?? '').trim()
+      const at = String(row.entered_at ?? '').trim()
+      if (status && at && !out[status]) {
+        out[status] = at
+      }
+    }
+    return out
+  }
+  const out: Record<string, string> = {}
+  for (const [status, at] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof at === 'string' && at.trim() !== '') {
+      out[status] = at
+    }
+  }
+  return out
+}
+
+export function statusEntryDateForColumn(
+  map: Record<string, string>,
+  statuses: readonly string[],
+): string | null {
+  for (const status of statuses) {
+    const at = map[status]
+    if (at) {
+      return at
+    }
+  }
+  return null
+}
