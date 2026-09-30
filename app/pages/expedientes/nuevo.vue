@@ -109,17 +109,13 @@ watch(() => form.archival_file_type_id, (typeId) => {
 })
 
 watch(configuredProducerAreas, (areas) => {
-  if (!form.archival_file_type_id) {
-    return
-  }
-
-  if (areas.length === 0) {
+  if (!form.archival_file_type_id || form.org_unit_id == null) {
     return
   }
 
   const allowedIds = new Set(areas.map(area => area.org_unit_id))
-  if (form.org_unit_id == null || !allowedIds.has(form.org_unit_id)) {
-    form.org_unit_id = areas[0]?.org_unit_id ?? null
+  if (areas.length > 0 && !allowedIds.has(form.org_unit_id)) {
+    form.org_unit_id = null
   }
 })
 

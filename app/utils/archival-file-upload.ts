@@ -16,6 +16,24 @@ export interface ArchivalFileDocTypeOption {
   typeCode: string
 }
 
+export function scopeCatalogTreeToTrdBranch(
+  seriesList: CatalogTreeSeries[],
+  seriesId: number | null,
+  subseriesId: number | null,
+): CatalogTreeSeries[] {
+  if (seriesId == null || subseriesId == null) {
+    return seriesList
+  }
+
+  return seriesList
+    .filter(series => series.id === seriesId)
+    .map(series => ({
+      ...series,
+      subseries: (series.subseries ?? []).filter(sub => sub.id === subseriesId),
+    }))
+    .filter(series => (series.subseries?.length ?? 0) > 0)
+}
+
 export function flattenCatalogDocumentTypes(seriesList: CatalogTreeSeries[]): ArchivalFileDocTypeOption[] {
   const options: ArchivalFileDocTypeOption[] = []
 

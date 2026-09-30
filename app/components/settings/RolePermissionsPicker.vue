@@ -397,12 +397,9 @@ function isCategoryFullySelected(category: string): boolean {
                           :model-value="selectedPermissions.includes(permission.name)"
                           @update:model-value="onPermissionChecked(permission.name, $event)"
                         />
-                        <Label :for="`permission-${permission.id}`" class="min-w-0 cursor-pointer space-y-0.5 font-normal">
+                        <Label :for="`permission-${permission.id}`" class="min-w-0 cursor-pointer font-normal">
                           <span class="block text-sm leading-snug">
                             {{ formatPermissionDisplayName(permission.name) }}
-                          </span>
-                          <span class="block text-xs text-muted-foreground">
-                            {{ permission.name }}
                           </span>
                         </Label>
                       </div>
@@ -421,12 +418,9 @@ function isCategoryFullySelected(category: string): boolean {
                       :model-value="selectedPermissions.includes(permission.name)"
                       @update:model-value="onPermissionChecked(permission.name, $event)"
                     />
-                    <Label :for="`permission-${permission.id}`" class="min-w-0 cursor-pointer space-y-0.5 font-normal">
+                    <Label :for="`permission-${permission.id}`" class="min-w-0 cursor-pointer font-normal">
                       <span class="block text-sm leading-snug">
                         {{ formatPermissionDisplayName(permission.name) }}
-                      </span>
-                      <span class="block text-xs text-muted-foreground">
-                        {{ permission.name }}
                       </span>
                     </Label>
                   </div>

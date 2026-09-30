@@ -162,6 +162,36 @@ export function countArchivalAreaDescendants(node: ArchivalFileTreeNode): number
   return total
 }
 
+export function archivalAreaNodeHasDocuments(node: ArchivalFileTreeNode): boolean {
+  if (isArchivalAreaDocumentNode(node)) {
+    return true
+  }
+
+  return (node.children ?? []).some(child => archivalAreaNodeHasDocuments(child))
+}
+
+export function filterArchivalAreaTreeToFoldersWithDocuments(
+  node: ArchivalFileTreeNode,
+): ArchivalFileTreeNode {
+  const nextChildren = (node.children ?? [])
+    .flatMap((child) => {
+      if (isArchivalAreaDocumentNode(child) || child.type === 'file' || child.type === 'child_file') {
+        return [child]
+      }
+
+      if (!isArchivalAreaFolderNode(child) || !archivalAreaNodeHasDocuments(child)) {
+        return []
+      }
+
+      return [filterArchivalAreaTreeToFoldersWithDocuments(child)]
+    })
+
+  return {
+    ...node,
+    children: nextChildren,
+  }
+}
+
 export function filterArchivalAreaChildren(
   children: ArchivalFileTreeNode[],
   query: string,

@@ -10,6 +10,7 @@ import type { CatalogTreeSeries } from '~/types/archival-trd'
 import {
   flattenCatalogDocumentTypes,
   flattenFileFolderNodes,
+  scopeCatalogTreeToTrdBranch,
   hasPendingOcrValidation,
   isOcrSupportedUploadFile,
   ocrEngineDisplayLabel,
@@ -143,12 +144,20 @@ const missingRequiredChoices = computed((): MissingRequiredUploadChoice[] => {
     grouped.set(item.doc_document_type_id, entry)
   }
 
-  return Array.from(grouped.entries()).map(([docDocumentTypeId, entry]) => ({
+  const choices = Array.from(grouped.entries()).map(([docDocumentTypeId, entry]) => ({
     docDocumentTypeId,
     requiredLabel: entry.labels.join(' · '),
     catalogLabel: catalogLabelForDocType(docDocumentTypeId, entry.code, entry.name),
     workflowStageKey: entry.stage,
   }))
+
+  if (!hasLockedTrdBranch.value || docTypeOptions.value.length === 0) {
+    return choices
+  }
+
+  const allowedIds = new Set(docTypeOptions.value.map(option => option.id))
+
+  return choices.filter(choice => allowedIds.has(choice.docDocumentTypeId))
 })
 
 const showRequiredDocumentPicker = computed(() => missingRequiredChoices.value.length > 0 && !attachNonRequired.value)
@@ -271,8 +280,11 @@ async function loadCatalog() {
   loadingCatalog.value = true
   try {
     const tree = await trdApi.fetchCatalogTree(props.file.org_unit_id, true)
-    catalogTree.value = tree
-    docTypeOptions.value = flattenCatalogDocumentTypes(tree)
+    const scopedTree = hasLockedTrdBranch.value
+      ? scopeCatalogTreeToTrdBranch(tree, lockedDocSeriesId.value, lockedDocSubseriesId.value)
+      : tree
+    catalogTree.value = scopedTree
+    docTypeOptions.value = flattenCatalogDocumentTypes(scopedTree)
     preselectMissingDocType()
   }
   catch {
