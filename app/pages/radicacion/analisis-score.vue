@@ -45,10 +45,11 @@ import {
 } from '~/utils/analisis-score-imprimir-totals'
 import { totalIngresosRadicacionFormatted } from '~/utils/radicacion-financial-totals'
 import { aplicarEgresosCapacidadBloqueDesdeFinancialInfo } from '~/utils/radicacion-financial-egresos'
-import { aplicarActivosEmergenciaDesdeSolicitud } from '~/utils/radicacion-financial-activos'
+import { aplicarActivosEmergenciaDesdeSolicitud, type ActivoPersonaKey } from '~/utils/radicacion-financial-activos'
 import {
   buildResumenFinancieroDeudorAnalisisPersistido,
   mergeFinancialInfoResumenAnalisisDeudor,
+  mergeFinancialInfoResumenAnalisisPersona,
 } from '~/utils/analisis-resumen-financiero-merge'
 import type { Company } from '~/types/company'
 import { useAuth } from '~/composables/useAuth'
@@ -123,6 +124,12 @@ const codeudoresDeSolicitud = ref<{ nombre: string, cedula: string }[]>([])
 /** `financial_info` del deudor (parseado) y monto para el resumen financiero (misma vista que en radicación). */
 const resumenDeudorFinancialInfo = ref<Record<string, unknown>>({})
 const resumenMontoSolicitado = ref(0)
+const CODEUDOR_RESUMEN_KEYS = ['codeudor1', 'codeudor2', 'codeudor3'] as const satisfies readonly ActivoPersonaKey[]
+const resumenCodeudoresFinancialInfo = ref<Array<{
+  key: ActivoPersonaKey
+  nombre: string
+  financialInfo: Record<string, unknown>
+}>>([])
 
 function parseJsonFieldSolicitud(val: unknown): Record<string, unknown> {
   if (val == null) {
@@ -147,11 +154,31 @@ function actualizarResumenFinancieroDeudorDesdeSolicitud(data: Record<string, un
   const d = data.debtor as Record<string, unknown> | null | undefined
   resumenDeudorFinancialInfo.value = d && typeof d === 'object' ? parseJsonFieldSolicitud(d.financial_info) : {}
   resumenMontoSolicitado.value = Number(data.amount_requested) || 0
+  const co = pickCoDebtorRowsFromSolicitudData(data)
+  resumenCodeudoresFinancialInfo.value = co.slice(0, CODEUDOR_RESUMEN_KEYS.length).map((row, index) => ({
+    key: CODEUDOR_RESUMEN_KEYS[index]!,
+    nombre: debtorDisplayName(row),
+    financialInfo: parseJsonFieldSolicitud(row.financial_info),
+  }))
 }
 
 /** Base radicación + ajustes del analista en EMERGENCIA (solo vista; no escribe la solicitud). */
 const resumenFinancieroDeudorAnalisis = computed(() =>
   mergeFinancialInfoResumenAnalisisDeudor(resumenDeudorFinancialInfo.value, emergenciaState.value),
+)
+
+const resumenesFinancierosCodeudoresAnalisis = computed(() =>
+  resumenCodeudoresFinancialInfo.value.map((codeudor, index) => ({
+    key: codeudor.key,
+    label: codeudor.nombre.trim()
+      ? `del codeudor ${index + 1} — ${codeudor.nombre.trim()}`
+      : `del codeudor ${index + 1}`,
+    financialInfo: mergeFinancialInfoResumenAnalisisPersona(
+      codeudor.financialInfo,
+      emergenciaState.value,
+      codeudor.key,
+    ),
+  })),
 )
 
 /** % ING desde parametrización (template `ing`); reserva = ingresos disponibles × %/100. */
@@ -704,6 +731,7 @@ function resetVistaAnalisisScoreParaSolicitud(): void {
   emergenciaState.value = defaultEmergenciaState()
   codeudoresDeSolicitud.value = []
   resumenDeudorFinancialInfo.value = {}
+  resumenCodeudoresFinancialInfo.value = []
   resumenMontoSolicitado.value = 0
   solicitudStatus.value = null
   analystReviewApprovedAt.value = null
@@ -1421,11 +1449,21 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
             permission="radicacion_ver_resumen_financiero"
             strict
           >
-            <RadicacionResumenFinancieroDeudor
-              :financial-info="resumenFinancieroDeudorAnalisis"
-              :amount-requested="resumenMontoSolicitado"
-              analysis-adjusted
-            />
+            <div class="space-y-3">
+              <RadicacionResumenFinancieroDeudor
+                :financial-info="resumenFinancieroDeudorAnalisis"
+                :amount-requested="resumenMontoSolicitado"
+                analysis-adjusted
+              />
+              <RadicacionResumenFinancieroDeudor
+                v-for="codeudor in resumenesFinancierosCodeudoresAnalisis"
+                :key="codeudor.key"
+                :financial-info="codeudor.financialInfo"
+                :amount-requested="resumenMontoSolicitado"
+                :summary-scope-label="codeudor.label"
+                analysis-adjusted
+              />
+            </div>
           </PermissionGate>
           <AnalisisEmergenciaForm
             ref="emergenciaFormRef"

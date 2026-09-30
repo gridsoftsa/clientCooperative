@@ -4,19 +4,20 @@ import {
   mergeEmergenciaFromSnapshot,
 } from '~/constants/analisis-score-emergencia'
 import { parseMontoCop } from '~/utils/analisis-emergencia-cuota'
-import { sumaValorFilasActivos, totalUnaPersonaActivo } from '~/utils/radicacion-financial-activos'
+import { sumaValorFilasActivos, totalUnaPersonaActivo, type ActivoPersonaKey } from '~/utils/radicacion-financial-activos'
 
 /**
  * Construye un `financial_info` solo para **vista** en análisis / SCORE: parte de la radicación
- * y aplica ajustes del analista en la hoja EMERGENCIA (activos del deudor, central de riesgos).
+ * y aplica ajustes del analista en la hoja EMERGENCIA (activos y central de riesgos de esa persona).
  * No persiste en la solicitud; la radicación sigue intacta.
  */
-export function mergeFinancialInfoResumenAnalisisDeudor(
+export function mergeFinancialInfoResumenAnalisisPersona(
   baselineFi: Record<string, unknown>,
   emergencia: EmergenciaState,
+  personaKey: ActivoPersonaKey,
 ): Record<string, unknown> {
   const out = JSON.parse(JSON.stringify(baselineFi)) as Record<string, unknown>
-  const persona = emergencia.activos.deudor
+  const persona = emergencia.activos[personaKey]
 
   const hasFilasActivos
     = persona.bienesGarantia.filas.length > 0 || persona.otrosBienes.filas.length > 0
@@ -55,7 +56,7 @@ export function mergeFinancialInfoResumenAnalisisDeudor(
     baseSol.real_estate = sumaValorFilasActivos(persona.bienesGarantia.filas)
   }
 
-  const tedRaw = emergencia.centralRiesgos.totalEndeudamiento.deudor
+  const tedRaw = emergencia.centralRiesgos.totalEndeudamiento[personaKey]
   if (typeof tedRaw === 'string' && tedRaw.trim() !== '') {
     const pasivos = parseMontoCop(tedRaw)
     if (pasivos != null && Number.isFinite(pasivos)) {
@@ -65,6 +66,13 @@ export function mergeFinancialInfoResumenAnalisisDeudor(
 
   out.solvency = baseSol
   return out
+}
+
+export function mergeFinancialInfoResumenAnalisisDeudor(
+  baselineFi: Record<string, unknown>,
+  emergencia: EmergenciaState,
+): Record<string, unknown> {
+  return mergeFinancialInfoResumenAnalisisPersona(baselineFi, emergencia, 'deudor')
 }
 
 /** Métricas planas guardadas en `analisis_score_snapshot` para reportes (además del JSON `emergencia`). */

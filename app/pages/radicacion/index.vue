@@ -70,8 +70,38 @@ function verRadicacionListPrefersDocumentActionsIcon(app: { status?: string, doc
 }
 const isAnalista = computed(() => hasRole('analista'))
 const showStatusEntryDates = computed(() =>
-  hasAnyRole(['auxiliar_credito', 'analista', 'director_credito']),
+  hasAnyRole(['super_admin', 'auxiliar_credito', 'revision_documentos', 'analista', 'director_credito']),
 )
+const sortKey = ref('created_at')
+const sortDir = ref<'asc' | 'desc'>('desc')
+
+function applyRoleDefaultSort(): void {
+  if (hasRole('director_credito')) {
+    sortKey.value = 'Credit_Director_Review'
+    sortDir.value = 'asc'
+    return
+  }
+  if (hasRole('analista')) {
+    sortKey.value = 'In_Analysis'
+    sortDir.value = 'asc'
+    return
+  }
+  if (hasRole('revision_documentos') || hasRole('auxiliar_credito')) {
+    sortKey.value = 'Documentation_Review'
+    sortDir.value = 'asc'
+  }
+}
+
+function toggleSort(key: string): void {
+  if (sortKey.value === key) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortKey.value = key
+    sortDir.value = 'asc'
+  }
+  pagination.value.current_page = 1
+  void fetchApplications()
+}
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
@@ -130,6 +160,10 @@ function buildListQuery(): Record<string, string | number> {
   if (search) {
     q.search = search
   }
+  if (sortKey.value) {
+    q.sort = sortKey.value
+    q.direction = sortDir.value
+  }
   return q
 }
 
@@ -156,9 +190,12 @@ async function fetchApplications() {
   }
 }
 
-watch([filterStatus, filterDateFrom, filterDateTo, filterSearch], () => {
+watch([filterStatus, filterDateFrom, filterDateTo, filterSearch], (current, previous) => {
   if (skipFilterWatch.value)
     return
+  if (!previous || current[0] !== previous[0]) {
+    alignSortWithStatusFilter()
+  }
   if (listFilterDebounce)
     clearTimeout(listFilterDebounce)
   listFilterDebounce = setTimeout(() => {
@@ -167,6 +204,22 @@ watch([filterStatus, filterDateFrom, filterDateTo, filterSearch], () => {
     fetchApplications()
   }, 400)
 })
+
+function alignSortWithStatusFilter(): void {
+  if (!showStatusEntryDates.value) {
+    return
+  }
+  if (filterStatus.value === 'all') {
+    applyRoleDefaultSort()
+    return
+  }
+  const column = radicacionStatusEntryColumns.find(col => col.statuses.includes(filterStatus.value))
+  if (!column) {
+    return
+  }
+  sortKey.value = column.key
+  sortDir.value = 'asc'
+}
 
 function clearFilters() {
   if (listFilterDebounce) {
@@ -355,6 +408,7 @@ async function handleDownloadPdf(app: { id: number; code?: string }) {
 }
 
 onMounted(() => {
+  applyRoleDefaultSort()
   fetchApplications()
 })
 
@@ -488,14 +542,30 @@ watch(transferDialogOpen, (v) => {
                 <TableHead>Monto</TableHead>
                 <TableHead>Plazo</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha y hora</TableHead>
+                <TableHead>
+                  <button type="button" class="inline-flex items-center gap-1" @click="toggleSort('created_at')">
+                    Fecha y hora
+                    <Icon
+                      v-if="sortKey === 'created_at'"
+                      :name="sortDir === 'asc' ? 'i-lucide-arrow-up' : 'i-lucide-arrow-down'"
+                      class="h-3.5 w-3.5"
+                    />
+                  </button>
+                </TableHead>
                 <template v-if="showStatusEntryDates">
                   <TableHead
                     v-for="col in radicacionStatusEntryColumns"
                     :key="`h-${col.key}`"
                     class="whitespace-nowrap"
                   >
-                    {{ col.label }}
+                    <button type="button" class="inline-flex items-center gap-1" @click="toggleSort(col.key)">
+                      {{ col.label }}
+                      <Icon
+                        v-if="sortKey === col.key"
+                        :name="sortDir === 'asc' ? 'i-lucide-arrow-up' : 'i-lucide-arrow-down'"
+                        class="h-3.5 w-3.5"
+                      />
+                    </button>
                   </TableHead>
                 </template>
                 <TableHead class="text-right">Acciones</TableHead>
