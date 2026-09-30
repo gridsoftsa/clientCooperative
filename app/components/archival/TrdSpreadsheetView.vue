@@ -77,9 +77,9 @@ const dataColumnCount = 15
 
     <ArchivalTrdSpreadsheetGlossary :context="glossaryContext" />
 
-    <div class="overflow-x-auto border border-t-0 border-border">
-      <table class="trd-spreadsheet-table w-full min-w-[980px] border-collapse text-[11px] leading-tight">
-        <thead>
+    <div class="trd-spreadsheet-scroll border border-t-0 border-border">
+      <table class="trd-spreadsheet-table w-full min-w-[980px] border-separate border-spacing-0 text-[11px] leading-tight">
+        <thead class="trd-spreadsheet-sticky-head">
           <tr class="trd-sheet-head-main">
             <th rowspan="2" class="trd-sheet-cell w-10">
               No.
@@ -140,6 +140,9 @@ const dataColumnCount = 15
             <th class="trd-sheet-cell w-8" title="Digitalización">
               D
             </th>
+          </tr>
+          <tr class="trd-sheet-head-gap" aria-hidden="true">
+            <th :colspan="dataColumnCount" class="trd-sheet-gap-cell"></th>
           </tr>
         </thead>
         <tbody>
@@ -210,10 +213,28 @@ const dataColumnCount = 15
 </template>
 
 <style scoped>
+.trd-spreadsheet-scroll {
+  max-height: min(70vh, 44rem);
+  overflow: auto;
+}
+
+.trd-spreadsheet-sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
 .trd-sheet-cell {
   border: 1px solid var(--border);
-  padding: 0.35rem 0.45rem;
+  padding: 0.5rem 0.55rem;
   vertical-align: top;
+}
+
+.trd-sheet-head-main th,
+.trd-sheet-head-sub th {
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+  vertical-align: middle;
 }
 
 .trd-sheet-head-main {
@@ -226,9 +247,32 @@ const dataColumnCount = 15
   color: var(--header-foreground);
 }
 
+.trd-sheet-head-main th,
+.trd-sheet-head-sub th {
+  background: inherit;
+}
+
+.trd-sheet-gap-cell {
+  height: 0.85rem;
+  padding: 0;
+  border: none;
+  background: var(--card);
+  box-shadow: 0 -6px 10px -4px rgb(0 0 0 / 0.18);
+}
+
 @media print {
   .trd-spreadsheet-root {
     break-inside: avoid;
+  }
+
+  .trd-spreadsheet-scroll {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .trd-spreadsheet-sticky-head,
+  .trd-spreadsheet-sticky-head th {
+    position: static;
   }
 
   .trd-spreadsheet-table {

@@ -2254,7 +2254,7 @@ watch(
                   <strong>Guardar asociación</strong>. Luego defina reglas en la pestaña <strong>Reglas</strong>.
                 </p>
               </div>
-              <div v-else class="overflow-x-auto rounded-md">
+              <div v-else class="rounded-md">
                 <ArchivalTrdSpreadsheetView
                   :data="previewSpreadsheetData"
                   :version-badge="previewSpreadsheetBadge"
