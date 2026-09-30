@@ -1,33 +1,65 @@
 <script setup lang="ts">
 import type { ArchivalFileTreeNode } from '~/types/archival-file'
+import type { ArchivalAreaFolderExpansion } from '~/utils/archival-area-repository'
 import {
+  archivalAreaNodeContainsId,
   archivalAreaNodeIcon,
   isArchivalAreaFolderNode,
 } from '~/utils/archival-area-repository'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   node: ArchivalFileTreeNode
   selectedId: string
   depth?: number
-}>()
+  expansion?: ArchivalAreaFolderExpansion
+  expansionTick?: number
+}>(), {
+  depth: 0,
+  expansion: 'default',
+  expansionTick: 0,
+})
 
 const emit = defineEmits<{
   select: [node: ArchivalFileTreeNode]
 }>()
 
-const depth = computed(() => props.depth ?? 0)
 const isFolder = computed(() => isArchivalAreaFolderNode(props.node))
 const isSelected = computed(() => props.node.id === props.selectedId)
 const hasFolderChildren = computed(() =>
   (props.node.children ?? []).some(child => isArchivalAreaFolderNode(child)),
 )
-const expanded = ref(depth.value < 2 || isSelected.value)
 
-watch(isSelected, (selected) => {
-  if (selected) {
-    expanded.value = true
+function defaultExpanded(): boolean {
+  if (props.expansion === 'all') {
+    return true
   }
-})
+
+  const onSelectedPath = archivalAreaNodeContainsId(props.node, props.selectedId)
+
+  if (props.expansion === 'collapsed') {
+    return props.depth === 0 || (onSelectedPath && !isSelected.value)
+  }
+
+  return props.depth < 2 || onSelectedPath
+}
+
+const expanded = ref(defaultExpanded())
+
+watch(
+  () => [props.expansion, props.expansionTick] as const,
+  () => {
+    expanded.value = defaultExpanded()
+  },
+)
+
+watch(
+  () => props.selectedId,
+  () => {
+    if (archivalAreaNodeContainsId(props.node, props.selectedId) && !isSelected.value) {
+      expanded.value = true
+    }
+  },
+)
 
 function handleSelect() {
   emit('select', props.node)
@@ -50,6 +82,8 @@ function toggleExpanded(event: Event) {
         v-if="hasFolderChildren"
         type="button"
         class="text-muted-foreground"
+        :aria-expanded="expanded"
+        :aria-label="expanded ? 'Contraer carpeta' : 'Expandir carpeta'"
         @click="toggleExpanded"
       >
         <Icon
@@ -79,6 +113,8 @@ function toggleExpanded(event: Event) {
         :node="child"
         :selected-id="selectedId"
         :depth="depth + 1"
+        :expansion="expansion"
+        :expansion-tick="expansionTick"
         @select="emit('select', $event)"
       />
     </div>

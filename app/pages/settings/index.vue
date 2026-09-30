@@ -1,8 +1,9 @@
 <script setup lang="ts">
-/**
- * Ruta histórica: /admin → /settings
- */
-await navigateTo('/settings/profile', { replace: true })
+definePageMeta({
+  middleware: [
+    () => navigateTo('/settings/profile', { replace: true }),
+  ],
+})
 </script>
 
 <template>

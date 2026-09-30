@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { ArchivalFileTreeNode } from '~/types/archival-file'
+import type { ArchivalFileTreeNode, ArchivalPhaseTarget } from '~/types/archival-file'
+import { ARCHIVAL_PHASE_TARGET_LABELS } from '~/types/archival-file'
 import { filterArchivalAreaTreeToFoldersWithDocuments } from '~/utils/archival-area-repository'
 
 definePageMeta({
@@ -17,6 +18,13 @@ const orgUnitId = ref<string | undefined>(undefined)
 const loading = ref(false)
 const tree = ref<ArchivalFileTreeNode | null>(null)
 const showAllTrdFolders = ref(true)
+const archive = ref<Extract<ArchivalPhaseTarget, 'management' | 'central' | 'historical'>>('management')
+
+const archiveOptions = [
+  { value: 'management' as const, label: ARCHIVAL_PHASE_TARGET_LABELS.management },
+  { value: 'central' as const, label: ARCHIVAL_PHASE_TARGET_LABELS.central },
+  { value: 'historical' as const, label: ARCHIVAL_PHASE_TARGET_LABELS.historical },
+]
 
 const displayTree = computed(() => {
   if (!tree.value) {
@@ -59,7 +67,7 @@ async function loadRepository() {
   loading.value = true
 
   try {
-    tree.value = await archivalApi.fetchAreaRepository(selectedOrgUnitNumericId.value)
+    tree.value = await archivalApi.fetchAreaRepository(selectedOrgUnitNumericId.value, archive.value)
   }
   catch {
     toast.error('No se pudo cargar el repositorio del área.')
@@ -67,6 +75,13 @@ async function loadRepository() {
   }
   finally {
     loading.value = false
+  }
+}
+
+function onArchiveChange(value: unknown) {
+  if (value === 'central' || value === 'historical' || value === 'management') {
+    archive.value = value
+    void loadRepository()
   }
 }
 
@@ -89,7 +104,11 @@ onMounted(async () => {
           Repositorio por área
         </h1>
         <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Navegue por carpetas TRD (área, serie, subserie, tipo documental) y consulte los documentos en paralelo.
+          {{ archive === 'management'
+            ? 'Archivo de gestión: documentos vigentes del área. Tras el plazo de retención en gestión, el expediente se traslada al archivo central (y luego al histórico) desde el detalle del expediente.'
+            : archive === 'central'
+              ? 'Archivo central: expedientes ya trasladados desde gestión. Consulta y descarga; no se cargan documentos nuevos aquí.'
+              : 'Archivo histórico: expedientes con valor permanente. Consulta y descarga; no se cargan documentos nuevos aquí.' }}
         </p>
       </div>
     </div>
@@ -110,6 +129,23 @@ onMounted(async () => {
                   :value="String(unit.id)"
                 >
                   {{ unit.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="flex flex-col justify-end gap-2">
+            <Label>Archivo</Label>
+            <Select :model-value="archive" @update:model-value="onArchiveChange">
+              <SelectTrigger class="h-9 w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="option in archiveOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -152,6 +188,7 @@ onMounted(async () => {
           :tree="displayTree"
           :org-unit-id="selectedOrgUnitNumericId ?? 0"
           :loading="loading"
+          :allow-upload="archive === 'management'"
           @uploaded="loadRepository"
         />
       </CardContent>

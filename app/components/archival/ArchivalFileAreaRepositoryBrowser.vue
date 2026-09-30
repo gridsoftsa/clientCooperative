@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ArchivalFileTreeNode } from '~/types/archival-file'
+import type { ArchivalAreaFolderExpansion } from '~/utils/archival-area-repository'
 import {
   archivalAreaDocumentRecordId,
   archivalAreaNodeIcon,
@@ -8,6 +9,7 @@ import {
   canViewArchivalAreaDocument,
   countArchivalAreaDescendants,
   filterArchivalAreaChildren,
+  filterArchivalAreaChildrenByUploadedDate,
   findArchivalTreeNode,
   findArchivalTreePath,
   partitionArchivalAreaChildren,
@@ -15,11 +17,15 @@ import {
 import { toast } from 'vue-sonner'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   tree: ArchivalFileTreeNode | null
   orgUnitId: number
   loading?: boolean
-}>()
+  allowUpload?: boolean
+}>(), {
+  loading: false,
+  allowUpload: true,
+})
 
 const emit = defineEmits<{
   uploaded: []
@@ -40,6 +46,11 @@ const viewingDocumentId = ref<string | null>(null)
 const selectedNodeId = ref('')
 const selectedDocument = ref<ArchivalFileTreeNode | null>(null)
 const searchQuery = ref('')
+const filterDateFrom = ref('')
+const filterDateTo = ref('')
+const navCollapsed = ref(false)
+const folderExpansion = ref<ArchivalAreaFolderExpansion>('default')
+const folderExpansionTick = ref(0)
 
 const canDownload = computed(() => hasPermission('expedientes_documentos_descargar'))
 
@@ -63,8 +74,34 @@ const breadcrumb = computed(() => {
 
 const partitionedChildren = computed(() => {
   const children = currentNode.value?.children ?? []
+  const byDate = filterArchivalAreaChildrenByUploadedDate(
+    children,
+    filterDateFrom.value,
+    filterDateTo.value,
+  )
 
-  return partitionArchivalAreaChildren(filterArchivalAreaChildren(children, searchQuery.value))
+  return partitionArchivalAreaChildren(filterArchivalAreaChildren(byDate, searchQuery.value))
+})
+
+const visibleChildrenCount = computed(() =>
+  partitionedChildren.value.folders.length
+  + partitionedChildren.value.documents.length
+  + partitionedChildren.value.files.length,
+)
+
+const hasDateFilter = computed(() =>
+  Boolean(filterDateFrom.value?.trim() || filterDateTo.value?.trim()),
+)
+
+function clearDateFilter() {
+  filterDateFrom.value = ''
+  filterDateTo.value = ''
+}
+
+watch([filterDateFrom, filterDateTo], ([from, to]) => {
+  if (from?.trim() && to?.trim() && from > to) {
+    toast.error('La fecha inicial no puede ser posterior a la fecha final')
+  }
 })
 
 const currentDocTypeId = computed(() => {
@@ -87,9 +124,16 @@ watch(
     selectedNodeId.value = tree?.id ?? ''
     selectedDocument.value = null
     searchQuery.value = ''
+    folderExpansion.value = 'default'
+    folderExpansionTick.value = 0
   },
   { immediate: true },
 )
+
+function setFolderExpansion(mode: ArchivalAreaFolderExpansion) {
+  folderExpansion.value = mode
+  folderExpansionTick.value += 1
+}
 
 function selectFolder(node: ArchivalFileTreeNode) {
   selectedNodeId.value = node.id
@@ -165,13 +209,39 @@ function formatBytes(size?: number): string {
       Seleccione un área para consultar su documentación.
     </div>
 
-    <ResizablePanelGroup
+    <div
       v-else
-      id="archival-area-repository"
-      direction="horizontal"
-      class="min-h-[32rem]"
+      class="flex min-h-[32rem]"
     >
+      <aside
+        v-if="navCollapsed"
+        class="flex w-16 shrink-0 flex-col items-center border-r bg-muted/20 py-3"
+      >
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          class="size-12"
+          title="Mostrar carpetas TRD"
+          aria-label="Mostrar carpetas TRD"
+          @click="navCollapsed = false"
+        >
+          <Icon name="i-lucide-panel-left-open" class="size-6" />
+        </Button>
+        <span
+          class="mt-4 origin-center rotate-180 text-xs font-semibold uppercase tracking-wide text-muted-foreground [writing-mode:vertical-rl]"
+        >
+          Carpetas TRD
+        </span>
+      </aside>
+
+      <ResizablePanelGroup
+        id="archival-area-repository"
+        direction="horizontal"
+        class="min-h-[32rem] min-w-0 flex-1"
+      >
       <ResizablePanel
+        v-if="!navCollapsed"
         id="archival-area-nav"
         :default-size="28"
         :min-size="20"
@@ -180,27 +250,68 @@ function formatBytes(size?: number): string {
       >
         <div class="flex h-full flex-col">
           <div class="border-b px-3 py-3">
-            <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Carpetas TRD
-            </p>
-            <p class="mt-1 text-sm font-medium">
-              {{ tree.name }}
-            </p>
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0">
+                <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Carpetas TRD
+                </p>
+                <p class="mt-1 truncate text-sm font-medium" :title="tree.name">
+                  {{ tree.name }}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                class="size-11 shrink-0"
+                title="Ocultar menú de carpetas"
+                aria-label="Ocultar menú de carpetas"
+                @click="navCollapsed = true"
+              >
+                <Icon name="i-lucide-panel-left-close" class="size-5" />
+              </Button>
+            </div>
+            <div class="mt-2 flex flex-wrap gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="h-8 px-2.5 text-xs"
+                title="Mostrar solo series"
+                @click="setFolderExpansion('collapsed')"
+              >
+                <Icon name="i-lucide-chevrons-up-down" class="mr-1 size-4" />
+                Contraer
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                class="h-8 px-2.5 text-xs"
+                title="Abrir todas las carpetas"
+                @click="setFolderExpansion('all')"
+              >
+                <Icon name="i-lucide-chevrons-down-up" class="mr-1 size-4" />
+                Expandir
+              </Button>
+            </div>
           </div>
 
           <div class="flex-1 overflow-y-auto p-2">
             <ArchivalFileAreaFolderNav
               :node="tree"
               :selected-id="currentNode?.id ?? tree.id"
+              :expansion="folderExpansion"
+              :expansion-tick="folderExpansionTick"
               @select="selectFolder"
             />
           </div>
         </div>
       </ResizablePanel>
 
-      <ResizableHandle with-handle />
+      <ResizableHandle v-if="!navCollapsed" with-handle />
 
-      <ResizablePanel id="archival-area-content" :default-size="72" :min-size="45">
+      <ResizablePanel id="archival-area-content" :default-size="navCollapsed ? 100 : 72" :min-size="45">
         <div class="flex h-full min-h-[32rem] flex-col">
           <div class="space-y-3 border-b px-4 py-3">
             <div class="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
@@ -221,18 +332,40 @@ function formatBytes(size?: number): string {
               </template>
             </div>
 
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 class="text-lg font-semibold tracking-tight">
-                  {{ currentNode?.name }}
-                </h2>
-                <p class="text-sm text-muted-foreground">
-                  {{ archivalAreaNodeTypeLabel(currentNode!) }}
-                  · {{ (currentNode?.children?.length ?? 0) }} elementos en esta carpeta
-                </p>
-              </div>
+            <div class="min-w-0 space-y-1">
+              <h2
+                class="truncate text-lg font-semibold tracking-tight"
+                :title="currentNode?.name"
+              >
+                {{ currentNode?.name }}
+              </h2>
+              <p class="truncate text-sm text-muted-foreground">
+                {{ archivalAreaNodeTypeLabel(currentNode!) }}
+                · {{ visibleChildrenCount }} elementos en esta carpeta
+              </p>
+            </div>
 
-              <div class="relative w-full max-w-xs">
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
+              <div class="min-w-[14rem] max-w-md flex-1">
+                <DateRangeStringPicker
+                  id="area-repo-date-range"
+                  v-model:from="filterDateFrom"
+                  v-model:to="filterDateTo"
+                  placeholder-text="Fecha de carga"
+                  compact
+                  full-width
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                class="h-9 shrink-0"
+                :disabled="!hasDateFilter"
+                @click="clearDateFilter"
+              >
+                Limpiar fechas
+              </Button>
+              <div class="relative min-w-[12rem] max-w-xs flex-1">
                 <Icon name="i-lucide-search" class="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                 <Input
                   v-model="searchQuery"
@@ -241,6 +374,9 @@ function formatBytes(size?: number): string {
                 />
               </div>
             </div>
+            <p class="text-xs text-muted-foreground">
+              Fechas y búsqueda aplican solo a esta carpeta (fecha de carga del documento).
+            </p>
           </div>
 
           <div class="flex-1 overflow-y-auto p-4">
@@ -331,12 +467,25 @@ function formatBytes(size?: number): string {
                           <Badge v-if="!canViewArchivalAreaDocument(document)" variant="secondary" class="text-xs">
                             Restringido
                           </Badge>
+                          <Badge
+                            v-if="document.retention?.label"
+                            :variant="document.retention.transfer_status === 'due' ? 'destructive' : 'secondary'"
+                            class="text-xs"
+                          >
+                            {{ document.retention.label }}
+                          </Badge>
                         </div>
                         <p class="mt-2 text-xs text-muted-foreground">
                           {{ formatBytes(document.size_bytes) }}
                           <span v-if="document.uploaded_at">
                             · {{ new Date(document.uploaded_at).toLocaleDateString('es-CO') }}
                           </span>
+                        </p>
+                        <p
+                          v-if="document.retention?.management_ends_at"
+                          class="mt-1 text-xs text-muted-foreground"
+                        >
+                          Archivo de gestión hasta {{ document.retention.management_ends_at }}
                         </p>
                       </div>
                     </div>
@@ -398,7 +547,7 @@ function formatBytes(size?: number): string {
           </div>
 
           <div
-            v-if="selectedDocument && selectedFileId"
+            v-if="selectedDocument && selectedFileId && allowUpload"
             class="border-t bg-muted/20 p-4"
           >
             <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -425,6 +574,7 @@ function formatBytes(size?: number): string {
         </div>
       </ResizablePanel>
     </ResizablePanelGroup>
+    </div>
     <DocumentInlinePreviewDialog
       v-model:open="inlinePreviewOpen"
       :title="inlinePreviewTitle"

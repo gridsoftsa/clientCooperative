@@ -16,3 +16,8 @@ export const ARCHIVAL_DISPOSITION_TYPE_OPTIONS = [
   { value: 'full_conservation', label: 'Conservación total' },
   { value: 'selection', label: 'Selección' },
 ] as const
+
+export const ARCHIVAL_TRANSFER_KIND_OPTIONS = [
+  { value: 'primary', label: 'Primaria (gestión → central)' },
+  { value: 'secondary', label: 'Secundaria (central → histórico)' },
+] as const

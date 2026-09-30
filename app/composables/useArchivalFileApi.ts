@@ -211,10 +211,24 @@ export function useArchivalFileApi() {
     })
   }
 
-  async function fetchAreaRepository(orgUnitId: number) {
-    const res = await api<{ data: ArchivalFileTreeNode }>('/archival-files/area/repository', {
-      query: { org_unit_id: orgUnitId },
-    })
+  async function fetchAreaRepository(
+    orgUnitId: number,
+    archive: 'management' | 'central' | 'historical' = 'management',
+    dates?: { createdFrom?: string, createdTo?: string },
+  ) {
+    const query: Record<string, string | number> = { org_unit_id: orgUnitId, archive }
+    const createdFrom = dates?.createdFrom?.trim()
+    const createdTo = dates?.createdTo?.trim()
+
+    if (createdFrom) {
+      query.created_from = createdFrom
+    }
+
+    if (createdTo) {
+      query.created_to = createdTo
+    }
+
+    const res = await api<{ data: ArchivalFileTreeNode }>('/archival-files/area/repository', { query })
 
     return res.data
   }

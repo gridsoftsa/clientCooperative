@@ -302,6 +302,16 @@ export const navMenu: NavMenu[] = [
             anyPermission: ['trd_ciclo_vida_ver', 'trd_tablas_ver', 'trd_catalogo_ver'],
           },
           {
+            title: 'Transferencias',
+            link: '/settings/archival/transfers',
+            anyPermission: ['trd_ciclo_vida_ver', 'trd_tablas_ver', 'trd_catalogo_ver'],
+          },
+          {
+            title: 'Ubicación TRD del acta',
+            link: '/settings/archival/transfers/trd-filing',
+            anyPermission: ['trd_tablas_editar', 'trd_tablas_ver', 'trd_catalogo_ver'],
+          },
+          {
             title: 'Disposición final',
             link: '/settings/archival/disposition',
             anyPermission: ['trd_disposicion_ver', 'trd_tablas_ver', 'trd_catalogo_ver'],

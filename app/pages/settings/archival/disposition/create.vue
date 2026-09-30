@@ -61,6 +61,17 @@ watch(orgUnitId, () => {
   loadEligible()
 })
 
+function toggleDoc(id: number) {
+  const currentId = Number(id)
+
+  if (selectedDocIds.value.includes(currentId)) {
+    selectedDocIds.value = selectedDocIds.value.filter(docId => docId !== currentId)
+    return
+  }
+
+  selectedDocIds.value = [...selectedDocIds.value, currentId]
+}
+
 onMounted(async () => {
   await loadUnits()
   await loadEligible()
@@ -134,23 +145,17 @@ onMounted(async () => {
             <p v-if="!eligibleDocs.length" class="text-xs text-muted-foreground">
               No hay documentos en central/histórico con plazo cumplido para el área seleccionada.
             </p>
-            <div v-else class="max-h-48 overflow-y-auto space-y-2 rounded border p-3">
-              <label
+            <div v-else class="flex max-h-48 flex-col gap-2 overflow-y-auto rounded border p-3">
+              <Checkbox
                 v-for="doc in eligibleDocs"
                 :key="doc.id"
-                class="flex items-start gap-2 text-sm cursor-pointer"
+                :checked="selectedDocIds.includes(Number(doc.id))"
+                @update:checked="toggleDoc(doc.id)"
               >
-                <Checkbox
-                  :model-value="selectedDocIds.includes(doc.id)"
-                  @update:model-value="(v: boolean) => {
-                    if (v) selectedDocIds.push(doc.id)
-                    else selectedDocIds = selectedDocIds.filter(id => id !== doc.id)
-                  }"
-                />
-                <span>
+                <span class="text-left">
                   #{{ doc.id }} {{ doc.credit_application_code }} — {{ doc.title }}
                 </span>
-              </label>
+              </Checkbox>
             </div>
           </div>
 

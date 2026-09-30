@@ -72,7 +72,7 @@ const showModalTheme = ref(false)
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem as-child>
-              <NuxtLink to="/settings" @click="setOpenMobile(false)">
+              <NuxtLink to="/settings/profile" @click="setOpenMobile(false)">
                 <Icon name="i-lucide-settings" />
                 Configuración
               </NuxtLink>

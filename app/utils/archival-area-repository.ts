@@ -121,6 +121,12 @@ export function findArchivalTreeNode(
   return path?.at(-1) ?? null
 }
 
+export type ArchivalAreaFolderExpansion = 'default' | 'all' | 'collapsed'
+
+export function archivalAreaNodeContainsId(node: ArchivalFileTreeNode, targetId: string): boolean {
+  return findArchivalTreePath(node, targetId) !== null
+}
+
 export function partitionArchivalAreaChildren(children: ArchivalFileTreeNode[]): {
   folders: ArchivalFileTreeNode[]
   documents: ArchivalFileTreeNode[]
@@ -213,5 +219,78 @@ export function filterArchivalAreaChildren(
       .toLowerCase()
 
     return haystack.includes(normalized)
+  })
+}
+
+function archivalAreaNodeUploadedIsoDate(node: ArchivalFileTreeNode): string | null {
+  const raw = node.uploaded_at?.trim()
+  if (!raw) {
+    return null
+  }
+
+  return raw.slice(0, 10)
+}
+
+function archivalAreaNodeMatchesUploadedDateRange(
+  node: ArchivalFileTreeNode,
+  from: string,
+  to: string,
+): boolean {
+  const uploaded = archivalAreaNodeUploadedIsoDate(node)
+  if (!uploaded) {
+    return false
+  }
+
+  if (from && uploaded < from) {
+    return false
+  }
+
+  if (to && uploaded > to) {
+    return false
+  }
+
+  return true
+}
+
+function archivalAreaFolderHasDocumentInUploadedDateRange(
+  node: ArchivalFileTreeNode,
+  from: string,
+  to: string,
+): boolean {
+  if (isArchivalAreaDocumentNode(node)) {
+    return archivalAreaNodeMatchesUploadedDateRange(node, from, to)
+  }
+
+  return (node.children ?? []).some(child =>
+    archivalAreaFolderHasDocumentInUploadedDateRange(child, from, to),
+  )
+}
+
+export function filterArchivalAreaChildrenByUploadedDate(
+  children: ArchivalFileTreeNode[],
+  from: string,
+  to: string,
+): ArchivalFileTreeNode[] {
+  const start = from.trim()
+  const end = to.trim()
+
+  if (!start && !end) {
+    return children
+  }
+
+  if (start && end && start > end) {
+    return children
+  }
+
+  return children.filter((child) => {
+    if (isArchivalAreaDocumentNode(child)) {
+      return archivalAreaNodeMatchesUploadedDateRange(child, start, end)
+    }
+
+    if (child.type === 'filing') {
+      return archivalAreaFolderHasDocumentInUploadedDateRange(child, start, end)
+    }
+
+    return true
   })
 }

@@ -107,11 +107,17 @@ onMounted(async () => {
           <h2 class="text-2xl font-bold tracking-tight">
             Ciclo de vida documental
           </h2>
-          <p class="text-muted-foreground max-w-3xl text-sm leading-relaxed">
-            Documentos de radicación clasificados con TRD: gestión → central → histórico y disposición final según tiempos del snapshot de retención.
+          <p class="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+            Aquí se listan documentos de <strong class="font-medium text-foreground">radicación de crédito</strong> con TRD.
+            Los expedientes electrónicos (repositorio por área) se transfieren con
+            <NuxtLink class="underline" to="/settings/archival/transfers">actas de transferencia</NuxtLink>:
+            inventario, aprobación y luego ejecución. Esta pantalla no sustituye el acta.
           </p>
         </div>
         <div class="flex flex-wrap gap-2">
+          <Button variant="outline" @click="router.push('/settings/archival/transfers')">
+            Actas de transferencia
+          </Button>
           <Button variant="outline" @click="router.push('/settings/archival/disposition')">
             Actas de disposición
           </Button>

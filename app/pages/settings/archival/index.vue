@@ -141,6 +141,23 @@ const router = useRouter()
           </CardContent>
         </Card>
 
+        <Card class="cursor-pointer transition-colors hover:bg-muted/40" @click="router.push('/settings/archival/transfers')">
+          <CardHeader>
+            <CardTitle class="text-base">
+              Actas de transferencia
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
+              Transferencia primaria y secundaria de expedientes. Configure serie/subserie/tipo del PDF por área;
+              cada usuario solo elabora actas de su área designada.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="secondary" @click.stop="router.push('/settings/archival/transfers')">
+              Ver actas
+            </Button>
+          </CardContent>
+        </Card>
+
         <Card class="cursor-pointer transition-colors hover:bg-muted/40" @click="router.push('/settings/archival/disposition')">
           <CardHeader>
             <CardTitle class="text-base">

@@ -148,6 +148,22 @@ export interface ArchivalFile {
   consolidated_at?: string | null
 }
 
+export interface ArchivalDocumentRetentionSummary {
+  years_management: number
+  years_central: number
+  years_historical: number | null
+  origin_date: string
+  management_ends_at: string | null
+  central_ends_at: string | null
+  historical_ends_at: string | null
+  next_archive: 'central' | 'historical' | null
+  next_archive_label: string | null
+  transfer_status: 'upcoming' | 'due' | null
+  days_left: number | null
+  ends_at: string | null
+  label: string | null
+}
+
 export interface ArchivalFileTreeNode {
   id: string
   type: 'file' | 'child_file' | 'folder' | 'document' | 'document_reference' | 'area' | 'series' | 'subseries' | 'document_type' | 'filing'
@@ -185,6 +201,7 @@ export interface ArchivalFileTreeNode {
   workflow_stage_key?: string | null
   can_view_content?: boolean
   can_download_content?: boolean
+  retention?: ArchivalDocumentRetentionSummary | null
 }
 
 export interface ArchivalFileDocumentVersion {
