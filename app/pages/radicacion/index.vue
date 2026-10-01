@@ -69,24 +69,36 @@ function verRadicacionListPrefersDocumentActionsIcon(app: { status?: string, doc
   return false
 }
 const isAnalista = computed(() => hasRole('analista'))
+const statusDatePermissions = [
+  'radicacion_analisis_ver',
+  'radicacion_analisis_guardar',
+  'radicacion_documentos_decidir',
+  'radicacion_director_credito_decidir',
+]
 const showStatusEntryDates = computed(() =>
-  hasAnyRole(['super_admin', 'auxiliar_credito', 'revision_documentos', 'analista', 'director_credito']),
+  hasAnyRole(['super_admin', 'admin', 'auxiliar_credito', 'revision_documentos', 'analista', 'director_credito'])
+  || hasAnyPermission(statusDatePermissions),
 )
 const sortKey = ref('created_at')
 const sortDir = ref<'asc' | 'desc'>('desc')
 
 function applyRoleDefaultSort(): void {
-  if (hasRole('director_credito')) {
+  if (!showStatusEntryDates.value || hasAnyRole(['super_admin', 'admin'])) {
+    sortKey.value = 'created_at'
+    sortDir.value = 'desc'
+    return
+  }
+  if (hasRole('director_credito') || hasPermission('radicacion_director_credito_decidir')) {
     sortKey.value = 'Credit_Director_Review'
     sortDir.value = 'asc'
     return
   }
-  if (hasRole('analista')) {
+  if (hasRole('analista') || hasRole('auxiliar_credito') || hasAnyPermission(['radicacion_analisis_ver', 'radicacion_analisis_guardar'])) {
     sortKey.value = 'In_Analysis'
     sortDir.value = 'asc'
     return
   }
-  if (hasRole('revision_documentos') || hasRole('auxiliar_credito')) {
+  if (hasRole('revision_documentos') || hasPermission('radicacion_documentos_decidir')) {
     sortKey.value = 'Documentation_Review'
     sortDir.value = 'asc'
   }
