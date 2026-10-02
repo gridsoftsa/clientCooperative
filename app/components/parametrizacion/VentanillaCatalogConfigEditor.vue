@@ -15,6 +15,7 @@ type FunctionalDraft = {
   is_active: boolean
   show_in_public_form: boolean
   public_org_unit_id: number | null
+  public_org_unit_ids: number[]
   archival_file_type_id: string
   _clientId?: string
   _isNew?: boolean
@@ -62,6 +63,38 @@ const helperText = computed(() =>
 
 const NONE_ARCHIVAL_FILE_TYPE = 'none'
 
+const archivalFileTypeOptions = computed(() => [
+  { value: NONE_ARCHIVAL_FILE_TYPE, label: 'Sin expediente' },
+  ...props.archivalFileTypes.map(type => ({
+    value: String(type.id),
+    label: type.name,
+  })),
+])
+
+function onArchivalFileTypeChange(row: FunctionalDraft, value: string | number | null | undefined): void {
+  if (value == null || value === '') {
+    row.archival_file_type_id = NONE_ARCHIVAL_FILE_TYPE
+    return
+  }
+
+  row.archival_file_type_id = String(value)
+}
+
+const orgUnitSelectOptions = computed(() =>
+  props.orgUnits.map(unit => ({
+    value: unit.id,
+    label: `${unit.code} — ${unit.name}`,
+  })),
+)
+
+function responsibleOrgUnitIdsFromRow(row: VentanillaFunctionalTypeRow): number[] {
+  if (Array.isArray(row.public_org_unit_ids) && row.public_org_unit_ids.length > 0) {
+    return row.public_org_unit_ids.map(id => Number(id)).filter(id => Number.isFinite(id))
+  }
+
+  return row.public_org_unit_id != null ? [Number(row.public_org_unit_id)] : []
+}
+
 function slugFromLabel(label: string): string {
   const base = label
     .trim()
@@ -93,6 +126,7 @@ function cloneFunctional(rows: VentanillaFunctionalTypeRow[]): FunctionalDraft[]
       sort_order: String(row.sort_order ?? 0),
       is_active: row.is_active === undefined ? true : coerceBoolean(row.is_active),
       show_in_public_form: row.show_in_public_form === undefined ? true : coerceBoolean(row.show_in_public_form),
+      public_org_unit_ids: responsibleOrgUnitIdsFromRow(row),
       public_org_unit_id: row.public_org_unit_id != null ? Number(row.public_org_unit_id) : null,
       archival_file_type_id: row.archival_file_type_id != null
         ? String(row.archival_file_type_id)
@@ -182,6 +216,7 @@ function addFunctionalRow() {
     sort_order: String(maxOrder + 10),
     is_active: true,
     show_in_public_form: true,
+    public_org_unit_ids: [],
     public_org_unit_id: null,
     archival_file_type_id: NONE_ARCHIVAL_FILE_TYPE,
     _clientId: `new-${Date.now()}`,
@@ -295,9 +330,10 @@ function responseShort(row: FunctionalDraft): string {
 
 function audienceShort(row: FunctionalDraft): string {
   const audience = row.show_in_public_form ? 'Formulario público' : 'Solo personal'
-  const unit = props.orgUnits.find(item => item.id === row.public_org_unit_id)
+  const units = props.orgUnits.filter(item => row.public_org_unit_ids.includes(item.id))
+  const names = units.map(unit => unit.name).join(', ')
 
-  return unit ? `${audience} · ${unit.name}` : audience
+  return names ? `${audience} · ${names}` : audience
 }
 
 function validateAndSave() {
@@ -312,8 +348,8 @@ function validateAndSave() {
         toast.error('Cada tipo funcional debe tener etiqueta.')
         return
       }
-      if (row.public_org_unit_id == null) {
-        toast.error(`«${row.label.trim()}» necesita un área encargada.`)
+      if (row.public_org_unit_ids.length === 0) {
+        toast.error(`«${row.label.trim()}» necesita al menos un área encargada.`)
         return
       }
       const typeKey = validateFunctionalKey(row)
@@ -525,23 +561,15 @@ watch(
                 placeholder="Días"
               />
             </div>
-            <Select v-model="row.archival_file_type_id">
-              <SelectTrigger class="h-9 w-full">
-                <SelectValue placeholder="Sin expediente" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem :value="NONE_ARCHIVAL_FILE_TYPE">
-                  Sin expediente
-                </SelectItem>
-                <SelectItem
-                  v-for="fileType in archivalFileTypes"
-                  :key="fileType.id"
-                  :value="String(fileType.id)"
-                >
-                  {{ fileType.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <ArchivalSingleMultiselect
+              :id="`functional-file-type-${row._clientId || functionalRowKey(row)}`"
+              :model-value="row.archival_file_type_id"
+              :options="archivalFileTypeOptions"
+              placeholder="Buscar tipo de expediente…"
+              no-options-text="Sin tipos de expediente"
+              no-results-text="Sin coincidencias"
+              @update:model-value="onArchivalFileTypeChange(row, $event)"
+            />
             <label class="flex items-center gap-2 text-sm whitespace-nowrap">
               <Checkbox v-model="row.show_in_public_form" bare />
               Público
@@ -569,26 +597,18 @@ watch(
               <Icon name="i-lucide-trash-2" class="size-4" />
             </Button>
             <div class="space-y-1.5 lg:col-span-full">
-              <Label>Área encargada *</Label>
-              <Select
-                :model-value="row.public_org_unit_id != null ? String(row.public_org_unit_id) : undefined"
-                @update:model-value="row.public_org_unit_id = $event ? Number($event) : null"
-              >
-                <SelectTrigger class="h-9 w-full max-w-md">
-                  <SelectValue placeholder="Seleccione el área" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem
-                    v-for="unit in orgUnits"
-                    :key="unit.id"
-                    :value="String(unit.id)"
-                  >
-                    {{ unit.code }} — {{ unit.name }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Áreas encargadas *</Label>
+              <ArchivalMultiMultiselect
+                :id="`functional-org-units-${row._clientId || functionalRowKey(row)}`"
+                v-model="row.public_org_unit_ids"
+                coerce-number
+                :options="orgUnitSelectOptions"
+                placeholder="Buscar y seleccionar una o varias áreas…"
+                no-options-text="No hay áreas"
+                no-results-text="Sin coincidencias"
+              />
               <p class="text-xs text-muted-foreground">
-                Área encargada de este tipo. Si el tipo es público, el radicado del formulario queda aquí y el encargado del área es el responsable.
+                Puede elegir varias. Si el tipo es público, el radicado del formulario público queda en la primera área de la lista y el encargado de esa área es el responsable.
               </p>
             </div>
           </div>

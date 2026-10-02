@@ -27,7 +27,7 @@ function onCreated(type: ArchivalFileType) {
           Nuevo tipo de expediente
         </h1>
         <p class="max-w-3xl text-sm text-muted-foreground">
-          Defina el nombre y el modelo del tipo. La clave técnica se asigna sola al guardar. Las áreas productoras se agregan después, una a una.
+          Defina el nombre y el modelo del tipo. La clave técnica se asigna sola al guardar. Las áreas productoras se agregan después, una a una. El metadato al adjuntar documentos no se elige aquí.
         </p>
       </div>
       <Button variant="outline" class="shrink-0" @click="router.push('/expedientes/tipos')">
@@ -39,7 +39,7 @@ function onCreated(type: ArchivalFileType) {
       <CardHeader>
         <CardTitle>Datos generales</CardTitle>
         <CardDescription>
-          Información del tipo y esquema de metadatos.
+          Información del tipo. El metadato de documentos se configura en cada tipo documental del catálogo.
         </CardDescription>
       </CardHeader>
       <CardContent class="p-4 md:p-6">

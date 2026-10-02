@@ -147,7 +147,7 @@ onMounted(loadSeries)
               id="code"
               v-model="form.code"
               :prefix="seriesCodePrefix"
-              maxlength="64"
+              :maxlength="64"
               placeholder="02"
             />
             <p v-if="series" class="text-xs text-muted-foreground leading-relaxed">

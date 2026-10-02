@@ -27,6 +27,7 @@ export interface VentanillaFunctionalTypeRow {
   is_active?: boolean
   show_in_public_form?: boolean
   public_org_unit_id?: number | null
+  public_org_unit_ids?: number[]
   public_org_unit?: { id: number, name: string, code?: string } | null
   public_manager_user_id?: number | null
   sort_order?: number

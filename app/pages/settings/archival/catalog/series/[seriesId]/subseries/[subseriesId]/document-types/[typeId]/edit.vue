@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import CatalogConfidentialityFields from '~/components/archival/CatalogConfidentialityFields.vue'
+import CatalogDocumentTypeContentMetadataCard from '~/components/archival/CatalogDocumentTypeContentMetadataCard.vue'
 import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
 import {
   parseAllowedSupport,
@@ -64,6 +65,8 @@ const loadedConfidentiality = ref<CatalogConfidentialityPayload | null>(null)
 const subseriesCodePrefix = computed(() => subseries.value?.code ?? '')
 
 const restrictionsOnly = computed(() => isCatalogRestrictionsOnlyQuery(route.query))
+
+const highlightMetadata = computed(() => route.query.paso === 'metadatos')
 
 const canManageRestrictions = computed(() => hasPermission('trd_restrictions_manage'))
 
@@ -159,6 +162,17 @@ async function submit() {
 }
 
 onMounted(load)
+
+function onContentMetadataUpdated(value: import('~/types/archival-catalog').DocDocumentTypeContentMetadata): void {
+  if (!typeRow.value) {
+    return
+  }
+
+  typeRow.value = {
+    ...typeRow.value,
+    content_metadata: value,
+  }
+}
 </script>
 
 <template>
@@ -200,7 +214,7 @@ onMounted(load)
             <CatalogPrefixedCodeInput
               v-model="form.code"
               :prefix="subseriesCodePrefix"
-              maxlength="64"
+              :maxlength="64"
               placeholder="Sufijo de tipo"
             />
             <p class="text-xs text-muted-foreground leading-relaxed">
@@ -238,6 +252,13 @@ onMounted(load)
             ref="confidentialityFields"
             subject-type="document_type"
             :confidentiality="loadedConfidentiality"
+          />
+          <CatalogDocumentTypeContentMetadataCard
+            v-if="typeRow"
+            :document-type-id="typeRow.id"
+            :content-metadata="typeRow.content_metadata"
+            :highlight="highlightMetadata"
+            @updated="onContentMetadataUpdated"
           />
           <div class="flex justify-end gap-2">
             <Button variant="outline" @click="router.push(cancelPath())">

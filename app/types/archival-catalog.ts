@@ -55,6 +55,25 @@ export interface DocSubseriesRow {
   in_published_trd?: boolean
 }
 
+export interface DocDocumentTypeContentMetadataField {
+  id?: number
+  code: string
+  name: string
+  data_type: string
+  is_required?: boolean
+  is_searchable?: boolean
+  is_reportable?: boolean
+  is_ocr_extractable?: boolean
+  is_reusable?: boolean
+}
+
+export interface DocDocumentTypeContentMetadata {
+  status: 'none' | 'draft' | 'active' | string
+  fields_count: number
+  active?: { id: number, status: string, fields?: DocDocumentTypeContentMetadataField[] } | null
+  draft?: { id: number, status: string, fields?: DocDocumentTypeContentMetadataField[] } | null
+}
+
 export interface DocDocumentTypeRow {
   id: number
   doc_subseries_id: number
@@ -66,6 +85,7 @@ export interface DocDocumentTypeRow {
   subseries?: Pick<DocSubseriesRow, 'id' | 'code' | 'name' | 'doc_series_id'>
   confidentiality?: CatalogConfidentialityPayload
   in_published_trd?: boolean
+  content_metadata?: DocDocumentTypeContentMetadata
 }
 
 export interface ArchivalCatalogListMeta {

@@ -50,9 +50,16 @@ const effectiveTypeKey = computed(() => {
 
 const filteredMetadataSchemas = computed(() => {
   const typeKey = effectiveTypeKey.value
+  const currentId = form.archival_metadata_schema_id
+    ? Number(form.archival_metadata_schema_id)
+    : null
 
   return metadataSchemas.value.filter((schema) => {
-    if (schema.status !== 'active') {
+    if (currentId !== null && schema.id === currentId) {
+      return true
+    }
+
+    if (schema.status !== 'active' || schema.application_level !== 'file_type') {
       return false
     }
 
@@ -79,7 +86,10 @@ async function loadCatalogs() {
   loading.value = true
 
   try {
-    metadataSchemas.value = await metaApi.fetchSchemas()
+    metadataSchemas.value = await metaApi.fetchSchemas({
+      application_level: 'file_type',
+      status: 'active',
+    })
     applyInitial(props.initial)
   }
   catch {
@@ -196,16 +206,19 @@ onMounted(() => loadCatalogs())
         </div>
 
         <div class="space-y-2">
-          <Label>Esquema de metadatos</Label>
+          <Label>Metadato del expediente</Label>
           <Select
-            :model-value="form.archival_metadata_schema_id || undefined"
+            :model-value="form.archival_metadata_schema_id || '__none__'"
             :disabled="saving"
-            @update:model-value="form.archival_metadata_schema_id = $event ? String($event) : ''"
+            @update:model-value="form.archival_metadata_schema_id = $event && $event !== '__none__' ? String($event) : ''"
           >
             <SelectTrigger class="w-full">
-              <SelectValue placeholder="Opcional" />
+              <SelectValue placeholder="Sin metadato de expediente" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="__none__">
+                Sin metadato de expediente
+              </SelectItem>
               <SelectItem
                 v-for="schema in filteredMetadataSchemas"
                 :key="schema.id"
@@ -216,6 +229,13 @@ onMounted(() => loadCatalogs())
               </SelectItem>
             </SelectContent>
           </Select>
+          <p class="text-xs text-muted-foreground leading-relaxed">
+            Déjelo vacío en el caso habitual. Esto es solo para datos del
+            <span class="font-medium text-foreground">expediente</span>
+            (carpeta). El metadato al adjuntar un archivo (NIT, número, periodo, etc.) se define en cada
+            <span class="font-medium text-foreground">tipo documental</span>
+            del catálogo TRD.
+          </p>
         </div>
 
         <div class="space-y-2">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import Multiselect from '@vueform/multiselect'
 import { toast } from 'vue-sonner'
+import CatalogPublishedRestrictionsButton from '~/components/archival/CatalogPublishedRestrictionsButton.vue'
 import type { DocSeriesRow } from '~/types/archival-catalog'
 
 definePageMeta({

@@ -11,6 +11,7 @@ import {
   configuredProducerAreasForFunctionalType,
   clearInvalidOrgUnitSelectionsForFunctionalType,
   filterOrgUnitsByFunctionalTypeAreas,
+  responsibleOrgUnitIdsForFunctionalType,
 } from '~/utils/ventanilla-functional-type-areas'
 import type {
   VentanillaCatalogData,
@@ -101,16 +102,20 @@ const publicAreaAssignment = computed(() => {
     return null
   }
 
-  const orgUnitId = selectedFunctionalType.value.public_org_unit_id
-  if (orgUnitId == null) {
+  const ids = responsibleOrgUnitIdsForFunctionalType(selectedFunctionalType.value)
+  if (ids.length !== 1) {
     return null
   }
 
   return {
-    orgUnitId,
+    orgUnitId: ids[0] ?? 0,
     managerUserId: selectedFunctionalType.value.public_manager_user_id ?? null,
   }
 })
+
+const hasMultipleFunctionalTypeAreas = computed(() =>
+  responsibleOrgUnitIdsForFunctionalType(selectedFunctionalType.value).length > 1,
+)
 
 function withPublicAreaOption(options: OrgUnitOption[]): OrgUnitOption[] {
   const assignment = publicAreaAssignment.value
@@ -430,6 +435,9 @@ async function discardIntake(): Promise<void> {
       </p>
       <p v-if="publicAreaAssignment" class="text-muted-foreground text-xs">
         Este tipo público asigna el área encargada y a su encargado como responsable.
+      </p>
+      <p v-else-if="hasMultipleFunctionalTypeAreas" class="text-muted-foreground text-xs">
+        Este tipo tiene varias áreas encargadas. Seleccione cuál atiende el radicado; la TRD se carga de esa área.
       </p>
 
       <div class="grid gap-4 md:grid-cols-2">

@@ -36,6 +36,7 @@ import {
   configuredProducerAreasForFunctionalType,
   clearInvalidOrgUnitSelectionsForFunctionalType,
   filterOrgUnitsByFunctionalTypeAreas,
+  responsibleOrgUnitIdsForFunctionalType,
 } from '~/utils/ventanilla-functional-type-areas'
 
 interface VentanillaOrgUnitOption {
@@ -188,7 +189,7 @@ const recipientStaffChoices = computed(() => {
       value: Number(s.id),
       label: staffOptionLabel(s),
     }))
-  const manager = functionalTypeManagerStaff.value
+  const manager = managerStaffForOrgUnit(recipientOrgUnitId.value)
   if (manager && !choices.some(choice => choice.value === Number(manager.id))) {
     choices.unshift({
       value: Number(manager.id),
@@ -300,6 +301,28 @@ function assignmentOrgUnitId(staff: OrgStaffListItem | null | undefined): number
   return Number(unitId)
 }
 
+function managerStaffForOrgUnit(unitId: number | null): OrgStaffListItem | null {
+  if (unitId == null) {
+    return null
+  }
+
+  const unit = orgUnits.value.find(item => item.id === unitId)
+  if (unit?.manager_staff_id != null) {
+    const byStaffId = staffOptions.value.find(staff => Number(staff.id) === Number(unit.manager_staff_id))
+    if (byStaffId) {
+      return byStaffId
+    }
+  }
+
+  const managerUserId = selectedFunctionalType.value?.public_manager_user_id
+  const lockedId = functionalTypeDestinationOrgUnitId.value
+  if (managerUserId != null && lockedId === unitId) {
+    return staffOptions.value.find(staff => Number(staff.user_id ?? staff.user?.id) === Number(managerUserId)) ?? null
+  }
+
+  return null
+}
+
 function normalizeStaffRow(staff: OrgStaffListItem): OrgStaffListItem {
   const raw = staff as OrgStaffListItem & { currentAssignment?: Record<string, unknown> | null }
   const assignment = (staff.current_assignment ?? raw.currentAssignment ?? null) as {
@@ -354,21 +377,33 @@ const senderAreaHasManager = computed(() => {
   return unit?.manager_staff_id != null
 })
 
-const functionalTypeDestinationOrgUnitId = computed(() =>
-  selectedFunctionalType.value?.public_org_unit_id ?? null,
+const functionalTypeResponsibleOrgUnitIds = computed(() =>
+  responsibleOrgUnitIdsForFunctionalType(selectedFunctionalType.value),
 )
 
-const functionalTypeManagerStaff = computed(() => {
-  const destinationId = functionalTypeDestinationOrgUnitId.value
-  const managerUserId = selectedFunctionalType.value?.public_manager_user_id
-  if (destinationId == null || managerUserId == null) {
+const hasMultipleFunctionalTypeAreas = computed(() =>
+  functionalTypeResponsibleOrgUnitIds.value.length > 1,
+)
+
+const locksFunctionalTypeRecipientArea = computed(() =>
+  functionalTypeResponsibleOrgUnitIds.value.length === 1 && filingType.value !== 'outgoing',
+)
+
+const functionalTypeDestinationOrgUnitId = computed(() => {
+  if (!locksFunctionalTypeRecipientArea.value) {
     return null
   }
 
-  return staffOptions.value.find(staff =>
-    Number(staff.user_id ?? staff.user?.id) === Number(managerUserId),
-  ) ?? null
+  return functionalTypeResponsibleOrgUnitIds.value[0] ?? null
 })
+
+const functionalTypeManagerStaff = computed(() =>
+  managerStaffForOrgUnit(
+    locksFunctionalTypeRecipientArea.value
+      ? functionalTypeDestinationOrgUnitId.value
+      : recipientOrgUnitId.value,
+  ),
+)
 
 const applyingInternalDefaults = ref(false)
 let lastAutoSubject = ''
@@ -631,23 +666,38 @@ function applyInternalSender(): void {
   applyingInternalDefaults.value = false
 }
 
-function applyFunctionalTypeRecipient(): void {
-  const destinationId = functionalTypeDestinationOrgUnitId.value
-  if (destinationId == null) {
-    recipientOrgUnitId.value = null
+function applyManagerToRecipient(unitId: number | null): void {
+  if (filingType.value === 'outgoing') {
     return
   }
 
-  applyingInternalDefaults.value = true
-  recipientOrgUnitId.value = destinationId
-  const managerStaff = functionalTypeManagerStaff.value
-  if (managerStaff && filingType.value !== 'outgoing') {
-    recipientStaffId.value = Number(managerStaff.id)
+  const managerStaff = managerStaffForOrgUnit(unitId)
+  if (!managerStaff) {
+    return
   }
-  if (managerStaff) {
-    applyStaffToPartyFields(managerStaff, recipientName, recipientIdentifier)
+
+  recipientStaffId.value = Number(managerStaff.id)
+  applyStaffToPartyFields(managerStaff, recipientName, recipientIdentifier)
+}
+
+function applyFunctionalTypeRecipient(): void {
+  if (filingType.value === 'outgoing') {
+    return
   }
-  applyingInternalDefaults.value = false
+
+  const ids = functionalTypeResponsibleOrgUnitIds.value
+  if (ids.length === 1) {
+    const destinationId = ids[0] ?? null
+    applyingInternalDefaults.value = true
+    recipientOrgUnitId.value = destinationId
+    applyManagerToRecipient(destinationId)
+    applyingInternalDefaults.value = false
+    return
+  }
+
+  if (ids.length > 1 && recipientOrgUnitId.value != null && !ids.includes(recipientOrgUnitId.value)) {
+    recipientOrgUnitId.value = null
+  }
 }
 
 watch(functionalTypeKey, () => {
@@ -706,6 +756,7 @@ watch(recipientOrgUnitId, () => {
 
   recipientStaffId.value = null
   applyStaffToPartyFields(null, recipientName, recipientIdentifier)
+  applyManagerToRecipient(recipientOrgUnitId.value)
 }, { flush: 'sync' })
 
 watch(responsibleOrgUnitId, async (orgUnitId) => {
@@ -1191,6 +1242,12 @@ async function submit() {
               no-results-text="Sin coincidencias"
               :class="multiselectErrorClass('producer_org_unit')"
             />
+            <p
+              v-if="hasMultipleFunctionalTypeAreas && filingType === 'outgoing'"
+              class="text-xs text-muted-foreground"
+            >
+              Este tipo tiene varias áreas encargadas. Elija cuál emite el radicado; la TRD se carga de esa área.
+            </p>
           </div>
           <div class="min-w-0 space-y-2" :class="filingType === 'incoming' ? 'md:col-span-2' : ''">
             <Label>Remitente *</Label>
@@ -1220,23 +1277,29 @@ async function submit() {
             />
           </div>
           <div class="space-y-2">
-            <Label>Área destinataria *</Label>
+            <Label>{{ hasMultipleFunctionalTypeAreas && filingType !== 'outgoing' ? 'Área encargada *' : 'Área destinataria *' }}</Label>
             <Multiselect
               id="ventanilla_recipient_org_unit"
               v-model="recipientOrgUnitId"
               mode="single"
               :object="false"
-              :disabled="functionalTypeDestinationOrgUnitId != null"
+              :disabled="locksFunctionalTypeRecipientArea"
               :options="orgUnitSelectOptions"
               value-prop="value"
               label="label"
               :searchable="true"
-              :can-clear="true"
-              placeholder="Seleccione área"
+              :can-clear="!locksFunctionalTypeRecipientArea"
+              :placeholder="hasMultipleFunctionalTypeAreas ? 'Seleccione el área encargada' : 'Seleccione área'"
               no-options-text="Sin áreas disponibles"
               no-results-text="Sin coincidencias"
               :class="multiselectErrorClass('recipient_org_unit')"
             />
+            <p
+              v-if="hasMultipleFunctionalTypeAreas && filingType !== 'outgoing'"
+              class="text-xs text-muted-foreground"
+            >
+              Este tipo tiene varias áreas encargadas. Elija cuál atiende este radicado; la TRD y el destinatario se cargan de esa área.
+            </p>
           </div>
           <div class="min-w-0 space-y-2">
             <Label>Destinatario *</Label>
@@ -1272,16 +1335,22 @@ async function submit() {
             Su usuario no tiene un funcionario activo con área asignada. Seleccione el área y el remitente.
           </p>
           <p
-            v-else-if="filingType !== 'outgoing' && functionalTypeKey && functionalTypeDestinationOrgUnitId == null"
+            v-else-if="filingType !== 'outgoing' && functionalTypeKey && functionalTypeResponsibleOrgUnitIds.length === 0"
             class="text-sm text-muted-foreground md:col-span-2"
           >
             Este tipo no tiene área encargada. Seleccione el área destinataria.
           </p>
           <p
-            v-else-if="functionalTypeDestinationOrgUnitId != null && !functionalTypeManagerStaff"
+            v-else-if="locksFunctionalTypeRecipientArea && !functionalTypeManagerStaff"
             class="text-sm text-muted-foreground md:col-span-2"
           >
             El área encargada no tiene un responsable con usuario activo. Seleccione el destinatario.
+          </p>
+          <p
+            v-else-if="hasMultipleFunctionalTypeAreas && recipientOrgUnitId && !managerStaffForOrgUnit(recipientOrgUnitId)"
+            class="text-sm text-muted-foreground md:col-span-2"
+          >
+            El área seleccionada no tiene un responsable con usuario activo. Seleccione el destinatario.
           </p>
           <Collapsible v-model:open="optionalDetailsOpen" class="md:col-span-2">
             <CollapsibleTrigger as-child>

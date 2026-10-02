@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import CatalogConfidentialityFields from '~/components/archival/CatalogConfidentialityFields.vue'
+import CatalogDocumentTypeContentMetadataCard from '~/components/archival/CatalogDocumentTypeContentMetadataCard.vue'
 import CatalogPrefixedCodeInput from '~/components/CatalogPrefixedCodeInput.vue'
 import {
   serializeAllowedSupport,
@@ -50,6 +51,10 @@ const confidentialityFields = ref<{
     confidentiality_level?: import('~/types/archival-catalog').DocumentConfidentialityLevel
     grants?: import('~/types/archival-catalog').ClassificationAccessGrantRow[]
   }
+} | null>(null)
+const contentMetadataCard = ref<{
+  ensureDraftValid: () => Promise<boolean>
+  persistForDocumentType: (documentTypeId: number, activate: boolean) => Promise<boolean>
 } | null>(null)
 const codeShowErrors = ref(false)
 const codeInvalid = ref(false)
@@ -128,6 +133,10 @@ async function submit() {
     return
   }
 
+  if (contentMetadataCard.value && !await contentMetadataCard.value.ensureDraftValid()) {
+    return
+  }
+
   saving.value = true
   try {
     const code = codeSuffix.value
@@ -143,12 +152,20 @@ async function submit() {
       },
     })
     await catalogApi.persistClassification(confidentialityFields.value, 'document_type', created.data.id)
-    toast.success('Tipo documental creado')
-    await catalogApi.navigateAfterCatalogSave(
-      router,
-      route,
-      catalogApi.documentTypesListPath(seriesId.value, subseriesId.value),
-    )
+    if (contentMetadataCard.value) {
+      await contentMetadataCard.value.persistForDocumentType(created.data.id, true)
+    }
+    toast.success('Tipo documental creado.')
+    const metadataPath = catalogApi.documentTypeEditPath(seriesId.value, subseriesId.value, created.data.id)
+    const returnTo = catalogApi.returnToPath(route)
+    if (returnTo) {
+      await router.push({
+        path: metadataPath,
+        query: { return_to: returnTo, paso: 'metadatos' },
+      })
+      return
+    }
+    await router.push({ path: metadataPath, query: { paso: 'metadatos' } })
   } catch (e: any) {
     toast.error(e?.message && !e?.data ? e.message : (e?.data?.message || 'No se pudo crear el tipo documental'))
   } finally {
@@ -200,7 +217,7 @@ onMounted(loadSubseries)
               ref="codeInputRef"
               v-model="form.code"
               :prefix="subseriesCodePrefix"
-              maxlength="64"
+              :maxlength="64"
               placeholder="01"
               required
               :show-errors="codeShowErrors"
@@ -241,6 +258,11 @@ onMounted(loadSubseries)
           <CatalogConfidentialityFields
             ref="confidentialityFields"
             subject-type="document_type"
+          />
+          <CatalogDocumentTypeContentMetadataCard
+            ref="contentMetadataCard"
+            persist-with-parent
+            highlight
           />
           <div class="flex gap-2 justify-end">
             <Button type="button" variant="outline" @click="router.back()">

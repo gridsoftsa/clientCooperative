@@ -1,9 +1,52 @@
 import type { VentanillaFunctionalTypeProducerArea, VentanillaFunctionalTypeRow } from '~/types/ventanilla'
 
+export function responsibleOrgUnitIdsForFunctionalType(
+  functionalType: VentanillaFunctionalTypeRow | null | undefined,
+): number[] {
+  const ids: number[] = []
+
+  for (const raw of functionalType?.public_org_unit_ids ?? []) {
+    const id = Number(raw)
+    if (Number.isFinite(id) && id > 0 && !ids.includes(id)) {
+      ids.push(id)
+    }
+  }
+
+  if (ids.length === 0 && functionalType?.public_org_unit_id != null) {
+    const single = Number(functionalType.public_org_unit_id)
+    if (Number.isFinite(single) && single > 0) {
+      ids.push(single)
+    }
+  }
+
+  for (const area of functionalType?.producer_areas ?? []) {
+    const id = Number(area.org_unit_id)
+    if (Number.isFinite(id) && id > 0 && !ids.includes(id)) {
+      ids.push(id)
+    }
+  }
+
+  return ids
+}
+
 export function configuredProducerAreasForFunctionalType(
   functionalType: VentanillaFunctionalTypeRow | null | undefined,
 ): VentanillaFunctionalTypeProducerArea[] {
-  return (functionalType?.producer_areas ?? []).filter(area => area.org_unit_id)
+  const byId = new Map<number, VentanillaFunctionalTypeProducerArea>()
+
+  for (const area of functionalType?.producer_areas ?? []) {
+    if (area.org_unit_id) {
+      byId.set(Number(area.org_unit_id), area)
+    }
+  }
+
+  for (const orgUnitId of responsibleOrgUnitIdsForFunctionalType(functionalType)) {
+    if (!byId.has(orgUnitId)) {
+      byId.set(orgUnitId, { org_unit_id: orgUnitId })
+    }
+  }
+
+  return [...byId.values()]
 }
 
 export function filterOrgUnitsByFunctionalTypeAreas<T extends { id: number }>(

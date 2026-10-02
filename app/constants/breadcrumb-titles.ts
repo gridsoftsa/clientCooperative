@@ -184,6 +184,14 @@ export function buildPathBreadcrumbLinks(path: string): PathBreadcrumbLink[] {
       continue
     }
 
+    if (item === 'catalog') {
+      crumbs.push({
+        title: getBreadcrumbSegmentTitle(item),
+        href: '/settings/archival/catalog/series',
+      })
+      continue
+    }
+
     crumbs.push({
       title: getBreadcrumbSegmentTitle(item),
       href: `/${segments.slice(0, i + 1).join('/')}`,

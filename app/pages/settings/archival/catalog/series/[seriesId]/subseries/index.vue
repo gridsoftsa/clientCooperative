@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import CatalogPublishedRestrictionsButton from '~/components/archival/CatalogPublishedRestrictionsButton.vue'
 import type { DocSeriesRow, DocSubseriesRow } from '~/types/archival-catalog'
 
 definePageMeta({

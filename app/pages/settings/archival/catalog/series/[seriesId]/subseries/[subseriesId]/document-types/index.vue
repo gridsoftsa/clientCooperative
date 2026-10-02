@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import { formatAllowedSupportLabels } from '~/constants/archival-document-support'
+import CatalogPublishedRestrictionsButton from '~/components/archival/CatalogPublishedRestrictionsButton.vue'
 import type { DocDocumentTypeRow, DocSeriesRow, DocSubseriesRow } from '~/types/archival-catalog'
 
 definePageMeta({
@@ -158,6 +159,7 @@ onMounted(load)
                   <TableHead>Nombre</TableHead>
                   <TableHead>Soporte</TableHead>
                   <TableHead>Estado</TableHead>
+                  <TableHead>Metadato</TableHead>
                   <TableHead class="text-right">
                     Acciones
                   </TableHead>
@@ -176,6 +178,17 @@ onMounted(load)
                     <Badge :variant="r.is_active ? 'default' : 'secondary'">
                       {{ r.is_active ? 'Activo' : 'Inactivo' }}
                     </Badge>
+                  </TableCell>
+                  <TableCell class="text-xs text-muted-foreground">
+                    <template v-if="r.content_metadata?.status === 'active'">
+                      {{ r.content_metadata.fields_count }} campo(s)
+                    </template>
+                    <template v-else-if="r.content_metadata?.status === 'draft'">
+                      Borrador
+                    </template>
+                    <template v-else>
+                      Solo TRD
+                    </template>
                   </TableCell>
                   <TableCell class="text-right !whitespace-normal">
                     <div class="flex flex-wrap justify-end gap-1">
