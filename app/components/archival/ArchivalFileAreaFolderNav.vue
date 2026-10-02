@@ -3,6 +3,7 @@ import type { ArchivalFileTreeNode } from '~/types/archival-file'
 import type { ArchivalAreaFolderExpansion } from '~/utils/archival-area-repository'
 import {
   archivalAreaNodeContainsId,
+  archivalAreaNodeHasOverdueTransfer,
   archivalAreaNodeIcon,
   isArchivalAreaFolderNode,
 } from '~/utils/archival-area-repository'
@@ -25,9 +26,24 @@ const emit = defineEmits<{
 
 const isFolder = computed(() => isArchivalAreaFolderNode(props.node))
 const isSelected = computed(() => props.node.id === props.selectedId)
+const hasOverdueTransfer = computed(() => archivalAreaNodeHasOverdueTransfer(props.node))
 const hasFolderChildren = computed(() =>
   (props.node.children ?? []).some(child => isArchivalAreaFolderNode(child)),
 )
+
+const navRowClass = computed(() => {
+  if (isSelected.value) {
+    return hasOverdueTransfer.value
+      ? 'bg-primary/10 font-medium text-primary ring-1 ring-inset ring-rose-400/50'
+      : 'bg-primary/10 font-medium text-primary'
+  }
+
+  if (hasOverdueTransfer.value) {
+    return 'bg-rose-500/10 font-medium text-rose-800 hover:bg-rose-500/15 dark:text-rose-200'
+  }
+
+  return 'text-foreground hover:bg-muted/70'
+})
 
 function defaultExpanded(): boolean {
   if (props.expansion === 'all') {
@@ -74,9 +90,10 @@ function toggleExpanded(event: Event) {
 <template>
   <div>
     <div
-      class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/70"
-      :class="isSelected ? 'bg-primary/10 text-primary font-medium' : 'text-foreground'"
+      class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors"
+      :class="navRowClass"
       :style="{ paddingLeft: `${depth * 12 + 8}px` }"
+      :title="hasOverdueTransfer ? 'Hay documentos con plazo de retención cumplido y sin transferencia.' : undefined"
     >
       <button
         v-if="hasFolderChildren"
@@ -100,7 +117,8 @@ function toggleExpanded(event: Event) {
       >
         <Icon
           :name="archivalAreaNodeIcon(node, expanded && isFolder)"
-          class="size-4 shrink-0 text-muted-foreground"
+          class="size-4 shrink-0"
+          :class="hasOverdueTransfer ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'"
         />
         <span class="truncate">{{ node.name }}</span>
       </button>

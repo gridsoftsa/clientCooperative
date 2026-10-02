@@ -9,6 +9,7 @@ export const ARCHIVAL_DISPOSITION_ACT_STATUS_LABELS: Record<string, string> = {
   draft: 'Borrador',
   approved: 'Aprobada',
   executed: 'Ejecutada',
+  cancelled: 'Anulada',
 }
 
 export const ARCHIVAL_DISPOSITION_TYPE_OPTIONS = [

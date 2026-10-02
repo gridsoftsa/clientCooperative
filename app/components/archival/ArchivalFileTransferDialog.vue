@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { ArchivalFileAlertType, ArchivalPhaseTarget } from '~/types/archival-file'
+import type { ArchivalDocumentSelectionDecision, ArchivalFileAlertType, ArchivalFileTreeNode, ArchivalPhaseTarget } from '~/types/archival-file'
 import { ARCHIVAL_PHASE_TARGET_LABELS } from '~/types/archival-file'
+import type { ArchivalTransferDocumentSelectionRow } from '~/composables/useArchivalLifecycleApi'
 import { messageFromFetchError } from '~/utils/http-error-message'
 
 const props = defineProps<{
@@ -22,8 +23,11 @@ const emit = defineEmits<{
 const archivalApi = useArchivalFileApi()
 
 const saving = ref(false)
+const loadingDocuments = ref(false)
 const targetPhase = ref<ArchivalPhaseTarget>('central')
 const reason = ref('')
+const selectionDocuments = ref<ArchivalTransferDocumentSelectionRow[]>([])
+const selectionDecisions = ref<Record<number, ArchivalDocumentSelectionDecision>>({})
 
 const phaseOptions = computed(() => {
   const phase = props.eligibleNextPhase
@@ -37,14 +41,26 @@ const phaseOptions = computed(() => {
   }]
 })
 
-const isSubmitDisabled = computed(() =>
-  saving.value
-  || !props.eligibleNextPhase
-  || props.canTransferToNextPhase === false,
+const pendingSelection = computed(() =>
+  selectionDocuments.value.filter(document => document.requires_selection),
 )
 
-watch(() => props.open, (isOpen) => {
+const missingSelection = computed(() =>
+  pendingSelection.value.some(document => !selectionDecisions.value[document.id]),
+)
+
+const isSubmitDisabled = computed(() =>
+  saving.value
+  || loadingDocuments.value
+  || !props.eligibleNextPhase
+  || props.canTransferToNextPhase === false
+  || missingSelection.value,
+)
+
+watch(() => props.open, async (isOpen) => {
   if (!isOpen) {
+    selectionDocuments.value = []
+    selectionDecisions.value = {}
     return
   }
 
@@ -53,7 +69,54 @@ watch(() => props.open, (isOpen) => {
     ?? inferPhaseFromAlert(props.alertType)
     ?? 'central'
   reason.value = defaultReason(props.alertType)
+  await loadSelectionDocuments()
 })
+
+function flattenTreeDocuments(node: ArchivalFileTreeNode | null): ArchivalFileTreeNode[] {
+  if (!node) {
+    return []
+  }
+
+  const self = node.type === 'document' || node.type === 'document_reference' ? [node] : []
+
+  return [...self, ...(node.children ?? []).flatMap(child => flattenTreeDocuments(child))]
+}
+
+async function loadSelectionDocuments() {
+  loadingDocuments.value = true
+  try {
+    const tree = await archivalApi.fetchTree(props.fileId)
+    selectionDocuments.value = flattenTreeDocuments(tree).flatMap((node) => {
+      if (node.archival_file_document_id == null) {
+        return []
+      }
+
+      return [{
+        id: node.archival_file_document_id,
+        title: node.name,
+        doc_document_type_name: node.doc_document_type_name ?? null,
+        final_disposition: node.retention?.final_disposition ?? null,
+        final_disposition_label: node.retention?.final_disposition_label ?? null,
+        inherited_from_label: node.retention?.inherited_from_label ?? null,
+        requires_selection: node.retention?.requires_selection === true,
+        selection_decision: node.retention?.selection_decision ?? null,
+      }]
+    })
+    selectionDecisions.value = Object.fromEntries(
+      selectionDocuments.value
+        .filter((document): document is ArchivalTransferDocumentSelectionRow & { selection_decision: ArchivalDocumentSelectionDecision } =>
+          document.selection_decision === 'conservation' || document.selection_decision === 'elimination',
+        )
+        .map(document => [document.id, document.selection_decision]),
+    )
+  }
+  catch {
+    selectionDocuments.value = []
+  }
+  finally {
+    loadingDocuments.value = false
+  }
+}
 
 function inferPhaseFromAlert(alertType?: ArchivalFileAlertType | string | null): ArchivalPhaseTarget | null {
   switch (alertType) {
@@ -91,6 +154,10 @@ async function handleSubmit() {
     const res = await archivalApi.transferFile(props.fileId, {
       target_phase: targetPhase.value,
       reason: reason.value.trim() || null,
+      document_selection_decisions: pendingSelection.value.map(document => ({
+        archival_file_document_id: document.id,
+        decision: selectionDecisions.value[document.id],
+      })).filter((row): row is { archival_file_document_id: number, decision: ArchivalDocumentSelectionDecision } => Boolean(row.decision)),
     })
     toast.success(res.message)
     emit('update:open', false)
@@ -107,7 +174,7 @@ async function handleSubmit() {
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="sm:max-w-md">
+    <DialogContent class="sm:max-w-lg">
       <DialogHeader>
         <DialogTitle>Transferir expediente</DialogTitle>
         <DialogDescription>
@@ -150,6 +217,15 @@ async function handleSubmit() {
             Solo se muestra la fase siguiente válida para este expediente.
           </p>
         </div>
+
+        <p v-if="loadingDocuments" class="text-xs text-muted-foreground">
+          Cargando documentos del expediente…
+        </p>
+        <ArchivalDocumentSelectionChoices
+          v-else
+          v-model="selectionDecisions"
+          :documents="selectionDocuments"
+        />
 
         <div class="space-y-2">
           <Label for="transfer-reason">Motivo (opcional)</Label>

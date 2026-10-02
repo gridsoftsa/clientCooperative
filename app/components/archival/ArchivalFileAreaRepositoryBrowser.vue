@@ -3,6 +3,7 @@ import type { ArchivalFileTreeNode } from '~/types/archival-file'
 import type { ArchivalAreaFolderExpansion } from '~/utils/archival-area-repository'
 import {
   archivalAreaDocumentRecordId,
+  archivalAreaNodeHasOverdueTransfer,
   archivalAreaNodeIcon,
   archivalAreaNodeTypeLabel,
   canOpenArchivalAreaDocument,
@@ -142,6 +143,34 @@ function selectFolder(node: ArchivalFileTreeNode) {
 
 function openFolder(node: ArchivalFileTreeNode) {
   selectFolder(node)
+}
+
+function folderHasOverdueTransfer(folder: ArchivalFileTreeNode): boolean {
+  return archivalAreaNodeHasOverdueTransfer(folder)
+}
+
+function folderCardClass(folder: ArchivalFileTreeNode): string {
+  if (folderHasOverdueTransfer(folder)) {
+    return 'border-rose-400/70 bg-rose-500/5 hover:border-rose-500/80 hover:bg-rose-500/10'
+  }
+
+  return 'bg-background hover:border-primary/40 hover:bg-muted/30'
+}
+
+function folderIconWrapClass(folder: ArchivalFileTreeNode): string {
+  if (folderHasOverdueTransfer(folder)) {
+    return 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+  }
+
+  return 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+}
+
+function folderOverdueHint(folder: ArchivalFileTreeNode): string | undefined {
+  if (!folderHasOverdueTransfer(folder)) {
+    return undefined
+  }
+
+  return 'Hay documentos con plazo de retención cumplido y sin transferencia.'
 }
 
 function selectDocument(node: ArchivalFileTreeNode) {
@@ -399,12 +428,17 @@ function formatBytes(size?: number): string {
                     v-for="folder in partitionedChildren.folders"
                     :key="folder.id"
                     type="button"
-                    class="group rounded-xl border bg-background p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/30"
+                    class="group min-w-0 overflow-hidden rounded-xl border p-4 text-left transition-colors"
+                    :class="folderCardClass(folder)"
+                    :title="folderOverdueHint(folder)"
                     @click="openFolder(folder)"
                     @dblclick="openFolder(folder)"
                   >
                     <div class="flex items-start gap-3">
-                      <div class="rounded-lg bg-amber-500/10 p-2 text-amber-700 dark:text-amber-300">
+                      <div
+                        class="rounded-lg p-2"
+                        :class="folderIconWrapClass(folder)"
+                      >
                         <Icon :name="archivalAreaNodeIcon(folder)" class="size-5" />
                       </div>
                       <div class="min-w-0 flex-1">
@@ -420,6 +454,12 @@ function formatBytes(size?: number): string {
                           <span v-if="countArchivalAreaDescendants(folder) > (folder.children?.length ?? 0)">
                             · {{ countArchivalAreaDescendants(folder) }} en total
                           </span>
+                        </p>
+                        <p
+                          v-if="folderHasOverdueTransfer(folder)"
+                          class="mt-2 text-xs font-medium text-rose-700 dark:text-rose-300"
+                        >
+                          Transferencia pendiente
                         </p>
                       </div>
                       <Icon
@@ -439,7 +479,7 @@ function formatBytes(size?: number): string {
                   <div
                     v-for="document in partitionedChildren.documents"
                     :key="document.id"
-                    class="rounded-xl border bg-background p-4 transition-colors"
+                    class="min-w-0 overflow-hidden rounded-xl border bg-background p-4 transition-colors"
                     :class="selectedDocument?.id === document.id ? 'border-primary ring-1 ring-primary/30' : 'hover:border-primary/30'"
                     @click="selectDocument(document)"
                   >
@@ -475,6 +515,15 @@ function formatBytes(size?: number): string {
                             {{ document.retention.label }}
                           </Badge>
                         </div>
+                        <p
+                          v-if="document.retention?.final_disposition_label"
+                          class="mt-2 text-xs leading-snug text-muted-foreground wrap-break-word"
+                        >
+                          {{ document.retention.final_disposition_label }}
+                          <template v-if="document.retention.inherited_from_label">
+                            · {{ document.retention.inherited_from_label }}
+                          </template>
+                        </p>
                         <p class="mt-2 text-xs text-muted-foreground">
                           {{ formatBytes(document.size_bytes) }}
                           <span v-if="document.uploaded_at">

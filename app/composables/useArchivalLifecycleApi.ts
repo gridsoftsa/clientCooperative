@@ -61,7 +61,22 @@ export interface ArchivalTransferActRow {
     closed_at?: string | null
     archival_management_ends_at?: string | null
     archival_central_ends_at?: string | null
+    documents?: ArchivalTransferDocumentSelectionRow[]
   }>
+}
+
+export interface ArchivalTransferDocumentSelectionRow {
+  id: number
+  title: string
+  original_name?: string | null
+  mime_type?: string | null
+  doc_document_type_name?: string | null
+  final_disposition?: string | null
+  final_disposition_label?: string | null
+  inherited_from_label?: string | null
+  requires_selection: boolean
+  selection_decision?: string | null
+  selection_decision_label?: string | null
 }
 
 export interface ArchivalTransferActTrdSettingRow {
@@ -85,6 +100,7 @@ export interface ArchivalTransferEligibleFileRow {
   archival_management_ends_at?: string | null
   archival_central_ends_at?: string | null
   eligible_next_phase?: string | null
+  documents?: ArchivalTransferDocumentSelectionRow[]
 }
 
 export interface ArchivalDispositionActRow {
@@ -225,6 +241,27 @@ export function useArchivalLifecycleApi() {
     )
   }
 
+  async function updateTransferAct(actId: number, body: Record<string, unknown>) {
+    return await $api<{ data: ArchivalTransferActRow, message?: string }>(
+      `/archival/transfer-acts/${actId}`,
+      { method: 'PUT', body },
+    )
+  }
+
+  async function cancelTransferAct(actId: number) {
+    return await $api<{ data: ArchivalTransferActRow, message?: string }>(
+      `/archival/transfer-acts/${actId}/cancel`,
+      { method: 'POST' },
+    )
+  }
+
+  async function deleteTransferAct(actId: number) {
+    return await $api<{ message?: string }>(
+      `/archival/transfer-acts/${actId}`,
+      { method: 'DELETE' },
+    )
+  }
+
   async function approveTransferAct(actId: number) {
     return await $api<{ data: ArchivalTransferActRow, message?: string }>(
       `/archival/transfer-acts/${actId}/approve`,
@@ -294,6 +331,9 @@ export function useArchivalLifecycleApi() {
     fetchTransferActTrdSettings,
     saveTransferActTrdSetting,
     createTransferAct,
+    updateTransferAct,
+    cancelTransferAct,
+    deleteTransferAct,
     approveTransferAct,
     executeTransferAct,
     fetchTransferActPdfBlob,

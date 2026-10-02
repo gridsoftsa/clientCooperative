@@ -148,6 +148,8 @@ export interface ArchivalFile {
   consolidated_at?: string | null
 }
 
+export type ArchivalDocumentSelectionDecision = 'conservation' | 'elimination'
+
 export interface ArchivalDocumentRetentionSummary {
   years_management: number
   years_central: number
@@ -162,6 +164,13 @@ export interface ArchivalDocumentRetentionSummary {
   days_left: number | null
   ends_at: string | null
   label: string | null
+  final_disposition?: string | null
+  final_disposition_label?: string | null
+  inherited_from?: string | null
+  inherited_from_label?: string | null
+  requires_selection?: boolean
+  selection_decision?: ArchivalDocumentSelectionDecision | null
+  selection_decision_label?: string | null
 }
 
 export interface ArchivalFileTreeNode {

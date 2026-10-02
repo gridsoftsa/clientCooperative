@@ -176,6 +176,14 @@ export function archivalAreaNodeHasDocuments(node: ArchivalFileTreeNode): boolea
   return (node.children ?? []).some(child => archivalAreaNodeHasDocuments(child))
 }
 
+export function archivalAreaNodeHasOverdueTransfer(node: ArchivalFileTreeNode): boolean {
+  if (isArchivalAreaDocumentNode(node)) {
+    return node.retention?.transfer_status === 'due'
+  }
+
+  return (node.children ?? []).some(child => archivalAreaNodeHasOverdueTransfer(child))
+}
+
 export function filterArchivalAreaTreeToFoldersWithDocuments(
   node: ArchivalFileTreeNode,
 ): ArchivalFileTreeNode {

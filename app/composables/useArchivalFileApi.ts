@@ -391,13 +391,27 @@ export function useArchivalFileApi() {
     return res.data
   }
 
-  async function transferFile(id: number, payload: { target_phase: ArchivalPhaseTarget, reason?: string | null }) {
+  async function transferFile(id: number, payload: {
+    target_phase: ArchivalPhaseTarget
+    reason?: string | null
+    document_selection_decisions?: Array<{ archival_file_document_id: number, decision: 'conservation' | 'elimination' }>
+  }) {
     const res = await api<{ data: ArchivalFile, message: string }>(`/archival-files/${id}/transfer`, {
       method: 'POST',
       body: payload,
     })
 
     return res
+  }
+
+  async function saveDocumentSelection(
+    fileId: number,
+    documentSelectionDecisions: Array<{ archival_file_document_id: number, decision: 'conservation' | 'elimination' }>,
+  ) {
+    return await api<{ message?: string }>(`/archival-files/${fileId}/document-selection`, {
+      method: 'POST',
+      body: { document_selection_decisions: documentSelectionDecisions },
+    })
   }
 
   function documentDownloadUrl(fileId: number, documentId: number) {
@@ -476,6 +490,7 @@ export function useArchivalFileApi() {
     fetchEvents,
     fetchGlobalEvents,
     transferFile,
+    saveDocumentSelection,
     uploadAreaDocument,
     fetchRetentionReport,
     fetchIncompleteReport,

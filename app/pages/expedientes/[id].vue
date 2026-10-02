@@ -254,6 +254,15 @@ async function loadAll() {
   }
 }
 
+async function refreshTree() {
+  try {
+    tree.value = await archivalApi.fetchTree(fileId.value)
+  }
+  catch {
+    toast.error('No se pudo actualizar el árbol documental.')
+  }
+}
+
 async function handleClose() {
   if (!file.value) {
     return
@@ -507,6 +516,7 @@ onMounted(() => loadAll())
               @reference="openReferenceDialog"
               @replace-version="openVersionDialog"
               @publish-to-library="openPublishDialog"
+              @selection-updated="refreshTree"
             />
           </CardContent>
         </Card>

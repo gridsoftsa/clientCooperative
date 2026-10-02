@@ -24,6 +24,7 @@ const emit = defineEmits<{
   replaceVersion: [node: ArchivalFileTreeNode]
   clickFile: [node: ArchivalFileTreeNode]
   publishToLibrary: [node: ArchivalFileTreeNode]
+  selectionUpdated: []
 }>()
 
 const archivalApi = useArchivalFileApi()
@@ -192,6 +193,16 @@ function openExpediente() {
       >
         Restringido
       </Badge>
+      <Badge
+        v-if="isDocument && node.retention?.final_disposition_label"
+        variant="outline"
+        class="max-w-[7.5rem] min-w-0 truncate text-[10px] sm:max-w-[11rem] sm:text-xs"
+        :title="node.retention.inherited_from_label
+          ? `${node.retention.final_disposition_label} (heredada de ${node.retention.inherited_from_label})`
+          : node.retention.final_disposition_label"
+      >
+        {{ node.retention.final_disposition_label }}
+      </Badge>
 
       <Button
         v-if="canShowDetails"
@@ -296,6 +307,7 @@ function openExpediente() {
         :file-id="fileId"
         :can-view-documents="canView && canAccessDocumentContent"
         :can-download-documents="canDownload && canAccessDocumentContent"
+        @selection-updated="emit('selectionUpdated')"
       />
     </div>
 
@@ -318,6 +330,7 @@ function openExpediente() {
         @replace-version="emit('replaceVersion', $event)"
         @click-file="emit('clickFile', $event)"
         @publish-to-library="emit('publishToLibrary', $event)"
+        @selection-updated="emit('selectionUpdated')"
       />
     </div>
     <DocumentInlinePreviewDialog

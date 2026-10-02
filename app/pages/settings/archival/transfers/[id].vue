@@ -4,8 +4,12 @@ import {
   ARCHIVAL_DISPOSITION_ACT_STATUS_LABELS,
   ARCHIVAL_PHASE_LABELS,
 } from '~/constants/archival-lifecycle'
-import type { ArchivalTransferActRow } from '~/composables/useArchivalLifecycleApi'
+import type {
+  ArchivalTransferActRow,
+  ArchivalTransferDocumentSelectionRow,
+} from '~/composables/useArchivalLifecycleApi'
 import { messageFromFetchError } from '~/utils/http-error-message'
+import { canPreviewDocumentInline } from '~/utils/document-preview'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 definePageMeta({
@@ -21,6 +25,45 @@ const api = useArchivalLifecycleApi()
 const actId = computed(() => Number(route.params.id))
 const loading = ref(true)
 const act = ref<ArchivalTransferActRow | null>(null)
+const expandedFileIds = ref<Record<number, boolean>>({})
+
+const {
+  page: inventoryPage,
+  pageCount: inventoryPageCount,
+  pageItems: pagedInventoryFiles,
+  rangeLabel: inventoryRangeLabel,
+  goToPreviousPage: goToPreviousInventoryPage,
+  goToNextPage: goToNextInventoryPage,
+  resetPage: resetInventoryPage,
+} = useClientPagination(() => act.value?.files ?? [])
+
+watch(actId, () => {
+  expandedFileIds.value = {}
+  resetInventoryPage()
+})
+
+function isInventoryFileExpanded(fileId: number): boolean {
+  return expandedFileIds.value[fileId] === true
+}
+
+function setInventoryFileExpanded(fileId: number, open: boolean): void {
+  expandedFileIds.value = {
+    ...expandedFileIds.value,
+    [fileId]: open,
+  }
+}
+
+const missingSelectionOnDraft = computed(() => {
+  if (act.value?.status !== 'draft') {
+    return false
+  }
+
+  return (act.value.files ?? []).some(file =>
+    (file.documents ?? []).some(document =>
+      Boolean(document.requires_selection) && !document.selection_decision,
+    ),
+  )
+})
 
 const statusLabel = computed(() => {
   if (!act.value) {
@@ -34,6 +77,13 @@ const nextStep = computed(() => {
   const current = act.value
   if (!current) {
     return null
+  }
+
+  if (current.status === 'cancelled') {
+    return {
+      title: 'Acta anulada',
+      body: 'Este borrador fue anulado. No se puede aprobar ni ejecutar. Si necesita transferir, cree una acta nueva.',
+    }
   }
 
   if (current.status === 'draft') {
@@ -120,14 +170,67 @@ async function approve() {
 }
 
 const {
-  open: inlinePreviewOpen,
-  title: inlinePreviewTitle,
-  previewUrl: inlinePreviewUrl,
-  previewKind: inlinePreviewKind,
-  presentBlob,
+  open: actFilePreviewOpen,
+  title: actFilePreviewTitle,
+  previewUrl: actFilePreviewUrl,
+  previewKind: actFilePreviewKind,
+  presentBlob: presentActFileBlob,
 } = useInlineFilePreview()
-
+const { fetchDocumentViewBlob } = useArchivalDocumentBlob()
 const viewingPdf = ref(false)
+const viewingDocumentId = ref<number | null>(null)
+const downloadingDocumentId = ref<number | null>(null)
+
+function actDocumentFileName(row: ArchivalTransferDocumentSelectionRow): string {
+  return row.original_name?.trim() || row.title || 'documento'
+}
+
+function actDocumentCanPreview(row: ArchivalTransferDocumentSelectionRow): boolean {
+  return canPreviewDocumentInline(actDocumentFileName(row), row.mime_type ?? '')
+}
+
+function triggerFileDownload(blob: Blob, filename: string): void {
+  if (import.meta.server) {
+    return
+  }
+
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = window.document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = filename
+  window.document.body.appendChild(anchor)
+  anchor.click()
+  window.document.body.removeChild(anchor)
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1_000)
+}
+
+async function viewActFileDocument(fileId: number, row: ArchivalTransferDocumentSelectionRow): Promise<void> {
+  viewingDocumentId.value = row.id
+  try {
+    const blob = await fetchDocumentViewBlob(fileId, row.id)
+    presentActFileBlob(blob, actDocumentFileName(row), row.mime_type)
+  }
+  catch (error: unknown) {
+    toast.error(error instanceof Error ? error.message : 'No se pudo abrir el documento')
+  }
+  finally {
+    viewingDocumentId.value = null
+  }
+}
+
+async function downloadActFileDocument(fileId: number, row: ArchivalTransferDocumentSelectionRow): Promise<void> {
+  downloadingDocumentId.value = row.id
+  try {
+    const blob = await fetchDocumentViewBlob(fileId, row.id)
+    triggerFileDownload(blob, actDocumentFileName(row))
+  }
+  catch (error: unknown) {
+    toast.error(error instanceof Error ? error.message : 'No se pudo descargar el documento')
+  }
+  finally {
+    downloadingDocumentId.value = null
+  }
+}
 
 async function viewPdf() {
   if (!act.value) {
@@ -137,7 +240,7 @@ async function viewPdf() {
   viewingPdf.value = true
   try {
     const blob = await api.fetchTransferActPdfBlob(act.value.id)
-    presentBlob(blob, `${act.value.act_code}.pdf`, 'application/pdf')
+    presentActFileBlob(blob, `${act.value.act_code}.pdf`, 'application/pdf')
     act.value = await api.fetchTransferAct(actId.value)
   }
   catch (error: unknown) {
@@ -156,6 +259,42 @@ async function execute() {
   }
   catch (error: unknown) {
     toast.error(messageFromFetchError(error, 'No se pudo ejecutar'))
+  }
+}
+
+const pendingCancel = ref(false)
+const pendingDelete = ref(false)
+const acting = ref(false)
+
+async function confirmCancel() {
+  acting.value = true
+  try {
+    const res = await api.cancelTransferAct(actId.value)
+    act.value = res.data
+    pendingCancel.value = false
+    toast.success(res.message ?? 'Acta anulada')
+  }
+  catch (error: unknown) {
+    toast.error(messageFromFetchError(error, 'No se pudo anular el borrador'))
+  }
+  finally {
+    acting.value = false
+  }
+}
+
+async function confirmDelete() {
+  acting.value = true
+  try {
+    const res = await api.deleteTransferAct(actId.value)
+    pendingDelete.value = false
+    toast.success(res.message ?? 'Borrador eliminado')
+    await router.push('/settings/archival/transfers')
+  }
+  catch (error: unknown) {
+    toast.error(messageFromFetchError(error, 'No se pudo eliminar el borrador'))
+  }
+  finally {
+    acting.value = false
   }
 }
 
@@ -210,7 +349,20 @@ onMounted(load)
               Ver PDF
             </Button>
             <PermissionGate v-if="act.status === 'draft'" permission="trd_transferencias_ejecutar">
-              <Button variant="secondary" @click="approve">
+              <Button variant="outline" @click="router.push(`/settings/archival/transfers/create?id=${act.id}`)">
+                Editar
+              </Button>
+              <Button variant="outline" @click="pendingCancel = true">
+                Anular
+              </Button>
+              <Button variant="destructive" @click="pendingDelete = true">
+                Eliminar
+              </Button>
+              <Button
+                variant="secondary"
+                :disabled="missingSelectionOnDraft"
+                @click="approve"
+              >
                 Aprobar acta
               </Button>
             </PermissionGate>
@@ -231,6 +383,12 @@ onMounted(load)
           </p>
           <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
             {{ nextStep.body }}
+          </p>
+          <p
+            v-if="missingSelectionOnDraft"
+            class="mt-2 text-sm text-rose-700 dark:text-rose-300"
+          >
+            Hay documentos con disposición TRD de selección sin conservación o eliminación. Ábralos en el expediente (Metadatos del documento) y registre la decisión ahí. El acta no elige documentos.
           </p>
         </div>
 
@@ -380,82 +538,204 @@ onMounted(load)
               Inventario de expedientes ({{ act.files?.length ?? 0 }})
             </CardTitle>
             <CardDescription>
-              Lote que se entrega con esta acta. Al ejecutar, todos cambian de fase.
+              Expedientes del lote. Los documentos se ven al expandir cada uno. La TRD de selección se resuelve en el expediente, no eligiendo documentos en esta acta.
             </CardDescription>
           </CardHeader>
-          <CardContent class="overflow-x-auto">
-            <table v-if="act.files?.length" class="w-full text-sm">
-              <thead>
-                <tr class="border-b text-left text-muted-foreground">
-                  <th class="p-2">
-                    Expediente
-                  </th>
-                  <th class="p-2">
-                    Título
-                  </th>
-                  <th class="p-2">
-                    Tipo
-                  </th>
-                  <th class="p-2">
-                    Fase actual
-                  </th>
-                  <th class="p-2">
-                    Docs
-                  </th>
-                  <th class="p-2">
-                    Cierre
-                  </th>
-                  <th class="p-2">
-                    Fin gestión
-                  </th>
-                  <th class="p-2">
-                    Fin central
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="file in act.files" :key="file.id" class="border-b align-top">
-                  <td class="p-2">
-                    <NuxtLink class="font-mono text-xs underline" :to="`/expedientes/${file.id}`">
-                      {{ file.file_number }}
-                    </NuxtLink>
-                  </td>
-                  <td class="p-2">
+          <CardContent class="space-y-3">
+            <div v-if="act.files?.length" class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+              <span>{{ inventoryRangeLabel }}</span>
+              <div v-if="inventoryPageCount > 1" class="flex gap-1">
+                <Button type="button" size="sm" variant="outline" class="h-7 px-2" :disabled="inventoryPage <= 1" @click="goToPreviousInventoryPage">
+                  Anterior
+                </Button>
+                <Button type="button" size="sm" variant="outline" class="h-7 px-2" :disabled="inventoryPage >= inventoryPageCount" @click="goToNextInventoryPage">
+                  Siguiente
+                </Button>
+              </div>
+            </div>
+            <Collapsible
+              v-for="file in pagedInventoryFiles"
+              :key="file.id"
+              :open="isInventoryFileExpanded(file.id)"
+              class="rounded-lg border"
+              @update:open="setInventoryFileExpanded(file.id, $event)"
+            >
+              <div class="flex items-start gap-2 p-3">
+                <CollapsibleTrigger as-child>
+                  <Button variant="ghost" size="sm" type="button" class="mt-0.5 h-8 w-8 shrink-0 px-0">
+                    <Icon
+                      :name="isInventoryFileExpanded(file.id) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                      class="size-4"
+                    />
+                    <span class="sr-only">
+                      {{ isInventoryFileExpanded(file.id) ? 'Contraer' : 'Expandir' }}
+                    </span>
+                  </Button>
+                </CollapsibleTrigger>
+                <div class="min-w-0 flex-1 space-y-1">
+                  <NuxtLink class="w-fit font-mono text-xs underline" :to="`/expedientes/${file.id}`">
+                    {{ file.file_number }}
+                  </NuxtLink>
+                  <p class="text-sm font-medium leading-snug">
                     {{ file.title }}
-                  </td>
-                  <td class="p-2 text-muted-foreground">
-                    {{ file.file_type?.name ?? '—' }}
-                  </td>
-                  <td class="p-2">
-                    {{ phaseLabel(file.archival_phase) }}
-                  </td>
-                  <td class="p-2">
-                    {{ file.documents_count ?? '—' }}
-                  </td>
-                  <td class="p-2">
-                    {{ formatDate(file.closed_at) }}
-                  </td>
-                  <td class="p-2">
-                    {{ formatDate(file.archival_management_ends_at) }}
-                  </td>
-                  <td class="p-2">
-                    {{ formatDate(file.archival_central_ends_at) }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p v-else class="text-sm text-muted-foreground">
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {{ file.file_type?.name ?? 'Tipo no indicado' }}
+                    · {{ phaseLabel(file.archival_phase) }}
+                    · {{ file.documents_count ?? file.documents?.length ?? 0 }} documento(s)
+                  </p>
+                </div>
+              </div>
+              <CollapsibleContent>
+                <div class="space-y-3 border-t px-3 pb-3 pt-3">
+                  <dl class="grid gap-2 text-xs sm:grid-cols-3">
+                    <div>
+                      <dt class="text-muted-foreground">
+                        Cierre
+                      </dt>
+                      <dd class="mt-0.5">
+                        {{ formatDate(file.closed_at) }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="text-muted-foreground">
+                        Fin gestión
+                      </dt>
+                      <dd class="mt-0.5">
+                        {{ formatDate(file.archival_management_ends_at) }}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt class="text-muted-foreground">
+                        Fin central
+                      </dt>
+                      <dd class="mt-0.5">
+                        {{ formatDate(file.archival_central_ends_at) }}
+                      </dd>
+                    </div>
+                  </dl>
+                  <div v-if="file.documents?.length" class="space-y-2">
+                    <p class="text-xs font-medium text-muted-foreground">
+                      Documentos
+                    </p>
+                    <div
+                      v-for="fileDocument in file.documents"
+                      :key="fileDocument.id"
+                      class="flex items-center gap-3 rounded-md border bg-background px-3 py-2"
+                    >
+                      <Icon name="i-lucide-file" class="size-4 shrink-0 text-muted-foreground" />
+                      <div class="min-w-0 flex-1">
+                        <p class="truncate text-sm font-medium text-foreground">
+                          {{ fileDocument.title }}
+                        </p>
+                        <p class="truncate text-xs text-muted-foreground">
+                          <span v-if="fileDocument.original_name && fileDocument.original_name !== fileDocument.title">
+                            {{ fileDocument.original_name }}
+                            ·
+                          </span>
+                          <span v-if="fileDocument.final_disposition_label">
+                            {{ fileDocument.final_disposition_label }}
+                          </span>
+                          <span v-if="fileDocument.selection_decision_label" class="font-medium text-foreground">
+                            · {{ fileDocument.selection_decision_label }}
+                          </span>
+                          <span v-else-if="fileDocument.requires_selection" class="text-amber-700 dark:text-amber-300">
+                            · Pendiente en el expediente
+                          </span>
+                        </p>
+                      </div>
+                      <div class="flex shrink-0 items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          type="button"
+                          class="h-8 gap-1.5 px-2 text-xs"
+                          :disabled="viewingDocumentId === fileDocument.id"
+                          @click="viewActFileDocument(file.id, fileDocument)"
+                        >
+                          <Icon
+                            :name="viewingDocumentId === fileDocument.id
+                              ? 'i-lucide-loader-2'
+                              : (actDocumentCanPreview(fileDocument) ? 'i-lucide-eye' : 'i-lucide-download')"
+                            class="size-3.5"
+                            :class="{ 'animate-spin': viewingDocumentId === fileDocument.id }"
+                          />
+                          {{ actDocumentCanPreview(fileDocument) ? 'Ver' : 'Descargar' }}
+                        </Button>
+                        <Button
+                          v-if="actDocumentCanPreview(fileDocument)"
+                          variant="ghost"
+                          size="sm"
+                          type="button"
+                          class="h-8 px-2 text-xs"
+                          :disabled="downloadingDocumentId === fileDocument.id"
+                          @click="downloadActFileDocument(file.id, fileDocument)"
+                        >
+                          Descargar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <p v-else class="text-sm text-muted-foreground">
+                    Sin documentos en el expediente.
+                  </p>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+            <p v-if="!act.files?.length" class="text-sm text-muted-foreground">
               Sin expedientes asociados.
             </p>
           </CardContent>
         </Card>
       </div>
     </div>
+    <AlertDialog :open="pendingCancel" @update:open="pendingCancel = $event">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Anular borrador
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            El acta quedará anulada y no se podrá aprobar ni ejecutar. El código se conserva en el historial.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel :disabled="acting">
+            Cancelar
+          </AlertDialogCancel>
+          <Button :disabled="acting" @click="confirmCancel">
+            {{ acting ? 'Anulando…' : 'Anular acta' }}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog :open="pendingDelete" @update:open="pendingDelete = $event">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Eliminar borrador
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Esta acción borra el acta. El código quedará libre para usarlo de nuevo.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel :disabled="acting">
+            Cancelar
+          </AlertDialogCancel>
+          <Button variant="destructive" :disabled="acting" @click="confirmDelete">
+            {{ acting ? 'Eliminando…' : 'Eliminar' }}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <DocumentInlinePreviewDialog
-      v-model:open="inlinePreviewOpen"
-      :title="inlinePreviewTitle"
-      :preview-url="inlinePreviewUrl"
-      :preview-kind="inlinePreviewKind"
+      v-model:open="actFilePreviewOpen"
+      :title="actFilePreviewTitle"
+      :preview-url="actFilePreviewUrl"
+      :preview-kind="actFilePreviewKind"
     />
   </SettingsLayout>
 </template>
