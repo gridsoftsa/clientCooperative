@@ -1,5 +1,20 @@
 import type { VentanillaFunctionalTypeProducerArea, VentanillaFunctionalTypeRow } from '~/types/ventanilla'
 
+export function uniqueOrgUnitIdsFromProducerAreas(
+  areas: Array<{ org_unit_id?: number | null }> | null | undefined,
+): number[] {
+  const ids: number[] = []
+
+  for (const area of areas ?? []) {
+    const id = Number(area.org_unit_id)
+    if (Number.isFinite(id) && id > 0 && !ids.includes(id)) {
+      ids.push(id)
+    }
+  }
+
+  return ids
+}
+
 export function responsibleOrgUnitIdsForFunctionalType(
   functionalType: VentanillaFunctionalTypeRow | null | undefined,
 ): number[] {

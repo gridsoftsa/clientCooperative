@@ -63,7 +63,12 @@ const selectedSection = ref<CatalogSection>('functional-types')
 
 const functionalTypes = ref<VentanillaFunctionalTypeRow[]>([])
 const receptionMedia = ref<VentanillaReceptionMediumRow[]>([])
-const archivalFileTypes = ref<Array<{ id: number, name: string, type_key: string }>>([])
+const archivalFileTypes = ref<Array<{
+  id: number
+  name: string
+  type_key: string
+  producer_areas?: Array<{ org_unit_id: number }>
+}>>([])
 const orgUnits = ref<Array<{ id: number, name: string, code: string }>>([])
 const savedVersion = ref(0)
 
@@ -86,6 +91,9 @@ async function loadCatalog() {
       id: type.id,
       name: type.name,
       type_key: type.type_key,
+      producer_areas: (type.producer_areas ?? [])
+        .map(area => ({ org_unit_id: Number(area.org_unit_id) }))
+        .filter(area => Number.isFinite(area.org_unit_id) && area.org_unit_id > 0),
     }))
   } catch {
     toast.error('No se pudieron cargar los catálogos de ventanilla')

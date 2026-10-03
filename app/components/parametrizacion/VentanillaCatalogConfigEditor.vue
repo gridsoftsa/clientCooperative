@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import type { VentanillaFunctionalTypeRow, VentanillaReceptionMediumRow } from '~/types/ventanilla'
 import { coerceBoolean } from '~/utils/coerce-boolean'
+import { uniqueOrgUnitIdsFromProducerAreas } from '~/utils/ventanilla-functional-type-areas'
 
 export type VentanillaCatalogEditorKind = 'functional-types' | 'reception-media'
 
@@ -35,7 +36,12 @@ const props = defineProps<{
   kind: VentanillaCatalogEditorKind
   functionalTypes: VentanillaFunctionalTypeRow[]
   receptionMedia: VentanillaReceptionMediumRow[]
-  archivalFileTypes: Array<{ id: number, name: string, type_key: string }>
+  archivalFileTypes: Array<{
+    id: number
+    name: string
+    type_key: string
+    producer_areas?: Array<{ org_unit_id: number }>
+  }>
   orgUnits: Array<{ id: number, name: string, code: string }>
   canEdit: boolean
   saving: boolean
@@ -71,13 +77,33 @@ const archivalFileTypeOptions = computed(() => [
   })),
 ])
 
-function onArchivalFileTypeChange(row: FunctionalDraft, value: string | number | null | undefined): void {
-  if (value == null || value === '') {
-    row.archival_file_type_id = NONE_ARCHIVAL_FILE_TYPE
+function applyProducerAreasFromFileType(row: FunctionalDraft, fileTypeId: string): void {
+  if (!fileTypeId || fileTypeId === NONE_ARCHIVAL_FILE_TYPE) {
     return
   }
 
-  row.archival_file_type_id = String(value)
+  const fileType = props.archivalFileTypes.find(type => String(type.id) === fileTypeId)
+  const allowedIds = new Set(props.orgUnits.map(unit => unit.id))
+  const producerIds = uniqueOrgUnitIdsFromProducerAreas(fileType?.producer_areas)
+    .filter(id => allowedIds.has(id))
+
+  if (producerIds.length === 0) {
+    toast.info('Este tipo de expediente no tiene áreas productoras. Puede elegirlas aquí o asignarlas en el tipo de expediente.')
+    return
+  }
+
+  row.public_org_unit_ids = producerIds
+  row.public_org_unit_id = producerIds[0] ?? null
+}
+
+function onArchivalFileTypeChange(row: FunctionalDraft, value: string | number | null | undefined): void {
+  const next = value == null || value === '' ? NONE_ARCHIVAL_FILE_TYPE : String(value)
+  const previous = row.archival_file_type_id
+  row.archival_file_type_id = next
+
+  if (next !== previous) {
+    applyProducerAreasFromFileType(row, next)
+  }
 }
 
 const orgUnitSelectOptions = computed(() =>
@@ -608,7 +634,7 @@ watch(
                 no-results-text="Sin coincidencias"
               />
               <p class="text-xs text-muted-foreground">
-                Puede elegir varias. Si el tipo es público, el radicado del formulario público queda en la primera área de la lista y el encargado de esa área es el responsable.
+                Al elegir un tipo de expediente se cargan sus áreas productoras; luego puede añadir o quitar. Si el tipo es público, el radicado del formulario público queda en la primera área de la lista y el encargado de esa área es el responsable.
               </p>
             </div>
           </div>
