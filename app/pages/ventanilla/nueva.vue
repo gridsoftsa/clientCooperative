@@ -84,7 +84,6 @@ const subject = ref('')
 const receptionMedium = ref('')
 const notes = ref('')
 const assignedUserId = ref<number | null>(null)
-const metadataValues = ref<Record<string, unknown>>({})
 
 const orgUnits = ref<VentanillaOrgUnitOption[]>([])
 const producerOrgUnits = computed(() =>
@@ -102,12 +101,8 @@ const recipientStaffIds = computed(() => recipientStaffId.value != null ? [recip
 const fileRows = ref<DocumentAttachmentRow[]>([createDocumentAttachmentRow('Documento principal')])
 const filingUploadConstraints = VENTANILLA_FILING_UPLOAD_CONSTRAINTS
 const trdPickerRef = ref<{ focusFirstMissingTrdField?: () => void } | null>(null)
-const metadataFieldsRef = ref<{
-  findFirstMissingRequiredField?: () => { fieldCode: string; fieldIndex: number; message: string } | null
-  focusMissingField?: (fieldCode: string, fieldIndex: number) => void
-} | null>(null)
 
-type FilingFormSectionId = 'clasificacion' | 'trd' | 'metadatos' | 'archivos'
+type FilingFormSectionId = 'clasificacion' | 'trd' | 'archivos'
 
 const FILING_FORM_SECTIONS: Array<{
   id: FilingFormSectionId
@@ -116,7 +111,6 @@ const FILING_FORM_SECTIONS: Array<{
 }> = [
   { id: 'clasificacion', label: 'Clasificación', icon: 'i-lucide-layers' },
   { id: 'trd', label: 'TRD', icon: 'i-lucide-folder-tree' },
-  { id: 'metadatos', label: 'Metadatos', icon: 'i-lucide-list' },
   { id: 'archivos', label: 'Archivos', icon: 'i-lucide-paperclip' },
 ]
 
@@ -132,7 +126,7 @@ const FIELD_TO_SECTION: Record<VentanillaFilingFieldKey, FilingFormSectionId> = 
   recipient_identifier: 'clasificacion',
   subject: 'clasificacion',
   trd_document_type: 'trd',
-  metadata: 'metadatos',
+  metadata: 'clasificacion',
   file: 'archivos',
 }
 
@@ -551,16 +545,6 @@ const datosComplete = computed(() =>
 
 const trdComplete = computed(() => docDocumentTypeId.value != null)
 
-const metadataComplete = computed(() => {
-  void metadataValues.value
-
-  if (!functionalTypeKey.value && !docDocumentTypeId.value) {
-    return false
-  }
-
-  return !metadataFieldsRef.value?.findFirstMissingRequiredField?.()
-})
-
 const filesComplete = computed(() => attachedFileCount.value > 0)
 
 function isSectionComplete(id: FilingFormSectionId): boolean {
@@ -569,9 +553,6 @@ function isSectionComplete(id: FilingFormSectionId): boolean {
   }
   if (id === 'trd') {
     return trdComplete.value
-  }
-  if (id === 'metadatos') {
-    return metadataComplete.value
   }
 
   return filesComplete.value
@@ -589,10 +570,6 @@ function goToSection(id: FilingFormSectionId): void {
 }
 
 const validationInput = computed(() => {
-  const metadataSnapshot = metadataValues.value
-  void metadataSnapshot
-  const metadataMissing = metadataFieldsRef.value?.findFirstMissingRequiredField?.() ?? null
-
   return {
     filingType: filingType.value,
     functionalTypeKey: functionalTypeKey.value,
@@ -610,9 +587,6 @@ const validationInput = computed(() => {
       ? staffDocumentIdentifier(selectedRecipientStaff.value).length > 0
       : true,
     parties: computedFilingParties.value,
-    metadataError: metadataMissing?.message ?? null,
-    metadataFieldCode: metadataMissing?.fieldCode,
-    metadataFieldIndex: metadataMissing?.fieldIndex,
   }
 })
 
@@ -919,12 +893,6 @@ async function focusValidationIssue(issue: VentanillaFilingValidationIssue): Pro
     return
   }
 
-  if (issue.field === 'metadata' && issue.metadataFieldCode != null && issue.metadataFieldIndex != null) {
-    metadataFieldsRef.value?.focusMissingField?.(issue.metadataFieldCode, issue.metadataFieldIndex)
-
-    return
-  }
-
   focusVentanillaFieldById(VENTANILLA_FILING_FIELD_IDS[issue.field])
 }
 
@@ -1004,9 +972,6 @@ async function submit() {
     fd.append('assigned_user_id', String(assignedUserId.value))
   }
   fd.append('doc_document_type_id', String(docDocumentTypeId.value))
-  if (Object.keys(metadataValues.value).length > 0) {
-    fd.append('metadata_values', JSON.stringify(metadataValues.value))
-  }
 
   withFiles.forEach((row, index) => {
     if (!row.file) {
@@ -1077,7 +1042,7 @@ async function submit() {
 
       <Tabs v-model="activeSection" class="gap-4">
         <div class="sticky top-0 z-30 -mx-4 border-b bg-background/95 px-4 py-2 backdrop-blur md:-mx-6 md:px-6">
-          <TabsList class="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-4">
+          <TabsList class="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-3">
             <TabsTrigger
               v-for="section in FILING_FORM_SECTIONS"
               :key="section.id"
@@ -1133,7 +1098,7 @@ async function submit() {
             </AlertDescription>
           </Alert>
 
-          <div class="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] xl:items-start">
+          <div class="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] xl:items-end">
             <div class="space-y-4">
               <div class="space-y-2">
                 <Label>Tipo funcional *</Label>
@@ -1165,48 +1130,54 @@ async function submit() {
               </div>
             </div>
 
-            <div class="space-y-3 rounded-lg border bg-muted/20 p-4">
-              <p v-if="selectedFunctionalType && effectiveRequiresResponse && !needsManualSlaDays" class="text-sm text-muted-foreground">
-                SLA: {{ displayedSlaDays ?? '—' }} días hábiles
-              </p>
-              <p v-else-if="!selectedFunctionalType" class="text-sm text-muted-foreground">
-                Seleccione un tipo funcional para ver el plazo de respuesta.
-              </p>
-
-              <p
-                v-if="functionalTypeKey === VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY"
-                class="rounded-md border border-border bg-background p-3 text-xs text-muted-foreground"
-              >
-                {{ VENTANILLA_INFORMATIVE_TYPE_HINT }}
-              </p>
-
-              <div v-if="canOverrideResponse && selectedFunctionalType" class="space-y-3 border-t pt-3">
-                <div class="flex items-center gap-2">
+            <div class="rounded-lg border bg-muted/20 px-3 py-2.5">
+              <div class="flex min-h-9 flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <p class="text-sm text-muted-foreground">
+                  <template v-if="selectedFunctionalType && effectiveRequiresResponse && !needsManualSlaDays">
+                    SLA: {{ displayedSlaDays ?? '—' }} días hábiles
+                  </template>
+                  <template v-else-if="!selectedFunctionalType">
+                    Seleccione un tipo funcional para ver el plazo de respuesta.
+                  </template>
+                  <template v-else-if="!effectiveRequiresResponse">
+                    Sin plazo de respuesta
+                  </template>
+                </p>
+                <div
+                  v-if="canOverrideResponse && selectedFunctionalType"
+                  class="flex items-center gap-2"
+                >
                   <Switch
                     id="ventanilla_requires_response"
                     :model-value="effectiveRequiresResponse"
                     @update:model-value="requiresResponseOverride = $event === true"
                   />
-                  <Label for="ventanilla_requires_response" class="font-normal">
+                  <Label for="ventanilla_requires_response" class="whitespace-nowrap font-normal">
                     {{ effectiveRequiresResponse ? 'Requiere respuesta' : 'No requiere respuesta' }}
                   </Label>
                 </div>
-                <div v-if="needsManualSlaDays" class="space-y-2">
-                  <Label for="ventanilla_sla_days">Días hábiles *</Label>
-                  <Input
-                    id="ventanilla_sla_days"
-                    v-model="slaBusinessDaysInput"
-                    type="number"
-                    min="1"
-                    max="365"
-                    class="h-9 w-28"
-                    placeholder="Días"
-                  />
-                  <p class="text-xs text-muted-foreground">
-                    Este tipo no tiene plazo. Indique los días hábiles para responder.
-                  </p>
-                </div>
               </div>
+              <div v-if="needsManualSlaDays" class="mt-3 space-y-2 border-t pt-3">
+                <Label for="ventanilla_sla_days">Días hábiles *</Label>
+                <Input
+                  id="ventanilla_sla_days"
+                  v-model="slaBusinessDaysInput"
+                  type="number"
+                  min="1"
+                  max="365"
+                  class="h-9 w-28"
+                  placeholder="Días"
+                />
+                <p class="text-xs text-muted-foreground">
+                  Este tipo no tiene plazo. Indique los días hábiles para responder.
+                </p>
+              </div>
+              <p
+                v-if="functionalTypeKey === VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY"
+                class="mt-3 rounded-md border border-border bg-background p-3 text-xs text-muted-foreground"
+              >
+                {{ VENTANILLA_INFORMATIVE_TYPE_HINT }}
+              </p>
             </div>
           </div>
         </CardContent>
@@ -1484,31 +1455,6 @@ async function submit() {
                 :submit-attempted="submitAttempted"
                 v-model:doc-document-type-id="docDocumentTypeId"
               />
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="metadatos" force-mount class="data-[state=inactive]:hidden">
-          <Card id="ventanilla-section-metadatos">
-            <CardHeader class="pb-3">
-              <CardTitle class="text-base">
-                Metadatos
-              </CardTitle>
-              <CardDescription>
-                Campos dinámicos según el tipo funcional y la clasificación TRD.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <VentanillaArchivalMetadataFields
-                ref="metadataFieldsRef"
-                v-model="metadataValues"
-                :doc-document-type-id="docDocumentTypeId"
-                :functional-type-key="functionalTypeKey"
-                :submit-attempted="submitAttempted"
-              />
-              <p v-if="!docDocumentTypeId && !functionalTypeKey" class="text-muted-foreground text-sm">
-                Seleccione tipo funcional y tipo documental para cargar los metadatos aplicables.
-              </p>
             </CardContent>
           </Card>
         </TabsContent>

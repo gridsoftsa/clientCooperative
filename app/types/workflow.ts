@@ -212,6 +212,7 @@ export interface WorkflowFilingContext {
   }>
   is_active: boolean
   advance_guidance?: string | null
+  filing_metadata_complete?: boolean
   warnings?: WorkflowContextWarning[]
   task_escalation?: WorkflowTaskEscalationSummary | null
   archival_file?: WorkflowArchivalFileContext | null
@@ -274,6 +275,23 @@ export interface WorkflowFilingContextSummary {
   recipient_org_unit: { id: number, name: string, code?: string } | null
   doc_document_type: { id: number, code: string, name: string } | null
   assigned_user: { id: number, name: string } | null
+  metadata_values?: Record<string, unknown> | null
+  archival_metadata_schema?: {
+    id: number
+    name: string
+    version_number: number
+    fields?: Array<{
+      id?: number
+      code: string
+      name: string
+      data_type: string
+      is_required: boolean
+      sort_order: number
+      is_active?: boolean
+      options?: Array<{ value: string, label: string }> | null
+    }>
+  } | null
+  response_copy_emails?: string[] | null
   files: WorkflowFilingContextFile[]
 }
 

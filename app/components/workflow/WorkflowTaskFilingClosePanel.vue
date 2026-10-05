@@ -6,6 +6,7 @@ const props = defineProps<{
   filingId: number
   requiresResponse: boolean
   stageName?: string | null
+  initialCopyEmails?: string[]
   beforeSubmit?: () => Promise<boolean>
 }>()
 
@@ -17,8 +18,35 @@ const ventanillaApi = useVentanillaApi()
 
 const responseText = ref('')
 const responseCopyEmails = ref<string[]>([])
+const skipCopyPersist = ref(true)
+const copyEmailsSaving = ref(false)
 const closeReason = ref('')
 const saving = ref(false)
+
+watch(() => props.initialCopyEmails, (emails) => {
+  skipCopyPersist.value = true
+  responseCopyEmails.value = [...(emails ?? [])]
+  nextTick(() => {
+    skipCopyPersist.value = false
+  })
+}, { immediate: true, once: true })
+
+watch(responseCopyEmails, async (emails) => {
+  if (skipCopyPersist.value || !props.requiresResponse) {
+    return
+  }
+
+  copyEmailsSaving.value = true
+  try {
+    await ventanillaApi.updateFilingResponseCopyEmails(props.filingId, emails)
+  }
+  catch (error) {
+    toast.error(extractApiErrorMessage(error))
+  }
+  finally {
+    copyEmailsSaving.value = false
+  }
+})
 
 async function submit(): Promise<void> {
   if (props.requiresResponse && !responseText.value.trim()) {
@@ -40,9 +68,8 @@ async function submit(): Promise<void> {
 
     if (props.requiresResponse) {
       const res = await ventanillaApi.respondFiling(props.filingId, responseText.value.trim(), responseCopyEmails.value)
-      toast.success(res.message)
+      toast.success(res.message, { duration: 16000 })
       responseText.value = ''
-      responseCopyEmails.value = []
     }
     else {
       await ventanillaApi.closeFiling(props.filingId, closeReason.value.trim() || undefined)
@@ -88,7 +115,11 @@ async function submit(): Promise<void> {
           :disabled="saving"
         />
       </div>
-      <VentanillaResponseCopyEmails v-model="responseCopyEmails" />
+      <VentanillaResponseCopyEmails
+        v-model="responseCopyEmails"
+        :disabled="saving"
+        :saving="copyEmailsSaving"
+      />
     </div>
     <div v-else class="space-y-2">
       <Label>Motivo de cierre</Label>

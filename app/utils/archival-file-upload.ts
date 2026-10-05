@@ -85,6 +85,28 @@ export function flattenFileFolderNodes(node: ArchivalFileTreeNode | null): Archi
   return folders
 }
 
+export function flattenFileDocumentNodes(node: ArchivalFileTreeNode | null): ArchivalFileTreeNode[] {
+  if (!node) {
+    return []
+  }
+
+  const documents: ArchivalFileTreeNode[] = []
+
+  function walk(current: ArchivalFileTreeNode): void {
+    if (current.type === 'document' || current.type === 'document_reference') {
+      documents.push(current)
+    }
+
+    for (const child of current.children ?? []) {
+      walk(child)
+    }
+  }
+
+  walk(node)
+
+  return documents
+}
+
 export function metadataFieldSourceLabel(source: string | undefined, confidence?: number): string | null {
   if (!source) {
     return null

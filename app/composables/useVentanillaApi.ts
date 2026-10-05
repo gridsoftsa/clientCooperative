@@ -275,6 +275,24 @@ export function useVentanillaApi() {
     return res.data
   }
 
+  async function updateFilingMetadata(id: number, metadataValues: Record<string, unknown>): Promise<VentanillaFilingDetail> {
+    const res = await api<{ data: VentanillaFilingDetail; message: string }>(`/ventanilla/filings/${id}/metadata`, {
+      method: 'PATCH',
+      body: { metadata_values: metadataValues },
+    })
+
+    return res.data
+  }
+
+  async function updateFilingResponseCopyEmails(id: number, copyEmails: string[]): Promise<VentanillaFilingDetail> {
+    const res = await api<{ data: VentanillaFilingDetail; message: string }>(`/ventanilla/filings/${id}/response-copy-emails`, {
+      method: 'PATCH',
+      body: { copy_emails: copyEmails },
+    })
+
+    return res.data
+  }
+
   async function startFiling(id: number): Promise<VentanillaFilingDetail> {
     const res = await api<{ data: VentanillaFilingDetail; message: string }>(`/ventanilla/filings/${id}/start`, {
       method: 'PATCH',
@@ -719,6 +737,8 @@ export function useVentanillaApi() {
     classifyIntake,
     discardIntake,
     assignFiling,
+    updateFilingMetadata,
+    updateFilingResponseCopyEmails,
     startFiling,
     attachFilingFiles,
     respondFiling,

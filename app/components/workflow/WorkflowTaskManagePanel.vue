@@ -26,6 +26,7 @@ const emit = defineEmits<{
 
 const { hasPermission } = usePermissions()
 const workflowApi = useWorkflowApi()
+const ventanillaApi = useVentanillaApi()
 
 const activeTab = ref('actions')
 const note = ref('')
@@ -34,6 +35,13 @@ const returnStageId = ref<string>('')
 const reassignUserId = ref<string>('')
 const saving = ref(false)
 const attachmentsPanelRef = ref<InstanceType<typeof WorkflowTaskFilingAttachmentsPanel> | null>(null)
+const metadataFieldsRef = ref<{
+  findFirstMissingRequiredField?: () => { fieldCode: string, fieldIndex: number, message: string } | null
+  focusMissingField?: (fieldCode: string, fieldIndex: number) => void
+} | null>(null)
+const metadataValues = ref<Record<string, unknown>>({})
+const savingMetadata = ref(false)
+const metadataSubmitAttempted = ref(false)
 
 const showArchivalTab = computed(() =>
   Boolean(props.context?.archival_file && props.context?.open_task),
@@ -84,16 +92,50 @@ const filingRequiresResponse = computed(() => props.context?.filing?.requires_re
 const stageRules = computed(() => props.context?.open_task?.stage ?? props.task.stage ?? null)
 const returnableStages = computed(() => props.context?.returnable_stages ?? [])
 const advanceGuidance = computed(() => props.context?.advance_guidance ?? null)
-const canAdvanceTask = computed(() =>
-  isOpenWorkflowTaskStatus(props.task?.status)
-  && props.context?.is_active !== false,
+const viewedTaskIsCurrentOpen = computed(() =>
+  Boolean(props.task?.id && props.context?.open_task?.id === props.task.id),
+)
+const canAdvanceTask = computed(() => {
+  const status = viewedTaskIsCurrentOpen.value
+    ? (props.context?.open_task?.status ?? props.task?.status)
+    : props.task?.status
+
+  return isOpenWorkflowTaskStatus(status) && props.context?.is_active !== false
+})
+const showInactiveTaskAlert = computed(() =>
+  !advanceGuidance.value && !viewedTaskIsCurrentOpen.value && !canAdvanceTask.value,
+)
+const isManagementStage = computed(() =>
+  viewedTaskIsCurrentOpen.value
+  && props.context?.open_task?.stage?.ventanilla_role === 'management',
+)
+const showFilingMetadataCapture = computed(() =>
+  isManagementStage.value && Boolean(props.context?.filing?.id),
+)
+const needsFilingMetadata = computed(() =>
+  showFilingMetadataCapture.value
+  && props.context?.filing_metadata_complete === false
+  && filingMetadataFieldCount.value > 0,
+)
+const filingMetadataSchema = computed(() => props.context?.filing?.archival_metadata_schema ?? null)
+const filingMetadataFieldCount = computed(() =>
+  (filingMetadataSchema.value?.fields ?? []).filter(field => field.is_active !== false).length,
+)
+const actionWarnings = computed(() =>
+  (props.context?.warnings ?? []).filter(warning => warning.code !== 'filing_metadata_incomplete'),
 )
 const showAdvanceButton = computed(() =>
   canManage.value
   && stageRules.value?.allows_advance
   && canAdvanceTask.value
-  && !advanceGuidance.value,
+  && !advanceGuidance.value
+  && !needsFilingMetadata.value,
 )
+
+watch(() => props.context?.filing?.id, () => {
+  metadataValues.value = { ...(props.context?.filing?.metadata_values ?? {}) }
+  metadataSubmitAttempted.value = false
+}, { immediate: true })
 
 watch(() => props.task.id, () => {
   note.value = ''
@@ -102,6 +144,15 @@ watch(() => props.task.id, () => {
   reassignUserId.value = ''
   activeTab.value = 'actions'
 })
+
+watch(
+  () => [showFilingMetadataCapture.value, needsFilingMetadata.value] as const,
+  ([show, needs]) => {
+    if (show && needs && activeTab.value === 'actions') {
+      activeTab.value = 'metadata'
+    }
+  },
+)
 
 async function runWorkflowAction(action: () => Promise<unknown>, success: string) {
   saving.value = true
@@ -165,6 +216,15 @@ function goToFilingGestion(): void {
   }
 
   void navigateTo(`/ventanilla/${filingId}?section=gestion`)
+}
+
+function goToCurrentOpenTask(): void {
+  const openTaskId = props.context?.open_task?.id
+  if (!openTaskId) {
+    return
+  }
+
+  void navigateTo(`/workflow/tareas/${openTaskId}`)
 }
 
 function onFilingClosed(): void {
@@ -241,6 +301,35 @@ function refreshContext() {
   emit('refreshed')
   emit('changed')
 }
+
+async function saveFilingMetadata(): Promise<void> {
+  const filingId = props.context?.filing?.id
+  if (!filingId || filingMetadataFieldCount.value === 0) {
+    return
+  }
+
+  metadataSubmitAttempted.value = true
+  const missing = metadataFieldsRef.value?.findFirstMissingRequiredField?.()
+  if (missing) {
+    toast.error(missing.message)
+    metadataFieldsRef.value?.focusMissingField?.(missing.fieldCode, missing.fieldIndex)
+    return
+  }
+
+  savingMetadata.value = true
+  try {
+    await ventanillaApi.updateFilingMetadata(filingId, metadataValues.value)
+    toast.success('Metadatos guardados.')
+    metadataSubmitAttempted.value = false
+    refreshContext()
+  }
+  catch (error) {
+    toast.error(extractApiErrorMessage(error))
+  }
+  finally {
+    savingMetadata.value = false
+  }
+}
 </script>
 
 <template>
@@ -251,6 +340,12 @@ function refreshContext() {
       </TabsTrigger>
       <TabsTrigger v-if="showFilingTab" value="filing" class="flex-1 sm:flex-none">
         Radicado
+      </TabsTrigger>
+      <TabsTrigger v-if="showFilingMetadataCapture" value="metadata" class="flex-1 sm:flex-none">
+        Metadatos
+        <Badge v-if="needsFilingMetadata" variant="destructive" class="ml-2">
+          Obligatorio
+        </Badge>
       </TabsTrigger>
       <TabsTrigger v-if="showCollaboratorsTab" value="collaborators" class="flex-1 sm:flex-none">
         Colaboradores
@@ -286,9 +381,9 @@ function refreshContext() {
             </p>
           </div>
 
-          <div v-if="context?.warnings?.length" class="space-y-2">
+          <div v-if="actionWarnings.length" class="space-y-2">
             <Alert
-              v-for="warning in context.warnings"
+              v-for="warning in actionWarnings"
               :key="warning.code"
               variant="secondary"
             >
@@ -340,11 +435,37 @@ function refreshContext() {
             </AlertDescription>
           </Alert>
 
-          <Alert v-else-if="!canAdvanceTask" variant="secondary">
+          <Alert v-else-if="showInactiveTaskAlert" variant="secondary">
             <Icon name="i-lucide-circle-check" class="size-4" />
-            <AlertTitle>Tarea no activa</AlertTitle>
-            <AlertDescription>
-              Esta tarea ya fue completada o el proceso está cerrado. Actualice la bandeja o el radicado.
+            <AlertTitle>Esta etapa ya se completó</AlertTitle>
+            <AlertDescription class="space-y-3">
+              <p v-if="context?.open_task?.stage?.name">
+                La etapa activa ahora es «{{ context.open_task.stage.name }}».
+              </p>
+              <p v-else>
+                Esta tarea ya no está abierta. El proceso puede haber avanzado o cerrado.
+              </p>
+              <Button
+                v-if="context?.open_task?.id"
+                size="sm"
+                type="button"
+                @click="goToCurrentOpenTask"
+              >
+                Ir a la etapa activa
+              </Button>
+            </AlertDescription>
+          </Alert>
+
+          <Alert v-else-if="needsFilingMetadata" class="border-primary/40 bg-primary/5">
+            <Icon name="i-lucide-tags" class="size-4" />
+            <AlertTitle>Metadatos pendientes</AlertTitle>
+            <AlertDescription class="space-y-3">
+              <p>
+                Complete los metadatos obligatorios en la pestaña Metadatos para poder avanzar esta etapa.
+              </p>
+              <Button size="sm" type="button" variant="outline" @click="activeTab = 'metadata'">
+                Ir a metadatos
+              </Button>
             </AlertDescription>
           </Alert>
 
@@ -465,6 +586,7 @@ function refreshContext() {
         :filing-id="context.filing.id"
         :requires-response="filingRequiresResponse"
         :stage-name="context.open_task?.stage?.name"
+        :initial-copy-emails="context.filing.response_copy_emails ?? []"
         :before-submit="attachPendingFilesIfNeeded"
         @closed="onFilingClosed"
       />
@@ -472,6 +594,46 @@ function refreshContext() {
 
     <TabsContent v-if="showFilingTab && context?.filing" value="filing" class="mt-6">
       <WorkflowTaskFilingSummaryPanel :filing="context.filing" />
+    </TabsContent>
+
+    <TabsContent v-if="showFilingMetadataCapture && context?.filing" value="metadata" class="mt-6">
+      <div class="space-y-4">
+        <div class="space-y-1">
+          <p class="text-sm font-medium">
+            Metadatos del radicado
+          </p>
+          <p class="text-muted-foreground text-sm">
+            <template v-if="needsFilingMetadata">
+              Obligatorio en esta etapa de gestión. Debe completarlos para avanzar.
+            </template>
+            <template v-else-if="filingMetadataFieldCount > 0">
+              Metadatos archivísticos del radicado.
+            </template>
+            <template v-else>
+              Este radicado no tiene esquema de metadatos archivísticos para el tipo funcional ni el tipo documental.
+              Los campos de un documento (por ejemplo «Prueba») se capturan en la pestaña Expediente al adjuntarlo.
+            </template>
+          </p>
+        </div>
+        <VentanillaArchivalMetadataFields
+          v-if="filingMetadataFieldCount > 0"
+          ref="metadataFieldsRef"
+          v-model="metadataValues"
+          :schema="filingMetadataSchema"
+          :doc-document-type-id="context.filing.doc_document_type?.id"
+          :functional-type-key="context.filing.functional_type_key"
+          :submit-attempted="metadataSubmitAttempted"
+        />
+        <Button
+          v-if="filingMetadataFieldCount > 0"
+          type="button"
+          class="h-10"
+          :disabled="savingMetadata"
+          @click="saveFilingMetadata"
+        >
+          {{ savingMetadata ? 'Guardando…' : 'Guardar metadatos' }}
+        </Button>
+      </div>
     </TabsContent>
 
     <TabsContent

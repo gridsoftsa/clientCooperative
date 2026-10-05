@@ -711,7 +711,7 @@ onMounted(() => loadAll())
             </TabsContent>
 
             <TabsContent value="metadatos" class="mt-0 min-h-0 flex-1 overflow-y-auto p-4 data-[state=inactive]:hidden">
-              <ArchivalFileMetadataForm :file="file" @updated="loadAll" />
+              <ArchivalFileMetadataForm :file="file" :tree="tree" @updated="loadAll" />
             </TabsContent>
 
             <TabsContent

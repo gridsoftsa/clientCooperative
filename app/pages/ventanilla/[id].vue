@@ -55,6 +55,8 @@ const selectedAssignedUserId = ref<number | null>(null)
 const assignmentNote = ref('')
 const responseText = ref('')
 const responseCopyEmails = ref<string[]>([])
+const copyEmailsHydrating = ref(false)
+const copyEmailsSaving = ref(false)
 const closeReason = ref('')
 const voidReason = ref('')
 const voidDialogOpen = ref(false)
@@ -85,6 +87,22 @@ const latestSenderNotification = computed(() =>
 )
 const responseCopyDeliveries = computed(() =>
   (filing.value?.notification_deliveries ?? []).filter(delivery => delivery.recipient_role === 'response_copy'),
+)
+const storedResponseCopyEmails = computed(() => filing.value?.response_copy_emails ?? [])
+const visibleResponseCopyEmails = computed(() => {
+  if (storedResponseCopyEmails.value.length) {
+    return storedResponseCopyEmails.value
+  }
+
+  return responseCopyDeliveries.value
+    .map(delivery => delivery.recipient_address)
+    .filter((address): address is string => Boolean(address))
+})
+const responseCopyRows = computed(() =>
+  visibleResponseCopyEmails.value.map(email => ({
+    email,
+    delivery: responseCopyDeliveries.value.find(delivery => delivery.recipient_address === email) ?? null,
+  })),
 )
 const canAssign = computed(() => hasPermission('ventanilla_asignar') && !isTerminal.value)
 const canManage = computed(() => hasPermission('ventanilla_gestionar') && !isTerminal.value)
@@ -169,6 +187,7 @@ async function load() {
     catalog.value = await ventanillaApi.fetchCatalog()
     filing.value = await ventanillaApi.fetchFiling(id.value)
     selectedAssignedUserId.value = filing.value.assigned_user?.id ?? null
+    hydrateResponseCopyEmails(filing.value.response_copy_emails ?? [])
     await loadResponsibleUsers(
       filing.value.org_unit_responsible?.id ?? null,
       filing.value.assigned_user?.id ?? null,
@@ -186,6 +205,58 @@ function applySectionFromQuery() {
     activeSection.value = section as VentanillaDetailSection
   }
 }
+
+function sameCopyEmails(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) {
+    return false
+  }
+
+  return left.every((email, index) => email === right[index])
+}
+
+function hydrateResponseCopyEmails(emails: string[]): void {
+  copyEmailsHydrating.value = true
+  responseCopyEmails.value = [...emails]
+  nextTick(() => {
+    copyEmailsHydrating.value = false
+  })
+}
+
+async function persistResponseCopyEmails(emails: string[]): Promise<void> {
+  if (!canManage.value || !filing.value) {
+    return
+  }
+
+  copyEmailsSaving.value = true
+  errorMessage.value = ''
+  try {
+    const data = await ventanillaApi.updateFilingResponseCopyEmails(id.value, emails)
+    if (filing.value) {
+      filing.value.response_copy_emails = data.response_copy_emails ?? emails
+    }
+  }
+  catch (e: unknown) {
+    const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    errorMessage.value = first ?? err.data?.message ?? 'No se pudieron guardar las copias de la respuesta'
+  }
+  finally {
+    copyEmailsSaving.value = false
+  }
+}
+
+watch(responseCopyEmails, (emails) => {
+  if (copyEmailsHydrating.value || loading.value || !filing.value) {
+    return
+  }
+
+  const stored = filing.value.response_copy_emails ?? []
+  if (sameCopyEmails(emails, stored)) {
+    return
+  }
+
+  void persistResponseCopyEmails(emails)
+})
 
 onMounted(async () => {
   await load()
@@ -258,6 +329,18 @@ function responseCopyStatusLabel(status: string): string {
   return 'No enviado'
 }
 
+function responseCopyFailureReason(errorMessage: string | null | undefined): string | null {
+  if (!errorMessage) {
+    return null
+  }
+
+  if (errorMessage.toLowerCase().includes('too many emails per second')) {
+    return 'Mailtrap rechazó el envío por límite de mensajes por segundo'
+  }
+
+  return errorMessage
+}
+
 function notificationChannelLabel(channel: string): string {
   return VENTANILLA_NOTIFICATION_CHANNEL_LABELS[channel] ?? channel
 }
@@ -285,6 +368,7 @@ async function runAction(
   try {
     filing.value = await callback()
     selectedAssignedUserId.value = filing.value.assigned_user?.id ?? selectedAssignedUserId.value
+    hydrateResponseCopyEmails(filing.value.response_copy_emails ?? [])
     actionMessage.value = successMessage
   } catch (e: unknown) {
     const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
@@ -371,7 +455,7 @@ async function respondAndClose() {
     selectedAssignedUserId.value = filing.value.assigned_user?.id ?? selectedAssignedUserId.value
     actionMessage.value = res.message
     responseText.value = ''
-    responseCopyEmails.value = []
+    hydrateResponseCopyEmails(filing.value.response_copy_emails ?? [])
   }
   catch (e: unknown) {
     const err = e as { data?: { message?: string; errors?: Record<string, string[]> } }
@@ -753,15 +837,25 @@ async function viewSticker() {
                 {{ filing.response_text }}
               </dd>
             </div>
-            <div v-if="responseCopyDeliveries.length" class="sm:col-span-2">
+            <div v-if="responseCopyRows.length" class="sm:col-span-2">
               <dt class="text-muted-foreground text-xs">
                 Copias de la respuesta
               </dt>
               <dd class="mt-1 space-y-1 text-sm">
-                <p v-for="delivery in responseCopyDeliveries" :key="delivery.id">
-                  <span class="font-medium">{{ delivery.recipient_address }}</span>
-                  <span class="text-muted-foreground"> · {{ responseCopyStatusLabel(delivery.status) }}</span>
-                  <span v-if="delivery.sent_at" class="text-muted-foreground"> · {{ formatDate(delivery.sent_at) }}</span>
+                <p v-for="row in responseCopyRows" :key="row.email">
+                  <span class="font-medium">{{ row.email }}</span>
+                  <span v-if="row.delivery" class="text-muted-foreground">
+                    · {{ responseCopyStatusLabel(row.delivery.status) }}
+                    <template v-if="row.delivery.sent_at">
+                      · {{ formatDate(row.delivery.sent_at) }}
+                    </template>
+                    <template v-if="responseCopyFailureReason(row.delivery.error_message)">
+                      · {{ responseCopyFailureReason(row.delivery.error_message) }}
+                    </template>
+                  </span>
+                  <span v-else class="text-muted-foreground">
+                    · Guardado, sin intento de envío
+                  </span>
                 </p>
               </dd>
             </div>
@@ -897,7 +991,11 @@ async function viewSticker() {
                       <Label>Respuesta</Label>
                       <Textarea v-model="responseText" rows="4" placeholder="Registre la respuesta dada al remitente…" />
                     </div>
-                    <VentanillaResponseCopyEmails v-model="responseCopyEmails" />
+                    <VentanillaResponseCopyEmails
+                      v-model="responseCopyEmails"
+                      :disabled="!canManage"
+                      :saving="copyEmailsSaving"
+                    />
                     <Button :disabled="actionLoading === 'respond'" @click="respondAndClose">
                       {{ actionLoading === 'respond' ? 'Cerrando…' : 'Registrar respuesta y cerrar' }}
                     </Button>
@@ -1245,7 +1343,7 @@ async function viewSticker() {
                     class="mt-1 text-xs"
                     :class="delivery.status === 'skipped' ? 'text-muted-foreground' : 'text-destructive'"
                   >
-                    {{ delivery.error_message }}
+                    {{ responseCopyFailureReason(delivery.error_message) ?? delivery.error_message }}
                   </p>
                 </li>
               </ul>

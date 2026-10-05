@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { WorkflowFilingContext, WorkflowTaskCard } from '~/types/workflow'
-import { extractApiErrorMessage } from '~/utils/workflow-task-ui'
+import { extractApiErrorMessage, isOpenWorkflowTaskStatus } from '~/utils/workflow-task-ui'
 
 definePageMeta({
   layout: 'default',
@@ -116,6 +116,22 @@ async function load() {
     }
 
     await loadContext()
+
+    const openTaskId = context.value?.open_task?.id
+    if (
+      context.value?.is_active
+      && openTaskId
+      && task.value
+      && openTaskId !== task.value.id
+      && !isOpenWorkflowTaskStatus(task.value.status)
+    ) {
+      await navigateTo({
+        path: `/workflow/tareas/${openTaskId}`,
+        query: route.query,
+        replace: true,
+      })
+      return
+    }
   }
   catch (error) {
     task.value = null
@@ -141,9 +157,10 @@ function onWorkflowCompleted() {
 
 watch(taskId, () => {
   void load()
-}, { immediate: true })
+})
 
 onMounted(() => {
+  void load()
   void ensureLoaded()
 })
 </script>

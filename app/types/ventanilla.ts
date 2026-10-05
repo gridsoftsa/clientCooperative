@@ -499,6 +499,7 @@ export interface VentanillaFilingDetail extends VentanillaFilingSummary {
   assigned_user?: { id: number; name: string } | null
   assigned_at: string | null
   response_text: string | null
+  response_copy_emails?: string[]
   responded_at: string | null
   responded_by?: { id: number; name: string } | null
   closed_at: string | null

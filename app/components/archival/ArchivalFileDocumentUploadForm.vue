@@ -226,7 +226,9 @@ function captureAutocompleteSnapshot() {
 }
 
 function metadataSuggestionQuery(): Record<string, string | number> {
-  const query: Record<string, string | number> = {}
+  const query: Record<string, string | number> = {
+    archival_file_id: props.file.id,
+  }
 
   if (props.file.entity_key) {
     query.entity_key = props.file.entity_key

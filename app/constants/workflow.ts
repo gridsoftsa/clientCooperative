@@ -6,7 +6,7 @@ export const WORKFLOW_STAGE_TYPE_OPTIONS = [
 export const WORKFLOW_VENTANILLA_ROLE_OPTIONS = [
   { value: 'none', label: 'Sin integración ventanilla' },
   { value: 'assignment', label: 'Asignación (se completa al asignar responsable)' },
-  { value: 'management', label: 'Gestión (sigue el inicio de gestión en ventanilla)' },
+  { value: 'management', label: 'Gestión (única por flujo: captura metadatos y sigue el inicio de gestión en ventanilla)' },
   { value: 'response_close', label: 'Cierre / respuesta (valida respuesta obligatoria)' },
 ] as const
 

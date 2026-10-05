@@ -65,7 +65,6 @@ const recipientName = ref('')
 const recipientIdentifier = ref('')
 const notes = ref('')
 const metadataValues = ref<Record<string, unknown>>({})
-const metadataFieldsRef = ref<{ validateRequiredFields?: () => string | null } | null>(null)
 const discardReason = ref('')
 const discardDialogOpen = ref(false)
 
@@ -267,9 +266,6 @@ watch(functionalTypeKey, () => {
 async function classifyIntake(): Promise<void> {
   submitAttempted.value = true
 
-  const metadataMissing = metadataFieldsRef.value?.findFirstMissingRequiredField?.() ?? null
-  const metadataError = metadataMissing?.message ?? metadataFieldsRef.value?.validateRequiredFields?.() ?? null
-
   const formError = validateVentanillaCoreFilingForm({
     filingType: filingType.value,
     functionalTypeKey: resolvedFunctionalTypeKey(),
@@ -283,14 +279,10 @@ async function classifyIntake(): Promise<void> {
       recipientName: recipientName.value,
       recipientIdentifier: recipientIdentifier.value,
     },
-    metadataError,
   })
 
   if (formError) {
     showFormError(formError)
-    if (metadataMissing) {
-      metadataFieldsRef.value?.focusMissingField?.(metadataMissing.fieldCode, metadataMissing.fieldIndex)
-    }
     return
   }
 
@@ -578,14 +570,6 @@ async function discardIntake(): Promise<void> {
         :org-unit-id="responsibleOrgUnitId"
         :functional-type-key="functionalTypeKey"
         v-model:doc-document-type-id="docDocumentTypeId"
-      />
-
-      <VentanillaArchivalMetadataFields
-        ref="metadataFieldsRef"
-        v-model="metadataValues"
-        :doc-document-type-id="docDocumentTypeId"
-        :functional-type-key="functionalTypeKey"
-        :submit-attempted="submitAttempted"
       />
 
       <div class="space-y-2">

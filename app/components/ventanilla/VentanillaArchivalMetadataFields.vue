@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onDigitsOnlyInput } from '~/utils/digits-only-input'
 import { ventanillaInputErrorClass } from '~/utils/ventanilla-form-field-focus'
-import type { ArchivalMetadataFieldRow, ArchivalMetadataSchemaRow } from '~/composables/useArchivalMetadataApi'
+import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 
 const { formatPesosConSimbolo: formatCurrency, parsePesosInput: parseCurrency } = usePesosFormat()
 
@@ -9,6 +9,11 @@ const props = defineProps<{
   docDocumentTypeId: number | null | undefined
   functionalTypeKey: string | null | undefined
   modelValue: Record<string, unknown>
+  schema?: {
+    id?: number
+    name?: string
+    fields?: ArchivalMetadataFieldRow[]
+  } | null
   disabled?: boolean
   submitAttempted?: boolean
 }>()
@@ -18,7 +23,11 @@ const emit = defineEmits<{
 }>()
 
 const metaApi = useArchivalMetadataApi()
-const resolvedSchema = ref<ArchivalMetadataSchemaRow | null>(null)
+const resolvedSchema = ref<{
+  id?: number
+  name?: string
+  fields?: ArchivalMetadataFieldRow[]
+} | null>(null)
 const loading = ref(false)
 
 const values = computed({
@@ -27,8 +36,22 @@ const values = computed({
 })
 
 watch(
+  () => props.schema,
+  (schema) => {
+    if (schema !== undefined) {
+      resolvedSchema.value = schema
+    }
+  },
+  { immediate: true },
+)
+
+watch(
   () => [props.docDocumentTypeId, props.functionalTypeKey] as const,
   async (value: readonly [number | null | undefined, string | null | undefined]) => {
+    if (props.schema !== undefined) {
+      return
+    }
+
     const [docDocumentTypeId, functionalTypeKey] = value
     resolvedSchema.value = null
     if ((!docDocumentTypeId || docDocumentTypeId < 1) && !functionalTypeKey) {

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { ArchivalFile, ArchivalFileTreeNode } from '~/types/archival-file'
 import type { WorkflowArchivalFileContext } from '~/types/workflow'
+import { flattenFileDocumentNodes } from '~/utils/archival-file-upload'
+import { archivalMetadataDisplayEntries } from '~/utils/archival-metadata-display'
 
 const props = defineProps<{
   archivalContext: WorkflowArchivalFileContext
@@ -23,6 +25,11 @@ const canUpload = computed(() =>
 )
 
 const stageMissing = computed(() => props.archivalContext.required_documents_stage?.missing ?? [])
+const existingDocuments = computed(() => flattenFileDocumentNodes(tree.value))
+
+function documentMetadataEntries(document: ArchivalFileTreeNode) {
+  return archivalMetadataDisplayEntries(document.metadata_values)
+}
 
 async function load() {
   loading.value = true
@@ -97,24 +104,72 @@ watch(() => props.archivalContext.id, () => load())
       {{ loadError }}
     </p>
 
-    <ArchivalFileDocumentUploadForm
-      v-else-if="file && archivalContext.can_upload && canUpload"
-      :file="file"
-      :tree="tree"
-      :required="archivalContext.required_documents_stage"
-      :workflow-task-id="archivalContext.workflow_task_id"
-      :preset-node-id="archivalContext.archival_file_node_id"
-      :preset-doc-type-id="archivalContext.default_doc_document_type_id"
-      lock-folder
-      @uploaded="onUploaded"
-    />
+    <div v-else class="space-y-3">
+      <div v-if="existingDocuments.length" class="space-y-2">
+        <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Documentos ya cargados
+        </p>
+        <div
+          v-for="document in existingDocuments"
+          :key="document.id"
+          class="space-y-2 rounded-md border bg-background p-3"
+        >
+          <div class="space-y-0.5">
+            <p class="text-sm font-medium">
+              {{ document.name }}
+            </p>
+            <p class="text-xs text-muted-foreground">
+              {{ document.doc_document_type_name ?? 'Documento' }}
+              <template v-if="document.uploaded_at">
+                · {{ new Date(document.uploaded_at).toLocaleString('es-CO') }}
+              </template>
+            </p>
+          </div>
+          <dl
+            v-if="documentMetadataEntries(document).length"
+            class="grid gap-1 text-xs"
+          >
+            <div
+              v-for="entry in documentMetadataEntries(document)"
+              :key="entry.key"
+              class="flex flex-wrap justify-between gap-2"
+            >
+              <dt class="text-muted-foreground">
+                {{ entry.label }}
+              </dt>
+              <dd class="font-medium">
+                {{ entry.value }}
+              </dd>
+            </div>
+          </dl>
+          <p v-else class="text-xs text-muted-foreground">
+            Este documento no tiene metadatos registrados.
+          </p>
+        </div>
+      </div>
+      <p v-else class="text-xs text-muted-foreground">
+        Aún no hay documentos cargados en este expediente. Los metadatos se ven aquí después de adjuntar el archivo.
+      </p>
 
-    <p v-else-if="!archivalContext.can_upload" class="text-xs text-muted-foreground">
-      El expediente no admite nuevos documentos en su estado actual.
-    </p>
+      <ArchivalFileDocumentUploadForm
+        v-if="file && archivalContext.can_upload && canUpload"
+        :file="file"
+        :tree="tree"
+        :required="archivalContext.required_documents_stage"
+        :workflow-task-id="archivalContext.workflow_task_id"
+        :preset-node-id="archivalContext.archival_file_node_id"
+        :preset-doc-type-id="archivalContext.default_doc_document_type_id"
+        lock-folder
+        @uploaded="onUploaded"
+      />
 
-    <p v-else-if="!canUpload" class="text-xs text-muted-foreground">
-      No tiene permiso para adjuntar documentos al expediente.
-    </p>
+      <p v-else-if="!archivalContext.can_upload" class="text-xs text-muted-foreground">
+        El expediente no admite nuevos documentos en su estado actual.
+      </p>
+
+      <p v-else-if="!canUpload" class="text-xs text-muted-foreground">
+        No tiene permiso para adjuntar documentos al expediente.
+      </p>
+    </div>
   </div>
 </template>
