@@ -16,6 +16,7 @@ export interface ArchivalFileStatusActionOption {
   target: ArchivalFileStatusTransitionTarget
   label: string
   description: string
+  icon: string
   variant: 'default' | 'outline' | 'destructive'
   requiresReason: boolean
   permission: 'expedientes_editar' | 'expedientes_cerrar'
@@ -64,6 +65,7 @@ export function archivalFileStatusActions(
           target: 'inactive',
           label: 'Anular expediente',
           description: 'Use esta opción si el expediente se creó por error o no se completará. Quedará inactivo y dejará de estar en gestión.',
+          icon: 'i-lucide-ban',
           variant: 'destructive',
           requiresReason: true,
           permission: 'expedientes_editar',
@@ -75,6 +77,7 @@ export function archivalFileStatusActions(
           target: 'in_review',
           label: 'Enviar a revisión',
           description: 'El expediente quedará en revisión hasta que un responsable lo apruebe o devuelva.',
+          icon: 'i-lucide-send',
           variant: 'outline',
           requiresReason: false,
           permission: 'expedientes_editar',
@@ -82,8 +85,9 @@ export function archivalFileStatusActions(
         {
           target: 'inactive',
           label: 'Marcar inactivo',
-          description: 'Suspende temporalmente la gestión del expediente sin cerrarlo.',
-          variant: 'outline',
+          description: 'Suspende temporalmente la gestión del expediente sin completarlo.',
+          icon: 'i-lucide-pause-circle',
+          variant: 'destructive',
           requiresReason: false,
           permission: 'expedientes_cerrar',
         },
@@ -94,6 +98,7 @@ export function archivalFileStatusActions(
           target: 'active',
           label: 'Aprobar revisión',
           description: 'Confirma la revisión y deja el expediente activo.',
+          icon: 'i-lucide-check-circle-2',
           variant: 'default',
           requiresReason: false,
           permission: 'expedientes_cerrar',
@@ -102,6 +107,7 @@ export function archivalFileStatusActions(
           target: 'returned',
           label: 'Devolver para ajuste',
           description: 'Indique el motivo para que el responsable corrija el expediente.',
+          icon: 'i-lucide-undo-2',
           variant: 'destructive',
           requiresReason: true,
           permission: 'expedientes_cerrar',
@@ -113,6 +119,7 @@ export function archivalFileStatusActions(
           target: 'in_review',
           label: 'Reenviar a revisión',
           description: 'Envía nuevamente el expediente a revisión tras los ajustes.',
+          icon: 'i-lucide-send',
           variant: 'outline',
           requiresReason: false,
           permission: 'expedientes_editar',
@@ -121,6 +128,7 @@ export function archivalFileStatusActions(
           target: 'active',
           label: 'Marcar activo',
           description: 'Da por completados los ajustes y deja el expediente activo.',
+          icon: 'i-lucide-circle-check',
           variant: 'default',
           requiresReason: false,
           permission: 'expedientes_editar',
@@ -132,6 +140,7 @@ export function archivalFileStatusActions(
           target: 'active',
           label: 'Reactivar expediente',
           description: 'Vuelve a habilitar la gestión del expediente.',
+          icon: 'i-lucide-play-circle',
           variant: 'default',
           requiresReason: false,
           permission: 'expedientes_cerrar',
@@ -154,7 +163,7 @@ export function archivalFileStatusBanner(
     case 'in_review':
       return {
         title: 'En revisión',
-        description: 'Un responsable debe aprobar o devolver el expediente antes del cierre.',
+        description: 'Un responsable debe aprobar o devolver el expediente antes de completarlo.',
       }
     case 'returned':
       return {

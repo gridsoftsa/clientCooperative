@@ -47,9 +47,9 @@ function detailLines(item: ArchivalFileClosureReadiness['blocking'][number]): st
 <template>
   <Card>
     <CardHeader>
-      <CardTitle>Requisitos de cierre</CardTitle>
+      <CardTitle>Requisitos para completar</CardTitle>
       <CardDescription>
-        Validación de documentos, metadatos, clasificación y workflow antes de cerrar.
+        Validación de documentos, metadatos, clasificación y workflow antes de completar el expediente.
       </CardDescription>
     </CardHeader>
     <CardContent class="space-y-3">
@@ -58,7 +58,7 @@ function detailLines(item: ArchivalFileClosureReadiness['blocking'][number]): st
       </div>
       <template v-else-if="readiness">
         <Badge :variant="readiness.ready ? 'default' : 'destructive'">
-          {{ readiness.ready ? 'Listo para cerrar' : 'Pendientes por resolver' }}
+          {{ readiness.ready ? 'Listo para completar' : 'Pendientes por resolver' }}
         </Badge>
         <ul v-if="readiness.blocking.length" class="space-y-3 text-sm">
           <li

@@ -151,7 +151,7 @@ watch(() => props.producerAreas, () => {
         </Badge>
       </p>
       <p class="text-xs text-muted-foreground">
-        Checklist para cerrar el expediente y alertas de documentación faltante. Los tipos documentales
+        Checklist para completar el expediente y alertas de documentación faltante. Los tipos documentales
         deben ser de la serie y subserie de cada área productora. Si cambia esa TRD, los obligatorios
         que ya no coincidan se eliminan. Si el tipo usa workflow, los requisitos por etapa se configuran
         en el flujo de trabajo, no aquí.

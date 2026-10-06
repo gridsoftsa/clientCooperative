@@ -429,7 +429,7 @@ export const ARCHIVAL_FILE_STATUS_LABELS: Record<ArchivalFileStatus, string> = {
   active: 'Activo',
   in_review: 'En revisión',
   returned: 'Devuelto para ajuste',
-  closed: 'Cerrado',
+  closed: 'Completado',
   inactive: 'Inactivo',
   management_archive: 'En archivo de gestión',
   central_archive: 'En archivo central',

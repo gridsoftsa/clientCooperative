@@ -31,7 +31,7 @@ const metadataValues = defineModel<Record<string, unknown>>({ required: true })
           Esquema «{{ schemaName }}»
           <span v-if="schemaVersion">v{{ schemaVersion }}</span>.
         </template>
-        Los campos obligatorios deben completarse antes de cerrar el expediente; puede diligenciarlos ahora o después en el detalle.
+        Los campos obligatorios deben diligenciarse antes de completar el expediente; puede hacerlo ahora o después en el detalle.
       </p>
     </div>
 

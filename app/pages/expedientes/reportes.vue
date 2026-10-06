@@ -185,7 +185,7 @@ onMounted(() => load())
         </Card>
         <Card>
           <CardHeader class="pb-2">
-            <CardDescription>Cerrados</CardDescription>
+            <CardDescription>Completados</CardDescription>
             <CardTitle class="text-3xl">
               {{ summary?.closed ?? 0 }}
             </CardTitle>

@@ -47,6 +47,8 @@ const versionDialogOpen = ref(false)
 const publishDialogOpen = ref(false)
 const transferDialogOpen = ref(false)
 const statusTransitionDialogOpen = ref(false)
+const completeConfirmOpen = ref(false)
+const completing = ref(false)
 const selectedStatusAction = ref<ArchivalFileStatusActionOption | null>(null)
 const selectedTreeNode = ref<ArchivalFileTreeNode | null>(null)
 const transferAlertType = ref<string | null>(null)
@@ -263,7 +265,7 @@ async function refreshTree() {
   }
 }
 
-async function handleClose() {
+async function requestComplete() {
   if (!file.value) {
     return
   }
@@ -274,16 +276,27 @@ async function handleClose() {
     toast.error(
       lines.length > 0
         ? lines.join(' · ')
-        : 'Revise los requisitos de cierre en la pestaña Gestión.',
+        : 'Revise los requisitos para completar en la pestaña Gestión.',
     )
     await nextTick()
     document.getElementById('closure-readiness-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     return
   }
 
+  completeConfirmOpen.value = true
+}
+
+async function handleClose() {
+  if (!file.value) {
+    return
+  }
+
+  completing.value = true
+
   try {
     await archivalApi.closeFile(file.value.id)
-    toast.success('Expediente cerrado.')
+    completeConfirmOpen.value = false
+    toast.success('Expediente completado.')
     await loadAll()
   }
   catch (error: unknown) {
@@ -302,7 +315,10 @@ async function handleClose() {
         return
       }
     }
-    toast.error(messageFromFetchError(error, 'No se pudo cerrar el expediente.'))
+    toast.error(messageFromFetchError(error, 'No se pudo completar el expediente.'))
+  }
+  finally {
+    completing.value = false
   }
 }
 
@@ -358,21 +374,15 @@ onMounted(() => loadAll())
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-col gap-4 lg:gap-5">
+  <div class="flex h-[calc(100dvh-6.5rem)] min-h-0 flex-col gap-3">
     <div v-if="loading" class="py-16 text-center text-muted-foreground">
       Cargando expediente...
     </div>
 
     <template v-else-if="file">
-      <div class="sticky top-0 z-20 -mx-1 space-y-3 border-b bg-background/95 px-1 pb-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="shrink-0 space-y-3 border-b px-1 pb-3">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0 space-y-1">
-            <Button variant="ghost" size="sm" class="-ml-2 h-8 text-muted-foreground" as-child>
-              <NuxtLink to="/expedientes">
-                <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
-                Expedientes
-              </NuxtLink>
-            </Button>
             <p class="font-mono text-xs text-muted-foreground">
               {{ file.file_number }}
             </p>
@@ -398,22 +408,29 @@ onMounted(() => loadAll())
             </div>
           </div>
 
-          <div class="flex max-w-full flex-wrap gap-2 sm:justify-end">
+          <div
+            v-if="availableStatusActions.length || canTransfer || canReconsolidate || canConsolidate || canDownloadConsolidated || canAttachDocument"
+            class="flex max-w-full flex-wrap gap-2 sm:justify-end"
+          >
             <Button
               v-for="action in availableStatusActions"
               :key="action.target"
               size="sm"
               :variant="action.variant"
+              :title="action.description"
               @click="openStatusTransitionDialog(action)"
             >
+              <Icon :name="action.icon" class="size-4" />
               {{ action.label }}
             </Button>
             <Button
               v-if="canTransfer"
               variant="outline"
               size="sm"
+              title="Mover el expediente a la siguiente fase archivística"
               @click="openTransferDialog()"
             >
+              <Icon name="i-lucide-arrow-right-left" class="size-4" />
               Transferir
             </Button>
             <Button
@@ -423,6 +440,7 @@ onMounted(() => loadAll())
               :disabled="consolidating"
               @click="handleReconsolidate"
             >
+              <Icon name="i-lucide-refresh-cw" class="size-4" />
               {{ consolidating ? 'Reconsolidando…' : 'Reconsolidar PDF' }}
             </Button>
             <Button
@@ -432,6 +450,7 @@ onMounted(() => loadAll())
               :disabled="consolidating"
               @click="handleConsolidate"
             >
+              <Icon name="i-lucide-file-stack" class="size-4" />
               {{ consolidating ? 'Consolidando…' : (file.consolidated_path ? 'Reconsolidar PDF' : 'Consolidar PDF') }}
             </Button>
             <a
@@ -440,25 +459,19 @@ onMounted(() => loadAll())
               class="inline-flex"
             >
               <Button variant="outline" size="sm" type="button">
+                <Icon name="i-lucide-download" class="size-4" />
                 Descargar consolidado
               </Button>
             </a>
             <Button
-              v-if="canClose"
-              variant="outline"
-              size="sm"
-              :disabled="closureReadiness !== null && !closureReadiness.ready"
-              @click="handleClose"
-            >
-              Cerrar expediente
-            </Button>
-            <Button
               v-if="canAttachDocument"
               variant="secondary"
               size="sm"
+              title="Agregar documentos al expediente"
               @click="workspaceTab = 'adjuntar'"
             >
-              Adjuntar
+              <Icon name="i-lucide-paperclip" class="size-4" />
+              Adjuntar documento
             </Button>
           </div>
         </div>
@@ -481,8 +494,8 @@ onMounted(() => loadAll())
         </div>
       </div>
 
-      <div class="grid min-h-0 gap-4 lg:grid-cols-2 lg:items-stretch">
-        <Card class="min-h-0 min-w-0 flex flex-col overflow-hidden lg:max-h-[calc(100vh-11rem)]">
+      <div class="grid min-h-0 flex-1 gap-4 lg:grid-cols-2 lg:items-stretch">
+        <Card class="min-h-0 min-w-0 flex flex-col overflow-hidden">
           <CardHeader class="flex shrink-0 flex-row flex-wrap items-center justify-between gap-2 space-y-0 border-b py-3">
             <div class="min-w-0">
               <CardTitle class="text-base">
@@ -521,7 +534,7 @@ onMounted(() => loadAll())
           </CardContent>
         </Card>
 
-        <Card class="min-h-0 min-w-0 flex flex-col overflow-hidden lg:max-h-[calc(100vh-11rem)]">
+        <Card class="min-h-0 min-w-0 flex flex-col overflow-hidden">
           <Tabs v-model="workspaceTab" class="flex min-h-0 min-w-0 flex-1 flex-col">
             <div class="shrink-0 border-b px-2 py-2">
               <TabsList class="grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-3 lg:flex lg:flex-wrap">
@@ -734,6 +747,26 @@ onMounted(() => loadAll())
         </Card>
       </div>
 
+      <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t bg-background px-1 py-2">
+        <Button variant="outline" size="sm" as-child>
+          <NuxtLink to="/expedientes">
+            <Icon name="i-lucide-arrow-left" class="size-4" />
+            Volver al listado
+          </NuxtLink>
+        </Button>
+        <Button
+          v-if="canClose"
+          size="sm"
+          class="bg-emerald-600 text-white hover:bg-emerald-600/90"
+          :disabled="closureReadiness !== null && !closureReadiness.ready"
+          title="Da por terminada la gestión documental. No sale de esta pantalla."
+          @click="requestComplete"
+        >
+          <Icon name="i-lucide-circle-check-big" class="size-4" />
+          Completar expediente
+        </Button>
+      </div>
+
       <ArchivalFileDocumentReferenceDialog
         v-model:open="referenceDialogOpen"
         :file-id="file.id"
@@ -778,6 +811,26 @@ onMounted(() => loadAll())
         :action="selectedStatusAction"
         @updated="loadAll"
       />
+
+      <AlertDialog :open="completeConfirmOpen" @update:open="completeConfirmOpen = $event">
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Completar expediente</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción da por terminada la gestión documental y deja el expediente como completado.
+              No sale de esta pantalla: para salir use <span class="font-medium">Volver al listado</span> en la parte inferior.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel :disabled="completing">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction :disabled="completing" @click.prevent="handleClose">
+              {{ completing ? 'Completando…' : 'Sí, completar' }}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </template>
   </div>
 </template>

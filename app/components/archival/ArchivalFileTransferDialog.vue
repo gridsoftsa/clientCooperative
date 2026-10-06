@@ -178,7 +178,7 @@ async function handleSubmit() {
       <DialogHeader>
         <DialogTitle>Transferir expediente</DialogTitle>
         <DialogDescription>
-          Mueva el expediente cerrado a la siguiente fase archivística permitida según la TRD.
+          Mueva el expediente completado a la siguiente fase archivística permitida según la TRD.
         </DialogDescription>
       </DialogHeader>
 
