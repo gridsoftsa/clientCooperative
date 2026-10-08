@@ -79,7 +79,12 @@ const canShowDetails = computed(() =>
   isDocument.value
   || isFolder.value
   || isFileRoot.value
+  || Boolean(props.node.trd?.path)
   || (props.node.metadata_values != null && Object.keys(props.node.metadata_values).length > 0),
+)
+
+const nodeMetadataFields = computed(() =>
+  (props.node.metadata_fields?.length ? props.node.metadata_fields : props.metadataFields) ?? [],
 )
 
 const documentFileId = computed(() => props.fileId ?? props.node.archival_file_id ?? null)
@@ -154,23 +159,41 @@ function openExpediente() {
         v-if="hasChildren"
         type="button"
         class="text-muted-foreground"
+        :title="expanded ? 'Contraer' : 'Expandir'"
+        :aria-label="expanded ? `Contraer ${node.name}` : `Expandir ${node.name}`"
+        :aria-expanded="expanded"
         @click.stop="expanded = !expanded"
       >
-        <Icon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-4" />
+        <Icon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-4" aria-hidden="true" />
       </button>
       <span v-else class="w-4" />
 
-      <Icon :name="iconName" class="size-4 shrink-0 text-muted-foreground" />
+      <Icon :name="iconName" class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
 
-      <span class="min-w-0 flex-1 truncate text-xs sm:text-sm">{{ node.name }}</span>
+      <span
+        class="min-w-0 flex-1 truncate text-xs sm:text-sm"
+        :title="node.name"
+      >{{ node.name }}</span>
 
-      <Badge v-if="node.is_reference && !compact" variant="secondary" class="text-xs">
+      <ArchivalTrdPlacementDropdown
+        v-if="node.trd"
+        :trd="node.trd"
+        :compact="compact"
+      />
+
+      <Badge
+        v-if="node.is_reference && !compact"
+        variant="secondary"
+        class="text-xs"
+        :title="`Referencia a la versión ${node.referenced_version_number ?? '?'}`"
+      >
         Ref. v{{ node.referenced_version_number ?? '?' }}
       </Badge>
       <Badge
         v-if="isDocument && node.version_number"
         :variant="node.is_current_version === false ? 'outline' : 'secondary'"
         class="shrink-0 text-[10px] sm:text-xs"
+        :title="node.is_current_version === false ? `Versión ${node.version_number} histórica` : `Versión ${node.version_number} vigente`"
       >
         v{{ node.version_number }}
         <span v-if="node.is_current_version !== false" class="sr-only"> vigente</span>
@@ -179,17 +202,23 @@ function openExpediente() {
         v-if="!compact && isDocument && node.source_label"
         variant="outline"
         class="text-xs"
-        :title="node.source ? `Origen: ${node.source}` : undefined"
+        :title="`Origen: ${node.source_label}`"
       >
         {{ node.source_label }}
       </Badge>
-      <Badge v-if="!compact && node.status_label" variant="outline" class="text-xs">
+      <Badge
+        v-if="!compact && node.status_label"
+        variant="outline"
+        class="text-xs"
+        :title="`Estado: ${node.status_label}`"
+      >
         {{ node.status_label }}
       </Badge>
       <Badge
         v-if="isDocument && !canAccessDocumentContent"
         variant="secondary"
         class="text-[10px] sm:text-xs"
+        title="Contenido restringido por clasificación. La TRD y los metadatos sí se pueden consultar."
       >
         Restringido
       </Badge>
@@ -212,6 +241,8 @@ function openExpediente() {
         class="h-7 shrink-0 gap-1 px-1.5 text-xs text-muted-foreground sm:px-2"
         :class="{ 'text-primary': detailsExpanded }"
         :title="detailsExpanded ? 'Ocultar metadatos' : 'Ver metadatos'"
+        :aria-label="detailsExpanded ? `Ocultar metadatos de ${node.name}` : `Ver metadatos de ${node.name}`"
+        :aria-expanded="detailsExpanded"
         @click.stop="toggleDetails"
       >
         <Icon :name="detailsExpanded ? 'i-lucide-chevron-up' : 'i-lucide-info'" class="size-3.5" />
@@ -302,7 +333,7 @@ function openExpediente() {
     >
       <ArchivalFileTreeNodeDetails
         :node="node"
-        :metadata-fields="metadataFields"
+        :metadata-fields="nodeMetadataFields"
         :file-metadata-values="isFileRoot ? fileMetadataValues : undefined"
         :file-id="fileId"
         :can-view-documents="canView && canAccessDocumentContent"

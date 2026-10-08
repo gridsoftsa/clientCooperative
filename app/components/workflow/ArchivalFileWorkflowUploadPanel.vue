@@ -28,7 +28,7 @@ const stageMissing = computed(() => props.archivalContext.required_documents_sta
 const existingDocuments = computed(() => flattenFileDocumentNodes(tree.value))
 
 function documentMetadataEntries(document: ArchivalFileTreeNode) {
-  return archivalMetadataDisplayEntries(document.metadata_values)
+  return archivalMetadataDisplayEntries(document.metadata_values, document.metadata_fields)
 }
 
 async function load() {
@@ -118,11 +118,24 @@ watch(() => props.archivalContext.id, () => load())
             <p class="text-sm font-medium">
               {{ document.name }}
             </p>
-            <p class="text-xs text-muted-foreground">
-              {{ document.doc_document_type_name ?? 'Documento' }}
-              <template v-if="document.uploaded_at">
-                · {{ new Date(document.uploaded_at).toLocaleString('es-CO') }}
-              </template>
+            <ArchivalTrdPlacementDropdown
+              v-if="document.trd"
+              class="mt-1"
+              :trd="document.trd"
+            />
+            <p
+              v-else
+              class="text-xs text-muted-foreground"
+              :title="document.doc_document_type_name ?? 'Documento'"
+            >
+              {{ document.doc_document_type_name || 'Documento' }}
+            </p>
+            <p
+              v-if="document.uploaded_at"
+              class="text-xs text-muted-foreground"
+              :title="new Date(document.uploaded_at).toLocaleString('es-CO')"
+            >
+              {{ new Date(document.uploaded_at).toLocaleString('es-CO') }}
             </p>
           </div>
           <dl

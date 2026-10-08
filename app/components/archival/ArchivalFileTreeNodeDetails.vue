@@ -27,19 +27,44 @@ const isFileRoot = computed(() => props.node.type === 'file')
 const resolvedFileId = computed(() => props.fileId ?? props.node.archival_file_id ?? null)
 const documentId = computed(() => props.node.archival_file_document_id ?? null)
 
+const nodeMetadataFields = computed(() =>
+  (props.node.metadata_fields?.length ? props.node.metadata_fields : props.metadataFields) ?? [],
+)
+
 const metadataEntries = computed(() => {
   if (isFileRoot.value) {
     return archivalMetadataDisplayEntries(props.fileMetadataValues, props.metadataFields)
   }
 
-  return archivalMetadataDisplayEntries(props.node.metadata_values, props.metadataFields)
+  return archivalMetadataDisplayEntries(props.node.metadata_values, nodeMetadataFields.value)
+})
+
+const filingMetadataEntries = computed(() => {
+  if (!isFileRoot.value || !props.node.source_filing) {
+    return []
+  }
+
+  return archivalMetadataDisplayEntries(
+    props.node.source_filing.metadata_values,
+    props.node.source_filing.metadata_fields,
+  )
 })
 
 const structuralEntries = computed(() => {
   const entries: Array<{ label: string, value: string }> = []
 
   if (isDocumentLike.value) {
-    if (props.node.doc_document_type_name) {
+    const trd = props.node.trd
+    if (trd?.series) {
+      entries.push({ label: 'Serie TRD', value: `${trd.series.code} — ${trd.series.name}` })
+    }
+    if (trd?.subseries) {
+      entries.push({ label: 'Subserie TRD', value: `${trd.subseries.code} — ${trd.subseries.name}` })
+    }
+    if (trd?.document_type) {
+      entries.push({ label: 'Tipo documental', value: `${trd.document_type.code} — ${trd.document_type.name}` })
+    }
+    else if (props.node.doc_document_type_name) {
       entries.push({ label: 'Tipo documental', value: props.node.doc_document_type_name })
     }
 
@@ -107,6 +132,14 @@ const structuralEntries = computed(() => {
     entries.push({ label: 'Número', value: props.node.file_number })
   }
 
+  if (isFileRoot.value && props.node.trd?.path) {
+    entries.push({ label: 'Ubicación TRD', value: props.node.trd.path })
+  }
+
+  if (isFileRoot.value && props.node.source_filing?.filing_number) {
+    entries.push({ label: 'Radicado', value: props.node.source_filing.filing_number })
+  }
+
   if (props.node.status_label) {
     entries.push({ label: 'Estado', value: props.node.status_label })
   }
@@ -161,6 +194,7 @@ async function recordSelection(decision: 'conservation' | 'elimination'): Promis
 const hasContent = computed(() =>
   structuralEntries.value.length > 0
   || metadataEntries.value.length > 0
+  || filingMetadataEntries.value.length > 0
   || showVersionHistory.value
   || canRecordSelection.value,
 )
@@ -177,11 +211,31 @@ const hasContent = computed(() =>
         <dt class="text-muted-foreground">
           {{ entry.label }}
         </dt>
-        <dd class="font-medium break-words">
+        <dd class="font-medium break-words" :title="entry.value">
           {{ entry.value }}
         </dd>
       </div>
     </dl>
+
+    <div v-if="filingMetadataEntries.length" class="space-y-1.5">
+      <p class="font-medium text-muted-foreground">
+        Metadatos del radicado (workflow)
+      </p>
+      <dl class="grid gap-1.5 sm:grid-cols-2">
+        <div
+          v-for="entry in filingMetadataEntries"
+          :key="`filing-${entry.key}`"
+          class="min-w-0 rounded-md bg-background/60 px-2 py-1.5"
+        >
+          <dt class="text-muted-foreground">
+            {{ entry.label }}
+          </dt>
+          <dd class="font-medium break-words" :title="entry.value">
+            {{ entry.value }}
+          </dd>
+        </div>
+      </dl>
+    </div>
 
     <div v-if="metadataEntries.length" class="space-y-1.5">
       <p class="font-medium text-muted-foreground">
@@ -196,7 +250,7 @@ const hasContent = computed(() =>
           <dt class="text-muted-foreground">
             {{ entry.label }}
           </dt>
-          <dd class="font-medium break-words">
+          <dd class="font-medium break-words" :title="entry.value">
             {{ entry.value }}
           </dd>
         </div>

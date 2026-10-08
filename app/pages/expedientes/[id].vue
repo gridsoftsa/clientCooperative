@@ -54,6 +54,7 @@ const selectedTreeNode = ref<ArchivalFileTreeNode | null>(null)
 const transferAlertType = ref<string | null>(null)
 const transferSuggestedPhase = ref<ArchivalPhaseTarget | null>(null)
 const workspaceTab = ref<'resumen' | 'gestion' | 'metadatos' | 'adjuntar' | 'auditoria'>('resumen')
+const treeQuery = ref('')
 
 const gestionAttentionCount = computed(() => {
   let count = 0
@@ -147,6 +148,59 @@ const eligibleNextPhaseLabel = computed(() => {
   return ARCHIVAL_PHASE_TARGET_LABELS[phase]
 })
 const consolidating = ref(false)
+
+function archivalTreeNodeMatchesQuery(node: ArchivalFileTreeNode, query: string): boolean {
+  const haystack = [
+    node.name,
+    node.file_number,
+    node.doc_document_type_name,
+    node.doc_series_code,
+    node.trd?.path,
+    node.trd?.series?.code,
+    node.trd?.series?.name,
+    node.trd?.subseries?.code,
+    node.trd?.subseries?.name,
+    node.trd?.document_type?.code,
+    node.trd?.document_type?.name,
+    node.source_filing?.filing_number,
+    JSON.stringify(node.metadata_values ?? {}),
+    JSON.stringify(node.source_filing?.metadata_values ?? {}),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  return haystack.includes(query)
+}
+
+function filterArchivalTree(node: ArchivalFileTreeNode, query: string): ArchivalFileTreeNode | null {
+  if (!query) {
+    return node
+  }
+
+  const children = (node.children ?? [])
+    .map(child => filterArchivalTree(child, query))
+    .filter((child): child is ArchivalFileTreeNode => child != null)
+
+  if (archivalTreeNodeMatchesQuery(node, query) || children.length > 0) {
+    return { ...node, children }
+  }
+
+  return null
+}
+
+const visibleTree = computed(() => {
+  if (!tree.value) {
+    return null
+  }
+
+  const query = treeQuery.value.trim().toLowerCase()
+  if (!query) {
+    return tree.value
+  }
+
+  return filterArchivalTree(tree.value, query)
+})
 
 const expedienteMetadataFields = computed<ArchivalMetadataFieldRow[]>(() => {
   const fields = file.value?.metadata_schema?.active_fields ?? []
@@ -502,7 +556,7 @@ onMounted(() => loadAll())
                 Árbol documental
               </CardTitle>
               <CardDescription class="text-xs">
-                Navegue carpetas y documentos. Metadatos en cada nodo.
+                Navegue carpetas y documentos. La TRD y los metadatos aparecen en cada nodo.
               </CardDescription>
             </div>
             <Button
@@ -516,9 +570,24 @@ onMounted(() => loadAll())
             </Button>
           </CardHeader>
           <CardContent class="min-h-0 min-w-0 flex-1 overflow-y-auto p-3 sm:p-4">
+            <div class="mb-3">
+              <Input
+                v-model="treeQuery"
+                placeholder="Buscar por TRD, documento o metadatos…"
+                class="h-8 text-xs"
+                title="Buscar en el árbol por código o nombre TRD, documento o metadatos"
+                aria-label="Buscar en el árbol por TRD, documento o metadatos"
+              />
+            </div>
+            <p
+              v-if="tree && !visibleTree && treeQuery.trim()"
+              class="text-xs text-muted-foreground"
+            >
+              Ningún documento coincide con la búsqueda.
+            </p>
             <ArchivalFileTreeItem
-              v-if="tree"
-              :node="tree"
+              v-else-if="visibleTree"
+              :node="visibleTree"
               :file-id="file.id"
               :can-manage-documents="canManageDocuments"
               :can-view="canViewDocuments"
@@ -589,6 +658,10 @@ onMounted(() => loadAll())
                   <div>
                     <span class="text-muted-foreground">Área:</span>
                     {{ file.org_unit?.name }}
+                  </div>
+                  <div v-if="tree?.trd" class="space-y-1">
+                    <span class="text-muted-foreground">Ubicación TRD:</span>
+                    <ArchivalTrdPlacementDropdown :trd="tree.trd" />
                   </div>
                   <div v-if="file.entity_label">
                     <span class="text-muted-foreground">Entidad:</span>

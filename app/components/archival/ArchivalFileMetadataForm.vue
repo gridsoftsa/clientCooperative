@@ -43,8 +43,15 @@ const fileTypeSettingsPath = computed(() =>
 )
 
 function documentMetadataEntries(document: ArchivalFileTreeNode) {
-  return archivalMetadataDisplayEntries(document.metadata_values)
+  return archivalMetadataDisplayEntries(document.metadata_values, document.metadata_fields)
 }
+
+const filingMetadataEntries = computed(() =>
+  archivalMetadataDisplayEntries(
+    props.tree?.source_filing?.metadata_values,
+    props.tree?.source_filing?.metadata_fields,
+  ),
+)
 
 function syncFromFile() {
   metadataValues.value = { ...(props.file.metadata_values ?? {}) }
@@ -118,6 +125,38 @@ watch(() => props.file, () => syncFromFile(), { immediate: true, deep: true })
       </template>
     </div>
 
+    <div
+      v-if="tree?.source_filing"
+      class="space-y-3 border-t pt-4"
+    >
+      <p class="text-sm font-medium">
+        Metadatos del radicado
+      </p>
+      <p class="text-muted-foreground text-xs">
+        Campos capturados en el workflow del radicado
+        <span v-if="tree.source_filing.filing_number" class="font-medium text-foreground">
+          {{ tree.source_filing.filing_number }}
+        </span>.
+      </p>
+      <dl v-if="filingMetadataEntries.length" class="grid gap-1 text-xs">
+        <div
+          v-for="entry in filingMetadataEntries"
+          :key="entry.key"
+          class="flex flex-wrap justify-between gap-2"
+        >
+          <dt class="text-muted-foreground">
+            {{ entry.label }}
+          </dt>
+          <dd class="font-medium">
+            {{ entry.value }}
+          </dd>
+        </div>
+      </dl>
+      <p v-else class="text-xs text-muted-foreground">
+        El radicado no tiene metadatos archivísticos guardados.
+      </p>
+    </div>
+
     <div class="space-y-3 border-t pt-4">
       <p class="text-sm font-medium">
         Metadatos de documentos
@@ -135,9 +174,19 @@ watch(() => props.file, () => syncFromFile(), { immediate: true, deep: true })
             <p class="text-sm font-medium">
               {{ document.name }}
             </p>
-            <p class="text-xs text-muted-foreground">
-              {{ document.doc_document_type_name ?? 'Documento' }}
-            </p>
+            <div class="mt-1">
+              <ArchivalTrdPlacementDropdown
+                v-if="document.trd"
+                :trd="document.trd"
+              />
+              <p
+                v-else
+                class="text-xs text-muted-foreground"
+                :title="document.doc_document_type_name ?? 'Documento'"
+              >
+                {{ document.doc_document_type_name ?? 'Documento' }}
+              </p>
+            </div>
           </div>
           <dl v-if="documentMetadataEntries(document).length" class="grid gap-1 text-xs">
             <div

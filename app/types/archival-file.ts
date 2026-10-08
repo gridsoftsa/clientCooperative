@@ -173,6 +173,33 @@ export interface ArchivalDocumentRetentionSummary {
   selection_decision_label?: string | null
 }
 
+export interface ArchivalTrdCatalogItem {
+  id: number
+  code: string
+  name: string
+}
+
+export interface ArchivalTrdPlacement {
+  path: string
+  series?: ArchivalTrdCatalogItem | null
+  subseries?: ArchivalTrdCatalogItem | null
+  document_type?: ArchivalTrdCatalogItem | null
+}
+
+export interface ArchivalTreeMetadataField {
+  code: string
+  name: string
+  data_type?: string
+  options?: Array<{ value: string, label: string }> | null
+}
+
+export interface ArchivalFileSourceFiling {
+  id: number
+  filing_number?: string | null
+  metadata_values?: Record<string, unknown> | null
+  metadata_fields?: ArchivalTreeMetadataField[]
+}
+
 export interface ArchivalFileTreeNode {
   id: string
   type: 'file' | 'child_file' | 'folder' | 'document' | 'document_reference' | 'area' | 'series' | 'subseries' | 'document_type' | 'filing'
@@ -190,6 +217,9 @@ export interface ArchivalFileTreeNode {
   download_url?: string | null
   mime_type?: string | null
   metadata_values?: Record<string, unknown> | null
+  metadata_fields?: ArchivalTreeMetadataField[]
+  trd?: ArchivalTrdPlacement | null
+  source_filing?: ArchivalFileSourceFiling | null
   org_unit_id?: number
   doc_document_type_id?: number
   doc_document_type_name?: string

@@ -15,7 +15,6 @@ const route = useRoute()
 const router = useRouter()
 
 const applicantId = route.params.id as string
-const { getByLabel } = useMunicipalities()
 
 const form = ref<ApplicantForm>({
   document_type: 'CC',
@@ -73,7 +72,6 @@ function applicantToForm(a: Applicant): ApplicantForm {
 
 function formToPayload(): Record<string, unknown> {
   const f = form.value
-  const municipality = getByLabel(f.residence_city_name)
   return {
     document_type: f.document_type,
     document_number: f.document_number,
@@ -92,7 +90,7 @@ function formToPayload(): Record<string, unknown> {
     email: f.email || null,
     residence_address: f.residence_address || null,
     residence_city_name: f.residence_city_name || null,
-    residence_city_id: municipality?.id ?? f.residence_city_id ?? null,
+    residence_city_id: f.residence_city_id ?? null,
     residence_type: f.residence_type || null,
     time_in_residence: f.time_in_residence || null,
     occupation: f.occupation || null,

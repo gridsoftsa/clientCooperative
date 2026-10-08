@@ -206,7 +206,7 @@ onMounted(async () => {
         <div class="flex flex-wrap gap-3">
           <Input
             v-model="search"
-            placeholder="Buscar por título, número, cédula o nombre..."
+            placeholder="Buscar por título, número, TRD, cédula o nombre..."
             class="max-w-md"
             @keyup.enter="loadFiles(1)"
           />
