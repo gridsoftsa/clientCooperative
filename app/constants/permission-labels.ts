@@ -312,6 +312,7 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   ventanilla_override_respuesta: 'Ajustar obligación de respuesta',
   plantilla_score_ver: 'Ver plantilla SCORE',
   plantilla_score_editar: 'Editar plantilla SCORE',
+  expedientes_enlace_credito_configurar: 'Configurar enlace de radicación de crédito con expedientes',
   trd_catalogo_ver: 'Ver catálogo documental (TRD)',
   trd_catalogo_editar: 'Editar catálogo documental (TRD)',
   trd_restrictions_manage: 'Añadir o cambiar restricciones de confidencialidad (TRD publicada)',

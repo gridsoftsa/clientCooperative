@@ -128,6 +128,7 @@ export const navMenu: NavMenu[] = [
           'expedientes_area_ver',
           'expedientes_biblioteca_ver',
           'expedientes_tipos_configurar',
+          'expedientes_enlace_credito_configurar',
           'expedientes_reportes_ver',
           'expedientes_alertas_configurar',
           'expedientes_acceso_gestionar',
@@ -158,6 +159,11 @@ export const navMenu: NavMenu[] = [
             title: 'Tipos de expediente',
             link: '/expedientes/tipos',
             permission: 'expedientes_tipos_configurar',
+          },
+          {
+            title: 'Enlace crédito',
+            link: '/expedientes/enlace-credito',
+            permission: 'expedientes_enlace_credito_configurar',
           },
           {
             title: 'Control de acceso',
@@ -269,12 +275,12 @@ export const navMenu: NavMenu[] = [
       {
         title: 'TRD y archivo',
         icon: 'i-lucide-archive',
-        anyPermission: ['trd_catalogo_ver', 'trd_tablas_ver'],
+        anyPermission: ['trd_catalogo_ver', 'trd_tablas_ver', 'expedientes_tipos_configurar'],
         children: [
           {
             title: 'Resumen',
             link: '/settings/archival',
-            anyPermission: ['trd_catalogo_ver', 'trd_tablas_ver'],
+            anyPermission: ['trd_catalogo_ver', 'trd_tablas_ver', 'expedientes_tipos_configurar'],
           },
           {
             title: 'Catálogo (series)',

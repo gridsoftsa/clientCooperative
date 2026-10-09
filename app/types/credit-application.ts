@@ -187,6 +187,8 @@ export interface CreditApplicationForm {
   numero_radicado_externo: string
   /** Área productora documental para aplicar TRD vigente a los adjuntos */
   document_producer_org_unit_id?: number | null
+  /** Crear expediente de crédito bajo el del asociado (requiere interruptor global). */
+  link_to_archival?: boolean
   /** Marca de solicitud privilegiada (informes); editable con permiso `radicacion_marcar_privilegiado`. */
   is_privileged?: boolean
   /** Obligatoria si `is_privileged` es true; texto libre en español. */

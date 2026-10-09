@@ -25,6 +25,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   'edit': 'Editar',
   'editar': 'Editar',
   'email': 'Correo',
+  'enlace-credito': 'Enlace crédito',
+  'expedientes': 'Expedientes',
   'estructura': 'Estructura',
   'financial-activity': 'Actividad financiera',
   'import': 'Importar estructura',

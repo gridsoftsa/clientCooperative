@@ -184,6 +184,14 @@ onMounted(async () => {
           Tipos
         </Button>
         <Button
+          v-if="hasPermission('expedientes_enlace_credito_configurar')"
+          variant="outline"
+          @click="router.push('/expedientes/enlace-credito')"
+        >
+          <Icon name="i-lucide-link" class="mr-2 size-4" />
+          Enlace crédito
+        </Button>
+        <Button
           v-if="hasPermission('expedientes_reportes_ver')"
           variant="outline"
           @click="router.push('/expedientes/reportes')"

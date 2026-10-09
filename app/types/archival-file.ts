@@ -80,6 +80,22 @@ export interface ArchivalFileType {
   } | null
 }
 
+export interface ArchivalCreditLinkFileTypeOption {
+  id: number
+  name: string
+  type_key: string
+}
+
+export interface ArchivalCreditLinkSettings {
+  enabled: boolean
+  associate_archival_file_type_id: number | null
+  credit_archival_file_type_id: number | null
+  associate_archival_file_type?: ArchivalCreditLinkFileTypeOption | null
+  credit_archival_file_type?: ArchivalCreditLinkFileTypeOption | null
+  available_file_types?: ArchivalCreditLinkFileTypeOption[]
+  user_producer_org_unit?: { id: number, name: string, code: string } | null
+}
+
 export interface ArchivalFileTypeRequiredDocument {
   id?: number
   org_unit_id?: number | null

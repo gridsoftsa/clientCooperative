@@ -173,6 +173,7 @@ const form = ref<CreditApplicationForm>({
   co_debtors: [],
   numero_radicado_externo: '',
   document_producer_org_unit_id: null,
+  link_to_archival: false,
   is_privileged: false,
   privileged_justification: '',
 })
@@ -185,12 +186,20 @@ const {
   loadTrdTypesForUnit,
 } = useRadicacionTrd()
 
+const archivalApi = useArchivalFileApi()
+const creditLinkGlobalEnabled = ref(false)
+const userProducerOrgUnitId = ref<number | null>(null)
+
 watch(
   () => form.value.document_producer_org_unit_id,
   (id) => {
     loadTrdTypesForUnit(id ?? null)
   },
 )
+
+function applyAutomaticCreditArchivalLink(): void {
+  form.value.link_to_archival = creditLinkGlobalEnabled.value
+}
 
 function appendRadicacionTrdToFormData(fd: FormData, doc: {
   doc_document_type_id?: number | null
@@ -1621,6 +1630,15 @@ onMounted(() => {
   void fetchCatalogs()
   void loadProducerUnits()
   void fetchCreditDestinationOptions()
+  void archivalApi.fetchCreditLinkSettings()
+    .then((data) => {
+      creditLinkGlobalEnabled.value = data.enabled
+      userProducerOrgUnitId.value = data.user_producer_org_unit?.id ?? null
+      applyAutomaticCreditArchivalLink()
+    })
+    .catch(() => {
+      creditLinkGlobalEnabled.value = false
+    })
 })
 </script>
 
@@ -1998,40 +2016,6 @@ onMounted(() => {
                 inputmode="numeric"
                 @keydown="onKeydownNumeric($event, false)"
               />
-            </div>
-            <div class="space-y-1.5 sm:col-span-2">
-              <Label for="doc_producer_unit">Área productora documental (TRD)</Label>
-              <div class="flex flex-wrap gap-2 items-center">
-                <Select
-                  :model-value="form.document_producer_org_unit_id ?? undefined"
-                  @update:model-value="form.document_producer_org_unit_id = $event != null ? Number($event) : null"
-                >
-                  <SelectTrigger id="doc_producer_unit" class="min-w-[280px]">
-                    <SelectValue placeholder="Opcional: clasificación archivística" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem
-                      v-for="u in producerUnits"
-                      :key="u.id"
-                      :value="u.id"
-                    >
-                      {{ u.name }} ({{ u.code }})
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  v-if="form.document_producer_org_unit_id"
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  @click="form.document_producer_org_unit_id = null"
-                >
-                  Quitar
-                </Button>
-              </div>
-              <p class="text-xs text-muted-foreground leading-relaxed">
-                Si el área tiene TRD vigente, cada documento adjunto (no auxiliar) deberá indicar su tipo documental del catálogo.
-              </p>
             </div>
             <div class="space-y-1.5">
               <Label for="agency">Sucursal *</Label>

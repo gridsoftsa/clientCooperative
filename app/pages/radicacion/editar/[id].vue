@@ -212,6 +212,7 @@ const form = ref<CreditApplicationForm>({
   co_debtors: [],
   numero_radicado_externo: '',
   document_producer_org_unit_id: null,
+  link_to_archival: false,
   is_privileged: false,
   privileged_justification: '',
 })
@@ -224,12 +225,24 @@ const {
   loadTrdTypesForUnit,
 } = useRadicacionTrd()
 
+const archivalApi = useArchivalFileApi()
+const creditLinkGlobalEnabled = ref(false)
+const userProducerOrgUnitId = ref<number | null>(null)
+
 watch(
   () => form.value.document_producer_org_unit_id,
   (unitId) => {
     loadTrdTypesForUnit(unitId ?? null)
   },
 )
+
+function applyAutomaticCreditArchivalLink(): void {
+  if (documentsOnlyEditMode.value) {
+    return
+  }
+
+  form.value.link_to_archival = creditLinkGlobalEnabled.value
+}
 
 function appendRadicacionTrdToFormData(fd: FormData, doc: {
   doc_document_type_id?: number | null
@@ -529,6 +542,7 @@ function syncFormFromApplication() {
     status: 'Draft',
     numero_radicado_externo: app.numero_radicado_externo ?? '',
     document_producer_org_unit_id: app.document_producer_org_unit_id ?? null,
+    link_to_archival: app.link_to_archival === true,
     co_debtors: coDebtors.value.map((c: (typeof coDebtors.value)[number]) => {
       const docs = getDocumentsForApplicant(c.id)
       return apiApplicantToForm(c, docs)
@@ -1885,6 +1899,15 @@ onMounted(() => {
   void fetchCatalogs()
   void loadProducerUnits()
   void fetchCreditDestinationOptions()
+  void archivalApi.fetchCreditLinkSettings()
+    .then((data) => {
+      creditLinkGlobalEnabled.value = data.enabled
+      userProducerOrgUnitId.value = data.user_producer_org_unit?.id ?? null
+      applyAutomaticCreditArchivalLink()
+    })
+    .catch(() => {
+      creditLinkGlobalEnabled.value = false
+    })
 })
 </script>
 
@@ -2392,41 +2415,6 @@ onMounted(() => {
                 <p class="text-[11px] text-muted-foreground">
                   Al pegar desde Word se limpian espacios extra y caracteres especiales.
                   {{ (form.destination_description ?? '').length }}/{{ PASTED_PLAIN_TEXT_MAX_LENGTH }}
-                </p>
-              </div>
-              <div class="space-y-1.5 sm:col-span-2 lg:col-span-3">
-                <Label for="doc_producer_unit">Área productora documental (TRD)</Label>
-                <div class="flex flex-wrap gap-2 items-center">
-                  <Select
-                    :model-value="form.document_producer_org_unit_id ?? undefined"
-                    :disabled="documentsOnlyEditMode"
-                    @update:model-value="form.document_producer_org_unit_id = $event != null ? Number($event) : null"
-                  >
-                    <SelectTrigger id="doc_producer_unit" class="min-w-[280px]">
-                      <SelectValue placeholder="Opcional: clasificación archivística" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem
-                        v-for="u in producerUnits"
-                        :key="u.id"
-                        :value="u.id"
-                      >
-                        {{ u.name }} ({{ u.code }})
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    v-if="form.document_producer_org_unit_id && !documentsOnlyEditMode"
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    @click="form.document_producer_org_unit_id = null"
-                  >
-                    Quitar
-                  </Button>
-                </div>
-                <p class="text-xs text-muted-foreground leading-relaxed">
-                  Si el área tiene TRD vigente, cada documento adjunto (no auxiliar) deberá indicar su tipo documental del catálogo.
                 </p>
               </div>
               <div class="space-y-3 sm:col-span-2 lg:col-span-3">

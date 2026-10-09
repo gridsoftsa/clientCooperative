@@ -8,6 +8,7 @@ import type {
   ArchivalFileMetadataSuggestion,
   ArchivalFileRequiredDocumentsEvaluation,
   ArchivalFileTreeNode,
+  ArchivalCreditLinkSettings,
   ArchivalFileType,
   ArchivalMasterDocumentSearchResult,
   ArchivalPhaseTarget,
@@ -482,6 +483,23 @@ export function useArchivalFileApi() {
     return api<{ message: string }>(`/archival-files/access-grants/${id}`, { method: 'DELETE' })
   }
 
+  async function fetchCreditLinkSettings() {
+    const res = await api<{ data: ArchivalCreditLinkSettings }>('/archival/credit-link-settings')
+
+    return res.data
+  }
+
+  async function updateCreditLinkSettings(payload: {
+    enabled: boolean
+    associate_archival_file_type_id?: number | null
+    credit_archival_file_type_id?: number | null
+  }) {
+    return await api<{ data: ArchivalCreditLinkSettings, message?: string }>('/archival/credit-link-settings', {
+      method: 'PUT',
+      body: payload,
+    })
+  }
+
   async function fetchAccessControlReport(query: Record<string, string | number | undefined> = {}) {
     const res = await api<{
       data: import('~/types/archival-access').ArchivalAccessControlReportRow[]
@@ -540,5 +558,7 @@ export function useArchivalFileApi() {
     updateAccessGrant,
     deleteAccessGrant,
     fetchAccessControlReport,
+    fetchCreditLinkSettings,
+    updateCreditLinkSettings,
   }
 }
