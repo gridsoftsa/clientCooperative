@@ -13,10 +13,14 @@ definePageMeta({
   permissions: 'expedientes_reportes_ver|expedientes_acceso_reporte',
 })
 
+const FILTER_ALL = 'all'
+
 const router = useRouter()
 const route = useRoute()
 const archivalApi = useArchivalFileApi()
 const { hasPermission } = usePermissions()
+const { $api } = useNuxtApp()
+const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promise<T>
 
 const summary = ref<Record<string, number> | null>(null)
 const alerts = ref<ArchivalFileAlert[]>([])
@@ -27,10 +31,71 @@ const loading = ref(true)
 const refreshing = ref(false)
 const exporting = ref(false)
 
+const fileTypes = ref<Array<{ id: number, name: string }>>([])
+const orgUnits = ref<Array<{ id: number, name: string }>>([])
+const fileTypeFilter = ref(FILTER_ALL)
+const orgUnitFilter = ref(FILTER_ALL)
+const phaseFilter = ref(FILTER_ALL)
+const alertTypeFilter = ref(FILTER_ALL)
+const severityFilter = ref(FILTER_ALL)
+const upcomingOnly = ref(true)
+const accessStatusFilter = ref(FILTER_ALL)
+const accessPermissionFilter = ref(FILTER_ALL)
+
 const canRefresh = computed(() => hasPermission('expedientes_reportes_ver'))
 const canOperationalReports = computed(() => hasPermission('expedientes_reportes_ver'))
 const canAccessReport = computed(() => hasPermission('expedientes_acceso_reporte'))
 const highlightAccess = computed(() => route.query.tab === 'acceso')
+
+const phaseOptions = [
+  { value: 'management', label: 'Archivo de gestión' },
+  { value: 'central', label: 'Archivo central' },
+  { value: 'historical', label: 'Archivo histórico' },
+]
+
+const alertTypeOptions = Object.entries(ARCHIVAL_FILE_ALERT_TYPE_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}))
+
+function operationalQuery(): Record<string, string | number | boolean> {
+  const query: Record<string, string | number | boolean> = {}
+  if (fileTypeFilter.value !== FILTER_ALL)
+    query.archival_file_type_id = Number(fileTypeFilter.value)
+  if (orgUnitFilter.value !== FILTER_ALL)
+    query.org_unit_id = Number(orgUnitFilter.value)
+  if (phaseFilter.value !== FILTER_ALL)
+    query.archival_phase = phaseFilter.value
+  if (alertTypeFilter.value !== FILTER_ALL)
+    query.alert_type = alertTypeFilter.value
+  if (severityFilter.value !== FILTER_ALL)
+    query.severity = severityFilter.value
+  query.upcoming_only = upcomingOnly.value ? 1 : 0
+  return query
+}
+
+function accessQuery(): Record<string, string | number | undefined> {
+  return {
+    archival_file_type_id: fileTypeFilter.value !== FILTER_ALL ? Number(fileTypeFilter.value) : undefined,
+    status: accessStatusFilter.value !== FILTER_ALL ? accessStatusFilter.value : undefined,
+    permission: accessPermissionFilter.value !== FILTER_ALL ? accessPermissionFilter.value : undefined,
+  }
+}
+
+async function loadFilterOptions() {
+  try {
+    const [types, units] = await Promise.all([
+      archivalApi.fetchFileTypes(),
+      api<{ data: Array<{ id: number, name: string }> }>('/organizational-structure/org-units'),
+    ])
+    fileTypes.value = types.map(type => ({ id: type.id, name: type.name }))
+    orgUnits.value = units.data ?? []
+  }
+  catch {
+    fileTypes.value = []
+    orgUnits.value = []
+  }
+}
 
 function alertTypeLabel(type: string): string {
   return ARCHIVAL_FILE_ALERT_TYPE_LABELS[type as ArchivalFileAlertType] ?? type
@@ -46,13 +111,15 @@ async function load() {
   try {
     const tasks: Promise<unknown>[] = []
 
+    const query = operationalQuery()
+
     if (canOperationalReports.value) {
       tasks.push(
         Promise.all([
-          archivalApi.fetchReportsSummary(),
-          archivalApi.fetchAlertsReport({ per_page: 50 }),
-          archivalApi.fetchRetentionReport({ per_page: 25, upcoming_only: 1 }),
-          archivalApi.fetchIncompleteReport({ per_page: 25 }),
+          archivalApi.fetchReportsSummary(query),
+          archivalApi.fetchAlertsReport({ ...query, per_page: 50 }),
+          archivalApi.fetchRetentionReport({ ...query, per_page: 25 }),
+          archivalApi.fetchIncompleteReport({ ...query, per_page: 25 }),
         ]).then(([summaryData, alertsData, retentionData, incompleteData]) => {
           summary.value = summaryData
           alerts.value = alertsData.data
@@ -64,7 +131,7 @@ async function load() {
 
     if (canAccessReport.value) {
       tasks.push(
-        archivalApi.fetchAccessControlReport().then((res) => {
+        archivalApi.fetchAccessControlReport(accessQuery()).then((res) => {
           accessRows.value = res.data ?? []
         }),
       )
@@ -104,7 +171,7 @@ async function exportReports(format: 'xlsx' | 'pdf') {
   exporting.value = true
 
   try {
-    await archivalApi.exportReports(format)
+    await archivalApi.exportReports(format, operationalQuery())
     toast.success(`Reporte exportado en formato ${format === 'pdf' ? 'PDF' : 'Excel'}.`)
   }
   catch (error) {
@@ -115,7 +182,22 @@ async function exportReports(format: 'xlsx' | 'pdf') {
   }
 }
 
-onMounted(() => load())
+function clearFilters() {
+  fileTypeFilter.value = FILTER_ALL
+  orgUnitFilter.value = FILTER_ALL
+  phaseFilter.value = FILTER_ALL
+  alertTypeFilter.value = FILTER_ALL
+  severityFilter.value = FILTER_ALL
+  upcomingOnly.value = true
+  accessStatusFilter.value = FILTER_ALL
+  accessPermissionFilter.value = FILTER_ALL
+  load()
+}
+
+onMounted(async () => {
+  await loadFilterOptions()
+  await load()
+})
 </script>
 
 <template>
@@ -167,6 +249,224 @@ onMounted(() => load())
         </Button>
       </div>
     </div>
+
+    <Card>
+      <CardHeader class="pb-3">
+        <CardTitle class="text-base">
+          Filtros
+        </CardTitle>
+        <CardDescription>
+          Acotan indicadores, tablas y la exportación Excel/PDF.
+        </CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-4">
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div
+            v-if="canOperationalReports || canAccessReport"
+            class="space-y-2"
+          >
+            <Label>Tipo de expediente</Label>
+            <Select v-model="fileTypeFilter">
+              <SelectTrigger>
+                <SelectValue placeholder="Todos los tipos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="FILTER_ALL">
+                  Todos los tipos
+                </SelectItem>
+                <SelectItem
+                  v-for="type in fileTypes"
+                  :key="type.id"
+                  :value="String(type.id)"
+                >
+                  {{ type.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div
+            v-if="canOperationalReports"
+            class="space-y-2"
+          >
+            <Label>Área productora</Label>
+            <Select v-model="orgUnitFilter">
+              <SelectTrigger>
+                <SelectValue placeholder="Todas las áreas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="FILTER_ALL">
+                  Todas las áreas
+                </SelectItem>
+                <SelectItem
+                  v-for="unit in orgUnits"
+                  :key="unit.id"
+                  :value="String(unit.id)"
+                >
+                  {{ unit.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div
+            v-if="canOperationalReports"
+            class="space-y-2"
+          >
+            <Label>Fase archivística</Label>
+            <Select v-model="phaseFilter">
+              <SelectTrigger>
+                <SelectValue placeholder="Todas las fases" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="FILTER_ALL">
+                  Todas las fases
+                </SelectItem>
+                <SelectItem
+                  v-for="phase in phaseOptions"
+                  :key="phase.value"
+                  :value="phase.value"
+                >
+                  {{ phase.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div
+            v-if="canOperationalReports"
+            class="space-y-2"
+          >
+            <Label>Tipo de alerta</Label>
+            <Select v-model="alertTypeFilter">
+              <SelectTrigger>
+                <SelectValue placeholder="Todas las alertas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="FILTER_ALL">
+                  Todas las alertas
+                </SelectItem>
+                <SelectItem
+                  v-for="option in alertTypeOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div
+            v-if="canOperationalReports"
+            class="space-y-2"
+          >
+            <Label>Severidad</Label>
+            <Select v-model="severityFilter">
+              <SelectTrigger>
+                <SelectValue placeholder="Todas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="FILTER_ALL">
+                  Todas
+                </SelectItem>
+                <SelectItem
+                  v-for="(label, value) in ARCHIVAL_FILE_ALERT_SEVERITY_LABELS"
+                  :key="value"
+                  :value="value"
+                >
+                  {{ label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div
+            v-if="canAccessReport"
+            class="space-y-2"
+          >
+            <Label>Estado de acceso</Label>
+            <Select v-model="accessStatusFilter">
+              <SelectTrigger>
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="FILTER_ALL">
+                  Todos
+                </SelectItem>
+                <SelectItem value="active">
+                  Activo
+                </SelectItem>
+                <SelectItem value="inactive">
+                  Inactivo
+                </SelectItem>
+                <SelectItem value="revoked">
+                  Revocado
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div
+            v-if="canAccessReport"
+            class="space-y-2"
+          >
+            <Label>Permiso de acceso</Label>
+            <Select v-model="accessPermissionFilter">
+              <SelectTrigger>
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem :value="FILTER_ALL">
+                  Todos
+                </SelectItem>
+                <SelectItem value="view">
+                  Ver
+                </SelectItem>
+                <SelectItem value="download">
+                  Descargar
+                </SelectItem>
+                <SelectItem value="edit">
+                  Editar
+                </SelectItem>
+                <SelectItem value="attach">
+                  Anexar
+                </SelectItem>
+                <SelectItem value="close">
+                  Cerrar
+                </SelectItem>
+                <SelectItem value="transfer">
+                  Transferir
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div
+          v-if="canOperationalReports"
+          class="flex items-center gap-2 rounded-lg border p-3"
+        >
+          <Checkbox
+            id="upcoming-only"
+            :checked="upcomingOnly"
+            @update:checked="upcomingOnly = $event === true"
+          />
+          <Label for="upcoming-only" class="cursor-pointer">
+            Solo retención próxima
+          </Label>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <Button variant="secondary" :disabled="loading" @click="load()">
+            Aplicar filtros
+          </Button>
+          <Button variant="outline" :disabled="loading" @click="clearFilters">
+            Limpiar
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
 
     <div v-if="loading" class="py-10 text-center text-muted-foreground">
       Cargando reportes...

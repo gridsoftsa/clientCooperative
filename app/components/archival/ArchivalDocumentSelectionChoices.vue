@@ -23,11 +23,16 @@ function documentNeedsSelectionChoice(document: ArchivalTransferDocumentSelectio
     .includes('selection')
 }
 
+const emit = defineEmits<{
+  decided: [payload: { documentId: number, decision: ArchivalDocumentSelectionDecision }]
+}>()
+
 function setDecision(documentId: number, decision: ArchivalDocumentSelectionDecision) {
   decisions.value = {
     ...decisions.value,
     [documentId]: decision,
   }
+  emit('decided', { documentId, decision })
 }
 </script>
 

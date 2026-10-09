@@ -21,6 +21,13 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const api = useArchivalLifecycleApi()
+const archivalApi = useArchivalFileApi()
+const { hasPermission } = usePermissions()
+const canRecordSelection = computed(() =>
+  hasPermission('expedientes_transferir') || hasPermission('trd_transferencias_ejecutar'),
+)
+const selectionDecisions = ref<Record<number, 'conservation' | 'elimination'>>({})
+const savingSelectionKey = ref<string | null>(null)
 
 const actId = computed(() => Number(route.params.id))
 const loading = ref(true)
@@ -53,6 +60,43 @@ function setInventoryFileExpanded(fileId: number, open: boolean): void {
   }
 }
 
+function documentNeedsSelectionChoice(document: ArchivalTransferDocumentSelectionRow): boolean {
+  if (document.requires_selection) {
+    return true
+  }
+
+  return (document.final_disposition ?? '')
+    .split('|')
+    .map(part => part.trim())
+    .includes('selection')
+}
+
+function fileNeedsSelectionColumns(file: NonNullable<ArchivalTransferActRow['files']>[number]): boolean {
+  return (file.documents ?? []).some(document => documentNeedsSelectionChoice(document))
+}
+
+function decisionForDocument(documentId: number): 'conservation' | 'elimination' {
+  return selectionDecisions.value[documentId] ?? 'conservation'
+}
+
+function selectionPayloadForAct(): Array<{ archival_file_document_id: number, decision: 'conservation' | 'elimination' }> {
+  const rows: Array<{ archival_file_document_id: number, decision: 'conservation' | 'elimination' }> = []
+
+  for (const file of act.value?.files ?? []) {
+    for (const document of file.documents ?? []) {
+      if (!documentNeedsSelectionChoice(document)) {
+        continue
+      }
+      rows.push({
+        archival_file_document_id: document.id,
+        decision: decisionForDocument(document.id),
+      })
+    }
+  }
+
+  return rows
+}
+
 const missingSelectionOnDraft = computed(() => {
   if (act.value?.status !== 'draft') {
     return false
@@ -60,7 +104,7 @@ const missingSelectionOnDraft = computed(() => {
 
   return (act.value.files ?? []).some(file =>
     (file.documents ?? []).some(document =>
-      Boolean(document.requires_selection) && !document.selection_decision,
+      documentNeedsSelectionChoice(document) && !selectionDecisions.value[document.id],
     ),
   )
 })
@@ -144,10 +188,44 @@ function phaseLabel(phase?: string | null): string {
   return ARCHIVAL_PHASE_LABELS[phase] ?? phase
 }
 
+function hydrateSelectionDecisions(): void {
+  const next: Record<number, 'conservation' | 'elimination'> = {}
+
+  for (const file of act.value?.files ?? []) {
+    for (const document of file.documents ?? []) {
+      if (!documentNeedsSelectionChoice(document)) {
+        continue
+      }
+      if (document.selection_decision === 'conservation' || document.selection_decision === 'elimination') {
+        next[document.id] = document.selection_decision
+      }
+      else {
+        next[document.id] = 'conservation'
+      }
+    }
+  }
+
+  selectionDecisions.value = next
+}
+
+function expandFilesNeedingSelection(): void {
+  const next = { ...expandedFileIds.value }
+
+  for (const file of act.value?.files ?? []) {
+    if (fileNeedsSelectionColumns(file) || (file.documents?.length ?? 0) > 0) {
+      next[file.id] = true
+    }
+  }
+
+  expandedFileIds.value = next
+}
+
 async function load() {
   loading.value = true
   try {
     act.value = await api.fetchTransferAct(actId.value)
+    hydrateSelectionDecisions()
+    expandFilesNeedingSelection()
   }
   catch {
     toast.error('No se pudo cargar el acta')
@@ -158,10 +236,46 @@ async function load() {
   }
 }
 
+function setActDocumentDecision(
+  fileId: number,
+  documentId: number,
+  decision: 'conservation' | 'elimination',
+): void {
+  selectionDecisions.value = {
+    ...selectionDecisions.value,
+    [documentId]: decision,
+  }
+  void recordActDocumentSelection(fileId, { documentId, decision })
+}
+
+async function recordActDocumentSelection(
+  fileId: number,
+  payload: { documentId: number, decision: 'conservation' | 'elimination' },
+): Promise<void> {
+  const key = `${fileId}-${payload.documentId}`
+  savingSelectionKey.value = key
+  try {
+    const res = await archivalApi.saveDocumentSelection(fileId, [
+      { archival_file_document_id: payload.documentId, decision: payload.decision },
+    ])
+    toast.success(res.message ?? 'Selección registrada')
+    act.value = await api.fetchTransferAct(actId.value)
+    hydrateSelectionDecisions()
+    expandedFileIds.value = { ...expandedFileIds.value, [fileId]: true }
+  }
+  catch (error: unknown) {
+    toast.error(messageFromFetchError(error, 'No se pudo guardar la selección'))
+  }
+  finally {
+    savingSelectionKey.value = null
+  }
+}
+
 async function approve() {
   try {
-    const res = await api.approveTransferAct(actId.value)
+    const res = await api.approveTransferAct(actId.value, selectionPayloadForAct())
     act.value = res.data
+    hydrateSelectionDecisions()
     toast.success(res.message ?? 'Aprobada')
   }
   catch (error: unknown) {
@@ -385,10 +499,10 @@ onMounted(load)
             {{ nextStep.body }}
           </p>
           <p
-            v-if="missingSelectionOnDraft"
-            class="mt-2 text-sm text-rose-700 dark:text-rose-300"
+            v-if="act.status === 'draft' && (act.files ?? []).some(file => fileNeedsSelectionColumns(file))"
+            class="mt-2 text-sm text-muted-foreground"
           >
-            Hay documentos con disposición TRD de selección sin conservación o eliminación. Ábralos en el expediente (Metadatos del documento) y registre la decisión ahí. El acta no elige documentos.
+            Los documentos con TRD de selección quedan en Conservación por defecto (pasan al archivo central). Marque Eliminación solo si no deben transferirse y quedan para disposición final.
           </p>
         </div>
 
@@ -538,7 +652,7 @@ onMounted(load)
               Inventario de expedientes ({{ act.files?.length ?? 0 }})
             </CardTitle>
             <CardDescription>
-              Expedientes del lote. Los documentos se ven al expandir cada uno. La TRD de selección se resuelve en el expediente, no eligiendo documentos en esta acta.
+              Expedientes del lote. Si la TRD indica selección, cada documento aparece en una fila: Conservación queda marcada por defecto (pasa a archivo central); Eliminación solo si no se transfiere.
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-3">
@@ -618,63 +732,156 @@ onMounted(load)
                     <p class="text-xs font-medium text-muted-foreground">
                       Documentos
                     </p>
-                    <div
-                      v-for="fileDocument in file.documents"
-                      :key="fileDocument.id"
-                      class="flex items-center gap-3 rounded-md border bg-background px-3 py-2"
-                    >
-                      <Icon name="i-lucide-file" class="size-4 shrink-0 text-muted-foreground" />
-                      <div class="min-w-0 flex-1">
-                        <p class="truncate text-sm font-medium text-foreground">
-                          {{ fileDocument.title }}
-                        </p>
-                        <p class="truncate text-xs text-muted-foreground">
-                          <span v-if="fileDocument.original_name && fileDocument.original_name !== fileDocument.title">
-                            {{ fileDocument.original_name }}
-                            ·
-                          </span>
-                          <span v-if="fileDocument.final_disposition_label">
-                            {{ fileDocument.final_disposition_label }}
-                          </span>
-                          <span v-if="fileDocument.selection_decision_label" class="font-medium text-foreground">
-                            · {{ fileDocument.selection_decision_label }}
-                          </span>
-                          <span v-else-if="fileDocument.requires_selection" class="text-amber-700 dark:text-amber-300">
-                            · Pendiente en el expediente
-                          </span>
-                        </p>
-                      </div>
-                      <div class="flex shrink-0 items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          type="button"
-                          class="h-8 gap-1.5 px-2 text-xs"
-                          :disabled="viewingDocumentId === fileDocument.id"
-                          @click="viewActFileDocument(file.id, fileDocument)"
-                        >
-                          <Icon
-                            :name="viewingDocumentId === fileDocument.id
-                              ? 'i-lucide-loader-2'
-                              : (actDocumentCanPreview(fileDocument) ? 'i-lucide-eye' : 'i-lucide-download')"
-                            class="size-3.5"
-                            :class="{ 'animate-spin': viewingDocumentId === fileDocument.id }"
-                          />
-                          {{ actDocumentCanPreview(fileDocument) ? 'Ver' : 'Descargar' }}
-                        </Button>
-                        <Button
-                          v-if="actDocumentCanPreview(fileDocument)"
-                          variant="ghost"
-                          size="sm"
-                          type="button"
-                          class="h-8 px-2 text-xs"
-                          :disabled="downloadingDocumentId === fileDocument.id"
-                          @click="downloadActFileDocument(file.id, fileDocument)"
-                        >
-                          Descargar
-                        </Button>
-                      </div>
+                    <div class="overflow-x-auto rounded-md border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead class="min-w-[220px]">
+                              Documento
+                            </TableHead>
+                            <TableHead class="w-[1%] whitespace-nowrap">
+                              Acciones
+                            </TableHead>
+                            <TableHead
+                              v-if="fileNeedsSelectionColumns(file)"
+                              class="w-[1%] whitespace-nowrap text-center"
+                            >
+                              Conservación
+                            </TableHead>
+                            <TableHead
+                              v-if="fileNeedsSelectionColumns(file)"
+                              class="w-[1%] whitespace-nowrap text-center"
+                            >
+                              Eliminación
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <TableRow
+                            v-for="fileDocument in file.documents"
+                            :key="fileDocument.id"
+                          >
+                            <TableCell class="align-middle">
+                              <div class="flex min-w-0 items-start gap-2">
+                                <Icon name="i-lucide-file" class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                                <div class="min-w-0">
+                                  <p class="text-sm font-medium leading-snug text-foreground">
+                                    {{ fileDocument.title }}
+                                  </p>
+                                  <p class="text-xs text-muted-foreground">
+                                    <span v-if="fileDocument.original_name && fileDocument.original_name !== fileDocument.title">
+                                      {{ fileDocument.original_name }}
+                                      ·
+                                    </span>
+                                    <span v-if="fileDocument.final_disposition_label">
+                                      {{ fileDocument.final_disposition_label }}
+                                    </span>
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell class="align-middle">
+                              <div class="flex shrink-0 items-center gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  type="button"
+                                  class="h-8 gap-1.5 px-2 text-xs"
+                                  :disabled="viewingDocumentId === fileDocument.id"
+                                  @click="viewActFileDocument(file.id, fileDocument)"
+                                >
+                                  <Icon
+                                    :name="viewingDocumentId === fileDocument.id
+                                      ? 'i-lucide-loader-2'
+                                      : (actDocumentCanPreview(fileDocument) ? 'i-lucide-eye' : 'i-lucide-download')"
+                                    class="size-3.5"
+                                    :class="{ 'animate-spin': viewingDocumentId === fileDocument.id }"
+                                  />
+                                  {{ actDocumentCanPreview(fileDocument) ? 'Ver' : 'Descargar' }}
+                                </Button>
+                                <Button
+                                  v-if="actDocumentCanPreview(fileDocument)"
+                                  variant="ghost"
+                                  size="sm"
+                                  type="button"
+                                  class="h-8 px-2 text-xs"
+                                  :disabled="downloadingDocumentId === fileDocument.id"
+                                  @click="downloadActFileDocument(file.id, fileDocument)"
+                                >
+                                  Descargar
+                                </Button>
+                              </div>
+                            </TableCell>
+                            <TableCell
+                              v-if="fileNeedsSelectionColumns(file)"
+                              class="text-center align-middle"
+                            >
+                              <label
+                                v-if="documentNeedsSelectionChoice(fileDocument) && act.status === 'draft' && canRecordSelection"
+                                class="inline-flex cursor-pointer justify-center"
+                              >
+                                <input
+                                  type="radio"
+                                  class="size-4 accent-primary"
+                                  :name="`selection-${file.id}-${fileDocument.id}`"
+                                  :checked="decisionForDocument(fileDocument.id) === 'conservation'"
+                                  :disabled="savingSelectionKey != null"
+                                  @change="setActDocumentDecision(file.id, fileDocument.id, 'conservation')"
+                                >
+                                <span class="sr-only">Conservación</span>
+                              </label>
+                              <span
+                                v-else-if="documentNeedsSelectionChoice(fileDocument) && decisionForDocument(fileDocument.id) === 'conservation'"
+                                class="text-xs font-medium"
+                              >
+                                Sí
+                              </span>
+                              <span v-else-if="!documentNeedsSelectionChoice(fileDocument)" class="text-muted-foreground">
+                                —
+                              </span>
+                            </TableCell>
+                            <TableCell
+                              v-if="fileNeedsSelectionColumns(file)"
+                              class="text-center align-middle"
+                            >
+                              <label
+                                v-if="documentNeedsSelectionChoice(fileDocument) && act.status === 'draft' && canRecordSelection"
+                                class="inline-flex cursor-pointer justify-center"
+                              >
+                                <input
+                                  type="radio"
+                                  class="size-4 accent-primary"
+                                  :name="`selection-${file.id}-${fileDocument.id}`"
+                                  :checked="decisionForDocument(fileDocument.id) === 'elimination'"
+                                  :disabled="savingSelectionKey != null"
+                                  @change="setActDocumentDecision(file.id, fileDocument.id, 'elimination')"
+                                >
+                                <span class="sr-only">Eliminación</span>
+                              </label>
+                              <span
+                                v-else-if="documentNeedsSelectionChoice(fileDocument) && decisionForDocument(fileDocument.id) === 'elimination'"
+                                class="text-xs font-medium"
+                              >
+                                Sí
+                              </span>
+                              <span v-else-if="!documentNeedsSelectionChoice(fileDocument)" class="text-muted-foreground">
+                                —
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
                     </div>
+                    <p
+                      v-if="act.status === 'draft' && fileNeedsSelectionColumns(file) && !canRecordSelection"
+                      class="text-sm text-muted-foreground"
+                    >
+                      Conservación queda marcada por defecto. Para cambiar a Eliminación use
+                      <NuxtLink class="underline" :to="`/expedientes/${file.id}`">
+                        el expediente
+                      </NuxtLink>
+                      o un usuario con permiso de transferencia.
+                    </p>
                   </div>
                   <p v-else class="text-sm text-muted-foreground">
                     Sin documentos en el expediente.

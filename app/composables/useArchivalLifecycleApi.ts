@@ -209,7 +209,7 @@ export function useArchivalLifecycleApi() {
   }
 
   async function fetchTransferAllowedOrgUnits() {
-    const res = await $api<{ data: Array<{ id: number, name: string, code: string }> }>(
+    const res = await $api<{ data: Array<{ id: number, name: string, code: string, assigned?: boolean }> }>(
       '/archival/transfer-acts/allowed-org-units',
     )
     return res.data ?? []
@@ -262,10 +262,18 @@ export function useArchivalLifecycleApi() {
     )
   }
 
-  async function approveTransferAct(actId: number) {
+  async function approveTransferAct(
+    actId: number,
+    documentSelectionDecisions: Array<{ archival_file_document_id: number, decision: 'conservation' | 'elimination' }> = [],
+  ) {
     return await $api<{ data: ArchivalTransferActRow, message?: string }>(
       `/archival/transfer-acts/${actId}/approve`,
-      { method: 'POST' },
+      {
+        method: 'POST',
+        body: documentSelectionDecisions.length
+          ? { document_selection_decisions: documentSelectionDecisions }
+          : {},
+      },
     )
   }
 

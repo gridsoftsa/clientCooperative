@@ -11,6 +11,8 @@ definePageMeta({
 
 const FILTER_ALL = 'all'
 const ORG_UNIT_NONE = 'none'
+const PER_PAGE_OPTIONS = [10, 15, 25, 50] as const
+const AREA_PREVIEW_LIMIT = 6
 
 const router = useRouter()
 const archivalApi = useArchivalFileApi()
@@ -23,6 +25,10 @@ const orgUnits = ref<Array<{ id: number, name: string }>>([])
 const loading = ref(true)
 const togglingId = ref<number | null>(null)
 const viewMode = ref<'table' | 'by_area'>('table')
+const meta = ref({ current_page: 1, last_page: 1, total: 0, per_page: 15 })
+
+const showPagination = computed(() => viewMode.value === 'table' && meta.value.total > 0 && meta.value.last_page > 1)
+const areaShowAll = ref<Record<string, boolean>>({})
 
 const search = ref('')
 const orgUnitFilter = ref<string>(FILTER_ALL)
@@ -77,10 +83,72 @@ const orgUnitPills = computed(() => {
   return { pills, withoutArea }
 })
 
+function typeHasTrdConfigured(type: ArchivalFileType): boolean {
+  const areas = type.producer_areas ?? []
+
+  if (areas.some(area => area.doc_series_id && area.doc_subseries_id)) {
+    return true
+  }
+
+  return Boolean(type.doc_series_id && type.doc_subseries_id)
+}
+
+function matchesListFilters(type: ArchivalFileType): boolean {
+  const term = search.value.trim().toLowerCase()
+
+  if (term) {
+    const haystack = `${type.name} ${type.type_key} ${type.description ?? ''}`.toLowerCase()
+    if (!haystack.includes(term)) {
+      return false
+    }
+  }
+
+  if (orgUnitFilter.value === ORG_UNIT_NONE && (type.producer_areas?.length ?? 0) > 0) {
+    return false
+  }
+
+  if (orgUnitFilter.value !== FILTER_ALL && orgUnitFilter.value !== ORG_UNIT_NONE) {
+    const unitId = Number(orgUnitFilter.value)
+    if (!(type.producer_areas ?? []).some(area => area.org_unit_id === unitId)) {
+      return false
+    }
+  }
+
+  if (modelFilter.value !== FILTER_ALL && type.model !== modelFilter.value) {
+    return false
+  }
+
+  if (statusFilter.value === 'active' && !type.is_active) {
+    return false
+  }
+
+  if (statusFilter.value === 'inactive' && type.is_active) {
+    return false
+  }
+
+  if (systemFilter.value === 'system' && !type.is_system) {
+    return false
+  }
+
+  if (systemFilter.value === 'custom' && type.is_system) {
+    return false
+  }
+
+  if (trdFilter.value === 'configured' && !typeHasTrdConfigured(type)) {
+    return false
+  }
+
+  if (trdFilter.value === 'pending' && typeHasTrdConfigured(type)) {
+    return false
+  }
+
+  return true
+}
+
 const groupedByArea = computed(() => {
   const groups = new Map<string, { key: string, label: string, types: ArchivalFileType[] }>()
 
-  for (const type of types.value) {
+  for (const type of summaryTypes.value.filter(matchesListFilters)) {
     const areas = type.producer_areas ?? []
 
     if (areas.length === 0) {
@@ -114,6 +182,10 @@ const groupedByArea = computed(() => {
   })
 })
 
+const areaViewTypeCount = computed(() =>
+  groupedByArea.value.reduce((sum, group) => sum + group.types.length, 0),
+)
+
 const hasActiveFilters = computed(() =>
   search.value.trim() !== ''
   || orgUnitFilter.value !== FILTER_ALL
@@ -145,8 +217,11 @@ function fileTypePayload(type: ArchivalFileType, overrides: Partial<Record<strin
   }
 }
 
-function buildQueryParams(): Record<string, string | number | boolean | undefined> {
-  const params: Record<string, string | number | boolean | undefined> = {}
+function buildQueryParams(page: number): Record<string, string | number | boolean | undefined> {
+  const params: Record<string, string | number | boolean | undefined> = {
+    page,
+    per_page: meta.value.per_page,
+  }
 
   if (search.value.trim()) {
     params.search = search.value.trim()
@@ -165,6 +240,9 @@ function buildQueryParams(): Record<string, string | number | boolean | undefine
 
   if (statusFilter.value === 'active') {
     params.active_only = true
+  }
+  else if (statusFilter.value === 'inactive') {
+    params.is_active = false
   }
 
   if (systemFilter.value === 'system') {
@@ -186,7 +264,8 @@ function buildQueryParams(): Record<string, string | number | boolean | undefine
 
 async function loadSummary() {
   try {
-    summaryTypes.value = await archivalApi.fetchFileTypesAdmin({}, false)
+    const res = await archivalApi.fetchFileTypesAdmin({}, false)
+    summaryTypes.value = res.data
   }
   catch {
     summaryTypes.value = []
@@ -203,15 +282,18 @@ async function loadOrgUnits() {
   }
 }
 
-async function load() {
+async function load(page = 1) {
   loading.value = true
 
   try {
     const includeInactive = statusFilter.value !== 'active'
-    types.value = await archivalApi.fetchFileTypesAdmin(buildQueryParams(), !includeInactive)
-
-    if (statusFilter.value === 'inactive') {
-      types.value = types.value.filter(type => !type.is_active)
+    const res = await archivalApi.fetchFileTypesAdmin(buildQueryParams(page), !includeInactive)
+    types.value = res.data
+    meta.value = {
+      current_page: res.meta.current_page,
+      last_page: res.meta.last_page,
+      total: res.meta.total,
+      per_page: res.meta.per_page,
     }
   }
   catch {
@@ -222,9 +304,14 @@ async function load() {
   }
 }
 
+function onPerPageChange(value: unknown) {
+  meta.value.per_page = Number(value)
+  void load(1)
+}
+
 async function refreshAll() {
   await loadSummary()
-  await load()
+  await load(meta.value.current_page)
 }
 
 async function toggleActive(type: ArchivalFileType, isActive: boolean) {
@@ -249,9 +336,25 @@ async function toggleActive(type: ArchivalFileType, isActive: boolean) {
   }
 }
 
+function typesForAreaPreview(group: { key: string, types: ArchivalFileType[] }): ArchivalFileType[] {
+  if (areaShowAll.value[group.key]) {
+    return group.types
+  }
+
+  return group.types.slice(0, AREA_PREVIEW_LIMIT)
+}
+
+function toggleAreaShowAll(key: string) {
+  areaShowAll.value = {
+    ...areaShowAll.value,
+    [key]: !areaShowAll.value[key],
+  }
+}
+
 function selectOrgUnitPill(value: string) {
   orgUnitFilter.value = value
-  void load()
+  areaShowAll.value = {}
+  void load(1)
 }
 
 function clearFilters() {
@@ -261,7 +364,8 @@ function clearFilters() {
   statusFilter.value = FILTER_ALL
   systemFilter.value = FILTER_ALL
   trdFilter.value = FILTER_ALL
-  void load()
+  areaShowAll.value = {}
+  void load(1)
 }
 
 function requiredCount(type: ArchivalFileType): number {
@@ -359,10 +463,10 @@ onMounted(async () => {
               v-model="search"
               class="max-w-md pl-9"
               placeholder="Buscar por nombre, clave o descripción..."
-              @keyup.enter="load"
+              @keyup.enter="load(1)"
             />
           </div>
-          <Select v-model="modelFilter" @update:model-value="load">
+          <Select v-model="modelFilter" @update:model-value="() => load(1)">
             <SelectTrigger class="w-44">
               <SelectValue placeholder="Modelo" />
             </SelectTrigger>
@@ -379,7 +483,7 @@ onMounted(async () => {
               </SelectItem>
             </SelectContent>
           </Select>
-          <Select v-model="statusFilter" @update:model-value="load">
+          <Select v-model="statusFilter" @update:model-value="() => load(1)">
             <SelectTrigger class="w-40">
               <SelectValue placeholder="Estado" />
             </SelectTrigger>
@@ -395,7 +499,7 @@ onMounted(async () => {
               </SelectItem>
             </SelectContent>
           </Select>
-          <Select v-model="systemFilter" @update:model-value="load">
+          <Select v-model="systemFilter" @update:model-value="() => load(1)">
             <SelectTrigger class="w-40">
               <SelectValue placeholder="Origen" />
             </SelectTrigger>
@@ -411,7 +515,7 @@ onMounted(async () => {
               </SelectItem>
             </SelectContent>
           </Select>
-          <Select v-model="trdFilter" @update:model-value="load">
+          <Select v-model="trdFilter" @update:model-value="() => load(1)">
             <SelectTrigger class="w-44">
               <SelectValue placeholder="TRD" />
             </SelectTrigger>
@@ -427,7 +531,7 @@ onMounted(async () => {
               </SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="secondary" :disabled="loading" @click="load">
+          <Button variant="secondary" :disabled="loading" @click="load(1)">
             Buscar
           </Button>
           <Button
@@ -475,22 +579,44 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
-          <p class="text-sm text-muted-foreground">
-            {{ types.length }} de {{ summary.total }} tipo{{ summary.total === 1 ? '' : 's' }}
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+          <p class="min-w-0 text-sm text-muted-foreground">
+            {{ viewMode === 'table' ? meta.total : areaViewTypeCount }}
+            tipo{{ (viewMode === 'table' ? meta.total : areaViewTypeCount) === 1 ? '' : 's' }} según filtros
             · {{ summary.active }} activos
             · {{ summary.trdPending }} TRD pendiente{{ summary.trdPending === 1 ? '' : 's' }}
           </p>
-          <Tabs v-model="viewMode" class="w-auto">
-            <TabsList class="h-9">
-              <TabsTrigger value="table" class="text-xs sm:text-sm">
-                Tabla
-              </TabsTrigger>
-              <TabsTrigger value="by_area" class="text-xs sm:text-sm">
-                Por área
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div class="flex shrink-0 items-center gap-2">
+            <Select
+              v-if="viewMode === 'table'"
+              :model-value="String(meta.per_page)"
+              :disabled="loading"
+              @update:model-value="onPerPageChange"
+            >
+              <SelectTrigger id="tipos-per-page" class="h-9 w-[8.25rem]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="option in PER_PAGE_OPTIONS"
+                  :key="option"
+                  :value="String(option)"
+                >
+                  {{ option }} / pág.
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Tabs v-model="viewMode" class="w-auto">
+              <TabsList class="h-9">
+                <TabsTrigger value="table" class="text-xs sm:text-sm">
+                  Tabla
+                </TabsTrigger>
+                <TabsTrigger value="by_area" class="text-xs sm:text-sm">
+                  Por área
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
         <div v-if="loading" class="py-8 text-center text-muted-foreground">
@@ -608,68 +734,119 @@ onMounted(async () => {
           </TableBody>
         </Table>
 
-        <div v-else class="space-y-6">
-          <section
+        <div v-else class="space-y-2">
+          <p v-if="groupedByArea.length === 0" class="py-8 text-center text-sm text-muted-foreground">
+            No hay tipos que coincidan con los filtros.
+          </p>
+          <Collapsible
             v-for="group in groupedByArea"
             :key="group.key"
-            class="space-y-3"
+            :default-open="groupedByArea.length === 1"
+            class="group/collapsible rounded-md border"
           >
-            <div class="border-b pb-2">
-              <h2 class="font-semibold">
-                {{ group.label }}
-              </h2>
-              <p class="text-xs text-muted-foreground">
-                {{ group.types.length }} tipo{{ group.types.length === 1 ? '' : 's' }}
-              </p>
-            </div>
-
-            <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              <div
-                v-for="type in group.types"
-                :key="type.id"
-                class="rounded-lg border p-4"
-              >
-                <div class="flex items-start justify-between gap-2">
-                  <p class="font-medium">
-                    {{ type.name }}
-                  </p>
-                  <Badge v-if="type.is_system" variant="outline" class="text-xs">
-                    Sistema
-                  </Badge>
-                </div>
-                <p class="mt-1 text-xs text-muted-foreground">
-                  {{ ARCHIVAL_FILE_MODEL_LABELS[type.model] }} · {{ catalogSummary(type) }}
-                </p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    @click="router.push(`/expedientes/tipos/${type.id}`)"
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    v-if="type.is_active"
-                    variant="ghost"
-                    size="sm"
-                    :disabled="togglingId === type.id"
-                    @click="toggleActive(type, false)"
-                  >
-                    Desactivar
-                  </Button>
-                  <Button
-                    v-else
-                    variant="secondary"
-                    size="sm"
-                    :disabled="togglingId === type.id"
-                    @click="toggleActive(type, true)"
-                  >
-                    Activar
-                  </Button>
-                </div>
+            <CollapsibleTrigger
+              class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/40"
+            >
+              <div class="flex min-w-0 items-center gap-2">
+                <Icon
+                  name="i-lucide-chevron-right"
+                  class="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+                />
+                <span class="truncate font-medium">{{ group.label }}</span>
               </div>
-            </div>
-          </section>
+              <Badge variant="secondary" class="shrink-0">
+                {{ group.types.length }} tipo{{ group.types.length === 1 ? '' : 's' }}
+              </Badge>
+            </CollapsibleTrigger>
+            <CollapsibleContent class="border-t">
+              <ul class="divide-y">
+                <li
+                  v-for="type in typesForAreaPreview(group)"
+                  :key="type.id"
+                  class="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5"
+                >
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <p class="text-sm font-medium">
+                        {{ type.name }}
+                      </p>
+                      <Badge v-if="type.is_system" variant="outline" class="text-xs">
+                        Sistema
+                      </Badge>
+                      <Badge :variant="type.is_active ? 'default' : 'secondary'" class="text-xs">
+                        {{ type.is_active ? 'Activo' : 'Inactivo' }}
+                      </Badge>
+                    </div>
+                    <p class="text-xs text-muted-foreground">
+                      {{ ARCHIVAL_FILE_MODEL_LABELS[type.model] }} · {{ catalogSummary(type) }}
+                    </p>
+                  </div>
+                  <div class="flex shrink-0 flex-wrap gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="h-8 gap-1.5 px-2 text-xs"
+                      @click="router.push(`/expedientes/tipos/${type.id}`)"
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      v-if="type.is_active"
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      class="h-8 gap-1.5 px-2 text-xs"
+                      :disabled="togglingId === type.id"
+                      @click="toggleActive(type, false)"
+                    >
+                      <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                      Desactivar
+                    </Button>
+                    <Button
+                      v-else
+                      variant="secondary"
+                      size="sm"
+                      class="h-8 px-2 text-xs"
+                      :disabled="togglingId === type.id"
+                      @click="toggleActive(type, true)"
+                    >
+                      Activar
+                    </Button>
+                  </div>
+                </li>
+              </ul>
+              <div
+                v-if="group.types.length > AREA_PREVIEW_LIMIT"
+                class="border-t px-4 py-2"
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="h-8 px-0 text-xs"
+                  @click="toggleAreaShowAll(group.key)"
+                >
+                  {{ areaShowAll[group.key]
+                    ? 'Ver menos'
+                    : `Ver ${group.types.length - AREA_PREVIEW_LIMIT} más` }}
+                </Button>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+
+        <div
+          v-if="showPagination"
+          class="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground"
+        >
+          <span>
+            Página {{ meta.current_page }} de {{ meta.last_page }} · {{ meta.total }} tipo(s)
+          </span>
+          <NumberedPagination
+            :page="meta.current_page"
+            :last-page="meta.last_page"
+            :disabled="loading"
+            @update:page="load"
+          />
         </div>
       </CardContent>
     </Card>

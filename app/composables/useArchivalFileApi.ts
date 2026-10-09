@@ -144,18 +144,42 @@ export function useArchivalFileApi() {
   }
 
   async function fetchFileTypesAdmin(params: Record<string, string | number | boolean | undefined> = {}, activeOnly = false) {
-    const query: Record<string, string | number> = { active_only: activeOnly ? 1 : 0 }
+    const query: Record<string, string | number> = {}
+    if (activeOnly) {
+      query.active_only = 1
+    }
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== '' && value !== null) {
         query[key] = value === true ? 1 : value === false ? 0 : value
       }
     })
 
-    const res = await api<{ data: ArchivalFileType[] }>('/archival-files/types', {
+    const res = await api<{
+      data: ArchivalFileType[]
+      current_page?: number
+      last_page?: number
+      per_page?: number
+      total?: number
+      meta?: { current_page: number, last_page: number, per_page: number, total: number }
+    }>('/archival-files/types', {
       query,
     })
 
-    return res.data
+    const meta = res.meta ?? (res.current_page != null
+      ? {
+          current_page: res.current_page,
+          last_page: res.last_page ?? 1,
+          per_page: res.per_page ?? res.data.length,
+          total: res.total ?? res.data.length,
+        }
+      : {
+          current_page: 1,
+          last_page: 1,
+          per_page: res.data.length,
+          total: res.data.length,
+        })
+
+    return { data: res.data, meta }
   }
 
   async function fetchWorkflowStageOptions() {
@@ -304,13 +328,16 @@ export function useArchivalFileApi() {
     }>('/archival-files/reports/incomplete', { query })
   }
 
-  async function fetchReportsSummary() {
-    const res = await api<{ data: Record<string, number> }>('/archival-files/reports/summary')
+  async function fetchReportsSummary(query: Record<string, string | number | boolean> = {}) {
+    const res = await api<{ data: Record<string, number> }>('/archival-files/reports/summary', { query })
 
     return res.data
   }
 
-  async function exportReports(format: 'xlsx' | 'pdf') {
+  async function exportReports(
+    format: 'xlsx' | 'pdf',
+    query: Record<string, string | number | boolean> = {},
+  ) {
     const { downloadReportFile } = useReportExport()
     const date = new Date().toISOString().slice(0, 10)
     const filename = `reporte-expedientes-${date}.${format}`
@@ -318,7 +345,7 @@ export function useArchivalFileApi() {
       ? 'application/pdf'
       : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
-    await downloadReportFile('/archival-files/reports/export', { format }, filename, mime)
+    await downloadReportFile('/archival-files/reports/export', { format, ...query }, filename, mime)
   }
 
   async function fetchFileAlerts(fileId: number) {

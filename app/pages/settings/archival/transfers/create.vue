@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import { ARCHIVAL_TRANSFER_KIND_OPTIONS } from '~/constants/archival-lifecycle'
+import { archivalMultiselectWarningClass } from '~/utils/archival-form-validation'
 import { messageFromFetchError } from '~/utils/http-error-message'
 
 definePageMeta({
@@ -23,8 +24,9 @@ const editingActId = computed(() => {
 
 const hydratingEdit = ref(false)
 const saving = ref(false)
-const orgUnitId = ref<string | undefined>(undefined)
-const units = ref<Array<{ id: number, name: string, code: string }>>([])
+const submitAttempted = ref(false)
+const orgUnitId = ref<number | null>(null)
+const units = ref<Array<{ id: number, name: string, code: string, assigned?: boolean }>>([])
 const eligibleFiles = ref<Awaited<ReturnType<typeof api.fetchTransferEligibleFiles>>>([])
 const selectedFileIds = ref<number[]>([])
 const trdLabel = ref<string | null>(null)
@@ -37,21 +39,45 @@ const form = ref({
   description: '',
 })
 
+const unitOptions = computed(() =>
+  units.value.map(unit => ({
+    value: unit.id,
+    label: unit.code ? `${unit.code} — ${unit.name}` : unit.name,
+    title: unit.name,
+    subtitle: unit.code,
+  })),
+)
+
+function defaultOrgUnitId(): number | null {
+  const mine = units.value.filter(unit => unit.assigned)
+  if (mine.length === 1) {
+    return mine[0].id
+  }
+
+  if (units.value.length === 1) {
+    return units.value[0].id
+  }
+
+  return null
+}
+
 async function loadUnits() {
   units.value = await api.fetchTransferAllowedOrgUnits()
-  if (units.value.length === 1) {
-    orgUnitId.value = String(units.value[0].id)
+  if (editingActId.value != null) {
+    return
   }
+
+  orgUnitId.value = defaultOrgUnitId()
 }
 
 async function loadTrdSetting() {
   trdLabel.value = null
   missingTrd.value = false
-  if (!orgUnitId.value) {
+  if (orgUnitId.value == null) {
     return
   }
 
-  const rows = await api.fetchTransferActTrdSettings(Number(orgUnitId.value))
+  const rows = await api.fetchTransferActTrdSettings(orgUnitId.value)
   const row = rows[0]
   if (!row) {
     missingTrd.value = true
@@ -70,13 +96,13 @@ async function loadEligible(preserveSelection = false) {
     selectedFileIds.value = []
   }
   eligibleFiles.value = []
-  if (!orgUnitId.value) {
+  if (orgUnitId.value == null) {
     return
   }
 
   eligibleFiles.value = await api.fetchTransferEligibleFiles(
     form.value.transfer_kind,
-    Number(orgUnitId.value),
+    orgUnitId.value,
   )
 }
 
@@ -127,7 +153,7 @@ async function hydrateDraft() {
       act_date: act.act_date.slice(0, 10),
       description: act.description ?? '',
     }
-    orgUnitId.value = act.org_unit_id != null ? String(act.org_unit_id) : undefined
+    orgUnitId.value = act.org_unit_id != null ? Number(act.org_unit_id) : null
     await loadTrdSetting()
     await loadEligible(true)
     mergeFilesIntoEligible(act.files ?? [])
@@ -142,17 +168,23 @@ async function hydrateDraft() {
   }
 }
 
+function isEligibleFileSelected(id: number): boolean {
+  const currentId = Number(id)
+
+  return selectedFileIds.value.some(fileId => Number(fileId) === currentId)
+}
+
 function onFileCheckboxChange(id: number, checked: boolean) {
   const currentId = Number(id)
 
   if (checked) {
-    if (!selectedFileIds.value.includes(currentId)) {
+    if (!isEligibleFileSelected(currentId)) {
       selectedFileIds.value = [...selectedFileIds.value, currentId]
     }
     return
   }
 
-  selectedFileIds.value = selectedFileIds.value.filter(fileId => fileId !== currentId)
+  selectedFileIds.value = selectedFileIds.value.filter(fileId => Number(fileId) !== currentId)
 }
 
 const {
@@ -170,7 +202,8 @@ watch(() => eligibleFiles.value.length, () => {
 })
 
 async function submit() {
-  if (!orgUnitId.value) {
+  submitAttempted.value = true
+  if (orgUnitId.value == null) {
     toast.error('Seleccione el área productora')
     return
   }
@@ -179,7 +212,7 @@ async function submit() {
   try {
     const payload = {
       ...form.value,
-      org_unit_id: Number(orgUnitId.value),
+      org_unit_id: orgUnitId.value,
       archival_file_ids: selectedFileIds.value,
     }
 
@@ -239,21 +272,27 @@ onMounted(async () => {
             <Input v-model="form.act_code" />
           </div>
           <div class="space-y-2">
-            <Label>Área productora *</Label>
-            <Select v-model="orgUnitId" :disabled="editingActId != null">
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione su área" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="unit in units"
-                  :key="unit.id"
-                  :value="String(unit.id)"
-                >
-                  {{ unit.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <Label for="transfer-create-org-unit">Área productora *</Label>
+            <ArchivalSingleMultiselect
+              id="transfer-create-org-unit"
+              :key="`unit-${unitOptions.length}`"
+              v-model="orgUnitId"
+              coerce-number
+              :options="unitOptions"
+              :disabled="editingActId != null || units.length === 0"
+              :can-clear="editingActId == null"
+              placeholder="Buscar y seleccionar un área…"
+              no-options-text="No tiene áreas productoras asignadas"
+              no-results-text="Sin coincidencias"
+              :class="archivalMultiselectWarningClass(submitAttempted && orgUnitId == null)"
+            >
+              <template #option="{ option }">
+                <div class="archival-ms-option">
+                  <span class="archival-ms-option-title">{{ option.title }}</span>
+                  <span v-if="option.subtitle" class="archival-ms-option-subtitle">{{ option.subtitle }}</span>
+                </div>
+              </template>
+            </ArchivalSingleMultiselect>
             <p v-if="!units.length" class="text-xs text-destructive">
               No tiene un área productora asignada. Solicite su designación en estructura organizacional.
             </p>
@@ -300,7 +339,7 @@ onMounted(async () => {
             <p class="text-xs text-muted-foreground">
               El acta transfiere expedientes, no documentos sueltos. Si la TRD de un documento indica selección, conservación o eliminación se registra en el expediente (metadatos del documento), no aquí.
             </p>
-            <p v-if="!orgUnitId" class="text-xs text-muted-foreground">
+            <p v-if="orgUnitId == null" class="text-xs text-muted-foreground">
               Seleccione el área para listar expedientes elegibles.
             </p>
             <p v-else-if="!eligibleFiles.length" class="text-xs text-muted-foreground">
@@ -319,26 +358,22 @@ onMounted(async () => {
                 </div>
               </div>
               <div class="flex flex-col gap-2 rounded border p-3">
-                <label
-                  v-for="file in pagedEligibleFiles"
-                  :key="file.id"
-                  class="flex cursor-pointer items-start gap-2 text-sm"
+                <Checkbox
+                  v-for="eligibleFile in pagedEligibleFiles"
+                  :key="eligibleFile.id"
+                  :model-value="isEligibleFileSelected(eligibleFile.id)"
+                  @update:model-value="onFileCheckboxChange(eligibleFile.id, $event === true)"
                 >
-                  <Checkbox
-                    bare
-                    :checked="selectedFileIds.includes(Number(file.id))"
-                    @update:checked="onFileCheckboxChange(file.id, $event === true)"
-                  />
                   <span>
-                    <span class="font-mono text-xs">{{ file.file_number }}</span>
-                    — {{ file.title }}
+                    <span class="font-mono text-xs">{{ eligibleFile.file_number }}</span>
+                    — {{ eligibleFile.title }}
                   </span>
-                </label>
+                </Checkbox>
               </div>
             </template>
           </div>
 
-          <Button :disabled="saving || missingTrd || !orgUnitId || selectedFileIds.length === 0 || hydratingEdit" @click="submit">
+          <Button :disabled="saving || missingTrd || orgUnitId == null || selectedFileIds.length === 0 || hydratingEdit" @click="submit">
             {{ editingActId ? (saving ? 'Guardando…' : 'Guardar borrador') : (saving ? 'Creando…' : 'Crear acta (borrador)') }}
           </Button>
         </CardContent>

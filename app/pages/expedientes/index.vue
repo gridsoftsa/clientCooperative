@@ -436,27 +436,12 @@ onMounted(async () => {
 
           <div v-if="meta.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-muted-foreground">
             <span>{{ meta.total }} expedientes</span>
-            <div class="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                :disabled="meta.current_page <= 1"
-                @click="loadFiles(meta.current_page - 1)"
-              >
-                Anterior
-              </Button>
-              <span class="px-2 py-1">
-                {{ meta.current_page }} / {{ meta.last_page }}
-              </span>
-              <Button
-                size="sm"
-                variant="outline"
-                :disabled="meta.current_page >= meta.last_page"
-                @click="loadFiles(meta.current_page + 1)"
-              >
-                Siguiente
-              </Button>
-            </div>
+            <NumberedPagination
+              :page="meta.current_page"
+              :last-page="meta.last_page"
+              :disabled="loading"
+              @update:page="loadFiles"
+            />
           </div>
         </template>
       </CardContent>

@@ -238,13 +238,17 @@ onMounted(() => loadEvents())
           <Collapsible
             v-for="group in groupedEvents"
             :key="group.archival_file_id"
-            :default-open="groupedEvents.length <= 8"
-            class="rounded-md border"
+            :default-open="false"
+            class="group/collapsible rounded-md border"
           >
             <CollapsibleTrigger
               class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/40"
             >
-              <div class="min-w-0">
+              <div class="flex min-w-0 items-center gap-2">
+                <Icon
+                  name="i-lucide-chevron-right"
+                  class="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90"
+                />
                 <p class="truncate font-medium">
                   <NuxtLink
                     :to="`/expedientes/${group.archival_file_id}`"
@@ -279,24 +283,12 @@ onMounted(() => loadEvents())
           <span>
             Página {{ meta.current_page }} de {{ meta.last_page }} · {{ meta.total }} evento(s)
           </span>
-          <div class="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              :disabled="meta.current_page <= 1 || loading"
-              @click="loadEvents(meta.current_page - 1)"
-            >
-              Anterior
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              :disabled="meta.current_page >= meta.last_page || loading"
-              @click="loadEvents(meta.current_page + 1)"
-            >
-              Siguiente
-            </Button>
-          </div>
+          <NumberedPagination
+            :page="meta.current_page"
+            :last-page="meta.last_page"
+            :disabled="loading"
+            @update:page="loadEvents"
+          />
         </div>
       </CardContent>
     </Card>
