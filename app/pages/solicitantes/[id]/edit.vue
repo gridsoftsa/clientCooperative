@@ -13,6 +13,7 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const route = useRoute()
 const router = useRouter()
+const { goBack } = useNavigationBack('/solicitantes')
 
 const applicantId = route.params.id as string
 
@@ -157,7 +158,7 @@ onMounted(() => {
         <h2 class="text-2xl font-bold tracking-tight">
           Editar Solicitante
         </h2>
-        <Button variant="outline" @click="router.push('/solicitantes')">
+        <Button variant="outline" @click="goBack">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>

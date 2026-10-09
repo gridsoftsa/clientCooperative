@@ -25,6 +25,8 @@ interface IndicadorResponse {
       created_to: string
       sucursal_id: number | null
       status: string | null
+      date_criterion?: 'created_at' | 'status_entry'
+      date_criterion_label?: string
     }
     total_radicadas: number
     count_reached_status: number | null
@@ -90,17 +92,6 @@ const selectedStatusLabel = computed(() => {
   return getCreditApplicationStatusLabel(s)
 })
 
-function formatPercent(value: number | null | undefined): string {
-  if (value == null) {
-    return '—'
-  }
-  return new Intl.NumberFormat('es-CO', {
-    style: 'percent',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 1,
-  }).format(value / 100)
-}
-
 function buildReportQuery(): Record<string, string | number> {
   const q: Record<string, string | number> = {}
   const from = filterDateFrom.value?.trim()
@@ -123,8 +114,11 @@ function buildReportQuery(): Record<string, string | number> {
 async function fetchSucursales(): Promise<void> {
   loadingSucursales.value = true
   try {
-    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales')
+    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales?scope=reports')
     sucursales.value = res.data ?? []
+    if (sucursales.value.length === 1 && sucursalId.value == null) {
+      sucursalId.value = sucursales.value[0]!.id
+    }
   } catch (error: any) {
     console.error('Error cargando sucursales para reportes:', error)
     toast.error(error?.data?.message ?? 'No se pudo cargar el catálogo de sucursales')
@@ -277,8 +271,8 @@ onUnmounted(() => {
         Indicador
       </h2>
       <p class="text-sm text-muted-foreground">
-        Compare el total de radicaciones creadas en el período con cuántas alcanzaron un estado del flujo
-        (estado actual o registro en trazabilidad). Elija un solo estado en el listado para ver cantidad y porcentaje sobre el total.
+        Compare las radicaciones creadas en el período con cuántas ingresaron a un estado del flujo
+        en esas mismas fechas, aunque hoy ya estén en otra instancia. Elija un estado para ver la cantidad.
       </p>
     </div>
 
@@ -287,7 +281,9 @@ onUnmounted(() => {
         <div class="space-y-1">
           <CardTitle>Filtros</CardTitle>
           <CardDescription>
-            Mismo criterio de fechas que «Solicitudes tramitadas» (<code class="rounded bg-muted px-1 py-0.5 text-[11px]">created_at</code>).
+            {{ selectedStatus
+              ? 'Con estado: el rango cuenta el día en que la solicitud ingresó a esa instancia.'
+              : 'Sin estado: el rango es la fecha de creación de la radicación (como en «Solicitudes tramitadas»).' }}
           </CardDescription>
         </div>
         <div class="flex shrink-0 flex-wrap gap-2">
@@ -329,7 +325,7 @@ onUnmounted(() => {
             <div class="min-w-0 flex-1 lg:max-w-xl">
               <DateRangeStringPicker
                 id="reportes-indicador-dates"
-                label="Rango (fecha de creación de la radicación)"
+                label="Rango de fechas"
                 v-model:from="filterDateFrom"
                 v-model:to="filterDateTo"
               />
@@ -354,7 +350,7 @@ onUnmounted(() => {
                   <SelectValue placeholder="Todas las sucursales" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">
+                  <SelectItem v-if="sucursales.length > 1" value="all">
                     Todas las sucursales
                   </SelectItem>
                   <SelectItem
@@ -409,7 +405,7 @@ onUnmounted(() => {
                   {{ reportData.total_radicadas }}
                 </CardTitle>
                 <p class="text-xs text-muted-foreground">
-                  Total en el rango y filtros (denominador del porcentaje).
+                  Creadas en el rango (fecha de radicación).
                 </p>
               </CardHeader>
             </Card>
@@ -418,19 +414,19 @@ onUnmounted(() => {
               <CardHeader class="space-y-1 px-4 py-4">
                 <template v-if="reportData.filters.status">
                   <CardDescription>
-                    Llegaron a: <span class="font-medium text-foreground">{{ selectedStatusLabel }}</span>
+                    Ingresaron a: <span class="font-medium text-foreground">{{ selectedStatusLabel }}</span>
                   </CardDescription>
                   <CardTitle class="text-3xl tabular-nums">
                     {{ reportData.count_reached_status ?? '—' }}
                   </CardTitle>
-                  <p class="text-lg font-semibold text-muted-foreground tabular-nums">
-                    {{ formatPercent(reportData.percentage) }} del total
+                  <p class="text-xs text-muted-foreground">
+                    Según trazabilidad, en el rango seleccionado. No importa el estado actual.
                   </p>
                 </template>
                 <template v-else>
                   <CardDescription>Estado del flujo</CardDescription>
                   <CardTitle class="text-base font-normal text-muted-foreground">
-                    Seleccione un estado arriba para ver la cantidad y el porcentaje sobre las radicaciones del período.
+                    Seleccione un estado arriba para ver cuántas solicitudes ingresaron a esa instancia en el rango.
                   </CardTitle>
                 </template>
               </CardHeader>

@@ -14,7 +14,7 @@ import {
 } from '~/constants/auxiliary-documents-checklist'
 import { messageFromFetchError } from '~/utils/http-error-message'
 import { creditApplicationDocumentIdEquals, parseFinancialChecklistDocumentIdMap } from '~/utils/financial-checklist-document-id-map'
-import { findDocumentIdByTitle } from '~/utils/radicacion-document-upload'
+import { coerceApplicantId, documentBelongsToApplicant, findDocumentIdByTitle } from '~/utils/radicacion-document-upload'
 import { isAuxiliaryChecklistLabelUnique } from '~/utils/auxiliary-documents-validation'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
@@ -31,6 +31,8 @@ const props = withDefaults(
       is_reviewed?: boolean
       review_comment?: string | null
     }>
+    /** El deudor incluye filas históricas sin applicant_id; los codeudores no. */
+    allowUnscopedApplicantDocuments?: boolean
     /** Mismo catálogo que «Tipo de actividad económica» — alinea valores con las claves de `itemsByActivity`. */
     economicActivityOptions?: EconomicActivityCatalogOption[]
     disabled?: boolean
@@ -48,6 +50,7 @@ const props = withDefaults(
   {
     creditApplicationId: null,
     applicationDocuments: () => [],
+    allowUnscopedApplicantDocuments: false,
     economicActivityOptions: () => [],
     disabled: false,
     auxiliaryPendingUploadHint: 'draftSave',
@@ -93,42 +96,57 @@ const docIdsByKey = computed((): Record<string, number | null> =>
 )
 
 function applicantIdForDocs(): number | undefined {
-  return props.applicant.id
+  return coerceApplicantId(props.applicant.id)
+}
+
+function documentsForThisApplicant() {
+  const aid = applicantIdForDocs()
+  const list = props.applicationDocuments ?? []
+  if (aid == null) {
+    return []
+  }
+  return list.filter(d => documentBelongsToApplicant(d, aid, props.allowUnscopedApplicantDocuments))
 }
 
 function docMetaById(id: number) {
   const aid = applicantIdForDocs()
-  const list = props.applicationDocuments ?? []
-  return list.find(d =>
+  if (aid == null) {
+    return null
+  }
+  return documentsForThisApplicant().find(d =>
     creditApplicationDocumentIdEquals(d.id, id)
-    && (aid == null || d.applicant_id == null || Number(d.applicant_id) === aid),
-  ) ?? list.find(d => creditApplicationDocumentIdEquals(d.id, id)) ?? null
+    && documentBelongsToApplicant(d, aid, props.allowUnscopedApplicantDocuments),
+  ) ?? null
 }
 
 function labelForChecklistKey(key: string): string {
   return checklistRows.value.find(r => r.key === key)?.label ?? key
 }
 
-/** Resuelve documento por mapa o, si el ID está huérfano / ausente, por título (solo si el label es único). */
+/** Resuelve documento por mapa o, si el ID está huérfano / ausente, por título de ESTE solicitante. */
 function resolvedDocIdForKey(key: string): number | null {
   const mapped = docIdsByKey.value[key]
   if (typeof mapped === 'number' && mapped >= 1 && docMetaById(mapped)) {
     return mapped
   }
+  const aid = applicantIdForDocs()
+  if (aid == null) {
+    return null
+  }
   const label = labelForChecklistKey(key)
   // Si hay varias filas con el mismo texto (p. ej. 4× «Otros soportes…»), no recuperar por título:
-  // un solo PDF se mostraría en todas.
+  // un solo PDF se mostraría en todas las filas de ESTA persona.
   if (isAuxiliaryChecklistLabelUnique(checklistRows.value, label)) {
     const title = titleForAuxiliaryDocumentUpload(label)
-    const docs = props.applicationDocuments ?? []
-    const byTitle = findDocumentIdByTitle(docs, title, applicantIdForDocs())
-      ?? findDocumentIdByTitle(docs, title, null)
+    const byTitle = findDocumentIdByTitle(
+      documentsForThisApplicant(),
+      title,
+      aid,
+      props.allowUnscopedApplicantDocuments,
+    )
     if (byTitle != null) {
       return byTitle
     }
-  }
-  if (typeof mapped === 'number' && mapped >= 1) {
-    return mapped
   }
   return null
 }
@@ -149,7 +167,7 @@ function documentReviewRowForKey(key: string): {
   if (docId == null || docId < 1) {
     return null
   }
-  const d = props.applicationDocuments?.find(x => creditApplicationDocumentIdEquals(x.id, docId))
+  const d = documentsForThisApplicant().find(x => creditApplicationDocumentIdEquals(x.id, docId))
   if (!d || typeof d !== 'object') {
     return null
   }
@@ -158,7 +176,8 @@ function documentReviewRowForKey(key: string): {
 
 function auxiliaryReviewDomId(key: string): string {
   const d = documentReviewRowForKey(key)
-  return d ? `aux_doc_reviewed_${key}_${d.id}` : `aux_doc_reviewed_${key}`
+  const scope = String(applicantIdForDocs() ?? 'new')
+  return d ? `aux_doc_reviewed_${scope}_${key}_${d.id}` : `aux_doc_reviewed_${scope}_${key}`
 }
 
 function setDocumentReviewChecked(key: string, v: unknown): void {
@@ -313,20 +332,26 @@ function clearPending(key: string): void {
 async function removeUploaded(key: string): Promise<void> {
   const id = resolvedDocIdForKey(key)
   const appId = props.creditApplicationId
-  if (!id || !appId) return
-  try {
-    await $api(`/credit-applications/${appId}/documents/${id}`, { method: 'DELETE' })
-    const next = { ...docIdsByKey.value, [key]: null }
-    patchAuxiliaryDocuments(next)
+  const ownMeta = id != null ? docMetaById(id) : null
+  if (ownMeta && appId && id) {
+    try {
+      await $api(`/credit-applications/${appId}/documents/${id}`, { method: 'DELETE' })
+    } catch {
+      toast.error('No se pudo eliminar el documento')
+      return
+    }
+  }
+  const next = { ...docIdsByKey.value, [key]: null }
+  patchAuxiliaryDocuments(next)
+  if (ownMeta) {
     toast.success('Documento eliminado')
-  } catch {
-    toast.error('No se pudo eliminar el documento')
   }
 }
 
 function safeInputId(key: string, index: number): string {
   const slug = key.replace(/[^a-zA-Z0-9_-]/g, '_')
-  return `aux_doc_${index}_${slug}`
+  const scope = String(applicantIdForDocs() ?? props.applicant.document_number ?? 'new').replace(/[^a-zA-Z0-9_-]/g, '_')
+  return `aux_doc_${scope}_${index}_${slug}`
 }
 
 function canPreviewAuxiliaryDocument(key: string): boolean {

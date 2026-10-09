@@ -11,7 +11,19 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '~/component
 import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import RadicacionResumenFinancieroDeudorComparacion from '~/components/radicacion/RadicacionResumenFinancieroDeudorComparacion.vue'
 import CreditsFinancialActivityFormList from '~/components/credits/FinancialActivityFormList.vue'
+import CreditApplicationStatusBadges from '~/components/radicacion/CreditApplicationStatusBadges.vue'
 import { getCreditApplicationStatusLabel, isCreditApplicationTerminalImmutable, isCreditApplicationAdviserEditableStatus, isCreditApplicationReturnedToAdviser } from '~/constants/credit-application-status'
+import {
+  documentationReturnResubmitOptions,
+  analystReturnResubmitOptions,
+  agencyDirectorReturnResubmitOptions,
+  creditDirectorReturnResubmitOptions,
+  returnFlowConfirmDescription,
+  returnedByResumeLabel,
+  serializeReturnToForApi,
+  parseReturnToSelection,
+  type ReturnResubmitTo,
+} from '~/constants/credit-application-return'
 import type { ActivityTemplateData, ApplicantForm, CreditApplicationForm } from '~/types/credit-application'
 import { parseActivityTemplateList } from '~/types/credit-application'
 import { normalizeFinancialInfoAliases } from '~/utils/merge-applicant-search'
@@ -35,7 +47,10 @@ import {
 } from '~/constants/documentation-approver-entity-checklist'
 import { appendFileToFormData } from '~/utils/safe-upload-file-name'
 import {
+  coerceApplicantId,
+  collectChecklistDocumentIds,
   filterFreeAttachmentDocuments,
+  groupDocumentsByApplicantId,
 } from '~/utils/radicacion-document-upload'
 import {
   itemsByActivityFromCatalogResponse,
@@ -46,6 +61,7 @@ definePageMeta({
   layout: 'default',
   middleware: 'permission',
   permissions: 'radicacion_ver',
+  key: route => route.path,
 })
 
 const route = useRoute()
@@ -142,6 +158,8 @@ const stepsDeudor = [
   { num: 4, title: 'Datos de la Solicitud' },
   { num: 5, title: 'Codeudores' },
 ]
+useRouteSyncedStep(currentStep, stepsDeudor.length)
+const { goBack } = useNavigationBack('/radicacion')
 
 const stepsCodeudor = [
   { num: 1, title: 'Datos del Codeudor' },
@@ -189,12 +207,14 @@ function timelineHasReturnedEvent(events: unknown): boolean {
   )
 }
 const directorDecision = ref<'approved' | 'returned' | ''>('')
+const directorResubmitTo = ref<ReturnResubmitTo>('advisor')
 const directorConcept = ref('')
 const directorDecisionDialogOpen = ref(false)
 const submittingDirectorDecision = ref(false)
 const documentationDecision = ref<'approved' | 'returned' | ''>('')
+const documentationResubmitTo = ref<ReturnResubmitTo>('advisor')
 const documentationConcept = ref('')
-const documentationInsurabilityChoice = ref<'yes' | 'no'>('no')
+const documentationInsurabilityChoice = ref<'yes' | 'no'>('yes')
 const documentationInsurabilityStatusValue = ref('')
 const documentationInsurabilityStatusJustification = ref('')
 const documentationInsurabilityStatusOptions = ref<Array<{ value: string, label: string }>>([])
@@ -246,6 +266,7 @@ const showInsurabilityDocumentsSection = computed(
     hasPermission('radicacion_insurability_ver')
     && (
       application.value?.documentation_insurability_required === true
+      || documentationReviewFlowActive.value
       || (canDocumentationDecide.value && documentationInsurabilityChoice.value === 'yes')
     ),
 )
@@ -319,7 +340,10 @@ const fngDocumentationInteractionMode = computed((): 'full' | 'uploadOnly' | 'vi
 const showInsurabilityStatusInAsegurabilidadCard = computed(
   () =>
     hasPermission('radicacion_insurability_status_editar')
-    && application.value?.documentation_insurability_required === true,
+    && (
+      application.value?.documentation_insurability_required === true
+      || documentationReviewFlowActive.value
+    ),
 )
 
 const canEditInsurabilityStatusInAsegurabilidadSection = computed(
@@ -349,6 +373,31 @@ const showReturnedCorrectionHint = computed(
         && hasAnyPermission(['radicacion_crear', 'radicacion_editar']),
     ),
 )
+const parkedReturnHint = computed((): string => {
+  const by = application.value?.returned_by
+  const status = String(application.value?.status ?? '')
+  if (!by || isCreditApplicationReturnedToAdviser(status)) {
+    return ''
+  }
+  const resume = returnedByResumeLabel(String(by))
+  if (!resume) {
+    return ''
+  }
+  const workflow = new Set(['Director_Review', 'Documentation_Review', 'In_Analysis', 'Credit_Director_Review'])
+  if (!workflow.has(status)) {
+    return ''
+  }
+  return `Esta radicación fue devuelta a esta etapa. Al completar la revisión, vuelve a ${resume}.`
+})
+const showCorrectedAfterCreditDirectorHint = computed(
+  () => Boolean(application.value?.corrected_after_credit_director_return) && !parkedReturnHint.value && !showReturnedCorrectionHint.value,
+)
+const showCorrectedAfterReturnHint = computed(
+  () => Boolean(application.value?.corrected_after_return)
+    && !application.value?.corrected_after_credit_director_return
+    && !parkedReturnHint.value
+    && !showReturnedCorrectionHint.value,
+)
 const returnedFromDocumentationReview = computed(() => Boolean(application.value?.skip_next_director_review))
 const canAnalystDecide = computed(
   () => hasPermission('radicacion_analisis_guardar') && application.value?.status === 'In_Analysis',
@@ -375,19 +424,21 @@ const directorDecisionOptions = [
 ]
 const documentationDecisionOptions = [
   { value: 'approved', label: 'Aprobar y enviar a análisis' },
-  { value: 'returned', label: 'Devolver por revisión de documentos' },
+  { value: 'returned', label: 'Devolver a una etapa anterior' },
 ]
 
 const analystDecision = ref<'approved' | 'returned' | ''>('')
+const analystResubmitTo = ref<ReturnResubmitTo>('advisor')
 const analystConcept = ref('')
 const analystDecisionDialogOpen = ref(false)
 const submittingAnalystDecision = ref(false)
 const analystDecisionOptions = [
   { value: 'approved', label: 'Aprobar (abre Análisis y SCORE para análisis y envío a director de crédito)' },
-  { value: 'returned', label: 'Devolver al asesor para corrección (visible también para director de agencia)' },
+  { value: 'returned', label: 'Devolver a una etapa anterior' },
 ]
 
-const creditDirectorDecision = ref<'approved' | 'rejected' | 'returned_modification' | 'returned_insurer_response' | ''>('')
+const creditDirectorDecision = ref<'approved' | 'rejected' | 'returned' | 'returned_modification' | 'returned_insurer_response' | ''>('')
+const creditDirectorReturnTo = ref<ReturnResubmitTo>('advisor')
 const creditDirectorConcept = ref('')
 const creditDirectorExceptionOptions = [
   { value: 'no', label: 'No' },
@@ -404,6 +455,7 @@ const creditDirectorExceptionJustification = ref('')
 const creditDirectorExceptionReasonOptions = ref<Array<{ value: string, label: string }>>([])
 const creditDirectorExceptionReasonsSelected = ref<string[]>([])
 const creditDirectorApproverValue = ref('')
+const creditDirectorApproverName = ref('')
 const creditDirectorApproverOptions = ref<Array<{ value: string, label: string }>>([])
 const creditDirectorDecisionDialogOpen = ref(false)
 const submittingCreditDirectorDecision = ref(false)
@@ -413,6 +465,7 @@ const documentationReviewConceptCollapsibleOpen = ref(true)
 const creditDirectorDecisionOptions = [
   { value: 'approved', label: 'Aprobar para desembolso' },
   { value: 'rejected', label: 'Rechazar solicitud' },
+  { value: 'returned', label: 'Devolución' },
   { value: 'returned_modification', label: 'Modificación' },
   { value: 'returned_insurer_response', label: 'Respuesta aseguradora' },
 ]
@@ -504,6 +557,9 @@ const cancellationActorDisplay = computed((): string => {
 function onDirectorDecisionUpdate(value: string | null) {
   if (value === 'approved' || value === 'returned') {
     directorDecision.value = value
+    if (value === 'returned') {
+      directorResubmitTo.value = 'advisor'
+    }
     return
   }
   directorDecision.value = ''
@@ -512,6 +568,9 @@ function onDirectorDecisionUpdate(value: string | null) {
 function onDocumentationDecisionUpdate(value: string | null) {
   if (value === 'approved' || value === 'returned') {
     documentationDecision.value = value
+    if (value === 'returned') {
+      documentationResubmitTo.value = 'advisor'
+    }
     return
   }
   documentationDecision.value = ''
@@ -520,6 +579,9 @@ function onDocumentationDecisionUpdate(value: string | null) {
 function onAnalystDecisionUpdate(value: string | null) {
   if (value === 'approved' || value === 'returned') {
     analystDecision.value = value
+    if (value === 'returned') {
+      analystResubmitTo.value = 'advisor'
+    }
     return
   }
   analystDecision.value = ''
@@ -529,12 +591,17 @@ function onCreditDirectorDecisionUpdate(value: string | null) {
   if (
     value === 'approved'
     || value === 'rejected'
+    || value === 'returned'
     || value === 'returned_modification'
     || value === 'returned_insurer_response'
   ) {
     creditDirectorDecision.value = value
+    if (value === 'returned') {
+      creditDirectorReturnTo.value = 'advisor'
+    }
     if (value !== 'approved') {
       creditDirectorApproverValue.value = ''
+      creditDirectorApproverName.value = ''
     }
     return
   }
@@ -556,6 +623,7 @@ function onCreditDirectorExceptionUpdate(value: string | null) {
   creditDirectorExceptionJustification.value = ''
   creditDirectorExceptionReasonsSelected.value = []
   creditDirectorApproverValue.value = ''
+  creditDirectorApproverName.value = ''
 }
 
 function onCreditDirectorPrivilegedUpdate(value: string | null) {
@@ -675,7 +743,10 @@ function timelineEventStatusLabel(
   return getCreditApplicationStatusLabel(status, {
     timelineEventKey: event.event_key ?? null,
     timelineRole: role,
+    returnedBy: application.value?.returned_by,
     skipNextDirectorReview: application.value?.skip_next_director_review,
+    resubmitToAnalystAfterReturn: application.value?.resubmit_to_analyst_after_return,
+    resubmitToCreditDirectorAfterReturn: application.value?.resubmit_to_credit_director_after_return,
   })
 }
 
@@ -941,8 +1012,9 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
   const residenceName = (typeof api?.residence_city_name === 'string' && api.residence_city_name?.trim())
     ? api.residence_city_name
     : (api?.residence_city as { name?: string } | null)?.name ?? ''
+  const applicantId = coerceApplicantId(api?.id)
   return {
-    id: typeof api?.id === 'number' ? api.id : undefined,
+    id: applicantId,
     document_type: api?.document_type ?? 'CC',
     document_number: api?.document_number ?? '',
     expedition_date: toDateInputFormat(api?.expedition_date) ?? api?.expedition_date,
@@ -1050,30 +1122,9 @@ const coDebtors = computed(() => {
     }))
 })
 
-const documentsByApplicant = computed(() => {
-  const docs = application.value?.documents ?? []
-  const byApplicant: Record<string, any[]> = {}
-  const seenByApplicant: Record<string, Set<number>> = {}
-  for (const doc of docs) {
-    const aid = doc.applicant_id
-    if (aid == null) continue
-    const key = String(aid)
-    const id = Number(doc.id)
-    if (!Number.isFinite(id)) {
-      continue
-    }
-    if (!byApplicant[key]) {
-      byApplicant[key] = []
-      seenByApplicant[key] = new Set()
-    }
-    if (seenByApplicant[key]!.has(id)) {
-      continue
-    }
-    seenByApplicant[key]!.add(id)
-    byApplicant[key].push(doc)
-  }
-  return byApplicant
-})
+const documentsByApplicant = computed(() =>
+  groupDocumentsByApplicantId(application.value?.documents ?? [], debtor.value?.id),
+)
 
 function getDocumentsForApplicant(applicantId: number | string | null | undefined): any[] {
   if (applicantId == null) return []
@@ -1090,6 +1141,40 @@ function getFreeDocumentsForApplicant(
 ): any[] {
   return filterFreeAttachmentDocuments(getDocumentsForApplicant(applicantId), financialInfo)
 }
+
+/**
+ * Adjuntos del expediente en consulta/aprobación: los mismos archivos de Documentación
+ * que no están ya en el checklist (p. ej. cédula, CIFIN, referencias subidos con título libre).
+ * No se filtra por applicant_id: si quedaron etiquetados como codeudor, el ente aprobador
+ * igual debe verlos al abrir la radicación.
+ */
+const consultaExpedienteDocuments = computed(() => {
+  const docs = application.value?.documents ?? []
+  const mappedIds = new Set<number>()
+  const financialInfos = [
+    form.value.debtor?.financial_info,
+    ...(form.value.co_debtors ?? []).map(c => c.financial_info),
+  ]
+  for (const fi of financialInfos) {
+    for (const id of collectChecklistDocumentIds(fi)) {
+      mappedIds.add(id)
+    }
+  }
+  const seen = new Set<number>()
+  const out: any[] = []
+  for (const doc of docs) {
+    const id = Number(doc?.id)
+    if (!Number.isInteger(id) || id < 1 || seen.has(id)) {
+      continue
+    }
+    if (mappedIds.has(id)) {
+      continue
+    }
+    seen.add(id)
+    out.push(doc)
+  }
+  return out
+})
 
 function creditMortgageSummaryText(opts: unknown): string {
   if (!Array.isArray(opts) || opts.length !== 1) {
@@ -1321,6 +1406,12 @@ async function confirmAnalystDecision() {
       body: {
         decision,
         concept: analystConcept.value.trim(),
+        ...(decision === 'returned'
+          ? (() => {
+              const to = serializeReturnToForApi(analystResubmitTo.value)
+              return to ? { resubmit_to: to } : {}
+            })()
+          : {}),
       },
     })
     analystDecisionDialogOpen.value = false
@@ -1331,12 +1422,15 @@ async function confirmAnalystDecision() {
     }
     toast.success(
       wasReturned
-        ? 'Radicación devuelta al asesor.'
+        ? (serializeReturnToForApi(analystResubmitTo.value)
+            ? 'Radicación devuelta a la etapa seleccionada.'
+            : 'Radicación devuelta al asesor.')
         : 'Decisión del analista registrada correctamente.',
       wasReturned
         ? {
-            description:
-              'Dejó de aparecer en el listado por defecto del analista (solo «En análisis»). Para localizarla, use el filtro de estado «Devuelta (ajustes pendientes)».',
+            description: serializeReturnToForApi(analystResubmitTo.value)
+              ? 'Quedó en la bandeja de esa etapa. Al completarla, vuelve a análisis.'
+              : 'Quedó en la bandeja del asesor (inicio del flujo). Al corregir, vuelve a análisis.',
             duration: 10000,
           }
         : undefined,
@@ -1369,6 +1463,12 @@ async function confirmDirectorDecision() {
       body: {
         decision: directorDecision.value,
         concept: directorConcept.value.trim(),
+        ...(directorDecision.value === 'returned'
+          ? (() => {
+              const to = serializeReturnToForApi(directorResubmitTo.value)
+              return to ? { resubmit_to: to } : {}
+            })()
+          : {}),
       },
     })
     directorDecisionDialogOpen.value = false
@@ -1437,6 +1537,10 @@ async function openCreditDirectorDecisionDialog() {
       toast.error('Seleccione el ente aprobador.')
       return
     }
+    if (creditDirectorApproverName.value.trim().length < 2) {
+      toast.error('Indique el nombre del ente aprobador (mínimo 2 caracteres).')
+      return
+    }
   }
   if (hasPermission('radicacion_marcar_privilegiado') && creditDirectorIsPrivilegedChoice.value === 'yes') {
     if (creditDirectorPrivilegedJustification.value.trim().length < 10) {
@@ -1471,6 +1575,15 @@ async function confirmCreditDirectorDecision() {
       approver_value: creditDirectorDecision.value === 'approved'
         ? creditDirectorApproverValue.value.trim()
         : null,
+      approver_name: creditDirectorDecision.value === 'approved'
+        ? creditDirectorApproverName.value.trim()
+        : null,
+    }
+    if (creditDirectorDecision.value === 'returned') {
+      const to = serializeReturnToForApi(creditDirectorReturnTo.value)
+      if (to) {
+        body.resubmit_to = to
+      }
     }
     if (
       application.value?.documentation_insurability_required === true
@@ -1506,14 +1619,6 @@ async function confirmCreditDirectorDecision() {
     toast.error(e?.data?.message ?? 'No se pudo registrar la decisión del director de crédito.')
   } finally {
     submittingCreditDirectorDecision.value = false
-  }
-}
-
-function onDocumentationInsurabilityChoiceUpdate(v: unknown): void {
-  documentationInsurabilityChoice.value = v === 'yes' ? 'yes' : 'no'
-  if (documentationInsurabilityChoice.value === 'no') {
-    documentationInsurabilityStatusValue.value = ''
-    documentationInsurabilityStatusJustification.value = ''
   }
 }
 
@@ -1567,11 +1672,17 @@ async function confirmDocumentationDecision() {
     const body: Record<string, unknown> = {
       decision: documentationDecision.value,
       concept: documentationConcept.value.trim(),
-      insurability_required: documentationInsurabilityChoice.value === 'yes',
+      insurability_required: true,
       documents: documentsPayload,
     }
     if (documentationDecision.value === 'approved') {
       body.credit_mortgage_options = [documentationCreditMortgage.value]
+    }
+    if (documentationDecision.value === 'returned') {
+      const to = serializeReturnToForApi(documentationResubmitTo.value)
+      if (to) {
+        body.resubmit_to = to
+      }
     }
     await $api(`/credit-applications/${application.value.id}/documentation-decision`, {
       method: 'PATCH',
@@ -1685,12 +1796,13 @@ async function repairLoadedAuxiliaryDocumentMapsOnDetail(): Promise<void> {
   } catch {
     return
   }
-  const repairOne = (applicant: ApplicantForm) => {
+  const repairOne = (applicant: ApplicantForm, allowUnscoped: boolean) => {
     const repaired = repairAuxiliaryDocumentsMapFromExisting({
       itemsByActivity,
       financialInfo: applicant.financial_info,
       applicationDocuments: docs,
       applicantId: applicant.id,
+      allowUnscoped,
     })
     if (!repaired) {
       return
@@ -1704,9 +1816,9 @@ async function repairLoadedAuxiliaryDocumentMapsOnDetail(): Promise<void> {
       : {}
     applicant.financial_info = { ...fi, auxiliaryDocuments: repaired }
   }
-  repairOne(form.value.debtor)
+  repairOne(form.value.debtor, true)
   for (const co of form.value.co_debtors ?? []) {
-    repairOne(co)
+    repairOne(co, false)
   }
 }
 
@@ -1726,6 +1838,7 @@ async function fetchApplication() {
     } else if (
       application.value?.skip_next_director_review === true
       || application.value?.resubmit_to_analyst_after_return === true
+      || application.value?.resubmit_to_credit_director_after_return === true
       || timelineHasReturnedEvent(application.value?.timeline)
     ) {
       timelineExpanded.value = true
@@ -1742,7 +1855,7 @@ async function fetchApplication() {
     lastDebtorDocumentationFinancialPatchSignature.value = stableStringifyDocumentationFinancialPatch(
       buildDocumentationFinancialPatch(form.value.debtor.financial_info),
     )
-    documentationInsurabilityChoice.value = application.value?.documentation_insurability_required === true ? 'yes' : 'no'
+    documentationInsurabilityChoice.value = 'yes'
     documentationInsurabilityStatusValue.value = typeof application.value?.insurability_status_value === 'string'
       && application.value.insurability_status_value !== ''
       ? application.value.insurability_status_value
@@ -2374,11 +2487,14 @@ async function flushCodeudorAuxiliaryDocumentUploads(applicantId: number): Promi
     if (Number.isFinite(newId) && newId > 0) {
       docMap[key] = newId
       if (typeof prevId === 'number' && prevId > 0 && prevId !== newId) {
-        try {
-          await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
-          removeInsurabilityDocumentFromApplicationState(prevId)
-        } catch (e) {
-          console.error(e)
+        const prevDoc = (application.value?.documents ?? []).find((d: { id?: number }) => Number(d.id) === Number(prevId)) as { applicant_id?: number | null } | undefined
+        if (prevDoc && Number(prevDoc.applicant_id) === Number(applicantId)) {
+          try {
+            await $api(`/credit-applications/${applicationId}/documents/${prevId}`, { method: 'DELETE' })
+            removeInsurabilityDocumentFromApplicationState(prevId)
+          } catch (e) {
+            console.error(e)
+          }
         }
       }
     }
@@ -2759,6 +2875,18 @@ onMounted(() => {
         <h2 class="text-2xl font-bold tracking-tight">
           Ver Radicación
         </h2>
+        <div v-if="application?.status" class="mt-2">
+          <CreditApplicationStatusBadges
+            :status="application.status"
+            :returned-by="application.returned_by"
+            :skip-next-director-review="application.skip_next_director_review"
+            :resubmit-to-analyst-after-return="application.resubmit_to_analyst_after_return"
+            :resubmit-to-credit-director-after-return="application.resubmit_to_credit_director_after_return"
+            :parked-after-return="Boolean(application.parked_after_return)"
+            :corrected-after-return="Boolean(application.corrected_after_return)"
+            :corrected-after-credit-director-return="Boolean(application.corrected_after_credit_director_return)"
+          />
+        </div>
         <p class="text-muted-foreground">
           <template v-if="documentationUploadMode">
             Revisión de documentación: puede ajustar el tipo de actividad económica, el checklist auxiliar (deudor y codeudores), documentos de asegurabilidad y FNG cuando la solicitud tiene garantía FNG, e indicar si el crédito es hipotecario antes de registrar el concepto.
@@ -2799,7 +2927,7 @@ onMounted(() => {
             {{ downloadingPdf ? 'Abriendo…' : 'Ver PDF' }}
           </Button>
         </PermissionGate>
-        <Button variant="outline" class="shrink-0" @click="router.push('/radicacion')">
+        <Button variant="outline" class="shrink-0" @click="goBack">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>
@@ -2861,6 +2989,39 @@ onMounted(() => {
             Ir a corregir y reenviar
           </NuxtLink>
         </Button>
+      </AlertDescription>
+    </Alert>
+
+    <Alert
+      v-if="parkedReturnHint && application?.id"
+      class="border-amber-600/35 bg-amber-500/[0.08] dark:border-amber-500/35 dark:bg-amber-950/40 [&>svg]:text-amber-700 dark:[&>svg]:text-amber-300"
+    >
+      <Icon name="i-lucide-undo-2" class="h-4 w-4" />
+      <AlertTitle>Devolución a esta etapa</AlertTitle>
+      <AlertDescription class="mt-1 text-sm leading-relaxed">
+        {{ parkedReturnHint }}
+      </AlertDescription>
+    </Alert>
+
+    <Alert
+      v-if="showCorrectedAfterCreditDirectorHint && application?.id"
+      class="border-amber-600/35 bg-amber-500/[0.08] dark:border-amber-500/35 dark:bg-amber-950/40 [&>svg]:text-amber-700 dark:[&>svg]:text-amber-300"
+    >
+      <Icon name="i-lucide-check-circle-2" class="h-4 w-4" />
+      <AlertTitle>Corregida tras devolución del ente aprobador</AlertTitle>
+      <AlertDescription class="mt-1 text-sm leading-relaxed">
+        El director de crédito la devolvió (devolución o modificación) y ya se corrigió. Volvió al flujo. Revise la trazabilidad.
+      </AlertDescription>
+    </Alert>
+
+    <Alert
+      v-if="showCorrectedAfterReturnHint && application?.id"
+      class="border-teal-600/35 bg-teal-500/[0.08] dark:border-teal-500/35 dark:bg-teal-950/40 [&>svg]:text-teal-700 dark:[&>svg]:text-teal-300"
+    >
+      <Icon name="i-lucide-check-circle-2" class="h-4 w-4" />
+      <AlertTitle>Corregida tras devolución</AlertTitle>
+      <AlertDescription class="mt-1 text-sm leading-relaxed">
+        Revisión de documentación o el analista la devolvió y ya se corrigió. Volvió al flujo. Revise la trazabilidad.
       </AlertDescription>
     </Alert>
 
@@ -2967,19 +3128,26 @@ onMounted(() => {
             <span class="text-muted-foreground">Justificación (privilegiado):</span>
             {{ application.privileged_justification }}
           </p>
+          <p
+            v-if="application?.credit_director_approver_value"
+            class="text-sm"
+          >
+            <span class="text-muted-foreground">Ente aprobador:</span>
+            {{ approverLabelForValue(application.credit_director_approver_value) }}
+          </p>
+          <p
+            v-if="application?.credit_director_approver_name"
+            class="text-sm"
+          >
+            <span class="text-muted-foreground">Nombre del ente aprobador:</span>
+            {{ application.credit_director_approver_name }}
+          </p>
           <div
             v-if="application?.credit_director_is_exception"
             class="space-y-2 rounded-md border border-amber-200 bg-amber-50/80 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30"
           >
             <p class="font-medium text-foreground">
               Excepción: Sí
-            </p>
-            <p
-              v-if="!application?.credit_director_is_exception && application?.credit_director_approver_value"
-              class="text-sm"
-            >
-              <span class="text-muted-foreground">Ente aprobador:</span>
-              {{ approverLabelForValue(application.credit_director_approver_value) }}
             </p>
             <p class="whitespace-pre-wrap">
               <span class="text-muted-foreground">Justificación:</span>
@@ -3185,7 +3353,7 @@ onMounted(() => {
                 <CardTitle>Decisión final — director de crédito</CardTitle>
                 <CardDescription>
                   Revise la radicación y el SCORE. Elija <strong>Aprobar para desembolso</strong>, <strong>Rechazar solicitud</strong>,
-                  <strong>Modificación</strong> o <strong>Respuesta aseguradora</strong> según corresponda. Debe dejar un concepto claro y estructurado.
+                  <strong>Devolución</strong>, <strong>Modificación</strong> o <strong>Respuesta aseguradora</strong> según corresponda. Debe dejar un concepto claro y estructurado.
                 </CardDescription>
               </div>
               <Button
@@ -3259,6 +3427,28 @@ onMounted(() => {
             />
           </div>
           <div
+            v-if="creditDirectorDecision === 'returned'"
+            class="space-y-1.5"
+          >
+            <Label for="credit_director_resubmit_to">Devolver a *</Label>
+            <Multiselect
+              id="credit_director_resubmit_to"
+              :model-value="creditDirectorReturnTo"
+              :options="creditDirectorReturnResubmitOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="false"
+              placeholder="Seleccionar etapa anterior"
+              class="multiselect-director"
+              @update:model-value="(v: unknown) => { const n = parseReturnToSelection(v); if (n === 'advisor' || n === 'agency_director' || n === 'documentation' || n === 'analysis') creditDirectorReturnTo = n }"
+            />
+            <p class="text-xs text-muted-foreground">
+              Etapas anteriores a revisión de director de crédito. Al completar esa etapa, la radicación vuelve aquí.
+            </p>
+          </div>
+          <div
             class="grid gap-4"
             :class="hasPermission('radicacion_marcar_privilegiado') ? 'sm:grid-cols-2' : ''"
           >
@@ -3306,22 +3496,36 @@ onMounted(() => {
           </div>
           <div
             v-if="creditDirectorDecision === 'approved'"
-            class="space-y-1.5"
+            class="space-y-3"
           >
-            <Label for="credit_director_approver">Ente aprobador *</Label>
-            <Multiselect
-              id="credit_director_approver"
-              :model-value="creditDirectorApproverValue === '' ? null : creditDirectorApproverValue"
-              :options="creditDirectorApproverOptions"
-              value-prop="value"
-              label="label"
-              mode="single"
-              :can-clear="false"
-              :searchable="true"
-              placeholder="Seleccionar aprobador"
-              class="multiselect-director"
-              @update:model-value="onCreditDirectorApproverUpdate"
-            />
+            <div class="space-y-1.5">
+              <Label for="credit_director_approver">Ente aprobador *</Label>
+              <Multiselect
+                id="credit_director_approver"
+                :model-value="creditDirectorApproverValue === '' ? null : creditDirectorApproverValue"
+                :options="creditDirectorApproverOptions"
+                value-prop="value"
+                label="label"
+                mode="single"
+                :can-clear="false"
+                :searchable="true"
+                placeholder="Seleccionar aprobador"
+                class="multiselect-director"
+                @update:model-value="onCreditDirectorApproverUpdate"
+              />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="credit_director_approver_name">Nombre del ente aprobador *</Label>
+              <Input
+                id="credit_director_approver_name"
+                v-model="creditDirectorApproverName"
+                maxlength="200"
+                placeholder="Nombre de la persona, comité u órgano que aprueba"
+              />
+              <p class="text-xs text-muted-foreground">
+                Identifique quién aprueba el crédito (mínimo 2 caracteres).
+              </p>
+            </div>
           </div>
           <div
             v-if="showApproverEntityDocumentsInCreditDirectorCard"
@@ -3452,6 +3656,28 @@ onMounted(() => {
               @update:model-value="onDirectorDecisionUpdate"
             />
           </div>
+          <div
+            v-if="directorDecision === 'returned'"
+            class="space-y-1.5"
+          >
+            <Label for="director_resubmit_to">Devolver a *</Label>
+            <Multiselect
+              id="director_resubmit_to"
+              :model-value="directorResubmitTo"
+              :options="agencyDirectorReturnResubmitOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="false"
+              placeholder="Seleccionar etapa"
+              class="multiselect-director"
+              @update:model-value="(v: unknown) => { const n = parseReturnToSelection(v); if (n === 'advisor') directorResubmitTo = n }"
+            />
+            <p class="text-xs text-muted-foreground">
+              Solo hay una etapa anterior: el asesor. Al corregir, vuelve al director de agencia.
+            </p>
+          </div>
           <div class="space-y-1.5">
             <Label for="director_concept">Concepto del director *</Label>
             <textarea
@@ -3500,13 +3726,12 @@ onMounted(() => {
           <CollapsibleContent>
             <CardContent class="space-y-4 pt-0">
           <div class="space-y-1.5">
-            <Label for="documentation_insurability">Requiere asegurabilidad</Label>
+            <Label for="documentation_insurability">Requiere asegurabilidad *</Label>
             <div class="flex justify-start">
               <Multiselect
                 id="documentation_insurability"
-                :model-value="documentationInsurabilityChoice === 'yes' ? 'yes' : 'no'"
+                :model-value="'yes'"
                 :options="[
-                  { value: 'no', label: 'No' },
                   { value: 'yes', label: 'Sí' },
                 ]"
                 value-prop="value"
@@ -3514,19 +3739,72 @@ onMounted(() => {
                 mode="single"
                 :can-clear="false"
                 :searchable="false"
-                placeholder="Seleccionar"
+                :disabled="true"
+                placeholder="Sí"
                 class="multiselect-director w-full max-w-md"
-                @update:model-value="onDocumentationInsurabilityChoiceUpdate"
               />
             </div>
             <p class="text-xs text-muted-foreground leading-relaxed">
-              Si marca «Sí», complete los documentos del checklist debajo antes de registrar la decisión. El <span class="font-medium">estado catalogado de asegurabilidad</span> y su justificación los registra el <span class="font-medium">director de crédito</span> al aprobar la operación (o quien tenga permiso de actualizar estado en la sección de asegurabilidad). Marque como revisados los del checklist auxiliar y, si la solicitud tiene garantía FNG, cada documento FNG ya cargado en la solicitud.
+              En revisión documental la asegurabilidad es <span class="font-medium text-foreground">obligatoria</span>. Complete el checklist debajo. El <span class="font-medium">estado catalogado de asegurabilidad</span> y su justificación los registra quien tenga permiso (plantilla: director de crédito) en esta misma sección o al aprobar la operación. Marque como revisados los del checklist auxiliar y, si la solicitud tiene garantía FNG, cada documento FNG ya cargado en la solicitud.
             </p>
           </div>
           <div
             v-if="inlineInsurabilityDocumentsInDocReviewCard"
             class="rounded-md border border-border/60 bg-muted/10 p-4 space-y-3"
           >
+            <div
+              v-if="showInsurabilityStatusInAsegurabilidadCard"
+              class="rounded-md border bg-muted/30 p-4 space-y-3"
+            >
+              <p class="text-sm text-muted-foreground leading-relaxed">
+                Esta radicación <span class="font-medium text-foreground">requiere asegurabilidad</span>.
+                El <span class="font-medium text-foreground">director de crédito</span> (o quien tenga permiso de actualizar estado) registra aquí el estado catalogado y su justificación.
+              </p>
+              <template v-if="canEditInsurabilityStatusInAsegurabilidadSection">
+                <div class="space-y-3">
+                  <div class="space-y-1.5">
+                    <Label for="documentation_review_insurability_status">Estado asegurabilidad *</Label>
+                    <Multiselect
+                      id="documentation_review_insurability_status"
+                      :model-value="documentationInsurabilityStatusValue === '' ? null : documentationInsurabilityStatusValue"
+                      :options="documentationInsurabilityStatusOptions"
+                      value-prop="value"
+                      label="label"
+                      mode="single"
+                      :can-clear="false"
+                      :searchable="false"
+                      placeholder="Seleccionar estado"
+                      class="multiselect-director w-full max-w-md"
+                      @update:model-value="onDocumentationInsurabilityStatusUpdate"
+                    />
+                  </div>
+                  <div v-if="documentationInsurabilityStatusValue !== ''" class="space-y-1.5">
+                    <Label for="documentation_review_insurability_justification">Justificación del estado *</Label>
+                    <textarea
+                      id="documentation_review_insurability_justification"
+                      v-model="documentationInsurabilityStatusJustification"
+                      rows="4"
+                      class="flex min-h-[100px] w-full max-w-2xl rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      placeholder="Fundamente el estado elegido respecto de la operación."
+                    />
+                    <p class="text-xs text-muted-foreground">
+                      Mínimo 10 caracteres para guardar el cambio.
+                    </p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2 justify-start">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      :disabled="submittingInsurabilityStatusPatch"
+                      @click="patchInsurabilityStatusFromSection"
+                    >
+                      <Icon v-if="submittingInsurabilityStatusPatch" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                      Guardar estado y justificación
+                    </Button>
+                  </div>
+                </div>
+              </template>
+            </div>
             <div>
               <p class="text-sm font-medium text-foreground">
                 Documentos de asegurabilidad
@@ -3653,6 +3931,28 @@ onMounted(() => {
               @update:model-value="onDocumentationDecisionUpdate"
             />
           </div>
+          <div
+            v-if="documentationDecision === 'returned'"
+            class="space-y-1.5"
+          >
+            <Label for="documentation_resubmit_to">Devolver a *</Label>
+            <Multiselect
+              id="documentation_resubmit_to"
+              :model-value="documentationResubmitTo"
+              :options="documentationReturnResubmitOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="false"
+              placeholder="Seleccionar etapa"
+              class="multiselect-director"
+              @update:model-value="(v: unknown) => { const n = parseReturnToSelection(v); if (n === 'advisor' || n === 'agency_director') documentationResubmitTo = n }"
+            />
+            <p class="text-xs text-muted-foreground">
+              Etapas anteriores a revisión de documentos. Al completar esa etapa, la radicación vuelve aquí.
+            </p>
+          </div>
           <div class="space-y-1.5">
             <Label for="documentation_concept">Concepto de revisión *</Label>
             <textarea
@@ -3713,6 +4013,28 @@ onMounted(() => {
               class="multiselect-director"
               @update:model-value="onAnalystDecisionUpdate"
             />
+          </div>
+          <div
+            v-if="analystDecision === 'returned'"
+            class="space-y-1.5"
+          >
+            <Label for="analyst_resubmit_to">Devolver a *</Label>
+            <Multiselect
+              id="analyst_resubmit_to"
+              :model-value="analystResubmitTo"
+              :options="analystReturnResubmitOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="false"
+              placeholder="Seleccionar etapa"
+              class="multiselect-director"
+              @update:model-value="(v: unknown) => { const n = parseReturnToSelection(v); if (n === 'advisor' || n === 'agency_director' || n === 'documentation') analystResubmitTo = n }"
+            />
+            <p class="text-xs text-muted-foreground">
+              Etapas anteriores a análisis. Al completar esa etapa, la radicación vuelve al analista.
+            </p>
           </div>
           <div class="space-y-1.5">
             <Label for="analyst_concept">Concepto del analista *</Label>
@@ -3832,26 +4154,24 @@ onMounted(() => {
               :credit-application-documents="application?.documents ?? []"
             />
             <div
-              v-if="!documentationReviewFlowActive && getFreeDocumentsForApplicant(debtor.id, debtor.financial_info ?? form.debtor?.financial_info).length > 0"
+              v-if="consultaExpedienteDocuments.length > 0"
               class="space-y-3 border-t pt-4"
             >
               <div class="space-y-1">
                 <p class="text-sm font-semibold">
-                  {{ documentationUploadMode ? 'Archivos de la solicitud (descarga y revisión)' : 'Documentos adjuntos' }}
+                  Archivos del expediente
                 </p>
-                <p
-                  v-if="documentationUploadMode"
-                  class="text-xs text-muted-foreground leading-snug"
-                >
-                  Enlaces a los mismos archivos de la solicitud. Si el checklist de arriba ya muestra la carga, use esta zona para abrir el archivo y, si aplica, registrar la revisión documental.
+                <p class="text-xs text-muted-foreground leading-snug">
+                  Adjuntos guardados en Documentación que no están en el checklist de arriba. Ábralos para revisarlos.
                 </p>
               </div>
               <div class="flex min-w-0 flex-wrap gap-2">
                 <PermissionGate
-                  v-for="doc in getFreeDocumentsForApplicant(debtor.id, debtor.financial_info ?? form.debtor?.financial_info)"
+                  v-for="doc in consultaExpedienteDocuments"
                   :key="doc.id"
-                  permission="radicacion_descargar_documentos"
-                >                  <div class="min-w-0 max-w-full space-y-2 rounded-md border p-2">
+                  :any-permission="['radicacion_descargar_documentos', 'documentacion_ver']"
+                >
+                  <div class="min-w-0 max-w-full space-y-2 rounded-md border p-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -3909,7 +4229,7 @@ onMounted(() => {
 
           <!-- Paso 3: Datos financieros -->
           <div v-else-if="currentStep === 3" class="space-y-4">
-            <div :class="documentationUploadMode ? '' : 'pointer-events-none'">
+            <div :class="documentationUploadMode ? '' : 'pointer-events-none overflow-visible'">
               <ApplicantFormFields
                 v-model="form.debtor"
                 :show-only-financial="true"
@@ -4157,7 +4477,7 @@ onMounted(() => {
               </div>
 
               <div v-else class="space-y-4">
-                <div :class="documentationUploadMode ? '' : 'pointer-events-none'">
+                <div :class="documentationUploadMode ? '' : 'pointer-events-none overflow-visible'">
                   <ApplicantFormFields
                     v-model="form.co_debtors[selectedCoDebtorIndex]!"
                     :show-only-financial="true"
@@ -4210,10 +4530,13 @@ onMounted(() => {
           <AlertDialogTitle>Confirmar decisión final del director de crédito</AlertDialogTitle>
           <AlertDialogDescription>
             <template v-if="creditDirectorDecision === 'approved'">
-              La solicitud pasará a estado <strong>desembolso</strong>. Verifique que el concepto quede completo antes de confirmar.
+              La solicitud pasará a estado <strong>desembolso</strong>. Verifique el ente aprobador, su nombre y que el concepto quede completo antes de confirmar.
             </template>
             <template v-else-if="creditDirectorDecision === 'rejected'">
               La solicitud quedará <strong>rechazada</strong> de forma definitiva. Esta acción no se puede deshacer desde aquí.
+            </template>
+            <template v-else-if="creditDirectorDecision === 'returned'">
+              {{ returnFlowConfirmDescription(creditDirectorReturnTo, 'credit_director') }}
             </template>
             <template v-else-if="creditDirectorDecision === 'returned_modification'">
               La solicitud pasará a estado <strong>Modificación</strong> para corrección y nuevo flujo hasta una nueva revisión del director de crédito.
@@ -4247,7 +4570,12 @@ onMounted(() => {
         <AlertDialogHeader>
           <AlertDialogTitle>Confirmar decisión del director</AlertDialogTitle>
           <AlertDialogDescription>
-            Esta acción actualizará el estado de la radicación y guardará el concepto del director en la trazabilidad.
+            <template v-if="directorDecision === 'returned'">
+              {{ returnFlowConfirmDescription(directorResubmitTo, 'agency_director') }}
+            </template>
+            <template v-else>
+              Esta acción actualizará el estado de la radicación y guardará el concepto del director en la trazabilidad.
+            </template>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter class="flex flex-col gap-2 sm:flex-row sm:justify-end">
@@ -4275,7 +4603,7 @@ onMounted(() => {
               Se guardará el texto del concepto en la radicación. Permanecerás en esta vista.
             </template>
             <template v-else-if="analystDecision === 'returned'">
-              Esta acción devolverá la radicación al asesor y anulará la aprobación previa del analista si existía.
+              {{ returnFlowConfirmDescription(analystResubmitTo, 'analysis') }} Se anulará la aprobación previa del analista si existía.
             </template>
             <template v-else-if="analystDecision === 'approved'">
               Se guardará la aprobación y te llevará a Análisis y SCORE para completar el análisis y el SCORE.
@@ -4306,7 +4634,12 @@ onMounted(() => {
         <AlertDialogHeader>
           <AlertDialogTitle>Confirmar revisión de documentos</AlertDialogTitle>
           <AlertDialogDescription>
-            Esta acción actualizará el estado de la radicación y guardará el concepto de revisión documental.
+            <template v-if="documentationDecision === 'returned'">
+              {{ returnFlowConfirmDescription(documentationResubmitTo, 'documentation') }}
+            </template>
+            <template v-else>
+              Esta acción actualizará el estado de la radicación y guardará el concepto de revisión documental.
+            </template>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter class="flex flex-col gap-2 sm:flex-row sm:justify-end">

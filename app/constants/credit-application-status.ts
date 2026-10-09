@@ -1,4 +1,4 @@
-import type { BadgeVariants } from '~/components/ui/badge'
+import { returnedByStatusLabel } from '~/constants/credit-application-return'
 
 /** Cierre del flujo: sin edición ni desactivación (API y UI alineados). */
 export function isCreditApplicationTerminalImmutable(status: string | null | undefined): boolean {
@@ -75,10 +75,14 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export type CreditApplicationStatusLabelOptions = {
+  /** Quién devolvió (`returned_by` en API): documentation | analyst | agency_director | credit_director. */
+  returnedBy?: string | null
   /** Estado actual: viene del API cuando la solicitud está en `Returned` tras devolución documental. */
   skipNextDirectorReview?: boolean
-  /** `true` cuando el analista devolvió la radicación y el asesor debe corregir y reenviar al analista. */
+  /** `true` cuando el reenvío vuelve a análisis (analista u otro ente que eligió esa etapa). */
   resubmitToAnalystAfterReturn?: boolean
+  /** `true` cuando el director de crédito devolvió (Devolución) y el reenvío vuelve a esa revisión. */
+  resubmitToCreditDirectorAfterReturn?: boolean
   /** `event_key` de la fila de trazabilidad para acertar el matiz de `Returned`. */
   timelineEventKey?: string | null
   /** Si el estado etiquetado es el origen o el destino de esa fila. */
@@ -100,6 +104,9 @@ function returnedLabelFromTimeline(
     if (ek === 'analyst_returned_review') {
       return 'Devuelta por analista'
     }
+    if (ek === 'credit_director_returned') {
+      return 'Devolución'
+    }
     if (ek === 'credit_director_returned_modification') {
       return 'Modificación'
     }
@@ -114,6 +121,9 @@ function returnedLabelFromTimeline(
     }
     if (ek === 'sent_to_director_review') {
       return 'Devuelta por director de agencia'
+    }
+    if (ek === 'resubmitted_to_credit_director_after_return') {
+      return 'Devolución'
     }
     return null
   }
@@ -148,8 +158,17 @@ export function getCreditApplicationStatusLabel(
     return status
   }
 
+  const fromReturnedBy = returnedByStatusLabel(options?.returnedBy)
+  if (fromReturnedBy != null) {
+    return fromReturnedBy
+  }
+
   if (options?.resubmitToAnalystAfterReturn === true) {
     return 'Devuelta por analista (pendiente asesor)'
+  }
+
+  if (options?.resubmitToCreditDirectorAfterReturn === true) {
+    return 'Devolución'
   }
 
   if (options?.timelineEventKey != null && options.timelineRole != null) {
@@ -191,3 +210,61 @@ export const creditApplicationStatusOrder = [
   'Rejected',
   'Cancelled',
 ] as const
+
+/** Columnas de fecha de llegada a cada instancia (listado de radicación). */
+export const radicacionStatusEntryColumns: ReadonlyArray<{
+  key: string
+  label: string
+  statuses: readonly string[]
+}> = [
+  { key: 'Draft', label: 'Borrador', statuses: ['Draft'] },
+  { key: 'Director_Review', label: 'Dir. agencia', statuses: ['Director_Review', 'Submitted'] },
+  { key: 'Documentation_Review', label: 'Documentación', statuses: ['Documentation_Review'] },
+  { key: 'In_Analysis', label: 'Análisis', statuses: ['In_Analysis'] },
+  { key: 'Credit_Director_Review', label: 'Dir. crédito', statuses: ['Credit_Director_Review'] },
+  { key: 'Approved', label: 'Aprobada', statuses: ['Approved'] },
+  { key: 'Disbursement', label: 'Desembolso', statuses: ['Disbursement'] },
+  { key: 'Returned', label: 'Devuelta', statuses: ['Returned', 'Returned_Credit_Modification', 'Returned_Insurer_Response'] },
+  { key: 'Rejected', label: 'Rechazada', statuses: ['Rejected'] },
+]
+
+export function statusEnteredAtMap(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object') {
+    return {}
+  }
+  if (Array.isArray(raw)) {
+    const out: Record<string, string> = {}
+    for (const entry of raw) {
+      if (!entry || typeof entry !== 'object') {
+        continue
+      }
+      const row = entry as { status?: unknown, entered_at?: unknown }
+      const status = String(row.status ?? '').trim()
+      const at = String(row.entered_at ?? '').trim()
+      if (status && at && !out[status]) {
+        out[status] = at
+      }
+    }
+    return out
+  }
+  const out: Record<string, string> = {}
+  for (const [status, at] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof at === 'string' && at.trim() !== '') {
+      out[status] = at
+    }
+  }
+  return out
+}
+
+export function statusEntryDateForColumn(
+  map: Record<string, string>,
+  statuses: readonly string[],
+): string | null {
+  for (const status of statuses) {
+    const at = map[status]
+    if (at) {
+      return at
+    }
+  }
+  return null
+}

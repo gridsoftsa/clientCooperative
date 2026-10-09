@@ -129,8 +129,11 @@ function buildReportQuery(): Record<string, string | number> {
 async function fetchSucursales(): Promise<void> {
   loadingSucursales.value = true
   try {
-    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales')
+    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales?scope=reports')
     sucursales.value = res.data ?? []
+    if (sucursales.value.length === 1 && sucursalId.value == null) {
+      sucursalId.value = sucursales.value[0]!.id
+    }
   } catch (error: any) {
     console.error('Error cargando sucursales para reportes:', error)
     toast.error(error?.data?.message ?? 'No se pudo cargar el catálogo de sucursales')
@@ -274,7 +277,7 @@ onUnmounted(() => {
         Promedio de demora
       </h2>
       <p class="text-sm text-muted-foreground">
-        Días promedio entre etapas del flujo de radicación (marcas de trazabilidad), por sucursal. Solo se incluyen radicaciones creadas en el rango; «N» es la cantidad de tramos completados observados en esa sucursal.
+        Días promedio entre etapas del flujo de radicación (marcas de trazabilidad), por sucursal. Solo se incluyen radicaciones creadas en el rango; «N» es la cantidad de tramos completados observados en esa sucursal. Requerir asegurabilidad no excluye del indicador; sí se excluyen las devoluciones por modificación del director de crédito.
       </p>
     </div>
 
@@ -325,7 +328,7 @@ onUnmounted(() => {
             <div class="min-w-0 flex-1 lg:max-w-xl">
               <DateRangeStringPicker
                 id="reportes-demora-dates"
-                label="Rango (fecha de creación de la radicación)"
+                label="Rango (creación o actividad en el flujo)"
                 v-model:from="filterDateFrom"
                 v-model:to="filterDateTo"
               />
@@ -350,7 +353,7 @@ onUnmounted(() => {
                   <SelectValue placeholder="Todas las sucursales" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">
+                  <SelectItem v-if="sucursales.length > 1" value="all">
                     Todas las sucursales
                   </SelectItem>
                   <SelectItem
@@ -366,7 +369,7 @@ onUnmounted(() => {
           </div>
           <p class="mt-3 text-xs text-muted-foreground">
             <span class="font-medium text-foreground">Vista previa:</span>
-            se actualiza al cambiar fechas o sucursal. Los días usan fracción según horas entre eventos.
+            se actualiza al cambiar fechas o sucursal. Los días usan fracción según horas entre eventos. El rango incluye radicaciones creadas en esas fechas o con actividad de trazabilidad en el período.
           </p>
         </div>
 

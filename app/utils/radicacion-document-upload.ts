@@ -172,13 +172,88 @@ export function readDocumentIdMap(
  * Busca un documento existente por título (p. ej. al reemplazar checklist sin id en el mapa).
  * Prefiere el id más alto si hay varios (el más reciente).
  */
+export function coerceApplicantId(value: unknown): number | undefined {
+  const n = Number(value)
+  return Number.isInteger(n) && n >= 1 ? n : undefined
+}
+
+/** True si el documento no está anclado a un solicitante (histórico: se trataba como deudor). */
+export function isUnscopedApplicantId(value: unknown): boolean {
+  return coerceApplicantId(value) == null
+}
+
+/**
+ * Agrupa documentos por solicitante. Filas sin `applicant_id` se asignan al deudor
+ * (carga antigua); los codeudores no las heredan.
+ */
+export function groupDocumentsByApplicantId<T extends { id?: number | null, applicant_id?: number | null }>(
+  documents: T[],
+  debtorApplicantId?: number | null,
+): Record<string, T[]> {
+  const debtorId = coerceApplicantId(debtorApplicantId)
+  const byApplicant: Record<string, T[]> = {}
+  const seenByApplicant: Record<string, Set<number>> = {}
+  for (const doc of documents) {
+    const aid = coerceApplicantId(doc.applicant_id) ?? debtorId
+    if (aid == null) {
+      continue
+    }
+    const key = String(aid)
+    const id = Number(doc.id)
+    if (!byApplicant[key]) {
+      byApplicant[key] = []
+      seenByApplicant[key] = new Set()
+    }
+    if (Number.isFinite(id)) {
+      if (seenByApplicant[key]!.has(id)) {
+        continue
+      }
+      seenByApplicant[key]!.add(id)
+    }
+    byApplicant[key].push(doc)
+  }
+  return byApplicant
+}
+
+/**
+ * True si el documento es de ese solicitante.
+ * `allowUnscoped`: el deudor también reconoce filas sin `applicant_id` (carga antigua).
+ * Los codeudores nunca heredan esas filas.
+ */
+export function documentBelongsToApplicant(
+  doc: { applicant_id?: number | null },
+  applicantId?: number | null,
+  allowUnscoped = false,
+): boolean {
+  if (applicantId == null || !Number.isFinite(Number(applicantId)) || Number(applicantId) < 1) {
+    return false
+  }
+  if (isUnscopedApplicantId(doc.applicant_id)) {
+    return allowUnscoped
+  }
+  return Number(doc.applicant_id) === Number(applicantId)
+}
+
+/** Filtra documentos de un solicitante; el deudor puede incluir filas sin applicant_id. */
+export function documentsForApplicant<T extends { applicant_id?: number | null }>(
+  documents: T[],
+  applicantId?: number | null,
+  allowUnscoped = false,
+): T[] {
+  return (documents ?? []).filter(d => documentBelongsToApplicant(d, applicantId, allowUnscoped))
+}
+
 export function findDocumentIdByTitle(
   documents: Array<{ id?: number; title?: string | null; applicant_id?: number | null }>,
   title: string,
   applicantId?: number | null,
+  allowUnscoped = false,
 ): number | null {
   const needle = title.trim()
   if (!needle) {
+    return null
+  }
+  if (applicantId == null || !Number.isFinite(Number(applicantId)) || Number(applicantId) < 1) {
     return null
   }
   let best: number | null = null
@@ -186,7 +261,7 @@ export function findDocumentIdByTitle(
     if ((doc.title ?? '').trim() !== needle) {
       continue
     }
-    if (applicantId != null && doc.applicant_id != null && Number(doc.applicant_id) !== Number(applicantId)) {
+    if (!documentBelongsToApplicant(doc, applicantId, allowUnscoped)) {
       continue
     }
     const id = typeof doc.id === 'number' ? doc.id : Number(doc.id)
@@ -198,4 +273,33 @@ export function findDocumentIdByTitle(
     }
   }
   return best
+}
+
+export type CodeudorApplicantIdRow = {
+  applicant_id?: number | null
+  applicantId?: number | null
+  document_number?: string | null
+  applicant?: { id?: number | null; document_number?: string | null } | null
+}
+
+/** Resuelve el applicant_id del codeudor por cédula (no por índice, para no cruzar archivos). */
+export function resolveCodeudorApplicantId(
+  co: { document_number?: string },
+  index: number,
+  rows: CodeudorApplicantIdRow[],
+): number | null {
+  const doc = String(co.document_number ?? '').trim()
+  if (doc !== '') {
+    const match = rows.find((row) => {
+      const rowDoc = String(row.document_number ?? row.applicant?.document_number ?? '').trim()
+      return rowDoc === doc
+    })
+    const matchedId = Number(match?.applicant_id ?? match?.applicantId ?? match?.applicant?.id ?? 0)
+    if (Number.isInteger(matchedId) && matchedId > 0) {
+      return matchedId
+    }
+  }
+  const fallback = rows[index]
+  const fallbackId = Number(fallback?.applicant_id ?? fallback?.applicantId ?? fallback?.applicant?.id ?? 0)
+  return Number.isInteger(fallbackId) && fallbackId > 0 ? fallbackId : null
 }

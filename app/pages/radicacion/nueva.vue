@@ -23,11 +23,13 @@ import {
   titleForFngDocumentUpload,
 } from '~/constants/documentation-fng-checklist'
 import { mergeApplicantFromApi } from '~/utils/merge-applicant-search'
+import { cloneApplicantForm } from '~/utils/clone-applicant-form'
 import { messageFromFetchError } from '~/utils/http-error-message'
 import {
   findDocumentIdByTitle,
   hasPendingRadicacionDocumentUploads,
   readDocumentIdMap,
+  resolveCodeudorApplicantId,
   runDocumentUpload,
 } from '~/utils/radicacion-document-upload'
 import { isAuxiliaryChecklistLabelUnique } from '~/utils/auxiliary-documents-validation'
@@ -56,6 +58,7 @@ definePageMeta({
   layout: 'default',
   middleware: 'permission',
   permissions: 'radicacion_crear',
+  key: route => route.path,
 })
 
 const { $api, $csrf } = useNuxtApp()
@@ -129,27 +132,16 @@ const codeudorBeingAdded = ref<ApplicantForm>({
   documents: [],
 })
 
-/** Si no es null, el asistente de 3 pasos edita ese codeudor en `form.co_debtors`; si es null, crea uno nuevo en `codeudorBeingAdded`. */
+/** Si no es null, el asistente edita `form.co_debtors[index]`; si es null, crea uno nuevo. El wizard siempre trabaja sobre un borrador clonado. */
 const codeudorEditIndex = ref<number | null>(null)
+const codeudorWizardSession = ref(0)
 
 const codeudorWizardApplicant = computed({
   get(): ApplicantForm {
-    const i = codeudorEditIndex.value
-    if (i != null) {
-      const co = form.value.co_debtors[i]
-      if (co != null) {
-        return co
-      }
-    }
     return codeudorBeingAdded.value
   },
   set(v: ApplicantForm) {
-    const i = codeudorEditIndex.value
-    if (i != null) {
-      form.value.co_debtors[i] = v
-    } else {
-      codeudorBeingAdded.value = v
-    }
+    codeudorBeingAdded.value = v
   },
 })
 
@@ -285,6 +277,8 @@ const stepsCodeudor = [
 const steps = computed(() => (mode.value === 'codeudor' ? stepsCodeudor : stepsDeudor))
 const maxStep = computed(() => steps.value.length)
 const userSucursalId = computed<number | null>(() => authUser.value?.sucursal_id ?? null)
+useRouteSyncedStep(currentStep, maxStep)
+const { goBack } = useNavigationBack('/radicacion')
 
 async function fetchCatalogs() {
   try {
@@ -385,41 +379,14 @@ async function searchApplicantForCodeudor() {
   }
 }
 
-async function searchApplicantForCoDebtor(idx: number) {
-  const co = form.value.co_debtors[idx]
-  if (!co) return
-  const doc = co.document_number?.trim()
-  if (!doc) {
-    toast.error('Ingresa el número de documento del codeudor')
-    return
-  }
-  loadingSearch.value = true
-  try {
-    const res = await $api<{ data: ApplicantForm | null; found: boolean }>(
-      '/credit-applications/applicants/find',
-      { query: { document_number: doc } },
-    )
-    if (res.found && res.data && co) {
-      mergeApplicantFromApi(co, res.data)
-      toast.success('Codeudor encontrado. Revisa y completa los datos.')
-    } else {
-      toast.info('No encontrado. Completa el formulario con los datos del codeudor.')
-    }
-  } catch (e) {
-    console.error('Error buscando codeudor:', e)
-    toast.error('Error al buscar')
-  } finally {
-    loadingSearch.value = false
-  }
-}
-
-const emptyCodeudor = (): ApplicantForm => ({
+const emptyCodeudor = (): ApplicantForm => cloneApplicantForm({
   document_type: 'CC',
   document_number: '',
   first_name: '',
   first_last_name: '',
   dependents: 0,
   documents: [],
+  financial_info: {},
 })
 
 function addCoDebtor() {
@@ -430,31 +397,31 @@ function startAddingCodeudor() {
   addingCodeudor.value = true
   codeudorEditIndex.value = null
   codeudorStep.value = 1
-  codeudorBeingAdded.value = { ...emptyCodeudor() }
+  codeudorBeingAdded.value = emptyCodeudor()
+  codeudorWizardSession.value += 1
 }
 
 function startEditingCodeudor(idx: number) {
-  if (!form.value.co_debtors[idx]) {
+  const current = form.value.co_debtors[idx]
+  if (!current) {
     return
   }
   addingCodeudor.value = true
   codeudorEditIndex.value = idx
   codeudorStep.value = 1
+  codeudorBeingAdded.value = cloneApplicantForm(current)
+  codeudorWizardSession.value += 1
 }
 
 function cancelAddingCodeudor() {
   addingCodeudor.value = false
   codeudorEditIndex.value = null
   codeudorStep.value = 1
+  codeudorBeingAdded.value = emptyCodeudor()
 }
 
 function searchApplicantForWizard() {
-  const i = codeudorEditIndex.value
-  if (i != null) {
-    searchApplicantForCoDebtor(i)
-  } else {
-    searchApplicantForCodeudor()
-  }
+  searchApplicantForCodeudor()
 }
 
 async function finalizeCodeudorWizard() {
@@ -491,9 +458,10 @@ async function finalizeCodeudorWizard() {
     return
   }
   if (codeudorEditIndex.value == null) {
-    form.value.co_debtors.push({ ...codeudorBeingAdded.value })
+    form.value.co_debtors.push(cloneApplicantForm(codeudorBeingAdded.value))
     toast.success('Codeudor agregado')
   } else {
+    form.value.co_debtors[codeudorEditIndex.value] = cloneApplicantForm(codeudorBeingAdded.value)
     toast.success('Cambios del codeudor guardados')
   }
   cancelAddingCodeudor()
@@ -589,16 +557,22 @@ function getActivityTemplatesFor(app: ApplicantForm): ActivityTemplateData[] {
 }
 
 function setActivityTemplatesFor(app: ApplicantForm, val: ActivityTemplateData[]): void {
-  if (!app.financial_info || typeof app.financial_info !== 'object') {
-    app.financial_info = {}
+  const prev = (app.financial_info && typeof app.financial_info === 'object')
+    ? { ...(app.financial_info as Record<string, unknown>) }
+    : {}
+  let clonedTemplates: ActivityTemplateData[] = []
+  try {
+    clonedTemplates = JSON.parse(JSON.stringify(val)) as ActivityTemplateData[]
+  } catch {
+    clonedTemplates = val.map(t => ({ ...t, data: { ...(t.data ?? {}) } }))
   }
-  const fi = app.financial_info as Record<string, unknown>
-  fi.activity_templates = val
-  fi.activity_templates_count = val.length
-  // Sincroniza utilidad mensual de plantillas → Ingreso cultivos/negocio (suma de todas las plantillas)
-  const sumUtilidad = sumUtilidadMensualFromTemplates(val)
-  const income = (fi.income ?? {}) as Record<string, unknown>
-  fi.income = { ...income, business: sumUtilidad }
+  const income = { ...((prev.income ?? {}) as Record<string, unknown>) }
+  app.financial_info = {
+    ...prev,
+    activity_templates: clonedTemplates,
+    activity_templates_count: clonedTemplates.length,
+    income: { ...income, business: sumUtilidadMensualFromTemplates(clonedTemplates) },
+  }
 }
 
 /** Mismas reglas que «Siguiente» en paso 1: obligatorios + checklist auxiliar (deudor o codeudor en URL dedicada). Requiere paso 1 montado (v-show). */
@@ -900,6 +874,7 @@ const {
   saveStatus,
   lastSavedAt,
   hasLocalDraft,
+  flushSave,
 } = useAutoSaveCreditApplication(form, {
   canCreate: canCreateDraft,
   payloadWithoutDocuments: payloadForAutoSave,
@@ -976,7 +951,7 @@ async function uploadAllDocuments(
 
   const pivots = application.application_applicants ?? []
   const debtorPivot = pivots.find((p: { role: string }) => p.role === 'DEUDOR')
-  const codeudorApplicantIds = (application.co_debtors ?? []).map((c: { applicant_id: number }) => c.applicant_id)
+  const codeudorRows = application.co_debtors ?? []
   const debtorApplicantId = debtorPivot
     ? Number((debtorPivot as { applicant_id?: number }).applicant_id ?? 0) || null
     : null
@@ -1044,7 +1019,7 @@ async function uploadAllDocuments(
         const labelRows = Object.entries(labelByKey).map(([k, lab]) => ({ key: k, label: lab }))
         const prevId = docMap[key]
           ?? (isAuxiliaryChecklistLabelUnique(labelRows, label)
-            ? findDocumentIdByTitle(serverDocuments, uploadTitle, debtorApplicantId)
+            ? findDocumentIdByTitle(serverDocuments, uploadTitle, debtorApplicantId, true)
             : null)
         await deleteDocIfPresent(prevId)
         const fd = new FormData()
@@ -1098,7 +1073,7 @@ async function uploadAllDocuments(
           const labelFng = labelByKeyFng[key] ?? key
           const uploadTitleFng = titleForFngDocumentUpload(labelFng)
           const prevIdFng = fngDocMap[key]
-            ?? findDocumentIdByTitle(serverDocuments, uploadTitleFng, debtorApplicantId)
+            ?? findDocumentIdByTitle(serverDocuments, uploadTitleFng, debtorApplicantId, true)
           await deleteDocIfPresent(prevIdFng)
           const fdFng = new FormData()
           fdFng.append('title', uploadTitleFng)
@@ -1133,9 +1108,9 @@ async function uploadAllDocuments(
 
   // Codeudores (desde tabla co_debtors)
   const coDebtors = form.value.co_debtors ?? []
-  for (let i = 0; i < coDebtors.length && i < codeudorApplicantIds.length; i++) {
+  for (let i = 0; i < coDebtors.length; i++) {
     const co = coDebtors[i]
-    const applicantId = codeudorApplicantIds[i]
+    const applicantId = co ? resolveCodeudorApplicantId(co, i, codeudorRows) : null
     if (!co || !applicantId) continue
     const docs = co.documents ?? []
     for (const doc of docs) {
@@ -1361,10 +1336,12 @@ async function saveCodeudor() {
         if (didAuxSave) {
           form.value.debtor.financial_info = { ...fiObj, auxiliaryDocuments: docMapS }
           form.value.debtor.auxiliaryDocumentFiles = {}
+          const { documents: _docsUpdated, auxiliaryDocumentFiles: _auxUpdated, ...coUpdated } = form.value.debtor
+          payload.co_debtors = [...existingCoDebtors, coUpdated]
           await $csrf()
           await $api(`/credit-applications/${updated.id}`, {
             method: 'PUT',
-            body: payloadWithoutDocuments('Draft'),
+            body: payload,
           })
         }
       }
@@ -1390,6 +1367,9 @@ async function saveCodeudor() {
 }
 
 async function saveDraft() {
+  if (saving.value) {
+    return
+  }
   if (mode.value === 'codeudor') {
     const identityErrCo = validateApplicantMinimalIdentityForDraftSave(form.value.debtor, 'co_debtor')
     if (identityErrCo) {
@@ -1414,6 +1394,7 @@ async function saveDraft() {
 
   saving.value = true
   try {
+    await flushSave()
     await $csrf()
     const body = payloadForAutoSave()
     let application: { id: number; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> }
@@ -1429,6 +1410,9 @@ async function saveDraft() {
         body,
       })
       application = data
+    }
+    if (application?.id) {
+      draftId.value = application.id
     }
     await uploadAllDocuments(application.id, application)
     clearLocalDraft()
@@ -1451,6 +1435,9 @@ async function saveDraft() {
 
 /** Guarda borrador, sube documentos y pasa la solicitud a revisión del director de agencia. */
 async function submitApplication() {
+  if (saving.value) {
+    return
+  }
   if (mode.value === 'codeudor') {
     await saveCodeudor()
     return
@@ -1484,6 +1471,7 @@ async function submitApplication() {
 
   saving.value = true
   try {
+    await flushSave()
     await $csrf()
     let application: { id: number; code?: string; application_applicants?: Array<{ applicant_id: number; role: string }>; co_debtors?: Array<{ applicant_id: number }> }
     if (draftId.value) {
@@ -1498,6 +1486,9 @@ async function submitApplication() {
         body: payloadWithoutDocuments('Draft'),
       })
       application = data
+    }
+    if (application?.id) {
+      draftId.value = application.id
     }
     await uploadAllDocuments(application.id, application)
     await $api(`/credit-applications/${application.id}/submit-to-director-review`, { method: 'PATCH' })
@@ -1685,7 +1676,7 @@ onMounted(() => {
           </span>
           <span v-else-if="saveStatus === 'error'">Error al guardar (datos en copia local)</span>
         </div>
-        <Button variant="outline" @click="router.push('/radicacion')">
+        <Button variant="outline" @click="goBack">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>
@@ -2145,7 +2136,7 @@ onMounted(() => {
 
         <!-- Paso 5 Deudor: Codeudores - subflujo agregar codeudor (3 pasos) -->
         <div
-          v-show="mode === 'deudor' && currentStep === 5 && addingCodeudor"
+          v-if="mode === 'deudor' && currentStep === 5 && addingCodeudor"
           class="space-y-6"
         >
           <div class="flex flex-wrap items-center justify-between gap-4">
@@ -2186,6 +2177,7 @@ onMounted(() => {
           <!-- Paso 1: Datos del Codeudor -->
           <div v-show="codeudorStep === 1" class="space-y-4">
             <ApplicantFormFields
+              :key="`codeudor-step1-${codeudorWizardSession}`"
               ref="codeudorWizardStepOneFormRef"
               v-model="codeudorWizardApplicant"
               :credit-application-id="draftId ?? undefined"
@@ -2204,14 +2196,17 @@ onMounted(() => {
           <!-- Paso 2: Actividad económica -->
           <div v-show="codeudorStep === 2" class="space-y-4">
             <CreditsFinancialActivityFormList
+              :key="`codeudor-activity-${codeudorWizardSession}`"
               ref="codeudorActivityTemplatesListRef"
               :model-value="getActivityTemplatesFor(codeudorWizardApplicant)"
+              :dom-id-scope="`codeudor-${codeudorWizardSession}`"
               @update:model-value="(v) => setActivityTemplatesFor(codeudorWizardApplicant, v)"
             />
           </div>
           <!-- Paso 3: Datos financieros -->
           <div v-show="codeudorStep === 3" class="space-y-4">
             <ApplicantFormFields
+              :key="`codeudor-step3-${codeudorWizardSession}`"
               v-model="codeudorWizardApplicant"
               :credit-application-id="draftId ?? undefined"
               :show-only-financial="true"
@@ -2274,7 +2269,7 @@ onMounted(() => {
           <div v-else class="space-y-2">
             <div
               v-for="(co, idx) in form.co_debtors"
-              :key="idx"
+              :key="`${idx}-${co.document_number || 'co'}`"
               class="flex w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-border px-3 py-2.5 sm:gap-3"
             >
               <Button
@@ -2332,29 +2327,29 @@ onMounted(() => {
               v-if="mode === 'codeudor'"
               type="button"
               variant="outline"
-              :disabled="saving"
+              :disabled="saving || saveStatus === 'saving'"
               @click="saveDraft"
             >
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              <Icon v-if="saving || saveStatus === 'saving'" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
               Guardar codeudor
             </Button>
             <Button
               v-if="mode === 'deudor'"
               type="button"
               variant="outline"
-              :disabled="saving"
+              :disabled="saving || saveStatus === 'saving'"
               @click="saveDraft"
             >
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              <Icon v-if="saving || saveStatus === 'saving'" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
               Guardar borrador
             </Button>
             <Button
               v-if="mode === 'deudor'"
               type="button"
-              :disabled="saving"
+              :disabled="saving || saveStatus === 'saving'"
               @click="openSubmitDirectorDialog"
             >
-              <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              <Icon v-if="saving || saveStatus === 'saving'" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
               Enviar al director
             </Button>
           </div>

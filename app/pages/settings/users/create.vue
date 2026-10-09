@@ -28,6 +28,7 @@ const { $api } = useNuxtApp()
 const router = useRouter()
 const route = useRoute()
 const { mapRoleSelectOptions } = useRoleAssignmentScope()
+const { goBack: goBackFallback } = useNavigationBack('/settings/users')
 
 const returnTo = computed(() => {
   const value = route.query.returnTo
@@ -37,6 +38,14 @@ const returnTo = computed(() => {
 const fromStaffFlow = computed(() =>
   returnTo.value != null && isStaffUserCreateReturnPath(returnTo.value),
 )
+
+function goBack() {
+  if (returnTo.value) {
+    void router.push(returnTo.value)
+    return
+  }
+  goBackFallback()
+}
 
 const form = ref({
   name: '',
@@ -355,7 +364,7 @@ watch(selectedRole, (role) => {
         <Button
           variant="outline"
           class="shrink-0"
-          @click="returnTo ? router.push(returnTo) : router.back()"
+          @click="goBack"
         >
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
@@ -616,7 +625,7 @@ watch(selectedRole, (role) => {
           </Card>
 
           <div class="flex justify-end gap-4">
-            <Button type="button" variant="outline" @click="returnTo ? router.push(returnTo) : router.back()">
+            <Button type="button" variant="outline" @click="goBack">
               Cancelar
             </Button>
             <Button type="submit" :disabled="saving">

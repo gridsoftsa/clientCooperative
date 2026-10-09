@@ -165,8 +165,11 @@ function buildReportQuery(): Record<string, string | number> {
 async function fetchSucursales(): Promise<void> {
   loadingSucursales.value = true
   try {
-    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales')
+    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales?scope=reports')
     sucursales.value = res.data ?? []
+    if (sucursales.value.length === 1 && sucursalId.value == null) {
+      sucursalId.value = sucursales.value[0]!.id
+    }
   } catch (error: any) {
     console.error('Error cargando sucursales para reportes:', error)
     toast.error(error?.data?.message ?? 'No se pudo cargar el catálogo de sucursales')
@@ -400,7 +403,7 @@ onUnmounted(() => {
                   <SelectValue placeholder="Todas las sucursales" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">
+                  <SelectItem v-if="sucursales.length > 1" value="all">
                     Todas las sucursales
                   </SelectItem>
                   <SelectItem

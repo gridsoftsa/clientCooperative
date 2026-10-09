@@ -25,6 +25,7 @@ import {
 /** Import explícito: Nuxt auto-importa como `RadicacionAuxiliaryDocumentsSection`, no como `AuxiliaryDocumentsSection`. */
 import AuxiliaryDocumentsSection from '~/components/radicacion/AuxiliaryDocumentsSection.vue'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
+import { coerceApplicantId, documentsForApplicant } from '~/utils/radicacion-document-upload'
 
 const props = withDefaults(
   defineProps<{
@@ -192,6 +193,10 @@ function setExpensesDescription(value: string) {
   setFinancial('expenses', { ...(financial.value.expenses || {}), description: value })
 }
 
+function financialDescriptionDisplay(value: unknown): string {
+  return typeof value === 'string' && value.trim() !== '' ? value : '—'
+}
+
 function onPasteIncomeDescription(e: ClipboardEvent) {
   if (personalReadOnly.value) {
     return
@@ -331,6 +336,16 @@ type AuxiliaryDocumentsSectionExpose = {
 }
 
 const auxiliaryDocumentsSectionRef = ref<AuxiliaryDocumentsSectionExpose | null>(null)
+
+/** Checklist auxiliar: solo archivos de este solicitante (no reutilizar el CTL de otro codeudor). */
+const auxiliaryDocumentsForThisApplicant = computed(() => {
+  const docs = props.creditApplicationDocuments ?? []
+  const aid = coerceApplicantId(props.modelValue.id)
+  if (aid == null) {
+    return []
+  }
+  return documentsForApplicant(docs, aid, !props.showCoDebtorConcept)
+})
 const submitValidationAttempted = ref(false)
 /** Tras cualquier cambio en fecha de nacimiento o expedición: validación en vivo (sin esperar blur ni envío). */
 const liveApplicantDateCheckRequested = ref(false)
@@ -1313,7 +1328,8 @@ function formatFileSize(bytes: number): string {
           ref="auxiliaryDocumentsSectionRef"
           :applicant="modelValue"
           :credit-application-id="creditApplicationId ?? undefined"
-          :application-documents="creditApplicationDocuments ?? []"
+          :application-documents="auxiliaryDocumentsForThisApplicant"
+          :allow-unscoped-applicant-documents="!showCoDebtorConcept"
           :economic-activity-options="economicActivityOptions"
           :auxiliary-pending-upload-hint="auxiliaryPendingUploadHint"
           :interaction-mode="auxiliaryInteractionMode"
@@ -1360,7 +1376,7 @@ function formatFileSize(bytes: number): string {
         <!-- Ingresos (tabla) -->
         <div class="flex flex-col">
           <h4 class="mb-2 text-sm font-semibold text-foreground">Ingresos</h4>
-          <div class="flex-1 overflow-hidden rounded-lg border border-border sm:w-fit sm:max-w-sm">
+          <div class="flex-1 overflow-visible rounded-lg border border-border sm:w-fit sm:max-w-sm">
         <table class="w-full table-fixed text-sm">
           <thead>
             <tr class="border-b border-border bg-muted/40">
@@ -1478,18 +1494,24 @@ function formatFileSize(bytes: number): string {
         </table>
         <div class="border-t border-border px-3 py-2" :class="fieldClass">
           <Label class="text-xs">Descripción ingresos</Label>
+          <p
+            v-if="personalReadOnly"
+            class="mt-1 min-h-[60px] whitespace-pre-wrap rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-foreground"
+          >
+            {{ financialDescriptionDisplay(financial.income?.description) }}
+          </p>
           <textarea
+            v-else
             :value="financial.income?.description"
             class="mt-1 flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             placeholder="Detalle de ingresos (negocio, cultivos, etc.)"
             rows="2"
-            :readonly="personalReadOnly"
             :maxlength="PASTED_PLAIN_TEXT_MAX_LENGTH"
             @paste="onPasteIncomeDescription"
             @blur="onBlurIncomeDescription"
             @input="setIncomeDescription(($event.target as HTMLTextAreaElement).value)"
           />
-          <p class="mt-1 text-[11px] text-muted-foreground">
+          <p v-if="!personalReadOnly" class="mt-1 text-[11px] text-muted-foreground">
             Al pegar desde Word se limpian espacios extra y caracteres especiales.
             {{ (financial.income?.description ?? '').length }}/{{ PASTED_PLAIN_TEXT_MAX_LENGTH }}
           </p>
@@ -1500,7 +1522,7 @@ function formatFileSize(bytes: number): string {
         <!-- Gastos (tabla) -->
         <div class="flex flex-col">
           <h4 class="mb-2 text-sm font-semibold text-foreground">Gastos</h4>
-          <div class="flex-1 overflow-hidden rounded-lg border border-border sm:w-fit sm:max-w-sm">
+          <div class="flex-1 overflow-visible rounded-lg border border-border sm:w-fit sm:max-w-sm">
         <table class="w-full table-fixed text-sm">
           <thead>
             <tr class="border-b border-border bg-muted/40">
@@ -1623,18 +1645,24 @@ function formatFileSize(bytes: number): string {
         </table>
         <div class="border-t border-border px-3 py-2" :class="fieldClass">
           <Label class="text-xs">Descripción gastos</Label>
+          <p
+            v-if="personalReadOnly"
+            class="mt-1 min-h-[60px] whitespace-pre-wrap rounded-md border border-input bg-muted/50 px-3 py-2 text-sm text-foreground"
+          >
+            {{ financialDescriptionDisplay(financial.expenses?.description) }}
+          </p>
           <textarea
+            v-else
             :value="financial.expenses?.description"
             class="mt-1 flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             placeholder="Detalle de gastos del hogar"
             rows="2"
-            :readonly="personalReadOnly"
             :maxlength="PASTED_PLAIN_TEXT_MAX_LENGTH"
             @paste="onPasteExpensesDescription"
             @blur="onBlurExpensesDescription"
             @input="setExpensesDescription(($event.target as HTMLTextAreaElement).value)"
           />
-          <p class="mt-1 text-[11px] text-muted-foreground">
+          <p v-if="!personalReadOnly" class="mt-1 text-[11px] text-muted-foreground">
             Al pegar desde Word se limpian espacios extra y caracteres especiales.
             {{ (financial.expenses?.description ?? '').length }}/{{ PASTED_PLAIN_TEXT_MAX_LENGTH }}
           </p>

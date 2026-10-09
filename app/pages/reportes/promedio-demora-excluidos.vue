@@ -34,7 +34,7 @@ interface ExcludedResponse {
     }
     summary: {
       modification_count: number
-      real_estate_review_count: number
+      real_estate_review_count?: number
       excluded_total: number
     }
     rows: ExcludedRow[]
@@ -87,8 +87,11 @@ function buildReportQuery(): Record<string, string | number> {
 async function fetchSucursales(): Promise<void> {
   loadingSucursales.value = true
   try {
-    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales')
+    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales?scope=reports')
     sucursales.value = res.data ?? []
+    if (sucursales.value.length === 1 && sucursalId.value == null) {
+      sucursalId.value = sucursales.value[0]!.id
+    }
   } catch (error: any) {
     toast.error(error?.data?.message ?? 'No se pudo cargar sucursales')
   } finally {
@@ -162,7 +165,7 @@ onUnmounted(() => {
         Excluidos del indicador de demora
       </h2>
       <p class="text-sm text-muted-foreground">
-        Este reporte separa casos que no deben afectar el indicador de tiempos del proceso estándar.
+        Solo entran las devoluciones por modificación del director de crédito. Requerir asegurabilidad ya no excluye: aplica a todos los créditos.
       </p>
     </div>
 
@@ -172,7 +175,7 @@ onUnmounted(() => {
           <div class="min-w-0 flex-1 lg:max-w-xl">
             <DateRangeStringPicker
               id="reportes-excluidos-demora-dates"
-              label="Rango (fecha de generación de la radicación)"
+              label="Rango (fecha de la devolución por modificación)"
               v-model:from="filterDateFrom"
               v-model:to="filterDateTo"
             />
@@ -188,7 +191,7 @@ onUnmounted(() => {
                 <SelectValue placeholder="Todas las sucursales" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">
+                <SelectItem v-if="sucursales.length > 1" value="all">
                   Todas las sucursales
                 </SelectItem>
                 <SelectItem v-for="s in sucursalesSorted" :key="s.id" :value="String(s.id)">
@@ -204,17 +207,11 @@ onUnmounted(() => {
         </div>
 
         <template v-else-if="reportData">
-          <div class="grid gap-3 sm:grid-cols-3">
+          <div class="grid gap-3 sm:grid-cols-2">
             <Card>
               <CardHeader class="space-y-1 px-4 py-4">
                 <CardDescription>Excluidas por modificación</CardDescription>
                 <CardTitle class="text-2xl">{{ reportData.summary.modification_count }}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader class="space-y-1 px-4 py-4">
-                <CardDescription>Excluidas por inmobiliaria/asegurabilidad</CardDescription>
-                <CardTitle class="text-2xl">{{ reportData.summary.real_estate_review_count }}</CardTitle>
               </CardHeader>
             </Card>
             <Card>

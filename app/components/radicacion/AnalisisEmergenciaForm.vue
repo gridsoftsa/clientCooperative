@@ -34,7 +34,7 @@ import {
 import {
   parsePesosFlexibleAnalisis,
   sumCuotasFinEmergencia,
-  totalGastosCapacidadConCuotasFin,
+  recalcularCapacidadPagoDerivados,
 } from '~/utils/analisis-emergencia-capacidad'
 
 const state = defineModel<EmergenciaState>({ required: true })
@@ -266,120 +266,11 @@ function onCuotaFinPesosModelUpdate(line: EmergenciaCuotaLine, v: string) {
   line.cuota = n === undefined ? raw : formatPesos(n)
 }
 
-function syncTotalIngresosBloque(b: EmergenciaCapacidadBloque) {
-  const ing = parsePesosFlexible(b.ingresos)
-  const otr = parsePesosFlexible(b.otrosIngresos)
-  const noSust = parsePesosFlexible(b.unsustainedIncome)
-  const rawTotal = ing + otr - noSust
-  const sum = Math.max(0, rawTotal)
-  const allBlank = !String(b.ingresos ?? '').trim()
-    && !String(b.otrosIngresos ?? '').trim()
-    && !String(b.unsustainedIncome ?? '').trim()
-  if (sum === 0 && allBlank) {
-    b.totalIngresos = ''
-  }
-  else {
-    b.totalIngresos = formatPesos(sum)
-  }
-}
-
 function syncAllTotalesIngresosCapacidad() {
-  const s = state.value
-  syncTotalIngresosBloque(s.capacidadBloque1.a)
-  syncTotalIngresosBloque(s.capacidadBloque1.b)
-  syncTotalIngresosBloque(s.capacidadBloque2.a)
-  syncTotalIngresosBloque(s.capacidadBloque2.b)
-}
-
-/** `formatPesos` asume no negativos; aquí hace falta el signo y miles en COP. */
-function formatPesosDiferencia(n: number): string {
-  if (!Number.isFinite(n)) {
-    return ''
-  }
-  if (n === 0) {
-    return '0'
-  }
-  const sign = n < 0 ? '-' : ''
-  return sign + formatPesos(Math.abs(n))
-}
-
-/** Total ingresos − (gastos radicación + suma cuotas entidades financieras). Solo se escribe vía `watch`. */
-function syncIngresosDisponiblesBloque(b: EmergenciaCapacidadBloque) {
-  const noTi = !String(b.totalIngresos ?? '').trim()
-  const te = totalGastosCapacidadConCuotasFin(b)
-  if (noTi && te === 0) {
-    b.ingDisponibles = ''
-    return
-  }
-  const ti = parsePesosFlexible(b.totalIngresos)
-  b.ingDisponibles = formatPesosDiferencia(ti - te)
-}
-
-function syncAllIngresosDisponiblesCapacidad() {
-  const s = state.value
-  syncIngresosDisponiblesBloque(s.capacidadBloque1.a)
-  syncIngresosDisponiblesBloque(s.capacidadBloque1.b)
-  syncIngresosDisponiblesBloque(s.capacidadBloque2.a)
-  syncIngresosDisponiblesBloque(s.capacidadBloque2.b)
-}
-
-/**
- * Reserva = |ingresos disponibles| × (% ING / 100). Siempre es una detracción (línea «(-) % ing.»).
- * Si ingresos disponibles es negativo, el saldo sigue restando esta reserva (no la “devuelve”).
- */
-function syncReservaSobreIngresoBloque(b: EmergenciaCapacidadBloque, pct: number) {
-  const p = Number.isFinite(pct) && pct >= 0 ? pct : 0
-  if (!String(b.ingDisponibles ?? '').trim()) {
-    b.reservaSobreIngreso = ''
-    return
-  }
-  const id = parsePesosFlexible(b.ingDisponibles)
-  const val = Math.abs(id) * (p / 100)
-  b.reservaSobreIngreso = formatPesosDiferencia(val)
-}
-
-function syncAllReservasSobreIngresoCapacidad() {
-  const s = state.value
-  const pd = props.pctReservaDeudor
-  const pc = props.pctReservaCodeudor
-  syncReservaSobreIngresoBloque(s.capacidadBloque1.a, pd)
-  syncReservaSobreIngresoBloque(s.capacidadBloque1.b, pc)
-  syncReservaSobreIngresoBloque(s.capacidadBloque2.a, pc)
-  syncReservaSobreIngresoBloque(s.capacidadBloque2.b, pc)
-}
-
-/** Cada subsección de capacidad: mismo texto que Vr. cuota var. (crédito) para el snapshot. */
-function syncValorCuotaDesdeCredito() {
-  const v = state.value.credito.vrCuotaVar
-  const c = state.value.capacidadBloque1
-  const c2 = state.value.capacidadBloque2
-  c.a.valorCuota = v
-  c.b.valorCuota = v
-  c2.a.valorCuota = v
-  c2.b.valorCuota = v
-}
-
-/**
- * Saldo = ingresos disponibles (con signo) − reserva ING − valor de cuota.
- * Si ingresos disponibles es negativo, el saldo también queda negativo.
- */
-function syncSaldoBloque(b: EmergenciaCapacidadBloque) {
-  if (!String(b.ingDisponibles ?? '').trim()) {
-    b.saldo = ''
-    return
-  }
-  const id = parsePesosFlexible(b.ingDisponibles)
-  const res = parsePesosFlexible(b.reservaSobreIngreso)
-  const vc = parsePesosFlexible(state.value.credito.vrCuotaVar)
-  b.saldo = formatPesosDiferencia(id - res - vc)
-}
-
-function syncAllSaldoCapacidad() {
-  const s = state.value
-  syncSaldoBloque(s.capacidadBloque1.a)
-  syncSaldoBloque(s.capacidadBloque1.b)
-  syncSaldoBloque(s.capacidadBloque2.a)
-  syncSaldoBloque(s.capacidadBloque2.b)
+  recalcularCapacidadPagoDerivados(state.value, {
+    pctReservaDeudor: props.pctReservaDeudor,
+    pctReservaCodeudor: props.pctReservaCodeudor,
+  })
 }
 
 watch(
@@ -398,6 +289,13 @@ watch(
     state.value.capacidadBloque2.b.otrosIngresos,
     state.value.capacidadBloque2.b.unsustainedIncome,
     state.value.capacidadBloque1.a.totalEgresos,
+    state.value.capacidadBloque1.a.gastoPersonal,
+    state.value.capacidadBloque1.a.alimentacion,
+    state.value.capacidadBloque1.a.gastosServiciosArriendo,
+    state.value.capacidadBloque1.a.gastoSalud,
+    state.value.capacidadBloque1.a.gastoPension,
+    state.value.capacidadBloque1.a.gastoArl,
+    state.value.capacidadBloque1.a.otrosGastos,
     state.value.capacidadBloque1.b.totalEgresos,
     state.value.capacidadBloque2.a.totalEgresos,
     state.value.capacidadBloque2.b.totalEgresos,
@@ -405,21 +303,13 @@ watch(
     ...(state.value.capacidadBloque1.b.cuotasFin ?? []).map(l => l.cuota),
     ...(state.value.capacidadBloque2.a.cuotasFin ?? []).map(l => l.cuota),
     ...(state.value.capacidadBloque2.b.cuotasFin ?? []).map(l => l.cuota),
-    state.value.capacidadBloque1.a.ingDisponibles,
-    state.value.capacidadBloque1.b.ingDisponibles,
-    state.value.capacidadBloque2.a.ingDisponibles,
-    state.value.capacidadBloque2.b.ingDisponibles,
     props.pctReservaDeudor,
     props.pctReservaCodeudor,
   ],
   () => {
     syncAllTotalesIngresosCapacidad()
-    syncAllIngresosDisponiblesCapacidad()
-    syncAllReservasSobreIngresoCapacidad()
-    syncValorCuotaDesdeCredito()
-    syncAllSaldoCapacidad()
   },
-  { flush: 'post', immediate: true },
+  { flush: 'sync', immediate: true },
 )
 
 watch(
@@ -968,6 +858,7 @@ defineExpose({
                     <Label :for="`c1-${sideIdx}-ti`" class="text-xs">Total ingresos</Label>
                     <Input
                       :id="`c1-${sideIdx}-ti`"
+                      :key="`c1-ti-${side.key}-${state.capacidadBloque1[side.key].totalIngresos}`"
                       :model-value="displayPesosStored(state.capacidadBloque1[side.key].totalIngresos)"
                       type="text"
                       inputmode="decimal"
@@ -1059,6 +950,7 @@ defineExpose({
             <div :class="campoMontoClave">
               <Label class="text-xs" :class="labelMontoClave">Ingresos disponibles</Label>
               <Input
+                :key="`c1-disp-${side.key}-${state.capacidadBloque1[side.key].ingDisponibles}`"
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque1[side.key].ingDisponibles)"
                 type="text"
                 inputmode="decimal"
@@ -1072,6 +964,7 @@ defineExpose({
             <div :class="campoStack">
               <Label class="text-xs">{{ side.reserva }}</Label>
               <Input
+                :key="`c1-res-${side.key}-${state.capacidadBloque1[side.key].reservaSobreIngreso}`"
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque1[side.key].reservaSobreIngreso)"
                 type="text"
                 inputmode="decimal"
@@ -1099,6 +992,7 @@ defineExpose({
               <div :class="campoMontoClave">
                 <Label class="text-xs" :class="labelMontoClave">Saldo</Label>
                 <Input
+                  :key="`c1-saldo-${side.key}-${state.capacidadBloque1[side.key].saldo}`"
                   :model-value="displayPesosIngresosDisponibles(state.capacidadBloque1[side.key].saldo)"
                   type="text"
                   inputmode="decimal"
@@ -1185,6 +1079,7 @@ defineExpose({
                     <Label :for="`c2-${sideIdx}-ti`" class="text-xs">Total ingresos</Label>
                     <Input
                       :id="`c2-${sideIdx}-ti`"
+                      :key="`c2-ti-${side.key}-${state.capacidadBloque2[side.key].totalIngresos}`"
                       :model-value="displayPesosStored(state.capacidadBloque2[side.key].totalIngresos)"
                       type="text"
                       inputmode="decimal"
@@ -1276,6 +1171,7 @@ defineExpose({
             <div :class="campoMontoClave">
               <Label class="text-xs" :class="labelMontoClave">Ingresos disponibles</Label>
               <Input
+                :key="`c2-disp-${side.key}-${state.capacidadBloque2[side.key].ingDisponibles}`"
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque2[side.key].ingDisponibles)"
                 type="text"
                 inputmode="decimal"
@@ -1289,6 +1185,7 @@ defineExpose({
             <div :class="campoStack">
               <Label class="text-xs">{{ etiquetaReservaCodeudor }}</Label>
               <Input
+                :key="`c2-res-${side.key}-${state.capacidadBloque2[side.key].reservaSobreIngreso}`"
                 :model-value="displayPesosIngresosDisponibles(state.capacidadBloque2[side.key].reservaSobreIngreso)"
                 type="text"
                 inputmode="decimal"
@@ -1316,6 +1213,7 @@ defineExpose({
               <div :class="campoMontoClave">
                 <Label class="text-xs" :class="labelMontoClave">Saldo</Label>
                 <Input
+                  :key="`c2-saldo-${side.key}-${state.capacidadBloque2[side.key].saldo}`"
                   :model-value="displayPesosIngresosDisponibles(state.capacidadBloque2[side.key].saldo)"
                   type="text"
                   inputmode="decimal"
@@ -1342,7 +1240,8 @@ defineExpose({
           <p class="text-xs text-muted-foreground">
             Se muestran el deudor y los codeudores según la radicación. Bienes raíces: activos con Garantía en el paso 3;
             otros bienes: activos sin Garantía. El total global suma las dos tablas de cada persona.
-            Si añadiste o quitaste activos en el paso 3, pulsa <span class="font-medium text-foreground">Actualizar desde radicación</span> o vuelve a abrir este paso para alinear con la base.
+            Los valores que edites aquí se guardan en el análisis (no cambian la radicación).
+            Si el asesor corrigió activos en el paso 3, pulsa <span class="font-medium text-foreground">Actualizar desde radicación</span>.
           </p>
         </div>
         <Button

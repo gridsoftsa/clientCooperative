@@ -10,6 +10,7 @@ import {
   getTemplateSchema,
   templateHasProductSelect,
   validateActivityTemplate,
+  normalizeFinagroRanges,
 } from '~/constants/credits-financial-templates'
 import {
   getRadicacionReadOnlyConfigKeys,
@@ -28,6 +29,8 @@ import {
   GANADO_DOBLE_TASA_MORTALIDAD_PCT_DEFAULT,
   SERVICIOS_PCT_CONTRIBUCION_DEFAULT,
 } from '~/constants/template-config-schemas'
+
+const CULTIVO_PERMANENTE_USER_KEYS = ['edad_cultivo', 'cantidad_hectareas', 'valor_unitario_kg'] as const
 
 const { cultivoPermanenteOptions, cultivoCicloCortoOptions, pecesTipoOptions, serviciosTipoOptions, fetchCategories } = useTemplateCategories()
 const { fetchFlatData } = useTemplateFlatData()
@@ -220,6 +223,43 @@ async function loadFlatDataForTemplate(template: string, product: string | null)
   }
 }
 
+function keepUserEnteredCultivoFields(source: Record<string, unknown>): Record<string, unknown> {
+  const kept: Record<string, unknown> = {}
+  for (const key of CULTIVO_PERMANENTE_USER_KEYS) {
+    const v = source[key]
+    if (v !== undefined && v !== null && v !== '') {
+      kept[key] = v
+    }
+  }
+  return kept
+}
+
+/** Si hidratamos cacao/aguacate sin rangos FINAGRO, recargar catálogo del producto. */
+async function ensurePermanentCropRangesFromCatalog(): Promise<void> {
+  if (templateSelected.value !== 'cultivo-permanente') return
+  const product = String(formData.value.tipo_producto ?? props.modelValue?.product ?? '').trim()
+  if (!product) return
+  if (normalizeFinagroRanges(formData.value.finagro_ranges).length > 0) return
+  loadingFlatData.value = true
+  try {
+    const flatData = await fetchFlatData('cultivo-permanente', product)
+    const ranges = normalizeFinagroRanges(flatData.finagro_ranges)
+    if (ranges.length === 0) return
+    formData.value = {
+      ...formData.value,
+      finagro_ranges: ranges,
+      plantas_x_ha: formData.value.plantas_x_ha ?? flatData.plantas_x_ha,
+      duracion_meses: formData.value.duracion_meses ?? flatData.duracion_meses,
+      descripcion: formData.value.descripcion ?? flatData.descripcion,
+      anio_inicio_produccion: formData.value.anio_inicio_produccion ?? flatData.anio_inicio_produccion,
+    }
+    formDataVersion.value++
+    emitActivityTemplate()
+  } finally {
+    loadingFlatData.value = false
+  }
+}
+
 watch(templateSelected, async (newTemplate) => {
   if (isSyncingFromProps.value) return // No cargar al hidratar borrador
   if (!newTemplate) {
@@ -228,10 +268,10 @@ watch(templateSelected, async (newTemplate) => {
     emitActivityTemplate()
     return
   }
-  formData.value = {}
   const productKey = templateHasProductSelect(newTemplate)
     ? ((formData.value.tipo_producto ?? props.modelValue?.product) as string | null) ?? null
     : null
+  formData.value = {}
   await loadFlatDataForTemplate(newTemplate, productKey)
 })
 
@@ -243,14 +283,17 @@ watch(
     loadingFlatData.value = true
     try {
       const flatData = await fetchFlatData(templateSelected.value, product)
-      // Reemplazar por completo con la config del producto seleccionado (evita arrastrar config de Maíz al elegir Papa).
-      // Usar flatData como única fuente para ciclo_corto_cost_breakdown, kg_x_ha, etc.
+      // Reemplazar config del producto (evita arrastrar Maíz al elegir Papa)
+      // pero conservar edad / hectáreas / precio que el asesor ya digitó.
       if (templateSelected.value === 'plantilla-comercial') {
         for (const key of PLANTILLA_COMERCIAL_RADICACION_ONLY_KEYS) {
           delete flatData[key]
         }
       }
-      formData.value = { ...flatData, tipo_producto: product }
+      const kept = templateSelected.value === 'cultivo-permanente'
+        ? keepUserEnteredCultivoFields(formData.value)
+        : {}
+      formData.value = { ...flatData, ...kept, tipo_producto: product }
       if (templateSelected.value === 'servicios') {
         applyServiciosPctContribucion(formData.value)
       }
@@ -361,6 +404,9 @@ watch(
       }
     }
     configuredFieldKeys.value = val?.template ? getRadicacionReadOnlyConfigKeys(val.template) : []
+    if (newTemplate === 'cultivo-permanente') {
+      void ensurePermanentCropRangesFromCatalog()
+    }
     nextTick(() => { isSyncingFromProps.value = false })
   },
   { immediate: true },

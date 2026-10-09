@@ -182,7 +182,13 @@ defineExpose({
 })
 
 function emitUpdate() {
-  emit('update:modelValue', [...templates.value])
+  let payload: ActivityTemplateData[] = []
+  try {
+    payload = JSON.parse(JSON.stringify(templates.value)) as ActivityTemplateData[]
+  } catch {
+    payload = templates.value.map(t => ({ ...t, data: { ...(t.data ?? {}) } }))
+  }
+  emit('update:modelValue', payload)
 }
 
 watch(deleteDialogOpen, (open) => {
@@ -195,9 +201,15 @@ watch(
   () => props.modelValue,
   (val) => {
     const arr = val ?? []
-    if (JSON.stringify(arr) !== JSON.stringify(templates.value)) {
+    let next: ActivityTemplateData[] = []
+    try {
+      next = arr.length ? JSON.parse(JSON.stringify(arr)) as ActivityTemplateData[] : []
+    } catch {
+      next = arr.map(t => ({ ...t, data: { ...(t.data ?? {}) } }))
+    }
+    if (JSON.stringify(next) !== JSON.stringify(templates.value)) {
       const prevLocks = sectorTemplateLocked.value
-      templates.value = arr.length ? [...arr] : []
+      templates.value = next
       resyncSectorTemplateLockedFromPrevious(prevLocks)
     }
     // Si el `if` no corrió (mismo JSON en carga inicial), `sectorTemplateLocked` seguía [] y

@@ -20,7 +20,7 @@ const props = withDefaults(
     showCategoriesTab: boolean
     /** Enlace a la otra vista hermana (Plantillas ↔ Radicación). */
     sisterLink?: { to: string, label: string } | null
-    /** Destino del botón Volver. */
+    /** Destino del botón Volver si no hay historial de la app. */
     backTo?: string
     /** Permisos adicionales para guardar configuración plana (además de `plantillas_editar`). */
     configEditPermissions?: string[]
@@ -28,14 +28,14 @@ const props = withDefaults(
   {
     showCategoriesTab: true,
     sisterLink: null,
-    backTo: '/radicacion',
+    backTo: '/parametrizacion/plantillas',
     configEditPermissions: () => [],
   },
 )
 
 const { $api, $csrf } = useNuxtApp()
 const { hasPermission, hasAnyPermission } = usePermissions()
-const router = useRouter()
+const { goBack } = useNavigationBack(() => props.backTo)
 const deleteWithReason = useApiDeleteWithReason()
 
 const canEditFlatConfig = computed(() => {
@@ -74,6 +74,7 @@ const showCreateCategoryDialog = ref(false)
 const newCategoryTemplate = ref<string | null>(null)
 const selectedTemplateKey = ref<string | null>(null)
 const selectedProductKey = ref<string | null>(null)
+const planoTab = useRouteQueryState('tab', 'plantillas', ['plantillas', 'categorias'] as const)
 
 const templateLabels: Record<string, string> = {
   'ganado-ceba': 'Ganado para la Ceba',
@@ -359,7 +360,7 @@ watch(deleteCategoryDialogOpen, (v) => {
             {{ sisterLink.label }}
           </NuxtLink>
         </Button>
-        <Button variant="outline" @click="router.push(backTo)">
+        <Button variant="outline" @click="goBack">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>
@@ -367,7 +368,7 @@ watch(deleteCategoryDialogOpen, (v) => {
     </div>
 
     <div class="space-y-6">
-      <Tabs default-value="plantillas" class="w-full">
+      <Tabs v-model="planoTab" class="w-full">
         <TabsList
           v-if="showCategoriesTab"
           class="inline-flex w-auto grid-cols-2"

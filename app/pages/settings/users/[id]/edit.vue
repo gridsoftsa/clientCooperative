@@ -17,6 +17,7 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const route = useRoute()
 const router = useRouter()
+const { goBack } = useNavigationBack('/settings/users')
 const { user: authUser, refetchUserSilently } = useAuth()
 const { mapRoleSelectOptions } = useRoleAssignmentScope()
 
@@ -346,7 +347,7 @@ onMounted(async () => {
             Modifica el usuario: {{ user.name }}
           </p>
         </div>
-        <Button variant="outline" class="shrink-0" @click="router.back()">
+        <Button variant="outline" class="shrink-0" @click="goBack">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
           Volver
         </Button>
@@ -651,7 +652,7 @@ onMounted(async () => {
           </Card>
 
           <div class="flex justify-end gap-4">
-            <Button type="button" variant="outline" @click="router.back()">
+            <Button type="button" variant="outline" @click="goBack">
               Cancelar
             </Button>
             <Button type="submit" :disabled="saving">

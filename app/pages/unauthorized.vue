@@ -4,18 +4,14 @@ definePageMeta({
 })
 
 // const { t } = useI18n() // Temporalmente deshabilitado
-const { user } = useAuth()
-const router = useRouter()
-
-function goBack() {
-  router.back()
-}
+const { goBack } = useNavigationBack(() => {
+  const { hasPermission } = usePermissions()
+  return resolveAppHomePath(hasPermission)
+})
 
 function goHome() {
-  // Ir a Radicación si no tienen dashboard_ver (evita bucle con /)
   const { hasPermission } = usePermissions()
-  const target = resolveAppHomePath(hasPermission)
-  router.push(target)
+  void navigateTo(resolveAppHomePath(hasPermission))
 }
 </script>
 

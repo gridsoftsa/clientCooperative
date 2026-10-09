@@ -49,23 +49,27 @@ function totalVista(filas: { valor: string }[]) {
 }
 
 function onValorFilaUpdate(tab: EmergenciaTablaActivos, idx: number, v: string) {
+  const cur = tab.filas[idx]
+  if (cur == null) {
+    return
+  }
   const raw = filterPesosChars(String(v))
   if (!raw.trim()) {
-    tab.filas[idx]!.valor = ''
+    tab.filas[idx] = { ...cur, valor: '' }
     return
   }
   const n = parsePesosInput(raw)
-  tab.filas[idx]!.valor = n === undefined ? raw : formatPesos(n)
+  tab.filas[idx] = { ...cur, valor: n === undefined ? raw : formatPesos(n) }
 }
 
 function onBlurNormaliza(tab: EmergenciaTablaActivos, idx: number) {
-  const t = tab.filas[idx]?.valor
-  if (t == null || !String(t).trim()) {
+  const cur = tab.filas[idx]
+  if (cur == null || !String(cur.valor).trim()) {
     return
   }
-  const m = parseMontoCop(t)
+  const m = parseMontoCop(cur.valor)
   if (m != null) {
-    tab.filas[idx]!.valor = formatMontoCopVista(m)
+    tab.filas[idx] = { ...cur, valor: formatMontoCopVista(m) }
   }
 }
 </script>

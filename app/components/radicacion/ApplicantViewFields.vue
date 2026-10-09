@@ -273,7 +273,7 @@ onMounted(() => {
         <!-- Ingresos (tabla) -->
         <div class="flex flex-col">
           <h4 class="mb-2 text-sm font-semibold text-foreground">Ingresos</h4>
-          <div class="flex-1 overflow-hidden rounded-lg border border-border sm:w-fit sm:max-w-sm">
+          <div class="flex-1 overflow-visible rounded-lg border border-border sm:w-fit sm:max-w-sm">
         <table class="w-full table-fixed text-sm">
           <thead>
             <tr class="border-b border-border bg-muted/40">
@@ -308,9 +308,9 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
-        <div v-if="income.description" class="border-t border-border px-3 py-2" :class="fieldClass">
+        <div class="border-t border-border px-3 py-2" :class="fieldClass">
           <p :class="labelClass">Descripción ingresos</p>
-          <p class="whitespace-pre-wrap text-sm">{{ income.description }}</p>
+          <p class="mt-1 min-h-[60px] whitespace-pre-wrap rounded-md border border-input bg-muted/50 px-3 py-2 text-sm">{{ income.description?.trim() ? income.description : '—' }}</p>
         </div>
           </div>
         </div>
@@ -318,7 +318,7 @@ onMounted(() => {
         <!-- Gastos (tabla) -->
         <div class="flex flex-col">
           <h4 class="mb-2 text-sm font-semibold text-foreground">Gastos</h4>
-          <div class="flex-1 overflow-hidden rounded-lg border border-border sm:w-fit sm:max-w-sm">
+          <div class="flex-1 overflow-visible rounded-lg border border-border sm:w-fit sm:max-w-sm">
         <table class="w-full table-fixed text-sm">
           <thead>
             <tr class="border-b border-border bg-muted/40">
@@ -361,9 +361,9 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
-        <div v-if="expenses.description" class="border-t border-border px-3 py-2" :class="fieldClass">
+        <div class="border-t border-border px-3 py-2" :class="fieldClass">
           <p :class="labelClass">Descripción gastos</p>
-          <p class="whitespace-pre-wrap text-sm">{{ expenses.description }}</p>
+          <p class="mt-1 min-h-[60px] whitespace-pre-wrap rounded-md border border-input bg-muted/50 px-3 py-2 text-sm">{{ expenses.description?.trim() ? expenses.description : '—' }}</p>
         </div>
           </div>
         </div>

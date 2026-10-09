@@ -143,8 +143,11 @@ function buildReportQuery(): Record<string, string | number> {
 async function fetchSucursales(): Promise<void> {
   loadingSucursales.value = true
   try {
-    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales')
+    const res = await $api<{ data: SucursalCatalogItem[] }>('/catalogs/sucursales?scope=reports')
     sucursales.value = res.data ?? []
+    if (sucursales.value.length === 1 && sucursalId.value == null) {
+      sucursalId.value = sucursales.value[0]!.id
+    }
   } catch (error: any) {
     console.error('Error cargando sucursales para reportes:', error)
     toast.error(error?.data?.message ?? 'No se pudo cargar el catálogo de sucursales')
@@ -301,7 +304,7 @@ onUnmounted(() => {
         <div class="space-y-1">
           <CardTitle>Filtros y vista</CardTitle>
           <CardDescription>
-            Período por <code class="rounded bg-muted px-1 py-0.5 text-[11px]">created_at</code> de la radicación.
+            Período por fecha de la decisión del director de crédito.
           </CardDescription>
         </div>
         <div class="flex shrink-0 flex-wrap gap-2">
@@ -345,7 +348,7 @@ onUnmounted(() => {
             >
               <DateRangeStringPicker
                 id="reportes-excepciones-dates"
-                label="Período (fecha de creación de la radicación)"
+                label="Período (fecha de la decisión del director)"
                 v-model:from="filterDateFrom"
                 v-model:to="filterDateTo"
               />
@@ -372,7 +375,7 @@ onUnmounted(() => {
                     <SelectValue placeholder="Todas las sucursales" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">
+                    <SelectItem v-if="sucursales.length > 1" value="all">
                       Todas las sucursales
                     </SelectItem>
                     <SelectItem

@@ -4,6 +4,7 @@ import { currentCalendarMonthDateRange } from '~/utils/dateInputValue'
 definePageMeta({
   middleware: 'permission',
   permissions: 'dashboard_ver|ventanilla_dashboard_ver',
+  key: route => route.path,
 })
 
 const { hasPermission } = usePermissions()

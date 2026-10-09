@@ -5,6 +5,7 @@ import AnalisisScoreImprimirPanel from '~/components/radicacion/AnalisisScoreImp
 import RadicacionResumenFinancieroDeudor from '~/components/radicacion/RadicacionResumenFinancieroDeudor.vue'
 import {
   defaultEmergenciaState,
+  emergenciaSnapshotTieneFilasActivos,
   emergenciaStateToSnapshotObject,
   mergeEmergenciaSnapshotOverBase,
 } from '~/constants/analisis-score-emergencia'
@@ -27,6 +28,7 @@ import {
   formatMontoCopVista,
   tasaEfectivaPorcentajeDesdeNominal,
 } from '~/utils/analisis-emergencia-cuota'
+import { recalcularCapacidadPagoDerivados } from '~/utils/analisis-emergencia-capacidad'
 import type { EmergenciaCreditoCampoValidacion } from '~/utils/analisis-emergencia-validacion'
 import {
   descripcionErroresAdicionales,
@@ -43,10 +45,11 @@ import {
 } from '~/utils/analisis-score-imprimir-totals'
 import { totalIngresosRadicacionFormatted } from '~/utils/radicacion-financial-totals'
 import { aplicarEgresosCapacidadBloqueDesdeFinancialInfo } from '~/utils/radicacion-financial-egresos'
-import { aplicarActivosEmergenciaDesdeSolicitud } from '~/utils/radicacion-financial-activos'
+import { aplicarActivosEmergenciaDesdeSolicitud, type ActivoPersonaKey } from '~/utils/radicacion-financial-activos'
 import {
   buildResumenFinancieroDeudorAnalisisPersistido,
   mergeFinancialInfoResumenAnalisisDeudor,
+  mergeFinancialInfoResumenAnalisisPersona,
 } from '~/utils/analisis-resumen-financiero-merge'
 import type { Company } from '~/types/company'
 import { useAuth } from '~/composables/useAuth'
@@ -64,6 +67,7 @@ definePageMeta({
   layout: 'default',
   middleware: 'permission',
   permissions: 'radicacion_analisis_ver',
+  key: route => route.path,
 })
 
 const route = useRoute()
@@ -120,6 +124,12 @@ const codeudoresDeSolicitud = ref<{ nombre: string, cedula: string }[]>([])
 /** `financial_info` del deudor (parseado) y monto para el resumen financiero (misma vista que en radicación). */
 const resumenDeudorFinancialInfo = ref<Record<string, unknown>>({})
 const resumenMontoSolicitado = ref(0)
+const CODEUDOR_RESUMEN_KEYS = ['codeudor1', 'codeudor2', 'codeudor3'] as const satisfies readonly ActivoPersonaKey[]
+const resumenCodeudoresFinancialInfo = ref<Array<{
+  key: ActivoPersonaKey
+  nombre: string
+  financialInfo: Record<string, unknown>
+}>>([])
 
 function parseJsonFieldSolicitud(val: unknown): Record<string, unknown> {
   if (val == null) {
@@ -144,11 +154,31 @@ function actualizarResumenFinancieroDeudorDesdeSolicitud(data: Record<string, un
   const d = data.debtor as Record<string, unknown> | null | undefined
   resumenDeudorFinancialInfo.value = d && typeof d === 'object' ? parseJsonFieldSolicitud(d.financial_info) : {}
   resumenMontoSolicitado.value = Number(data.amount_requested) || 0
+  const co = pickCoDebtorRowsFromSolicitudData(data)
+  resumenCodeudoresFinancialInfo.value = co.slice(0, CODEUDOR_RESUMEN_KEYS.length).map((row, index) => ({
+    key: CODEUDOR_RESUMEN_KEYS[index]!,
+    nombre: debtorDisplayName(row),
+    financialInfo: parseJsonFieldSolicitud(row.financial_info),
+  }))
 }
 
 /** Base radicación + ajustes del analista en EMERGENCIA (solo vista; no escribe la solicitud). */
 const resumenFinancieroDeudorAnalisis = computed(() =>
   mergeFinancialInfoResumenAnalisisDeudor(resumenDeudorFinancialInfo.value, emergenciaState.value),
+)
+
+const resumenesFinancierosCodeudoresAnalisis = computed(() =>
+  resumenCodeudoresFinancialInfo.value.map((codeudor, index) => ({
+    key: codeudor.key,
+    label: codeudor.nombre.trim()
+      ? `del codeudor ${index + 1} — ${codeudor.nombre.trim()}`
+      : `del codeudor ${index + 1}`,
+    financialInfo: mergeFinancialInfoResumenAnalisisPersona(
+      codeudor.financialInfo,
+      emergenciaState.value,
+      codeudor.key,
+    ),
+  })),
 )
 
 /** % ING desde parametrización (template `ing`); reserva = ingresos disponibles × %/100. */
@@ -232,15 +262,24 @@ function aplicarCabeceraALineaEmergenciaDeudor(): void {
   emergenciaState.value.deudorCodeudor.fechaAnalisis = c.fecha
 }
 
-function formatFechaRadicacion(createdAt: unknown): string {
-  if (createdAt == null || createdAt === '') {
+function formatFechaAnalisisVista(iso: unknown): string {
+  if (iso == null || iso === '') {
     return new Date().toLocaleDateString('es-CO')
   }
-  const d = new Date(String(createdAt))
+  const d = new Date(String(iso))
   if (Number.isNaN(d.getTime())) {
     return new Date().toLocaleDateString('es-CO')
   }
   return d.toLocaleDateString('es-CO')
+}
+
+/** Fecha de análisis (aprobación del analista o hoy). No usar created_at de la radicación. */
+function fechaAnalisisDesdeSolicitud(data: Record<string, unknown>): string {
+  const approved = data.analyst_review_approved_at
+  if (approved != null && String(approved).trim() !== '') {
+    return formatFechaAnalisisVista(approved)
+  }
+  return new Date().toLocaleDateString('es-CO')
 }
 
 function pickStr(row: Record<string, unknown>, ...keys: string[]): string {
@@ -340,7 +379,10 @@ function aplicarEgresosCapacidadDesdeRadicacion(data: Record<string, unknown>): 
  * Sincroniza monto, ingresos, egresos, activos (filas) y codeudores con el JSON *actual* de la solicitud.
  * No reemplaza el snapshot de emergencia completo: solo lo alimentado por la radicación (paso 3).
  */
-function aplicarVistaFinancieraDesdeSolicitud(data: Record<string, unknown>): void {
+function aplicarVistaFinancieraDesdeSolicitud(
+  data: Record<string, unknown>,
+  opts?: { incluirActivos?: boolean },
+): void {
   const co = pickCoDebtorRowsFromSolicitudData(data)
   codeudoresDeSolicitud.value = buildCodeudoresDesdeCoDebtors(co)
   if (codeudoresDeSolicitud.value.length > 0) {
@@ -352,10 +394,12 @@ function aplicarVistaFinancieraDesdeSolicitud(data: Record<string, unknown>): vo
   aplicarMontoYPlazoCreditoDesdeSolicitud(data)
   aplicarIngresosCapacidadDesdeRadicacion(data)
   aplicarEgresosCapacidadDesdeRadicacion(data)
-  aplicarActivosEmergenciaDesdeSolicitud(emergenciaState.value, {
-    debtor: data.debtor,
-    coDebtors: co,
-  })
+  if (opts?.incluirActivos !== false) {
+    aplicarActivosEmergenciaDesdeSolicitud(emergenciaState.value, {
+      debtor: data.debtor,
+      coDebtors: co,
+    })
+  }
   actualizarResumenFinancieroDeudorDesdeSolicitud(data)
   sincronizarTasaEfectivaDesdeNominal()
   sincronizarVrCuotaVarFormula()
@@ -363,9 +407,9 @@ function aplicarVistaFinancieraDesdeSolicitud(data: Record<string, unknown>): vo
 }
 
 /**
- * Tras aplicar montos/ingresos/egresos/activos desde la radicación, fusiona el EMERGENCIA persistido
- * en `analisis_score_snapshot` (mismo orden que la carga inicial). Sin esto, al volver del paso Score
- * al Análisis solo quedaba la radicación y se perdían los valores guardados del analista.
+ * Tras aplicar montos/ingresos/egresos desde la radicación, fusiona el EMERGENCIA persistido.
+ * Los activos del snapshot no se vuelven a pisar con el paso 3 (a diferencia de ingresos/gastos):
+ * el analista los edita aquí, igual que los pasivos de la central de riesgos.
  */
 function reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data: Record<string, unknown>): void {
   const snap = data.analisis_score_snapshot as Record<string, unknown> | null | undefined
@@ -373,6 +417,9 @@ function reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data: Record<string
     emergenciaState.value,
     snap && typeof snap === 'object' ? (snap as { emergencia?: unknown }).emergencia : undefined,
   )
+  aplicarMontoYPlazoCreditoDesdeSolicitud(data)
+  aplicarIngresosCapacidadDesdeRadicacion(data)
+  aplicarEgresosCapacidadDesdeRadicacion(data)
   const dPre = data.debtor as Record<string, unknown> | null | undefined
   if (dPre && typeof dPre === 'object') {
     if (!emergenciaState.value.deudorCodeudor.deudor.trim()) {
@@ -386,15 +433,34 @@ function reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data: Record<string
     emergenciaState.value.deudorCodeudor.fechaAnalisis = scoreCabecera.value.fecha
   }
   aplicarCabeceraALineaEmergenciaDeudor()
-  sincronizarTasaEfectivaDesdeNominal()
-  sincronizarVrCuotaVarFormula()
   sincronizarGarantiaConPlantilla()
+  recalcularCapacidadPagoEnHojaAnalisis()
 }
 
 const sincronizandoPaso3Radicacion = ref(false)
+let syncRadicacionSerial = 0
 
-/** Relee la solicitud y aplica monto, ingresos, egresos y activos. `true` si la petición tuvo éxito. */
-async function refrescarVistaFinancieraDesdeSolicitudApi(): Promise<boolean> {
+function recalcularCapacidadPagoEnHojaAnalisis(): void {
+  sincronizarTasaEfectivaDesdeNominal()
+  sincronizarVrCuotaVarFormula()
+  recalcularCapacidadPagoDerivados(emergenciaState.value, {
+    pctReservaDeudor: pctIngDeudor.value,
+    pctReservaCodeudor: pctIngCodeudor.value,
+  })
+}
+
+function snapshotEmergenciaParaApi(): Record<string, unknown> {
+  recalcularCapacidadPagoEnHojaAnalisis()
+  return emergenciaStateToSnapshotObject(emergenciaState.value)
+}
+
+/**
+ * Relee la solicitud y alinea monto, ingresos y gastos (paso 3 de radicación).
+ * No vuelve a fusionar el snapshot de análisis: eso pisaba totales recalculados y ediciones no guardadas.
+ */
+async function refrescarVistaFinancieraDesdeSolicitudApi(opts?: {
+  incluirActivos?: boolean
+}): Promise<boolean> {
   const id = solicitudId.value
   if (id == null) {
     return false
@@ -403,29 +469,49 @@ async function refrescarVistaFinancieraDesdeSolicitudApi(): Promise<boolean> {
     return false
   }
   sincronizandoPaso3Radicacion.value = true
+  const serial = ++syncRadicacionSerial
   try {
     const res = await $api<{ data?: Record<string, unknown> } & Record<string, unknown>>(`/credit-applications/${id}`)
+    if (serial !== syncRadicacionSerial) {
+      return false
+    }
     const data = (res?.data ?? res) as Record<string, unknown>
     solicitudStatus.value = typeof data.status === 'string' ? data.status : null
     analystReviewApprovedAt.value = data.analyst_review_approved_at != null && data.analyst_review_approved_at !== ''
       ? String(data.analyst_review_approved_at)
       : null
-    aplicarVistaFinancieraDesdeSolicitud(data)
-    reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data)
+    aplicarMontoYPlazoCreditoDesdeSolicitud(data)
+    aplicarIngresosCapacidadDesdeRadicacion(data)
+    aplicarEgresosCapacidadDesdeRadicacion(data)
+    if (opts?.incluirActivos === true) {
+      const co = pickCoDebtorRowsFromSolicitudData(data)
+      codeudoresDeSolicitud.value = buildCodeudoresDesdeCoDebtors(co)
+      aplicarActivosEmergenciaDesdeSolicitud(emergenciaState.value, {
+        debtor: data.debtor,
+        coDebtors: co,
+      })
+      actualizarResumenFinancieroDeudorDesdeSolicitud(data)
+    }
+    recalcularCapacidadPagoEnHojaAnalisis()
     return true
   }
   catch (e) {
+    if (serial !== syncRadicacionSerial) {
+      return false
+    }
     console.error('Error actualizando datos de radicación (activos, ingresos, gastos):', e)
     toast.error('No se pudo leer la solicitud actualizada. Vuelve a intentar o recarga la página.')
     return false
   }
   finally {
-    sincronizandoPaso3Radicacion.value = false
+    if (serial === syncRadicacionSerial) {
+      sincronizandoPaso3Radicacion.value = false
+    }
   }
 }
 
 async function sincronizarPaso3RadicacionDesdeFormulario(): Promise<void> {
-  if (await refrescarVistaFinancieraDesdeSolicitudApi()) {
+  if (await refrescarVistaFinancieraDesdeSolicitudApi({ incluirActivos: true })) {
     toast.success('Ingresos, gastos y activos alineados con el paso 3 de la radicación.')
   }
 }
@@ -484,6 +570,10 @@ const perfilDeudor = ref<AnalisisScorePerfilValue | undefined>(undefined)
 
 const currentStep = ref(1)
 const maxStep = 4
+useRouteSyncedStep(currentStep, maxStep)
+const { goBack } = useNavigationBack(() =>
+  solicitudId.value ? `/radicacion/${solicitudId.value}` : '/radicacion',
+)
 
 const variableRowsForIndep = ref<ImprimirVariableRow[]>(cloneImprimirRows(IMPRIMIR_INDEPENDIENTE_VARIABLES))
 const variableRowsForEmp = ref<ImprimirVariableRow[]>(cloneImprimirRows(IMPRIMIR_EMPLEADO_VARIABLES))
@@ -571,6 +661,9 @@ watch(
       void fetchIngParametrizacion()
       void refrescarVistaFinancieraDesdeSolicitudApi()
     }
+    if (s === 3 || s === 4) {
+      recalcularCapacidadPagoEnHojaAnalisis()
+    }
     if (s === 4) {
       void fetchUser()
     }
@@ -638,6 +731,7 @@ function resetVistaAnalisisScoreParaSolicitud(): void {
   emergenciaState.value = defaultEmergenciaState()
   codeudoresDeSolicitud.value = []
   resumenDeudorFinancialInfo.value = {}
+  resumenCodeudoresFinancialInfo.value = []
   resumenMontoSolicitado.value = 0
   solicitudStatus.value = null
   analystReviewApprovedAt.value = null
@@ -663,6 +757,8 @@ async function loadSolicitudParaAnalisis(
   const pasoAlExito = options?.pasoAlExitoCarga
   solicitudCargaSerial.value += 1
   const cargaId = solicitudCargaSerial.value
+  syncRadicacionSerial += 1
+  sincronizandoPaso3Radicacion.value = false
   if (!soft) {
     resetVistaAnalisisScoreParaSolicitud()
   }
@@ -683,7 +779,7 @@ async function loadSolicitudParaAnalisis(
     if (snap && typeof snap === 'object' && snap.cabecera && typeof snap.cabecera === 'object') {
       const c = snap.cabecera as Record<string, unknown>
       scoreCabecera.value = {
-        fecha: String(c.fecha ?? ''),
+        fecha: fechaAnalisisDesdeSolicitud(data),
         cedula: String(c.cedula ?? ''),
         nombre: String(c.nombre ?? ''),
       }
@@ -697,12 +793,12 @@ async function loadSolicitudParaAnalisis(
         const docNum = debtor.document_number != null ? String(debtor.document_number).trim() : ''
         const cedula = [docType, docNum].filter(Boolean).join(' ').trim()
         scoreCabecera.value = {
-          fecha: formatFechaRadicacion(data.created_at),
+          fecha: fechaAnalisisDesdeSolicitud(data),
           cedula,
           nombre: debtorDisplayName(debtor),
         }
       } else {
-        scoreCabecera.value = { fecha: formatFechaRadicacion(data.created_at), cedula: '', nombre: '' }
+        scoreCabecera.value = { fecha: fechaAnalisisDesdeSolicitud(data), cedula: '', nombre: '' }
       }
     }
 
@@ -743,7 +839,11 @@ async function loadSolicitudParaAnalisis(
       && snap.variable_rows.length > 0,
     )
 
-    aplicarVistaFinancieraDesdeSolicitud(data)
+    aplicarVistaFinancieraDesdeSolicitud(data, {
+      incluirActivos: !emergenciaSnapshotTieneFilasActivos(
+        snap && typeof snap === 'object' ? (snap as { emergencia?: unknown }).emergencia : undefined,
+      ),
+    })
     reconciliarEmergenciaConSnapshotDespuesDeRadicacion(data)
 
     if (pasoAlExito != null) {
@@ -1056,6 +1156,10 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
   }
   guardandoEmergenciaBorrador.value = true
   try {
+    if (import.meta.client && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
+    await nextTick()
     const { $api, $csrf } = useNuxtApp()
     await $csrf()
     const rows = filasImprimirActuales().map(r => ({ ...r }))
@@ -1075,7 +1179,7 @@ async function guardarBorradorAnalisisEmergencia(): Promise<void> {
         nivel_ifs: classifyPuntajeTotalIFS(total),
         nivel_riesgo: classifyNivelRiesgo(total),
         observaciones: observacionesScore.value.trim() === '' ? null : observacionesScore.value,
-        emergencia: emergenciaStateToSnapshotObject(emergenciaState.value),
+        emergencia: snapshotEmergenciaParaApi(),
         resumen_financiero_deudor_analisis: buildResumenFinancieroDeudorAnalisisPersistido(
           resumenDeudorFinancialInfo.value,
           emergenciaState.value,
@@ -1150,10 +1254,20 @@ const mostrarBotonGuardarCierre = computed(
 )
 
 async function ejecutarGuardarScore(): Promise<void> {
+  if (import.meta.client && document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
+  await nextTick()
+  recalcularCapacidadPagoEnHojaAnalisis()
   await scorePanelRef.value?.guardarAnalisisScore()
 }
 
 async function ejecutarGuardarCierreAnalista(): Promise<void> {
+  if (import.meta.client && document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
+  await nextTick()
+  recalcularCapacidadPagoEnHojaAnalisis()
   const r = await scorePanelRef.value?.guardarAnalisisScore({ conceptoAnalista: conceptoAnalista.value })
   if (r?.sentToCreditDirectorReview) {
     envioDirectorCreditoPendiente.value = false
@@ -1209,7 +1323,7 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
           Radicación — Análisis de riesgo
         </p>
       </div>
-      <Button variant="outline" class="shrink-0" @click="router.push('/radicacion')">
+      <Button variant="outline" class="shrink-0" @click="goBack">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
         Volver
       </Button>
@@ -1335,11 +1449,21 @@ async function ejecutarDescargaScorePdf(): Promise<void> {
             permission="radicacion_ver_resumen_financiero"
             strict
           >
-            <RadicacionResumenFinancieroDeudor
-              :financial-info="resumenFinancieroDeudorAnalisis"
-              :amount-requested="resumenMontoSolicitado"
-              analysis-adjusted
-            />
+            <div class="space-y-3">
+              <RadicacionResumenFinancieroDeudor
+                :financial-info="resumenFinancieroDeudorAnalisis"
+                :amount-requested="resumenMontoSolicitado"
+                analysis-adjusted
+              />
+              <RadicacionResumenFinancieroDeudor
+                v-for="codeudor in resumenesFinancierosCodeudoresAnalisis"
+                :key="codeudor.key"
+                :financial-info="codeudor.financialInfo"
+                :amount-requested="resumenMontoSolicitado"
+                :summary-scope-label="codeudor.label"
+                analysis-adjusted
+              />
+            </div>
           </PermissionGate>
           <AnalisisEmergenciaForm
             ref="emergenciaFormRef"

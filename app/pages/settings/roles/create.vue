@@ -11,6 +11,7 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const router = useRouter()
 const route = useRoute()
+const { goBack: goBackFallback } = useNavigationBack('/settings/roles')
 
 const returnTo = computed(() => {
   const value = route.query.returnTo
@@ -21,10 +22,10 @@ const fromUserCreate = computed(() => returnTo.value === '/settings/users/create
 
 function goBack() {
   if (returnTo.value) {
-    router.push(returnTo.value)
+    void router.push(returnTo.value)
     return
   }
-  router.back()
+  goBackFallback()
 }
 
 const formData = ref({

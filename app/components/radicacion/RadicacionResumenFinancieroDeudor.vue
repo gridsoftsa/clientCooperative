@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Button } from '~/components/ui/button'
+
 /**
  * Resumen solo lectura: solvencia, endeudamiento, activos, pasivos, bien raíz.
  * Misma lógica que el detalle de radicación (`/radicacion/[id]`) a partir de `financial_info` y monto solicitado.
@@ -75,15 +77,38 @@ function solvenciaColorClass(pct: number | null): string {
   return 'bg-destructive/20 text-destructive border-destructive/40'
 }
 
+const incomeDescription = computed(() => {
+  const raw = fi.value?.income?.description
+  return typeof raw === 'string' && raw.trim() !== '' ? raw : ''
+})
+
+const expensesDescription = computed(() => {
+  const raw = fi.value?.expenses?.description
+  return typeof raw === 'string' && raw.trim() !== '' ? raw : ''
+})
+
+const incomeExpanded = ref(false)
+const expensesExpanded = ref(false)
+
+watch(incomeDescription, () => {
+  incomeExpanded.value = false
+})
+watch(expensesDescription, () => {
+  expensesExpanded.value = false
+})
+
 const montoActivos = computed(() => {
   const f = fi.value
   if (!f) return 0
-  const sol = (f as { solvency?: { assets?: number } }).solvency
   const assets = f?.assets ?? []
   const fromList = Array.isArray(assets)
     ? assets.reduce((s: number, a: { value?: number }) => s + (a?.value ?? 0), 0)
     : 0
-  return sol?.assets ?? fromList
+  if (fromList > 0) {
+    return fromList
+  }
+  const sol = (f as { solvency?: { assets?: number } }).solvency
+  return sol?.assets ?? 0
 })
 </script>
 
@@ -152,6 +177,58 @@ const montoActivos = computed(() => {
         </p>
         <p class="flex h-10 w-full items-center rounded-md border bg-muted/50 px-3 py-2 font-semibold">
           {{ formatPesosConSimbolo(fi?.solvency?.real_estate) }}
+        </p>
+      </div>
+    </div>
+    <div
+      v-if="incomeDescription || expensesDescription"
+      class="mt-4 grid gap-3"
+      :class="incomeDescription && expensesDescription ? 'sm:grid-cols-2' : ''"
+    >
+      <div v-if="incomeDescription" class="space-y-1">
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-sm font-bold uppercase">
+            Descripción ingresos
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="h-8 shrink-0"
+            :aria-expanded="incomeExpanded"
+            @click="incomeExpanded = !incomeExpanded"
+          >
+            {{ incomeExpanded ? 'Ocultar' : 'Ver más' }}
+          </Button>
+        </div>
+        <p
+          v-if="incomeExpanded"
+          class="whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2 text-sm"
+        >
+          {{ incomeDescription }}
+        </p>
+      </div>
+      <div v-if="expensesDescription" class="space-y-1">
+        <div class="flex items-center justify-between gap-2">
+          <p class="text-sm font-bold uppercase">
+            Descripción gastos
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="h-8 shrink-0"
+            :aria-expanded="expensesExpanded"
+            @click="expensesExpanded = !expensesExpanded"
+          >
+            {{ expensesExpanded ? 'Ocultar' : 'Ver más' }}
+          </Button>
+        </div>
+        <p
+          v-if="expensesExpanded"
+          class="whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2 text-sm"
+        >
+          {{ expensesDescription }}
         </p>
       </div>
     </div>

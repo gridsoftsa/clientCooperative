@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import TransferCreditApplicationSucursalDialog from '~/components/radicacion/TransferCreditApplicationSucursalDialog.vue'
+import CreditApplicationStatusBadges from '~/components/radicacion/CreditApplicationStatusBadges.vue'
 import {
   creditApplicationStatusFilterOptions as statusFilterOptions,
-  getCreditApplicationStatusBadgeVariant as getStatusBadgeVariant,
-  getCreditApplicationStatusLabel as getStatusLabel,
   isCreditApplicationTerminalImmutable,
   isCreditApplicationAdviserEditableStatus,
+  radicacionStatusEntryColumns,
+  statusEnteredAtMap,
+  statusEntryDateForColumn,
 } from '~/constants/credit-application-status'
 import { toast } from 'vue-sonner'
 
@@ -17,7 +19,7 @@ definePageMeta({
 
 const router = useRouter()
 const { $api, $csrf } = useNuxtApp()
-const { hasAnyPermission, hasRole, hasPermission } = usePermissions()
+const { hasAnyPermission, hasRole, hasAnyRole, hasPermission } = usePermissions()
 /** Editar / continuar borrador: crear o editar (nueva solo exige crear) */
 const canOpenDraftForm = computed(() => hasAnyPermission(['radicacion_crear', 'radicacion_editar']))
 const isDirectorAgencia = computed(() => hasRole('director_agencia'))
@@ -67,6 +69,51 @@ function verRadicacionListPrefersDocumentActionsIcon(app: { status?: string, doc
   return false
 }
 const isAnalista = computed(() => hasRole('analista'))
+const statusDatePermissions = [
+  'radicacion_analisis_ver',
+  'radicacion_analisis_guardar',
+  'radicacion_documentos_decidir',
+  'radicacion_director_credito_decidir',
+]
+const showStatusEntryDates = computed(() =>
+  hasAnyRole(['super_admin', 'admin', 'auxiliar_credito', 'revision_documentos', 'analista', 'director_credito'])
+  || hasAnyPermission(statusDatePermissions),
+)
+const sortKey = ref('created_at')
+const sortDir = ref<'asc' | 'desc'>('desc')
+
+function applyRoleDefaultSort(): void {
+  if (!showStatusEntryDates.value || hasAnyRole(['super_admin', 'admin'])) {
+    sortKey.value = 'created_at'
+    sortDir.value = 'desc'
+    return
+  }
+  if (hasRole('director_credito') || hasPermission('radicacion_director_credito_decidir')) {
+    sortKey.value = 'Credit_Director_Review'
+    sortDir.value = 'asc'
+    return
+  }
+  if (hasRole('analista') || hasRole('auxiliar_credito') || hasAnyPermission(['radicacion_analisis_ver', 'radicacion_analisis_guardar'])) {
+    sortKey.value = 'In_Analysis'
+    sortDir.value = 'asc'
+    return
+  }
+  if (hasRole('revision_documentos') || hasPermission('radicacion_documentos_decidir')) {
+    sortKey.value = 'Documentation_Review'
+    sortDir.value = 'asc'
+  }
+}
+
+function toggleSort(key: string): void {
+  if (sortKey.value === key) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortKey.value = key
+    sortDir.value = 'asc'
+  }
+  pagination.value.current_page = 1
+  void fetchApplications()
+}
 const { downloadApplicationPdf } = useDocumentDownload()
 const downloadingPdfId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
@@ -93,11 +140,13 @@ const pagination = ref({
 const filterStatus = ref<string>('all')
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
+const filterSearch = ref('')
 
 const hasActiveFilters = computed(() => {
   return filterStatus.value !== 'all'
     || Boolean(filterDateFrom.value?.trim())
     || Boolean(filterDateTo.value?.trim())
+    || Boolean(filterSearch.value?.trim())
 })
 
 const skipFilterWatch = ref(false)
@@ -118,6 +167,14 @@ function buildListQuery(): Record<string, string | number> {
   }
   if (to) {
     q.created_to = to
+  }
+  const search = filterSearch.value?.trim()
+  if (search) {
+    q.search = search
+  }
+  if (sortKey.value) {
+    q.sort = sortKey.value
+    q.direction = sortDir.value
   }
   return q
 }
@@ -145,9 +202,12 @@ async function fetchApplications() {
   }
 }
 
-watch([filterStatus, filterDateFrom, filterDateTo], () => {
+watch([filterStatus, filterDateFrom, filterDateTo, filterSearch], (current, previous) => {
   if (skipFilterWatch.value)
     return
+  if (!previous || current[0] !== previous[0]) {
+    alignSortWithStatusFilter()
+  }
   if (listFilterDebounce)
     clearTimeout(listFilterDebounce)
   listFilterDebounce = setTimeout(() => {
@@ -156,6 +216,22 @@ watch([filterStatus, filterDateFrom, filterDateTo], () => {
     fetchApplications()
   }, 400)
 })
+
+function alignSortWithStatusFilter(): void {
+  if (!showStatusEntryDates.value) {
+    return
+  }
+  if (filterStatus.value === 'all') {
+    applyRoleDefaultSort()
+    return
+  }
+  const column = radicacionStatusEntryColumns.find(col => col.statuses.includes(filterStatus.value))
+  if (!column) {
+    return
+  }
+  sortKey.value = column.key
+  sortDir.value = 'asc'
+}
 
 function clearFilters() {
   if (listFilterDebounce) {
@@ -166,6 +242,7 @@ function clearFilters() {
   filterStatus.value = 'all'
   filterDateFrom.value = ''
   filterDateTo.value = ''
+  filterSearch.value = ''
   pagination.value.current_page = 1
   nextTick(() => {
     skipFilterWatch.value = false
@@ -343,6 +420,7 @@ async function handleDownloadPdf(app: { id: number; code?: string }) {
 }
 
 onMounted(() => {
+  applyRoleDefaultSort()
   fetchApplications()
 })
 
@@ -396,6 +474,16 @@ watch(transferDialogOpen, (v) => {
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:flex-wrap sm:items-end">
+          <div class="grid w-full gap-3 sm:max-w-sm sm:shrink-0">
+            <Label for="filter-search" class="text-xs text-muted-foreground">Buscar asociado</Label>
+            <Input
+              id="filter-search"
+              v-model="filterSearch"
+              type="search"
+              placeholder="Nombre o cédula del asociado"
+              class="h-9"
+            />
+          </div>
           <div class="grid w-full gap-3 sm:max-w-[220px] sm:shrink-0">
             <Label for="filter-status" class="text-xs text-muted-foreground">Estado</Label>
             <Select v-model="filterStatus">
@@ -434,6 +522,9 @@ watch(transferDialogOpen, (v) => {
 
         <p v-if="!loading" class="text-sm text-muted-foreground">
           {{ pagination.total }} solicitud{{ pagination.total === 1 ? '' : 'es' }} encontrada{{ pagination.total === 1 ? '' : 's' }}.
+          <span class="block sm:inline sm:before:content-[' '] mt-1 sm:mt-0">
+            Si ya se corrigió tras una devolución de documentación o del analista, el sello es verde. Si la devolvió el ente aprobador (devolución o modificación), es amarillo.
+          </span>
         </p>
 
         <div v-if="loading" class="flex justify-center py-8">
@@ -450,16 +541,45 @@ watch(transferDialogOpen, (v) => {
             No hay solicitudes. Crea una nueva para comenzar.
           </template>
         </div>
-        <div v-else class="border rounded-lg overflow-hidden">
+        <div v-else class="border rounded-lg overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Código</TableHead>
+                <TableHead>Cédula</TableHead>
+                <TableHead>Asociado</TableHead>
+                <TableHead>Sucursal</TableHead>
+                <TableHead>Asesor</TableHead>
                 <TableHead>Radicado externo</TableHead>
                 <TableHead>Monto</TableHead>
                 <TableHead>Plazo</TableHead>
                 <TableHead>Estado</TableHead>
-                <TableHead>Fecha y hora</TableHead>
+                <TableHead>
+                  <button type="button" class="inline-flex items-center gap-1" @click="toggleSort('created_at')">
+                    Fecha y hora
+                    <Icon
+                      v-if="sortKey === 'created_at'"
+                      :name="sortDir === 'asc' ? 'i-lucide-arrow-up' : 'i-lucide-arrow-down'"
+                      class="h-3.5 w-3.5"
+                    />
+                  </button>
+                </TableHead>
+                <template v-if="showStatusEntryDates">
+                  <TableHead
+                    v-for="col in radicacionStatusEntryColumns"
+                    :key="`h-${col.key}`"
+                    class="whitespace-nowrap"
+                  >
+                    <button type="button" class="inline-flex items-center gap-1" @click="toggleSort(col.key)">
+                      {{ col.label }}
+                      <Icon
+                        v-if="sortKey === col.key"
+                        :name="sortDir === 'asc' ? 'i-lucide-arrow-up' : 'i-lucide-arrow-down'"
+                        class="h-3.5 w-3.5"
+                      />
+                    </button>
+                  </TableHead>
+                </template>
                 <TableHead class="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
@@ -515,20 +635,39 @@ watch(transferDialogOpen, (v) => {
                   </NuxtLink>
                   <span v-else>{{ app.code || '-' }}</span>
                 </TableCell>
+                <TableCell class="whitespace-nowrap font-mono text-sm">{{ app.debtor_document_number || '—' }}</TableCell>
+                <TableCell class="min-w-40 max-w-[16rem]">
+                  <span class="line-clamp-2">{{ app.debtor_name || '—' }}</span>
+                </TableCell>
+                <TableCell class="min-w-32">{{ app.sucursal_name || app.sucursal?.name || '—' }}</TableCell>
+                <TableCell class="min-w-32">{{ app.adviser_name || '—' }}</TableCell>
                 <TableCell class="font-mono text-sm">{{ app.numero_radicado_externo || '-' }}</TableCell>
                 <TableCell>{{ formatCurrency(Number(app.amount_requested)) }}</TableCell>
                 <TableCell>{{ app.term_months }} meses</TableCell>
                 <TableCell>
-                  <Badge :variant="getStatusBadgeVariant(app.status)">
-                    {{ getStatusLabel(app.status, {
-                      skipNextDirectorReview: app.skip_next_director_review,
-                      resubmitToAnalystAfterReturn: app.resubmit_to_analyst_after_return,
-                    }) }}
-                  </Badge>
+                  <CreditApplicationStatusBadges
+                    :status="app.status"
+                    :returned-by="app.returned_by"
+                    :skip-next-director-review="app.skip_next_director_review"
+                    :resubmit-to-analyst-after-return="app.resubmit_to_analyst_after_return"
+                    :resubmit-to-credit-director-after-return="app.resubmit_to_credit_director_after_return"
+                    :parked-after-return="Boolean(app.parked_after_return)"
+                    :corrected-after-return="Boolean(app.corrected_after_return)"
+                    :corrected-after-credit-director-return="Boolean(app.corrected_after_credit_director_return)"
+                  />
                 </TableCell>
                 <TableCell class="whitespace-nowrap text-sm tabular-nums">
                   {{ formatCreatedAt(app.created_at) }}
                 </TableCell>
+                <template v-if="showStatusEntryDates">
+                  <TableCell
+                    v-for="col in radicacionStatusEntryColumns"
+                    :key="`${app.id}-${col.key}`"
+                    class="whitespace-nowrap text-xs tabular-nums"
+                  >
+                    {{ formatCreatedAt(statusEntryDateForColumn(statusEnteredAtMap(app.status_entered_at), col.statuses)) }}
+                  </TableCell>
+                </template>
                 <TableCell class="text-right">
                   <div class="flex justify-end gap-1">
                     <PermissionGate permission="radicacion_analisis_guardar">

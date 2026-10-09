@@ -5,6 +5,7 @@ definePageMeta({
   layout: 'default',
   middleware: 'permission',
   permissions: 'radicacion_catalogos_ver',
+  key: route => route.path,
 })
 
 const sectors = sectorsForParametrizacionRadicacion()
@@ -18,6 +19,6 @@ const sectors = sectorsForParametrizacionRadicacion()
     breadcrumb-label="Radicación"
     :show-categories-tab="false"
     :sister-link="{ to: '/parametrizacion/plantillas', label: 'Plantillas' }"
-    back-to="/radicacion"
+    back-to="/parametrizacion/plantillas"
   />
 </template>

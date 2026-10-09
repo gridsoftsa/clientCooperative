@@ -7,7 +7,7 @@ import {
   titleForAuxiliaryDocumentUpload,
 } from '~/constants/auxiliary-documents-checklist'
 import { creditApplicationDocumentIdEquals, parseFinancialChecklistDocumentIdMap } from '~/utils/financial-checklist-document-id-map'
-import { findDocumentIdByTitle } from '~/utils/radicacion-document-upload'
+import { documentBelongsToApplicant, findDocumentIdByTitle } from '~/utils/radicacion-document-upload'
 
 export type AuxiliaryApplicationDocumentRef = {
   id: number
@@ -20,16 +20,16 @@ function findDocMeta(
   docId: number,
   documents: AuxiliaryApplicationDocumentRef[],
   applicantId?: number | null,
+  allowUnscoped = false,
 ): AuxiliaryApplicationDocumentRef | null {
-  const list = documents ?? []
-  const byIdAndApplicant = list.find(d =>
-    creditApplicationDocumentIdEquals(d.id, docId)
-    && (applicantId == null || d.applicant_id == null || Number(d.applicant_id) === Number(applicantId)),
-  )
-  if (byIdAndApplicant) {
-    return byIdAndApplicant
+  if (applicantId == null || !Number.isFinite(Number(applicantId)) || Number(applicantId) < 1) {
+    return null
   }
-  return list.find(d => creditApplicationDocumentIdEquals(d.id, docId)) ?? null
+  const list = documents ?? []
+  return list.find(d =>
+    creditApplicationDocumentIdEquals(d.id, docId)
+    && documentBelongsToApplicant(d, applicantId, allowUnscoped),
+  ) ?? null
 }
 
 /** True si el `label` aparece una sola vez en el checklist (seguro recuperar por título). */
@@ -58,10 +58,14 @@ function findAuxiliaryDocIdByUniqueLabelTitle(options: {
   rows: ReadonlyArray<{ key: string, label: string }>
   applicationDocuments: AuxiliaryApplicationDocumentRef[]
   applicantId?: number | null
+  allowUnscoped?: boolean
 }): number | null {
   if (!isAuxiliaryChecklistLabelUnique(options.rows, options.label)) {
     // Varias filas con el mismo texto (p. ej. 4× «Otros soportes de ingreso»):
     // el título «Auxiliar — …» es idéntico y no puede distinguirlas.
+    return null
+  }
+  if (options.applicantId == null || Number(options.applicantId) < 1) {
     return null
   }
   const uploadTitle = titleForAuxiliaryDocumentUpload(options.label)
@@ -69,10 +73,7 @@ function findAuxiliaryDocIdByUniqueLabelTitle(options: {
     options.applicationDocuments,
     uploadTitle,
     options.applicantId,
-  ) ?? findDocumentIdByTitle(
-    options.applicationDocuments,
-    uploadTitle,
-    null,
+    options.allowUnscoped === true,
   )
 }
 
@@ -89,6 +90,8 @@ export function isAuxiliaryChecklistKeySatisfied(options: {
   applicantId?: number | null
   /** Filas del checklist actual; necesarias para no cruzar labels duplicados. */
   checklistRows?: ReadonlyArray<{ key: string, label: string }>
+  /** El deudor reconoce documentos históricos sin applicant_id. */
+  allowUnscoped?: boolean
 }): boolean {
   const pending = options.pendingFiles?.[options.key]
   if (pending instanceof File) {
@@ -103,8 +106,9 @@ export function isAuxiliaryChecklistKeySatisfied(options: {
       : null,
   )
   const mappedId = map[options.key]
+  const allowUnscoped = options.allowUnscoped === true
   if (typeof mappedId === 'number' && mappedId >= 1) {
-    if (findDocMeta(mappedId, options.applicationDocuments, options.applicantId)) {
+    if (findDocMeta(mappedId, options.applicationDocuments, options.applicantId, allowUnscoped)) {
       return true
     }
   }
@@ -115,6 +119,7 @@ export function isAuxiliaryChecklistKeySatisfied(options: {
     rows,
     applicationDocuments: options.applicationDocuments,
     applicantId: options.applicantId,
+    allowUnscoped,
   }) != null
 }
 
@@ -126,6 +131,7 @@ export function missingRequiredAuxiliaryLabels(options: {
   applicationDocuments: AuxiliaryApplicationDocumentRef[]
   applicantId?: number | null
   economicActivityOptions?: ReadonlyArray<EconomicActivityCatalogOption>
+  allowUnscoped?: boolean
 }): string[] {
   const activityType = normalizeStoredActivityType(options.activityType)
   const rows = resolveAuxiliaryChecklistRows(
@@ -146,6 +152,7 @@ export function missingRequiredAuxiliaryLabels(options: {
       applicationDocuments: options.applicationDocuments,
       applicantId: options.applicantId,
       checklistRows: rows,
+      allowUnscoped: options.allowUnscoped === true,
     }))
     .map(r => r.label)
 }
@@ -168,6 +175,7 @@ export function repairAuxiliaryDocumentsMapFromExisting(options: {
   applicationDocuments: AuxiliaryApplicationDocumentRef[]
   applicantId?: number | null
   economicActivityOptions?: ReadonlyArray<EconomicActivityCatalogOption>
+  allowUnscoped?: boolean
 }): Record<string, number | null> | null {
   const activityType = extractActivityTypeFromFinancialInfo(options.financialInfo)
   const rows = resolveAuxiliaryChecklistRows(
@@ -188,6 +196,7 @@ export function repairAuxiliaryDocumentsMapFromExisting(options: {
     : {}
   const map = parseFinancialChecklistDocumentIdMap(fi.auxiliaryDocuments)
   let changed = false
+  const allowUnscoped = options.allowUnscoped === true
 
   // Un mismo document id no puede servir a varias claves del checklist.
   const claimedIds = new Set<number>()
@@ -199,7 +208,7 @@ export function repairAuxiliaryDocumentsMapFromExisting(options: {
         changed = true
         continue
       }
-      if (findDocMeta(currentId, options.applicationDocuments, options.applicantId)) {
+      if (findDocMeta(currentId, options.applicationDocuments, options.applicantId, allowUnscoped)) {
         claimedIds.add(currentId)
         continue
       }
@@ -210,12 +219,13 @@ export function repairAuxiliaryDocumentsMapFromExisting(options: {
       rows,
       applicationDocuments: options.applicationDocuments,
       applicantId: options.applicantId,
+      allowUnscoped,
     })
     if (recovered != null && !claimedIds.has(recovered) && recovered !== currentId) {
       map[row.key] = recovered
       claimedIds.add(recovered)
       changed = true
-    } else if (typeof currentId === 'number' && currentId >= 1 && !findDocMeta(currentId, options.applicationDocuments, options.applicantId)) {
+    } else if (typeof currentId === 'number' && currentId >= 1 && !findDocMeta(currentId, options.applicationDocuments, options.applicantId, allowUnscoped)) {
       map[row.key] = null
       changed = true
     }

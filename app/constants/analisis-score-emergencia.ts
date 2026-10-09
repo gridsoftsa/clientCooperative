@@ -257,13 +257,39 @@ function ensureCuotasFinMinimo(b: EmergenciaCapacidadBloque) {
   }
 }
 
-function asTablaActivos(t: unknown): EmergenciaTablaActivos | null {
-  if (t == null || typeof t !== 'object' || !Array.isArray((t as { filas?: unknown }).filas)) {
+/** `filas` a veces llega como objeto `{0: …}` (JSON/PHP) en lugar de array. */
+function asFilasList(filas: unknown): unknown[] | null {
+  if (Array.isArray(filas)) {
+    return filas
+  }
+  if (filas == null || typeof filas !== 'object') {
     return null
   }
-  const o = t as { filas: unknown[], observaciones?: unknown }
+  const rec = filas as Record<string, unknown>
+  const keys = Object.keys(rec)
+  if (keys.length === 0) {
+    return []
+  }
+  if (!keys.every(k => /^\d+$/.test(k))) {
+    return null
+  }
+  return keys
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map(i => rec[String(i)])
+}
+
+function asTablaActivos(t: unknown): EmergenciaTablaActivos | null {
+  if (t == null || typeof t !== 'object') {
+    return null
+  }
+  const o = t as { filas?: unknown, observaciones?: unknown }
+  const list = asFilasList(o.filas)
+  if (list == null) {
+    return null
+  }
   return {
-    filas: o.filas.map((f) => {
+    filas: list.map((f) => {
       if (f == null || typeof f !== 'object') {
         return { nombre: '', valor: '', matricula: '' }
       }
@@ -276,6 +302,32 @@ function asTablaActivos(t: unknown): EmergenciaTablaActivos | null {
     }),
     observaciones: typeof o.observaciones === 'string' ? o.observaciones : '',
   }
+}
+
+function personaActivoTieneFilas(p: unknown): boolean {
+  if (p == null || typeof p !== 'object') {
+    return false
+  }
+  const o = p as Record<string, unknown>
+  const g = asFilasList((o.bienesGarantia as { filas?: unknown } | undefined)?.filas)
+  const ot = asFilasList((o.otrosBienes as { filas?: unknown } | undefined)?.filas)
+  return (g != null && g.length > 0) || (ot != null && ot.length > 0)
+}
+
+/** true si el EMERGENCIA persistido ya tiene filas de activos (no hay que reponerlas desde la radicación). */
+export function emergenciaSnapshotTieneFilasActivos(saved: unknown): boolean {
+  if (saved == null || typeof saved !== 'object' || Array.isArray(saved)) {
+    return false
+  }
+  const act = (saved as Record<string, unknown>).activos
+  if (act == null || typeof act !== 'object' || Array.isArray(act)) {
+    return false
+  }
+  const a = act as Record<string, unknown>
+  return personaActivoTieneFilas(a.deudor)
+    || personaActivoTieneFilas(a.codeudor1)
+    || personaActivoTieneFilas(a.codeudor2)
+    || personaActivoTieneFilas(a.codeudor3)
 }
 
 /**
@@ -332,10 +384,52 @@ export function mergeEmergenciaFromSnapshot(saved: unknown): EmergenciaState {
   return merged
 }
 
+/** Campos de capacidad que salen del paso 3 de radicación (solo lectura en análisis). */
+const CAPACIDAD_CAMPOS_DESDE_RADICACION = [
+  'ingresos',
+  'gastoPersonal',
+  'alimentacion',
+  'gastosServiciosArriendo',
+  'arriendo',
+  'serviciosPublicos',
+  'gastoSalud',
+  'gastoPension',
+  'gastoArl',
+  'otrosGastos',
+  'totalEgresos',
+] as const
+
+/** Totales derivados: no se reutilizan del snapshot (se recalculan con ingresos/gastos/cuotas vigentes). */
+const CAPACIDAD_CAMPOS_DERIVADOS = [
+  'totalIngresos',
+  'ingDisponibles',
+  'reservaSobreIngreso',
+  'valorCuota',
+  'saldo',
+] as const
+
+function restaurarCapacidadDesdeRadicacion(
+  target: EmergenciaCapacidadBloque,
+  source: EmergenciaCapacidadBloque,
+): void {
+  for (const key of CAPACIDAD_CAMPOS_DESDE_RADICACION) {
+    target[key] = source[key]
+  }
+}
+
+function invalidarTotalesDerivadosCapacidad(b: EmergenciaCapacidadBloque): void {
+  for (const key of CAPACIDAD_CAMPOS_DERIVADOS) {
+    b[key] = ''
+  }
+}
+
 /**
  * Aplica un snapshot de EMERGENCIA sobre un estado ya hidratado (p. ej. monto, ingresos, egresos y activos desde la solicitud).
  * Importante: `deepMerge` fusiona arrays de `filas` por índice; por eso, si el snapshot trae `activos`, se reemplazan
  * las personas indicadas con `normalizarPersonaActivo` para que los activos guardados en análisis no se mezclen con la radicación.
+ *
+ * Ingresos, gastos y monto/plazo del crédito no se toman del snapshot: si el asesor los corrigió tras una
+ * devolución, el análisis debe mostrar la radicación viva (el snapshot conserva otros ingresos, cuotas, etc.).
  */
 export function mergeEmergenciaSnapshotOverBase(base: EmergenciaState, saved: unknown): EmergenciaState {
   if (saved == null || typeof saved !== 'object' || Array.isArray(saved)) {
@@ -343,17 +437,31 @@ export function mergeEmergenciaSnapshotOverBase(base: EmergenciaState, saved: un
   }
   const patch = saved as Record<string, unknown>
   const merged = deepMerge(base, saved) as EmergenciaState
+  /**
+   * Activos del analista: reemplazo completo (no deepMerge por índice de `filas`).
+   * Si se mezclan con la radicación, al reabrir el paso 2 reaparece el valor anterior;
+   * los pasivos (central de riesgos) no tienen esa ruta y por eso sí persistían.
+   */
   if (patch.activos != null && typeof patch.activos === 'object' && !Array.isArray(patch.activos)) {
-    const pa = patch.activos as Record<string, unknown>
-    for (const key of ['deudor', 'codeudor1', 'codeudor2', 'codeudor3'] as const) {
-      if (Object.prototype.hasOwnProperty.call(pa, key)) {
-        merged.activos[key] = normalizarPersonaActivo(pa[key])
-      }
-    }
-    if (Object.prototype.hasOwnProperty.call(pa, 'totalActivos') && typeof pa.totalActivos === 'string') {
-      merged.activos.totalActivos = pa.totalActivos
+    const pa = JSON.parse(JSON.stringify(patch.activos)) as Record<string, unknown>
+    merged.activos = {
+      deudor: normalizarPersonaActivo(pa.deudor),
+      codeudor1: normalizarPersonaActivo(pa.codeudor1),
+      codeudor2: normalizarPersonaActivo(pa.codeudor2),
+      codeudor3: normalizarPersonaActivo(pa.codeudor3),
+      totalActivos: typeof pa.totalActivos === 'string' ? pa.totalActivos : '',
     }
   }
+  restaurarCapacidadDesdeRadicacion(merged.capacidadBloque1.a, base.capacidadBloque1.a)
+  restaurarCapacidadDesdeRadicacion(merged.capacidadBloque1.b, base.capacidadBloque1.b)
+  restaurarCapacidadDesdeRadicacion(merged.capacidadBloque2.a, base.capacidadBloque2.a)
+  restaurarCapacidadDesdeRadicacion(merged.capacidadBloque2.b, base.capacidadBloque2.b)
+  invalidarTotalesDerivadosCapacidad(merged.capacidadBloque1.a)
+  invalidarTotalesDerivadosCapacidad(merged.capacidadBloque1.b)
+  invalidarTotalesDerivadosCapacidad(merged.capacidadBloque2.a)
+  invalidarTotalesDerivadosCapacidad(merged.capacidadBloque2.b)
+  merged.credito.vrCredito = base.credito.vrCredito
+  merged.credito.plazoMeses = base.credito.plazoMeses
   ensureCuotasFinMinimo(merged.capacidadBloque1.a)
   ensureCuotasFinMinimo(merged.capacidadBloque1.b)
   ensureCuotasFinMinimo(merged.capacidadBloque2.a)
