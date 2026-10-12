@@ -437,7 +437,7 @@ const analystDecisionOptions = [
   { value: 'returned', label: 'Devolver a una etapa anterior' },
 ]
 
-const creditDirectorDecision = ref<'approved' | 'rejected' | 'returned' | 'returned_modification' | 'returned_insurer_response' | ''>('')
+const creditDirectorDecision = ref<'approved' | 'rejected' | 'returned' | 'returned_modification' | 'returned_insurer_response' | 'send_to_management' | ''>('')
 const creditDirectorReturnTo = ref<ReturnResubmitTo>('advisor')
 const creditDirectorConcept = ref('')
 const creditDirectorExceptionOptions = [
@@ -464,11 +464,24 @@ const creditDirectorSectionCollapsibleOpen = ref(true)
 const documentationReviewConceptCollapsibleOpen = ref(true)
 const creditDirectorDecisionOptions = [
   { value: 'approved', label: 'Aprobar para desembolso' },
+  { value: 'send_to_management', label: 'Enviar a Gerencia' },
   { value: 'rejected', label: 'Rechazar solicitud' },
   { value: 'returned', label: 'Devolución' },
   { value: 'returned_modification', label: 'Modificación' },
   { value: 'returned_insurer_response', label: 'Respuesta aseguradora' },
 ]
+const managementDecision = ref<'approved' | 'rejected' | 'returned' | ''>('')
+const managementConcept = ref('')
+const managementDecisionDialogOpen = ref(false)
+const submittingManagementDecision = ref(false)
+const managementDecisionOptions = [
+  { value: 'approved', label: 'Aprobar para desembolso' },
+  { value: 'rejected', label: 'Rechazar solicitud' },
+  { value: 'returned', label: 'Devolver al director de crédito' },
+]
+const canGerenciaDecide = computed(
+  () => hasPermission('radicacion_gerencia_decidir') && application.value?.status === 'Management_Review',
+)
 const canCreditDirectorDecide = computed(
   () => hasPermission('radicacion_director_credito_decidir') && application.value?.status === 'Credit_Director_Review',
 )
@@ -1619,6 +1632,43 @@ async function confirmCreditDirectorDecision() {
     toast.error(e?.data?.message ?? 'No se pudo registrar la decisión del director de crédito.')
   } finally {
     submittingCreditDirectorDecision.value = false
+  }
+}
+
+function openManagementDecisionDialog() {
+  if (managementDecision.value === '') {
+    toast.error('Selecciona la decisión de gerencia.')
+    return
+  }
+  if (managementConcept.value.trim().length < 25) {
+    toast.error('El concepto de gerencia debe tener al menos 25 caracteres.')
+    return
+  }
+  managementDecisionDialogOpen.value = true
+}
+
+async function confirmManagementDecision() {
+  if (!application.value?.id || managementDecision.value === '' || submittingManagementDecision.value) {
+    return
+  }
+  submittingManagementDecision.value = true
+  try {
+    await $csrf()
+    await $api(`/credit-applications/${application.value.id}/management-decision`, {
+      method: 'PATCH',
+      body: {
+        decision: managementDecision.value,
+        concept: managementConcept.value.trim(),
+      },
+    })
+    managementDecisionDialogOpen.value = false
+    toast.success('Decisión de gerencia registrada correctamente.')
+    await navigateTo('/radicacion')
+  } catch (e: any) {
+    console.error('Error registrando decisión de gerencia:', e)
+    toast.error(e?.data?.message ?? 'No se pudo registrar la decisión de gerencia.')
+  } finally {
+    submittingManagementDecision.value = false
   }
 }
 
@@ -3352,7 +3402,7 @@ onMounted(() => {
               <div class="min-w-0 space-y-1.5">
                 <CardTitle>Decisión final — director de crédito</CardTitle>
                 <CardDescription>
-                  Revise la radicación y el SCORE. Elija <strong>Aprobar para desembolso</strong>, <strong>Rechazar solicitud</strong>,
+                  Revise la radicación y el SCORE. Elija <strong>Aprobar para desembolso</strong>, <strong>Enviar a Gerencia</strong>, <strong>Rechazar solicitud</strong>,
                   <strong>Devolución</strong>, <strong>Modificación</strong> o <strong>Respuesta aseguradora</strong> según corresponda. Debe dejar un concepto claro y estructurado.
                 </CardDescription>
               </div>
@@ -3630,6 +3680,56 @@ onMounted(() => {
             </CardContent>
           </CollapsibleContent>
         </Collapsible>
+      </Card>
+
+      <Card v-if="canGerenciaDecide">
+        <CardHeader>
+          <CardTitle>Decisión de gerencia</CardTitle>
+          <CardDescription>
+            Esta solicitud está en la bandeja de gerencia. Aquí sí se aprueba el crédito para desembolso, o se rechaza o se devuelve al director de crédito.
+          </CardDescription>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div class="space-y-1.5">
+            <Label for="management_decision">Decisión *</Label>
+            <Multiselect
+              id="management_decision"
+              :model-value="managementDecision === '' ? null : managementDecision"
+              :options="managementDecisionOptions"
+              value-prop="value"
+              label="label"
+              mode="single"
+              :can-clear="false"
+              :searchable="false"
+              placeholder="Seleccionar decisión"
+              class="multiselect-director"
+              @update:model-value="(v: unknown) => { managementDecision = (v === 'approved' || v === 'rejected' || v === 'returned') ? v : '' }"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="management_concept">Concepto *</Label>
+            <textarea
+              id="management_concept"
+              v-model="managementConcept"
+              rows="5"
+              class="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              placeholder="Fundamente la aprobación, el rechazo o la devolución. Mínimo 25 caracteres."
+            />
+            <p class="text-xs text-muted-foreground">
+              Mínimo 25 caracteres. Este texto queda en la trazabilidad.
+            </p>
+          </div>
+          <div class="flex justify-end">
+            <Button
+              type="button"
+              :disabled="submittingManagementDecision"
+              @click="openManagementDecisionDialog"
+            >
+              <Icon v-if="submittingManagementDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              Registrar decisión de gerencia
+            </Button>
+          </div>
+        </CardContent>
       </Card>
 
       <Card v-if="canDirectorDecide">
@@ -4522,6 +4622,9 @@ onMounted(() => {
             <template v-else-if="creditDirectorDecision === 'returned_insurer_response'">
               La solicitud pasará a estado <strong>Respuesta aseguradora</strong>; al reenviar, irá priorizada al analista.
             </template>
+            <template v-else-if="creditDirectorDecision === 'send_to_management'">
+              La solicitud pasará a la bandeja de <strong>Gerencia</strong>. Gerencia será quien apruebe o devuelva el crédito.
+            </template>
             <template v-else>
               Confirme la decisión del director de crédito.
             </template>
@@ -4537,6 +4640,41 @@ onMounted(() => {
             Confirmar
           </Button>
           <AlertDialogCancel :disabled="submittingCreditDirectorDecision">
+            Cancelar
+          </AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
+    <AlertDialog v-model:open="managementDecisionDialogOpen">
+      <AlertDialogContent class="max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar decisión de gerencia</AlertDialogTitle>
+          <AlertDialogDescription>
+            <template v-if="managementDecision === 'approved'">
+              La solicitud quedará <strong>aprobada</strong> y pasará a estado desembolso.
+            </template>
+            <template v-else-if="managementDecision === 'rejected'">
+              La solicitud quedará <strong>rechazada</strong> de forma definitiva.
+            </template>
+            <template v-else-if="managementDecision === 'returned'">
+              La solicitud volverá a la revisión del <strong>director de crédito</strong>.
+            </template>
+            <template v-else>
+              Confirme la decisión de gerencia.
+            </template>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            :disabled="submittingManagementDecision"
+            @click="confirmManagementDecision"
+          >
+            <Icon v-if="submittingManagementDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+            Confirmar
+          </Button>
+          <AlertDialogCancel :disabled="submittingManagementDecision">
             Cancelar
           </AlertDialogCancel>
         </AlertDialogFooter>

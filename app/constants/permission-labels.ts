@@ -146,6 +146,7 @@ const RADICACION_SUBGROUP_DEFINITIONS: Array<{ key: string; label: string; names
     names: new Set([
       'radicacion_director_decidir',
       'radicacion_director_credito_decidir',
+      'radicacion_gerencia_decidir',
       'radicacion_cancelar',
     ]),
   },
@@ -233,6 +234,7 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   radicacion_analisis_guardar: 'Guardar análisis y SCORE',
   radicacion_director_decidir: 'Decidir como director de agencia',
   radicacion_director_credito_decidir: 'Decisión director de crédito',
+  radicacion_gerencia_decidir: 'Decisión de gerencia',
   radicacion_cancelar: 'Cancelar solicitud de radicación',
   radicacion_trasladar_sucursal: 'Trasladar radicación a otra sucursal',
   radicacion_marcar_privilegiado: 'Marcar privilegiado',
