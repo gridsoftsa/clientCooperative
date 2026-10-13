@@ -77,18 +77,22 @@ const archivalFileTypeOptions = computed(() => [
   })),
 ])
 
-function applyProducerAreasFromFileType(row: FunctionalDraft, fileTypeId: string): void {
+function producerOrgUnitIdsForFileType(fileTypeId: string): number[] | null {
   if (!fileTypeId || fileTypeId === NONE_ARCHIVAL_FILE_TYPE) {
-    return
+    return []
   }
 
   const fileType = props.archivalFileTypes.find(type => String(type.id) === fileTypeId)
-  const allowedIds = new Set(props.orgUnits.map(unit => unit.id))
-  const producerIds = uniqueOrgUnitIdsFromProducerAreas(fileType?.producer_areas)
-    .filter(id => allowedIds.has(id))
+  if (!fileType) {
+    return null
+  }
 
-  if (producerIds.length === 0) {
-    toast.info('Este tipo de expediente no tiene áreas productoras. Puede elegirlas aquí o asignarlas en el tipo de expediente.')
+  return uniqueOrgUnitIdsFromProducerAreas(fileType.producer_areas)
+}
+
+function applyProducerAreasFromFileType(row: FunctionalDraft, fileTypeId: string): void {
+  const producerIds = producerOrgUnitIdsForFileType(fileTypeId)
+  if (producerIds == null) {
     return
   }
 
@@ -105,13 +109,6 @@ function onArchivalFileTypeChange(row: FunctionalDraft, value: string | number |
     applyProducerAreasFromFileType(row, next)
   }
 }
-
-const orgUnitSelectOptions = computed(() =>
-  props.orgUnits.map(unit => ({
-    value: unit.id,
-    label: `${unit.code} — ${unit.name}`,
-  })),
-)
 
 function responsibleOrgUnitIdsFromRow(row: VentanillaFunctionalTypeRow): number[] {
   if (Array.isArray(row.public_org_unit_ids) && row.public_org_unit_ids.length > 0) {
@@ -142,6 +139,11 @@ function resolveFunctionalTypeKey(row: VentanillaFunctionalTypeRow | { key?: str
 function cloneFunctional(rows: VentanillaFunctionalTypeRow[]): FunctionalDraft[] {
   return rows.map((row) => {
     const typeKey = resolveFunctionalTypeKey(row)
+    const archivalFileTypeId = row.archival_file_type_id != null
+      ? String(row.archival_file_type_id)
+      : NONE_ARCHIVAL_FILE_TYPE
+    const fromFileType = producerOrgUnitIdsForFileType(archivalFileTypeId)
+    const ids = fromFileType ?? responsibleOrgUnitIdsFromRow(row)
 
     return {
       typeKey,
@@ -152,11 +154,9 @@ function cloneFunctional(rows: VentanillaFunctionalTypeRow[]): FunctionalDraft[]
       sort_order: String(row.sort_order ?? 0),
       is_active: row.is_active === undefined ? true : coerceBoolean(row.is_active),
       show_in_public_form: row.show_in_public_form === undefined ? true : coerceBoolean(row.show_in_public_form),
-      public_org_unit_ids: responsibleOrgUnitIdsFromRow(row),
-      public_org_unit_id: row.public_org_unit_id != null ? Number(row.public_org_unit_id) : null,
-      archival_file_type_id: row.archival_file_type_id != null
-        ? String(row.archival_file_type_id)
-        : NONE_ARCHIVAL_FILE_TYPE,
+      public_org_unit_ids: ids,
+      public_org_unit_id: ids[0] ?? null,
+      archival_file_type_id: archivalFileTypeId,
       _clientId: typeKey || `saved-${row.label}`,
     }
   })
@@ -354,10 +354,25 @@ function responseShort(row: FunctionalDraft): string {
   return days ? `${days} días hábiles` : 'Sin plazo'
 }
 
+function responsibleAreaLabels(row: FunctionalDraft): string[] {
+  return row.public_org_unit_ids.map((id) => {
+    const unit = props.orgUnits.find(item => item.id === id)
+
+    return unit ? `${unit.code} — ${unit.name}` : `Área ${id}`
+  })
+}
+
+function responsibleAreasHint(row: FunctionalDraft): string {
+  if (!row.archival_file_type_id || row.archival_file_type_id === NONE_ARCHIVAL_FILE_TYPE) {
+    return 'Sin tipo de expediente. Las áreas se configuran en el tipo de expediente.'
+  }
+
+  return 'Este tipo de expediente no tiene áreas productoras. Configúrelas en el tipo de expediente.'
+}
+
 function audienceShort(row: FunctionalDraft): string {
   const audience = row.show_in_public_form ? 'Formulario público' : 'Solo personal'
-  const units = props.orgUnits.filter(item => row.public_org_unit_ids.includes(item.id))
-  const names = units.map(unit => unit.name).join(', ')
+  const names = responsibleAreaLabels(row).join(', ')
 
   return names ? `${audience} · ${names}` : audience
 }
@@ -374,10 +389,7 @@ function validateAndSave() {
         toast.error('Cada tipo funcional debe tener etiqueta.')
         return
       }
-      if (row.public_org_unit_ids.length === 0) {
-        toast.error(`«${row.label.trim()}» necesita al menos un área encargada.`)
-        return
-      }
+      applyProducerAreasFromFileType(row, row.archival_file_type_id)
       const typeKey = validateFunctionalKey(row)
       if (!/^[a-z0-9_-]+$/.test(typeKey)) {
         toast.error(`Clave no válida para «${row.label.trim()}». Use solo letras minúsculas, números, guion y guion bajo.`)
@@ -623,18 +635,24 @@ watch(
               <Icon name="i-lucide-trash-2" class="size-4" />
             </Button>
             <div class="space-y-1.5 lg:col-span-full">
-              <Label>Áreas encargadas *</Label>
-              <ArchivalMultiMultiselect
-                :id="`functional-org-units-${row._clientId || functionalRowKey(row)}`"
-                v-model="row.public_org_unit_ids"
-                coerce-number
-                :options="orgUnitSelectOptions"
-                placeholder="Buscar y seleccionar una o varias áreas…"
-                no-options-text="No hay áreas"
-                no-results-text="Sin coincidencias"
-              />
+              <Label>Áreas encargadas</Label>
+              <p
+                v-if="responsibleAreaLabels(row).length === 0"
+                class="text-sm text-muted-foreground"
+              >
+                {{ responsibleAreasHint(row) }}
+              </p>
+              <ul v-else class="flex flex-wrap gap-2">
+                <li
+                  v-for="label in responsibleAreaLabels(row)"
+                  :key="label"
+                  class="rounded-md border bg-muted/40 px-2 py-1 text-sm"
+                >
+                  {{ label }}
+                </li>
+              </ul>
               <p class="text-xs text-muted-foreground">
-                Al elegir un tipo de expediente se cargan sus áreas productoras; luego puede añadir o quitar. Si el tipo es público, el radicado del formulario público queda en la primera área de la lista y el encargado de esa área es el responsable.
+                Salen del tipo de expediente y no se cambian aquí. Si el tipo es público, el radicado del formulario queda en la primera área y su encargado es el responsable.
               </p>
             </div>
           </div>
