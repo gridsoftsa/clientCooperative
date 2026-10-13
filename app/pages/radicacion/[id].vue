@@ -67,7 +67,7 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const { $api, $csrf } = useNuxtApp()
-const { hasPermission, hasAnyPermission } = usePermissions()
+const { hasPermission, hasAnyPermission, hasRole, hasAnyRole } = usePermissions()
 const id = computed(() => route.params.id as string)
 const application = ref<any>(null)
 const loading = ref(true)
@@ -482,6 +482,30 @@ const managementDecisionOptions = [
 const canGerenciaDecide = computed(
   () => hasPermission('radicacion_gerencia_decidir') && application.value?.status === 'Management_Review',
 )
+/** Gerencia pura: vista corta para decidir. Quien además opera otra bandeja conserva la trazabilidad. */
+const isGerenciaOnlyView = computed(
+  () => hasRole('gerencia') && !hasAnyRole([
+    'super_admin',
+    'admin',
+    'director_credito',
+    'analista',
+    'auxiliar_credito',
+    'revision_documentos',
+    'director_agencia',
+  ]),
+)
+const gerenciaBriefConcepts = computed(() => {
+  const text = (value: unknown): string => (typeof value === 'string' ? value.trim() : '')
+  return [
+    { label: 'Concepto del director de crédito', text: text(application.value?.credit_director_concept) },
+    { label: 'Concepto del analista', text: text(application.value?.analyst_review_approved_concept) },
+    { label: 'Concepto del director de agencia', text: text(application.value?.agency_director_concept) },
+    {
+      label: 'Descripción del destino (asesor)',
+      text: text(application.value?.destination_description) || text(form.value.destination_description),
+    },
+  ]
+})
 const canCreditDirectorDecide = computed(
   () => hasPermission('radicacion_director_credito_decidir') && application.value?.status === 'Credit_Director_Review',
 )
@@ -3116,7 +3140,7 @@ onMounted(() => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card v-if="!isGerenciaOnlyView">
         <CardHeader>
           <div class="flex items-center justify-between gap-3">
             <CardTitle>Trazabilidad</CardTitle>
@@ -3717,7 +3741,7 @@ onMounted(() => {
               placeholder="Fundamente la aprobación, el rechazo o la devolución. Mínimo 25 caracteres."
             />
             <p class="text-xs text-muted-foreground">
-              Mínimo 25 caracteres. Este texto queda en la trazabilidad.
+              Mínimo 25 caracteres. Este texto queda registrado.
             </p>
           </div>
           <div class="flex justify-end">
@@ -3729,6 +3753,23 @@ onMounted(() => {
               <Icon v-if="submittingManagementDecision" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
               Registrar decisión de gerencia
             </Button>
+          </div>
+          <div class="space-y-3 border-t pt-4">
+            <p class="text-sm font-semibold">
+              Conceptos para la decisión
+            </p>
+            <div
+              v-for="item in gerenciaBriefConcepts"
+              :key="item.label"
+              class="space-y-1"
+            >
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {{ item.label }}
+              </p>
+              <p class="whitespace-pre-wrap rounded-md border bg-muted/30 px-3 py-2 text-sm">
+                {{ item.text || 'Sin registro' }}
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

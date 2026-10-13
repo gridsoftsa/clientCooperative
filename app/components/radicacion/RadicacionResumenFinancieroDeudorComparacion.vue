@@ -66,6 +66,7 @@ const financialInfoAnalisisVista = computed((): Record<string, unknown> | null =
       <RadicacionResumenFinancieroDeudor
         summary-scope-label="del deudor (análisis)"
         :financial-info="financialInfoAnalisisVista"
+        :interview-financial-info="financialInfo"
         :amount-requested="amountRequested"
         :analysis-adjusted="true"
       />
