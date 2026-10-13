@@ -607,6 +607,7 @@ function onCreditDirectorDecisionUpdate(value: string | null) {
     || value === 'returned'
     || value === 'returned_modification'
     || value === 'returned_insurer_response'
+    || value === 'send_to_management'
   ) {
     creditDirectorDecision.value = value
     if (value === 'returned') {
