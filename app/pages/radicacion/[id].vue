@@ -4621,7 +4621,7 @@ onMounted(() => {
               La solicitud pasará a estado <strong>Modificación</strong> para corrección y nuevo flujo hasta una nueva revisión del director de crédito.
             </template>
             <template v-else-if="creditDirectorDecision === 'returned_insurer_response'">
-              La solicitud pasará a estado <strong>Respuesta aseguradora</strong>; al reenviar, irá priorizada al analista.
+              La solicitud pasará a <strong>revisión de documentación</strong>. Cuando esa revisión se corrija, vuelve a la bandeja del director de crédito.
             </template>
             <template v-else-if="creditDirectorDecision === 'send_to_management'">
               La solicitud pasará a la bandeja de <strong>Gerencia</strong>. Gerencia será quien apruebe o devuelva el crédito.
