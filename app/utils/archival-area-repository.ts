@@ -75,7 +75,7 @@ export function archivalAreaNodeTypeLabel(node: ArchivalFileTreeNode): string {
     case 'document_type':
       return 'Tipo documental'
     case 'filing':
-      return 'Radicado'
+      return node.id.startsWith('credit-') ? 'Crédito' : 'Radicado'
     case 'folder':
       return 'Carpeta'
     case 'document':

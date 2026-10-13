@@ -106,7 +106,7 @@ watch([filterDateFrom, filterDateTo], ([from, to]) => {
 })
 
 const currentDocTypeId = computed(() => {
-  if (currentNode.value?.type === 'document_type' || currentNode.value?.type === 'filing') {
+  if (currentNode.value?.type === 'document_type' || currentNode.value?.type === 'filing' || currentNode.value?.type === 'folder') {
     return currentNode.value.doc_document_type_id
   }
 
