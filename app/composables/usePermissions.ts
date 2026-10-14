@@ -19,6 +19,28 @@ export function usePermissions() {
   /**
    * Verifica si el usuario tiene un rol específico
    */
+  function hasModule(module: 'creditos' | 'gestion_documental'): boolean {
+    if (import.meta.server || !user.value) {
+      return false
+    }
+
+    if (bypassesPermissionChecks()) {
+      return true
+    }
+
+    const modules = user.value.enabled_modules
+
+    if (!modules) {
+      return true
+    }
+
+    return modules.includes(module)
+  }
+
+  function hasAllModules(modules: Array<'creditos' | 'gestion_documental'>): boolean {
+    return modules.every(module => hasModule(module))
+  }
+
   function hasRole(role: string): boolean {
     if (!user.value?.roles) {
       return false
@@ -161,6 +183,8 @@ export function usePermissions() {
   const permissions = computed(() => user.value?.permissions || [])
 
   return {
+    hasModule,
+    hasAllModules,
     hasRole,
     hasAnyRole,
     hasAllRoles,

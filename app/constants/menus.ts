@@ -16,6 +16,7 @@ export const navMenu: NavMenu[] = [
         icon: 'i-lucide-megaphone',
         link: '/comunicados',
         permission: 'comunicados_ver',
+        module: 'gestion_documental',
       },
       {
         title: 'Notificaciones',
@@ -27,12 +28,14 @@ export const navMenu: NavMenu[] = [
         icon: 'i-lucide-users',
         link: '/workflow/colaboracion',
         permission: 'workflow_colaborar',
+        module: 'gestion_documental',
       },
       {
         title: 'Reportes',
         icon: 'i-lucide-chart-column',
         link: '/reportes',
         permission: 'reportes_ver',
+        module: 'creditos',
       },
       /* {
         title: 'Email',
@@ -52,6 +55,7 @@ export const navMenu: NavMenu[] = [
       {
         title: 'Workflow',
         icon: 'i-lucide-kanban-square',
+        module: 'gestion_documental',
         anyPermission: ['workflow_ver', 'workflow_definir', 'workflow_colaborar'],
         children: [
           {
@@ -84,6 +88,7 @@ export const navMenu: NavMenu[] = [
       {
         title: 'Ventanilla única',
         icon: 'i-lucide-inbox',
+        module: 'gestion_documental',
         anyPermission: ['ventanilla_ver', 'ventanilla_clasificar', 'ventanilla_sla_configurar'],
         children: [
           {
@@ -123,6 +128,7 @@ export const navMenu: NavMenu[] = [
       {
         title: 'Expedientes',
         icon: 'i-lucide-archive',
+        module: 'gestion_documental',
         anyPermission: [
           'expedientes_ver',
           'expedientes_area_ver',
@@ -197,24 +203,28 @@ export const navMenu: NavMenu[] = [
         icon: 'i-lucide-file-text',
         link: '/radicacion',
         permission: 'radicacion_ver',
+        module: 'creditos',
       },
       {
         title: 'Documentación',
         icon: 'i-lucide-folder-archive',
         link: '/documentacion',
         permission: 'documentacion_ver',
+        module: 'creditos',
       },
       {
         title: 'Explorador de documentos',
         icon: 'i-lucide-folders',
         link: '/documentacion/explorador',
         permission: 'documentacion_ver',
+        modules: ['creditos', 'gestion_documental'],
       },
       {
         title: 'Solicitantes',
         icon: 'i-lucide-user-check',
         link: '/solicitantes',
         permission: 'solicitantes_ver',
+        module: 'creditos',
       },
     ],
   },
@@ -224,6 +234,7 @@ export const navMenu: NavMenu[] = [
       {
         title: 'Estructura',
         icon: 'i-lucide-file-text',
+        module: 'gestion_documental',
         permission: 'estructura_org_ver',
         children: [
           {
@@ -281,6 +292,7 @@ export const navMenu: NavMenu[] = [
       {
         title: 'TRD y archivo',
         icon: 'i-lucide-archive',
+        module: 'gestion_documental',
         anyPermission: ['trd_catalogo_ver', 'trd_tablas_ver', 'expedientes_tipos_configurar'],
         children: [
           {
@@ -354,29 +366,34 @@ export const navMenu: NavMenu[] = [
             icon: 'i-lucide-layout-template',
             link: '/parametrizacion/plantillas',
             permission: 'plantillas_ver',
+            module: 'creditos',
           },
           {
             title: 'Estructura',
             icon: 'i-lucide-building-2',
             link: '/parametrizacion/estructura',
             anyPermission: ['plantillas_ver', 'estructura_org_ver'],
+            module: 'gestion_documental',
           },
           {
             title: 'Radicación',
             icon: 'i-lucide-file-text',
             link: '/parametrizacion/radicacion',
             permission: 'plantillas_ver',
+            module: 'creditos',
           },
           {
             title: 'Plantilla Score',
             icon: 'i-lucide-file-spreadsheet',
             link: '/parametrizacion/plantilla-score',
             permission: 'plantilla_score_ver',
+            module: 'creditos',
           },
           {
             title: 'Ventanilla única',
             icon: 'i-lucide-inbox',
             link: '/parametrizacion/ventanilla-unica',
+            module: 'gestion_documental',
             anyPermission: [
               'ventanilla_configurar',
               'plantillas_ver',
@@ -389,12 +406,14 @@ export const navMenu: NavMenu[] = [
             icon: 'i-lucide-megaphone',
             link: '/parametrizacion/comunicados',
             permission: 'comunicados_parametrizar',
+            module: 'gestion_documental',
           },
           {
             title: 'Biblioteca institucional',
             icon: 'i-lucide-library',
             link: '/parametrizacion/biblioteca-institucional',
             anyPermission: ['plantillas_ver', 'expedientes_biblioteca_ver'],
+            module: 'gestion_documental',
           },
         ],
       },

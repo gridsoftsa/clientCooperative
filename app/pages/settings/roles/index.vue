@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import type { Role, PaginatedRoles } from '~/types/role'
 import { formatPermissionDisplayName } from '~/constants/permission-labels'
 import { getRoleDisplayLabel, roleShowsSystemBadge } from '~/constants/role-labels'
+import { APPLICATION_DOMAIN_LABELS, type ProductModule } from '~/constants/application-domains'
 
 definePageMeta({
   layout: 'default',
@@ -162,6 +163,7 @@ watch(searchQuery, () => {
                 <TableRow>
                   <TableHead>ID</TableHead>
                   <TableHead>Nombre</TableHead>
+                  <TableHead>Módulos</TableHead>
                   <TableHead>Permisos</TableHead>
                   <TableHead>Fecha de Creación</TableHead>
                   <TableHead class="text-right">Acciones</TableHead>
@@ -174,6 +176,20 @@ watch(searchQuery, () => {
                     <div class="flex items-center gap-2">
                       <span class="font-medium">{{ getRoleDisplayLabel(role.name) }}</span>
                       <Badge v-if="roleShowsSystemBadge(role.name)" variant="default">Sistema</Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div class="flex flex-wrap gap-1">
+                      <Badge
+                        v-for="module in (role.enabled_modules ?? [])"
+                        :key="module"
+                        variant="secondary"
+                      >
+                        {{ APPLICATION_DOMAIN_LABELS[module as ProductModule] ?? module }}
+                      </Badge>
+                      <span v-if="!(role.enabled_modules ?? []).length" class="text-sm text-muted-foreground">
+                        Sin módulos
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell>

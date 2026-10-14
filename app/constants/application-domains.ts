@@ -41,6 +41,22 @@ export const PERMISSION_CATEGORY_APPLICATION_DOMAIN: Record<string, ApplicationD
   estructura: 'gestion_documental',
   grupos: 'gestion_documental',
   suplencias: 'gestion_documental',
+  documentacion: 'creditos',
+}
+
+export type ProductModule = Exclude<ApplicationDomain, 'sistema'>
+
+export function permissionDomainsForEnabledModules(
+  enabledModules: ProductModule[],
+  manageableDomains: ApplicationDomain[] | null,
+): ApplicationDomain[] {
+  const selected: ApplicationDomain[] = [...enabledModules, 'sistema']
+
+  if (manageableDomains === null) {
+    return selected
+  }
+
+  return selected.filter(domain => manageableDomains.includes(domain))
 }
 
 export function getPermissionApplicationDomain(categoryKey: string): ApplicationDomain {

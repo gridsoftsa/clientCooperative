@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { Permission, RoleTemplate } from '~/types/role'
+import {
+  permissionDomainsForEnabledModules,
+  type ProductModule,
+} from '~/constants/application-domains'
 
 definePageMeta({
   layout: 'default',
@@ -31,6 +35,7 @@ function goBack() {
 const formData = ref({
   name: '',
   permissions: [] as string[],
+  enabledModules: ['creditos', 'gestion_documental'] as ProductModule[],
 })
 
 const permissions = ref<Permission[]>([])
@@ -40,7 +45,27 @@ const loading = ref(false)
 const saving = ref(false)
 const { manageableDomains } = useRoleAssignmentScope()
 
-const visiblePermissionDomains = computed(() => manageableDomains.value)
+const allowedProductModules = computed((): ProductModule[] | null => {
+  const manageable = manageableDomains.value
+  if (manageable === null) {
+    return null
+  }
+
+  return manageable.filter((domain): domain is ProductModule => domain !== 'sistema')
+})
+
+const visiblePermissionDomains = computed(() =>
+  permissionDomainsForEnabledModules(formData.value.enabledModules, manageableDomains.value),
+)
+
+watch(allowedProductModules, (allowed) => {
+  if (!allowed) {
+    return
+  }
+
+  const next = formData.value.enabledModules.filter(module => allowed.includes(module))
+  formData.value.enabledModules = next.length > 0 ? next : [...allowed]
+}, { immediate: true })
 
 const selectedTemplateDescription = computed(() => {
   if (selectedTemplateKey.value === '__none__') {
@@ -94,7 +119,11 @@ const handleSubmit = async () => {
   try {
     const res = await $api<{ data: { name: string } }>('/roles', {
       method: 'POST',
-      body: { name: formData.value.name, permissions: formData.value.permissions },
+      body: {
+        name: formData.value.name,
+        permissions: formData.value.permissions,
+        enabled_modules: formData.value.enabledModules,
+      },
     })
     toast.success('Rol creado correctamente')
     if (returnTo.value) {
@@ -193,11 +222,16 @@ onMounted(() => fetchPermissionsAndTemplates())
             </CardContent>
           </Card>
 
+          <SettingsRoleModulesCard
+            v-model="formData.enabledModules"
+            :allowed-modules="allowedProductModules"
+          />
+
           <Card>
             <CardHeader>
               <CardTitle>Permisos</CardTitle>
               <CardDescription>
-                Busca por nombre o módulo (usuarios, radicación, reportes…). Cada permiso muestra su nombre legible y el identificador técnico.
+                Agrupados por módulo. Solo aparecen los permisos de los módulos activos y los de sistema.
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -4,6 +4,8 @@ declare module '#app' {
   interface PageMeta {
     /** Requiere todos estos permisos (AND). */
     permissionsAll?: string | string[]
+    /** Requiere todos estos módulos de producto activos. */
+    modules?: Array<'creditos' | 'gestion_documental'>
   }
 }
 

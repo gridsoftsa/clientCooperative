@@ -14,6 +14,10 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
+const { hasAllModules } = usePermissions()
+const canOpenDocumentExplorer = computed(() =>
+  hasAllModules(['creditos', 'gestion_documental']),
+)
 
 const rows = ref<DocumentationVaultListRow[]>([])
 const loading = ref(false)
@@ -187,7 +191,7 @@ onUnmounted(() => {
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
-        <Button variant="outline" as-child>
+        <Button v-if="canOpenDocumentExplorer" variant="outline" as-child>
           <NuxtLink to="/documentacion/explorador">
             <Icon name="i-lucide-folders" class="mr-2 h-4 w-4" />
             Explorador de documentos

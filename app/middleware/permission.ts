@@ -32,7 +32,7 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   }
 
   const { user, fetchUser } = useAuth()
-  const { hasAnyPermission, hasAllPermissions } = usePermissions()
+  const { hasAnyPermission, hasAllPermissions, hasAllModules } = usePermissions()
 
   // Asegurarse de que el usuario esté cargado antes de verificar permisos
   // El middleware auth.global debería haberlo cargado, pero por si acaso
@@ -51,6 +51,14 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
       return navigateTo('/login')
     }
     return
+  }
+
+  const requiredModules = to.meta.modules
+  if (requiredModules?.length && !hasAllModules(requiredModules)) {
+    if (to.path === '/unauthorized') {
+      return
+    }
+    return navigateTo('/unauthorized')
   }
 
   /** Todos los permisos requeridos (AND). Útil p. ej. settings + plantillas. */

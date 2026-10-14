@@ -2,6 +2,10 @@
 import { useDebounceFn } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import type { Role, Permission } from '~/types/role'
+import {
+  permissionDomainsForEnabledModules,
+  type ProductModule,
+} from '~/constants/application-domains'
 
 definePageMeta({
   layout: 'default',
@@ -20,6 +24,7 @@ const roleId = route.params.id as string
 const formData = ref({
   name: '',
   permissions: [] as string[],
+  enabledModules: ['creditos', 'gestion_documental'] as ProductModule[],
 })
 
 const role = ref<Role | null>(null)
@@ -30,7 +35,20 @@ const savingPermissions = ref(false)
 /** Evita PUT al hidratar el rol desde el servidor. */
 const skipPermissionAutoSave = ref(true)
 
-const visiblePermissionDomains = computed(() => manageableDomains.value)
+const allowedProductModules = computed((): ProductModule[] | null => {
+  const manageable = manageableDomains.value
+  if (manageable === null) {
+    return null
+  }
+
+  return manageable.filter((domain): domain is ProductModule => domain !== 'sistema')
+})
+
+const modulesLocked = computed(() => role.value?.name === 'super_admin')
+
+const visiblePermissionDomains = computed(() =>
+  permissionDomainsForEnabledModules(formData.value.enabledModules, manageableDomains.value),
+)
 
 const debouncedPersistPermissions = useDebounceFn(async () => {
   if (skipPermissionAutoSave.value || !role.value) {
@@ -43,7 +61,11 @@ const debouncedPersistPermissions = useDebounceFn(async () => {
   try {
     await $api(`/roles/${roleId}`, {
       method: 'PUT',
-      body: { name: formData.value.name, permissions: formData.value.permissions },
+      body: {
+        name: formData.value.name,
+        permissions: formData.value.permissions,
+        enabled_modules: formData.value.enabledModules,
+      },
     })
     await refetchUserSilently()
     toast.success('Permisos guardados', {
@@ -60,12 +82,22 @@ const debouncedPersistPermissions = useDebounceFn(async () => {
 }, 450)
 
 watch(
-  () => formData.value.permissions,
+  () => [formData.value.permissions, formData.value.enabledModules] as const,
   () => {
     debouncedPersistPermissions()
   },
   { deep: true },
 )
+
+function normalizeEnabledModules(raw: unknown): ProductModule[] {
+  if (!Array.isArray(raw)) {
+    return ['creditos', 'gestion_documental']
+  }
+
+  return raw.filter((module): module is ProductModule =>
+    module === 'creditos' || module === 'gestion_documental',
+  )
+}
 
 function normalizePermissionNames(raw: unknown): string[] {
   if (!Array.isArray(raw)) {
@@ -86,6 +118,7 @@ const fetchRole = async () => {
     formData.value = {
       name: response.data.name,
       permissions: permissionNames,
+      enabledModules: normalizeEnabledModules(response.data.enabled_modules),
     }
   } catch (error) {
     console.error('Error fetching role:', error)
@@ -115,7 +148,11 @@ const handleSubmit = async () => {
   try {
     await $api(`/roles/${roleId}`, {
       method: 'PUT',
-      body: { name: formData.value.name, permissions: formData.value.permissions },
+      body: {
+        name: formData.value.name,
+        permissions: formData.value.permissions,
+        enabled_modules: formData.value.enabledModules,
+      },
     })
     await refetchUserSilently()
     toast.success('Rol actualizado correctamente')
@@ -185,12 +222,18 @@ onMounted(async () => {
             </CardContent>
           </Card>
 
+          <SettingsRoleModulesCard
+            v-model="formData.enabledModules"
+            :allowed-modules="allowedProductModules"
+            :locked="modulesLocked"
+          />
+
           <Card>
             <CardHeader class="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
               <div class="min-w-0 flex-1">
                 <CardTitle>Permisos</CardTitle>
                 <CardDescription>
-                  Busca por nombre o módulo. Los cambios se guardan automáticamente al marcar o desmarcar.
+                  Agrupados por módulo. Al activar o desactivar un módulo, o al marcar permisos, el cambio se guarda solo.
                 </CardDescription>
               </div>
               <span

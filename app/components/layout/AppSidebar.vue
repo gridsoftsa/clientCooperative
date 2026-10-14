@@ -22,7 +22,7 @@ const teams = computed(() => [
 const { sidebar } = useAppSettings()
 const { searchQuery } = provideSidebarNavAccordion()
 const { user: authUser } = useAuth()
-const { hasRole, hasAnyRole, hasPermission, hasAnyPermission, isAdmin } = usePermissions()
+const { hasRole, hasAnyRole, hasPermission, hasAnyPermission, hasModule, hasAllModules, isAdmin } = usePermissions()
 const {
   creditArchivalLinkEnabled,
   creditArchivalLinkLoaded,
@@ -44,7 +44,15 @@ const user = computed(() => ({
 function canAccessItem(item: NavLink | NavGroup): boolean {
   // Durante SSR o si no hay usuario autenticado, solo mostrar elementos públicos
   if (import.meta.server || !authUser.value) {
-    return !item.permission && !item.role && !item.adminOnly
+    return !item.permission && !item.role && !item.adminOnly && !item.module && !item.modules?.length
+  }
+
+  if (item.module && !hasModule(item.module)) {
+    return false
+  }
+
+  if (item.modules?.length && !hasAllModules(item.modules)) {
+    return false
   }
 
   // adminOnly: solo administradores pueden ver
@@ -100,7 +108,7 @@ const filteredNavMenu = computed(() => {
   if (import.meta.server || !authUser.value) {
     return navMenu.map(section => ({
       ...section,
-      items: section.items.filter(item => !('permission' in item && item.permission) && !('role' in item && item.role) && !('adminOnly' in item && item.adminOnly))
+      items: section.items.filter(item => !('permission' in item && item.permission) && !('role' in item && item.role) && !('adminOnly' in item && item.adminOnly) && !('module' in item && item.module) && !('modules' in item && item.modules?.length))
     })).filter(section => section.items.length > 0)
   }
 

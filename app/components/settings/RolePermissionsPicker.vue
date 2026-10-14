@@ -144,6 +144,16 @@ const activeDomainHasResults = computed(() =>
   visibleCategoryKeysForDomain(activeDomainTab.value).length > 0,
 )
 
+watch(visibleDomainTabs, (tabs) => {
+  if (tabs.includes(activeDomainTab.value)) {
+    return
+  }
+
+  if (tabs[0]) {
+    activeDomainTab.value = tabs[0]
+  }
+}, { immediate: true })
+
 watch(hasSearchQuery, (searching) => {
   if (!searching) {
     return

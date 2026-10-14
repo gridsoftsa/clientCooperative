@@ -18,5 +18,6 @@ export interface AuthUser {
   sucursal?: { id: number; name: string; code: string | null; is_active?: boolean; is_main?: boolean } | null
   roles?: string[]
   permissions?: string[]
+  enabled_modules?: Array<'creditos' | 'gestion_documental'>
   admin_application_domains?: string[]
 }

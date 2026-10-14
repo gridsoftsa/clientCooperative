@@ -6,6 +6,7 @@ definePageMeta({
   layout: 'default',
   middleware: 'permission',
   permissions: 'documentacion_ver',
+  modules: ['creditos', 'gestion_documental'],
 })
 
 const archivalApi = useArchivalFileApi()
