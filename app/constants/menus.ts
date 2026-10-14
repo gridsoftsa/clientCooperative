@@ -205,6 +205,12 @@ export const navMenu: NavMenu[] = [
         permission: 'documentacion_ver',
       },
       {
+        title: 'Explorador de documentos',
+        icon: 'i-lucide-folders',
+        link: '/documentacion/explorador',
+        permission: 'documentacion_ver',
+      },
+      {
         title: 'Solicitantes',
         icon: 'i-lucide-user-check',
         link: '/solicitantes',

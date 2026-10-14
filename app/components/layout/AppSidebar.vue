@@ -23,6 +23,15 @@ const { sidebar } = useAppSettings()
 const { searchQuery } = provideSidebarNavAccordion()
 const { user: authUser } = useAuth()
 const { hasRole, hasAnyRole, hasPermission, hasAnyPermission, isAdmin } = usePermissions()
+const {
+  creditArchivalLinkEnabled,
+  creditArchivalLinkLoaded,
+  refreshCreditArchivalLink,
+} = useCreditArchivalLink()
+
+onMounted(() => {
+  void refreshCreditArchivalLink()
+})
 
 // Use authenticated user or fallback
 const user = computed(() => ({
@@ -76,6 +85,10 @@ function canAccessItem(item: NavLink | NavGroup): boolean {
     if (!hasAnyRole(item.anyRole)) {
       return false
     }
+  }
+
+  if ('requiresCreditArchivalLink' in item && item.requiresCreditArchivalLink) {
+    return creditArchivalLinkLoaded.value && creditArchivalLinkEnabled.value
   }
 
   return true

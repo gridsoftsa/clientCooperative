@@ -23,9 +23,13 @@ const props = withDefaults(defineProps<{
   orgUnitId: number
   loading?: boolean
   allowUpload?: boolean
+  navTitle?: string
+  emptyTreeMessage?: string
 }>(), {
   loading: false,
   allowUpload: true,
+  navTitle: 'Carpetas TRD',
+  emptyTreeMessage: 'Seleccione un área para consultar su documentación.',
 })
 
 const emit = defineEmits<{
@@ -53,7 +57,10 @@ const navCollapsed = ref(false)
 const folderExpansion = ref<ArchivalAreaFolderExpansion>('default')
 const folderExpansionTick = ref(0)
 
-const canDownload = computed(() => hasPermission('expedientes_documentos_descargar'))
+const canDownload = computed(() =>
+  hasPermission('expedientes_documentos_descargar') || hasPermission('documentacion_ver'),
+)
+const canOpenExpediente = computed(() => hasPermission('expedientes_ver'))
 
 const currentNode = computed(() => {
   if (!props.tree) {
@@ -235,7 +242,7 @@ function formatBytes(size?: number): string {
     </div>
 
     <div v-else-if="!tree" class="flex min-h-[28rem] items-center justify-center text-sm text-muted-foreground">
-      Seleccione un área para consultar su documentación.
+      {{ emptyTreeMessage }}
     </div>
 
     <div
@@ -251,8 +258,8 @@ function formatBytes(size?: number): string {
           variant="outline"
           size="icon"
           class="size-12"
-          title="Mostrar carpetas TRD"
-          aria-label="Mostrar carpetas TRD"
+          :title="`Mostrar ${navTitle.toLowerCase()}`"
+          :aria-label="`Mostrar ${navTitle.toLowerCase()}`"
           @click="navCollapsed = false"
         >
           <Icon name="i-lucide-panel-left-open" class="size-6" />
@@ -260,7 +267,7 @@ function formatBytes(size?: number): string {
         <span
           class="mt-4 origin-center rotate-180 text-xs font-semibold uppercase tracking-wide text-muted-foreground [writing-mode:vertical-rl]"
         >
-          Carpetas TRD
+          {{ navTitle }}
         </span>
       </aside>
 
@@ -282,9 +289,9 @@ function formatBytes(size?: number): string {
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
                 <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Carpetas TRD
+                  {{ navTitle }}
                 </p>
-                <p class="mt-1 truncate text-sm font-medium" :title="tree.name">
+                <p class="mt-1 text-sm font-medium leading-snug break-words">
                   {{ tree.name }}
                 </p>
               </div>
@@ -541,7 +548,7 @@ function formatBytes(size?: number): string {
 
                     <div class="mt-3 flex flex-wrap items-center gap-1.5">
                       <Button
-                        v-if="document.archival_file_id"
+                        v-if="canOpenExpediente && document.archival_file_id"
                         variant="outline"
                         size="sm"
                         @click.stop="openExpediente(document.archival_file_id)"
@@ -608,7 +615,12 @@ function formatBytes(size?: number): string {
                   {{ selectedDocument.name }}
                 </p>
               </div>
-              <Button variant="outline" size="sm" @click="openExpediente(selectedFileId)">
+              <Button
+                v-if="canOpenExpediente"
+                variant="outline"
+                size="sm"
+                @click="openExpediente(selectedFileId)"
+              >
                 Abrir expediente completo
               </Button>
             </div>

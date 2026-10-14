@@ -112,15 +112,15 @@ function toggleExpanded(event: Event) {
 
       <button
         type="button"
-        class="flex min-w-0 flex-1 items-center gap-2 text-left"
+        class="flex min-w-0 flex-1 items-start gap-2 text-left"
         @click="handleSelect"
       >
         <Icon
           :name="archivalAreaNodeIcon(node, expanded && isFolder)"
-          class="size-4 shrink-0"
+          class="mt-0.5 size-4 shrink-0"
           :class="hasOverdueTransfer ? 'text-rose-600 dark:text-rose-400' : 'text-muted-foreground'"
         />
-        <span class="truncate">{{ node.name }}</span>
+        <span class="min-w-0 whitespace-normal break-words leading-snug">{{ node.name }}</span>
       </button>
     </div>
 

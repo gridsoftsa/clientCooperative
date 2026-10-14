@@ -258,6 +258,18 @@ export function useArchivalFileApi() {
     return res.data
   }
 
+  async function fetchCreditDocumentExplorer(search?: string) {
+    const query: Record<string, string> = {}
+    const trimmed = search?.trim()
+    if (trimmed) {
+      query.search = trimmed
+    }
+
+    const res = await api<{ data: ArchivalFileTreeNode }>('/documentation/explorer', { query })
+
+    return res.data
+  }
+
   async function fetchConsolidationMeta() {
     const res = await api<{ data: import('~/types/archival-file').ArchivalFileConsolidationMeta }>(
       '/archival-files/meta/consolidation',
@@ -531,6 +543,7 @@ export function useArchivalFileApi() {
     deleteFileType,
     syncRequiredDocuments,
     fetchAreaRepository,
+    fetchCreditDocumentExplorer,
     fetchConsolidationMeta,
     fetchEvents,
     fetchGlobalEvents,

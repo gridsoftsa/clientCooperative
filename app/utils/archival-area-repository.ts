@@ -7,6 +7,7 @@ const FOLDER_TYPES = new Set<ArchivalFileTreeNode['type']>([
   'document_type',
   'folder',
   'filing',
+  'applicant',
 ])
 
 const DOCUMENT_TYPES = new Set<ArchivalFileTreeNode['type']>([
@@ -45,6 +46,10 @@ export function canOpenArchivalAreaDocument(node: ArchivalFileTreeNode): boolean
 }
 
 export function archivalAreaNodeIcon(node: ArchivalFileTreeNode, open = false): string {
+  if (node.type === 'applicant') {
+    return 'i-lucide-user-round'
+  }
+
   if (node.type === 'filing') {
     return 'i-lucide-inbox'
   }
@@ -76,6 +81,8 @@ export function archivalAreaNodeTypeLabel(node: ArchivalFileTreeNode): string {
       return 'Tipo documental'
     case 'filing':
       return node.id.startsWith('credit-') ? 'Crédito' : 'Radicado'
+    case 'applicant':
+      return 'Solicitante'
     case 'folder':
       return 'Carpeta'
     case 'document':

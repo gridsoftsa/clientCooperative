@@ -186,12 +186,20 @@ onUnmounted(() => {
           Consulte el expediente documental de cada radicación: PDFs generados, checklist por actividad, FNG, asegurabilidad, ente aprobador y demás adjuntos del ciclo de vida.
         </p>
       </div>
-      <Button variant="outline" as-child>
-        <NuxtLink to="/radicacion">
-          <Icon name="i-lucide-file-text" class="mr-2 h-4 w-4" />
-          Ir a radicación
-        </NuxtLink>
-      </Button>
+      <div class="flex flex-wrap gap-2">
+        <Button variant="outline" as-child>
+          <NuxtLink to="/documentacion/explorador">
+            <Icon name="i-lucide-folders" class="mr-2 h-4 w-4" />
+            Explorador de documentos
+          </NuxtLink>
+        </Button>
+        <Button variant="outline" as-child>
+          <NuxtLink to="/radicacion">
+            <Icon name="i-lucide-file-text" class="mr-2 h-4 w-4" />
+            Ir a radicación
+          </NuxtLink>
+        </Button>
+      </div>
     </div>
 
     <Card>

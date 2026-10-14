@@ -218,7 +218,7 @@ export interface ArchivalFileSourceFiling {
 
 export interface ArchivalFileTreeNode {
   id: string
-  type: 'file' | 'child_file' | 'folder' | 'document' | 'document_reference' | 'area' | 'series' | 'subseries' | 'document_type' | 'filing'
+  type: 'file' | 'child_file' | 'folder' | 'document' | 'document_reference' | 'area' | 'series' | 'subseries' | 'document_type' | 'filing' | 'applicant'
   name: string
   children: ArchivalFileTreeNode[]
   archival_file_id?: number

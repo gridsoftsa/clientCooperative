@@ -8,6 +8,7 @@ export interface NavLink {
   role?: string
   anyRole?: string[]
   adminOnly?: boolean
+  requiresCreditArchivalLink?: boolean
 }
 
 export interface NavSectionTitle {
