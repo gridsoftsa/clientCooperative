@@ -93,6 +93,7 @@ export const navMenu: NavMenu[] = [
           'sucursales_ver',
           'roles_ver',
           'auditoria_ver',
+          'manual_ver',
         ],
         children: [
           {
@@ -148,6 +149,12 @@ export const navMenu: NavMenu[] = [
             icon: 'i-lucide-clipboard-list',
             link: '/settings/audit',
             permission: 'auditoria_ver',
+          },
+          {
+            title: 'Manual',
+            icon: 'i-lucide-book-open',
+            link: '/settings/manual',
+            permission: 'manual_ver',
           },
         ],
       },

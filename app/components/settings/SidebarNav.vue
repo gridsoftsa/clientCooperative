@@ -21,6 +21,7 @@ const sections: { heading: string; items: NavItem[] }[] = [
       { label: 'Sucursales', href: '/settings/sucursales', permission: 'sucursales_ver' },
       { label: 'Roles', href: '/settings/roles', permission: 'roles_ver' },
       { label: 'Auditoría', href: '/settings/audit', permission: 'auditoria_ver' },
+      { label: 'Manual', href: '/settings/manual', permission: 'manual_ver' },
     ],
   },
 ]
