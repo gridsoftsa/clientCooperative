@@ -37,6 +37,25 @@ async function fetchActivities() {
   }
 }
 
+function changePage(page: number) {
+  pagination.value.current_page = page
+  fetchActivities()
+}
+
+function formatWhen(value: string | null | undefined): string {
+  if (!value) {
+    return ''
+  }
+  return new Date(value).toLocaleString('es-CO', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
+function visibleChanges(activity: { changes?: Array<{ field: string, old: string | null, new: string | null }> }) {
+  return (activity.changes ?? []).filter(change => change.old !== change.new)
+}
+
 onMounted(() => {
   fetchActivities()
 })
@@ -45,54 +64,89 @@ onMounted(() => {
 <template>
   <SettingsLayout :wide="true">
     <div class="w-full flex flex-col gap-4">
-    <div class="flex flex-wrap items-center justify-between gap-2">
-      <h2 class="text-2xl font-bold tracking-tight">
-        Auditoría del Sistema
-      </h2>
-      <div class="flex items-center gap-2">
-        <Button variant="outline" size="sm" @click="fetchActivities" :disabled="loading">
-          <Icon name="i-lucide-refresh-cw" :class="['mr-2 h-4 w-4', loading && 'animate-spin']" />
-          Actualizar
-        </Button>
+    <div class="flex flex-wrap items-end justify-between gap-2">
+      <div class="space-y-1">
+        <h2 class="text-2xl font-bold tracking-tight">
+          Auditoría
+        </h2>
+        <p class="max-w-2xl text-sm text-muted-foreground">
+          Cada fila dice quién hizo el cambio, a qué hora y qué quedó distinto. La contraseña nunca se muestra.
+        </p>
       </div>
+      <Button variant="outline" size="sm" :disabled="loading" @click="fetchActivities">
+        <Icon name="i-lucide-refresh-cw" :class="['mr-2 h-4 w-4', loading && 'animate-spin']" />
+        Actualizar
+      </Button>
     </div>
 
     <Card>
-      <CardHeader>
-        <CardTitle>Registro de Actividades</CardTitle>
-        <CardDescription>
-          Historial completo de acciones realizadas en el sistema
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+      <CardContent class="pt-6">
         <div v-if="loading" class="flex items-center justify-center py-8">
           <Icon name="i-lucide-loader-2" class="h-6 w-6 animate-spin" />
         </div>
-        <div v-else-if="activities.length === 0" class="text-center py-8 text-muted-foreground">
-          No hay actividades registradas
+        <div v-else-if="activities.length === 0" class="py-8 text-center text-muted-foreground">
+          Todavía no hay cambios registrados.
         </div>
-        <div v-else class="space-y-4">
-          <div
+        <div v-else class="space-y-3">
+          <article
             v-for="activity in activities"
             :key="activity.id"
-            class="flex items-start gap-4 p-4 border rounded-lg"
+            class="rounded-lg border p-4"
           >
-            <div class="flex-1">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="font-medium">{{ activity.description }}</span>
-                <Badge variant="outline" class="text-xs">
-                  {{ activity.event }}
-                </Badge>
-              </div>
-              <div class="text-sm text-muted-foreground">
-                <span v-if="activity.causer">
-                  Por: {{ activity.causer.name }} ({{ activity.causer.email }})
-                </span>
-                <span v-else>Por: Sistema</span>
-              </div>
-              <div class="text-xs text-muted-foreground mt-1">
-                {{ new Date(activity.created_at).toLocaleString() }}
-              </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <Badge variant="outline">
+                {{ activity.event_label || 'Cambio' }}
+              </Badge>
+              <span class="text-xs text-muted-foreground">
+                {{ formatWhen(activity.created_at) }}
+              </span>
+            </div>
+            <p class="mt-2 text-sm leading-relaxed">
+              {{ activity.summary || activity.description }}
+            </p>
+            <p class="mt-1 text-xs text-muted-foreground">
+              {{ activity.causer ? `${activity.causer.name} · ${activity.causer.email}` : 'Lo hizo el sistema' }}
+            </p>
+            <div v-if="visibleChanges(activity).length" class="mt-3 overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b text-left text-xs text-muted-foreground">
+                    <th class="py-1 pr-3 font-medium">Dato</th>
+                    <th class="py-1 pr-3 font-medium">Antes</th>
+                    <th class="py-1 font-medium">Después</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="change in visibleChanges(activity)" :key="change.field" class="border-b last:border-0">
+                    <td class="py-1.5 pr-3 align-top font-medium">{{ change.label }}</td>
+                    <td class="whitespace-pre-wrap py-1.5 pr-3 align-top text-muted-foreground">{{ change.old || 'Vacío' }}</td>
+                    <td class="whitespace-pre-wrap py-1.5 align-top">{{ change.new || 'Vacío' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+          <div v-if="pagination.last_page > 1" class="flex items-center justify-between gap-3 pt-2">
+            <p class="text-sm text-muted-foreground">
+              {{ pagination.total }} cambios
+            </p>
+            <div class="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                :disabled="pagination.current_page === 1 || loading"
+                @click="changePage(pagination.current_page - 1)"
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                :disabled="pagination.current_page === pagination.last_page || loading"
+                @click="changePage(pagination.current_page + 1)"
+              >
+                Siguiente
+              </Button>
             </div>
           </div>
         </div>
