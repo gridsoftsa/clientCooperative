@@ -5,15 +5,24 @@ definePageMeta({
   permissions: 'manual_ver',
 })
 
+type ManualTable = {
+  columns: string[]
+  rows: string[][]
+}
+
 type ManualSection = {
   heading: string
   paragraphs: string[]
   items: string[]
+  note: string | null
+  table: ManualTable | null
 }
 
 type ManualChapter = {
   id: string
+  number: string
   title: string
+  lead: string
   sections: ManualSection[]
 }
 
@@ -30,6 +39,7 @@ const document = ref<ManualDocument | null>(null)
 const loading = ref(true)
 const exporting = ref(false)
 const error = ref('')
+const activeChapterId = ref('')
 
 async function loadManual() {
   loading.value = true
@@ -37,6 +47,7 @@ async function loadManual() {
   try {
     const res = await $api<{ data: ManualDocument }>('/manual')
     document.value = res.data
+    activeChapterId.value = res.data.chapters[0]?.id ?? ''
   }
   catch {
     error.value = 'No se pudo cargar el manual.'
@@ -60,6 +71,10 @@ async function exportPdf() {
   }
 }
 
+function selectChapter(id: string) {
+  activeChapterId.value = id
+}
+
 onMounted(() => {
   loadManual()
 })
@@ -67,9 +82,9 @@ onMounted(() => {
 
 <template>
   <SettingsLayout :wide="true">
-    <div class="flex w-full flex-col gap-6">
+    <div class="flex w-full min-w-0 flex-col gap-6">
       <div class="flex flex-wrap items-end justify-between gap-3">
-        <div class="space-y-1">
+        <div class="min-w-0 space-y-1">
           <h2 class="text-2xl font-bold tracking-tight">
             {{ document?.title || 'Manual de operación' }}
           </h2>
@@ -77,7 +92,7 @@ onMounted(() => {
             {{ document?.subtitle || 'Qué hace cada módulo, quién lo usa y cómo recorre un crédito.' }}
           </p>
         </div>
-        <Button :disabled="loading || exporting || !document" @click="exportPdf">
+        <Button class="shrink-0" :disabled="loading || exporting || !document" @click="exportPdf">
           <Icon name="i-lucide-file-down" class="mr-2 h-4 w-4" />
           {{ exporting ? 'Generando PDF…' : 'Exportar PDF' }}
         </Button>
@@ -91,33 +106,43 @@ onMounted(() => {
         Cargando el manual…
       </p>
 
-      <div v-else-if="document" class="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        <nav class="lg:sticky lg:top-4 lg:self-start">
-          <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div v-else-if="document" class="grid min-w-0 items-start gap-6 lg:grid-cols-[15.5rem_minmax(0,1fr)]">
+        <nav class="rounded-lg border bg-card p-3 lg:sticky lg:top-20 lg:z-10 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:self-start">
+          <p class="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Capítulos
           </p>
-          <div class="flex flex-col gap-1">
+          <div class="flex flex-col gap-0.5">
             <a
               v-for="chapter in document.chapters"
               :key="chapter.id"
               :href="`#${chapter.id}`"
-              class="rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              class="rounded-md px-2 py-1.5 text-sm leading-snug hover:bg-muted hover:text-foreground"
+              :class="activeChapterId === chapter.id ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'"
+              @click="selectChapter(chapter.id)"
             >
-              {{ chapter.title }}
+              {{ chapter.number }}. {{ chapter.title }}
             </a>
           </div>
         </nav>
 
-        <div class="space-y-8">
+        <div class="min-w-0 space-y-8">
           <article
             v-for="chapter in document.chapters"
             :id="chapter.id"
             :key="chapter.id"
-            class="scroll-mt-4 space-y-4"
+            class="scroll-mt-6 space-y-4 border-b pb-8 last:border-b-0"
           >
-            <h3 class="text-xl font-semibold tracking-tight">
-              {{ chapter.title }}
-            </h3>
+            <div class="space-y-1">
+              <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Capítulo {{ chapter.number }}
+              </p>
+              <h3 class="text-xl font-semibold tracking-tight">
+                {{ chapter.title }}
+              </h3>
+              <p class="text-sm leading-relaxed text-muted-foreground">
+                {{ chapter.lead }}
+              </p>
+            </div>
             <section
               v-for="section in chapter.sections"
               :key="section.heading"
@@ -129,7 +154,7 @@ onMounted(() => {
               <p
                 v-for="(paragraph, index) in section.paragraphs"
                 :key="`${section.heading}-p-${index}`"
-                class="text-sm leading-relaxed text-foreground"
+                class="text-sm leading-relaxed"
               >
                 {{ paragraph }}
               </p>
@@ -138,6 +163,39 @@ onMounted(() => {
                   {{ item }}
                 </li>
               </ul>
+              <div v-if="section.table" class="overflow-x-auto rounded-md border">
+                <table class="w-full min-w-[36rem] border-collapse text-sm">
+                  <thead>
+                    <tr class="bg-muted/60">
+                      <th
+                        v-for="column in section.table.columns"
+                        :key="column"
+                        class="border-b px-3 py-2 text-left text-xs font-semibold"
+                      >
+                        {{ column }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="(row, rowIndex) in section.table.rows"
+                      :key="`${section.heading}-r-${rowIndex}`"
+                      class="align-top"
+                    >
+                      <td
+                        v-for="(cell, cellIndex) in row"
+                        :key="`${section.heading}-r-${rowIndex}-c-${cellIndex}`"
+                        class="border-b px-3 py-2 leading-relaxed"
+                      >
+                        {{ cell }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p v-if="section.note" class="rounded-md border border-amber-500/40 bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+                <span class="font-medium">Para tener en cuenta. </span>{{ section.note }}
+              </p>
             </section>
           </article>
         </div>
