@@ -258,9 +258,12 @@ const handleSubmit = async () => {
       status_change_reason: statusChangeReason.value.trim() || undefined,
       email: form.value.email,
       sucursal_id: form.value.sucursal_id || undefined,
-      org_staff_id: form.value.org_staff_id,
       allowed_sucursal_ids: form.value.allowed_sucursal_ids,
       roles: form.value.roles,
+    }
+
+    if (form.value.org_staff_id != null) {
+      body.org_staff_id = form.value.org_staff_id
     }
 
     if (showAdminApplicationDomains.value) {
@@ -287,7 +290,10 @@ const handleSubmit = async () => {
     router.push('/settings/users')
   } catch (error: any) {
     console.error('Error saving user:', error)
-    const message = error?.data?.message || error?.data?.errors?.email?.[0] || 'Error al actualizar el usuario'
+    const fieldErrors = error?.data?.errors
+      ? Object.values(error.data.errors as Record<string, string[]>).flat()
+      : []
+    const message = fieldErrors[0] || error?.data?.message || 'Error al actualizar el usuario'
     toast.error(message)
   } finally {
     saving.value = false
