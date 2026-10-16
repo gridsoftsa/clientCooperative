@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -109,7 +110,7 @@ const historyLoading = ref(true)
 const historyPagination = ref({
   current_page: 1,
   last_page: 1,
-  per_page: 15,
+  per_page: DEFAULT_LIST_PAGE_SIZE,
   total: 0,
 })
 const historyBlockFilter = ref<'all' | ImportBlock>('all')
@@ -292,6 +293,17 @@ async function loadHistory() {
   } finally {
     historyLoading.value = false
   }
+}
+
+function goToHistoryPage(page: number) {
+  historyPagination.value.current_page = page
+  void loadHistory()
+}
+
+function changeHistoryPerPage(size: number) {
+  historyPagination.value.per_page = size
+  historyPagination.value.current_page = 1
+  void loadHistory()
 }
 
 function clearHistoryFilters() {
@@ -612,32 +624,17 @@ onMounted(() => {
             </Table>
           </div>
 
-          <div
-            v-if="!historyLoading && historyPagination.last_page > 1"
-            class="flex flex-wrap items-center justify-between gap-2 border-t pt-4"
-          >
-            <p class="text-sm text-muted-foreground">
-              Página {{ historyPagination.current_page }} de {{ historyPagination.last_page }}
-            </p>
-            <div class="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                :disabled="historyPagination.current_page <= 1"
-                @click="historyPagination.current_page--; loadHistory()"
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                :disabled="historyPagination.current_page >= historyPagination.last_page"
-                @click="historyPagination.current_page++; loadHistory()"
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
+          <ListPaginationBar
+            v-if="historyPagination.total > 0"
+            :page="historyPagination.current_page"
+            :last-page="historyPagination.last_page"
+            :per-page="historyPagination.per_page"
+            :total="historyPagination.total"
+            item-label="importaciones"
+            :loading="historyLoading"
+            @update:page="goToHistoryPage"
+            @update:per-page="changeHistoryPerPage"
+          />
         </CardContent>
       </Card>
     </div>

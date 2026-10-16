@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import type { CommunicationItem, CommunicationTypeValue } from '~/types/communications'
 import { canPreviewDocumentInline } from '~/utils/document-preview'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -31,7 +32,7 @@ const sort = ref('recent')
 const page = ref(1)
 
 const feed = ref<CommunicationItem[]>([])
-const pagination = ref({ current_page: 1, last_page: 1, total: 0 })
+const pagination = ref({ current_page: 1, last_page: 1, total: 0, per_page: DEFAULT_LIST_PAGE_SIZE })
 const dashboard = ref<{
   stats: { birthdays_today: number, events_today: number, unread: number }
   birthdays_today: Array<{ id: number, name: string, org_unit?: string | null }>
@@ -173,7 +174,7 @@ async function loadAll() {
         type: selectedType.value || undefined,
         sort: sort.value,
         page: page.value,
-        per_page: 10,
+        per_page: pagination.value.per_page,
       }),
     ])
     dashboard.value = dash
@@ -182,6 +183,7 @@ async function loadAll() {
       current_page: list.current_page,
       last_page: list.last_page,
       total: list.total,
+      per_page: list.per_page ?? pagination.value.per_page,
     }
   }
   catch {
@@ -190,6 +192,17 @@ async function loadAll() {
   finally {
     loading.value = false
   }
+}
+
+function goToCommunicationsPage(nextPage: number) {
+  page.value = nextPage
+  void loadAll()
+}
+
+function changeCommunicationsPerPage(size: number) {
+  pagination.value.per_page = size
+  page.value = 1
+  void loadAll()
 }
 
 function selectType(type: string) {
@@ -465,17 +478,17 @@ watch(() => route.query.unread, (value) => {
           </Card>
         </div>
 
-        <div v-if="pagination.last_page > 1" class="flex items-center justify-center gap-2">
-          <Button variant="outline" size="sm" :disabled="page <= 1 || loading" @click="page--; loadAll()">
-            Anterior
-          </Button>
-          <span class="text-sm text-muted-foreground">
-            Página {{ pagination.current_page }} de {{ pagination.last_page }}
-          </span>
-          <Button variant="outline" size="sm" :disabled="page >= pagination.last_page || loading" @click="page++; loadAll()">
-            Siguiente
-          </Button>
-        </div>
+        <ListPaginationBar
+          v-if="pagination.total > 0"
+          :page="page"
+          :last-page="pagination.last_page"
+          :per-page="pagination.per_page"
+          :total="pagination.total"
+          item-label="comunicados"
+          :loading="loading"
+          @update:page="goToCommunicationsPage"
+          @update:per-page="changeCommunicationsPerPage"
+        />
       </div>
 
       <div class="space-y-4">

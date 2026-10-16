@@ -17,7 +17,7 @@ const props = defineProps<{
   home: InstitutionalLibraryHome | null
   listDocuments?: InstitutionalLibraryDocument[]
   listLoading?: boolean
-  listPagination?: { current_page: number, last_page: number, total: number }
+  listPagination?: { current_page: number, last_page: number, total: number, per_page?: number }
   viewMode?: 'portal' | 'list'
   search: string
   selectedOrgUnitId: string
@@ -35,6 +35,7 @@ const emit = defineEmits<{
   'open-section': [section: InstitutionalLibrarySection]
   'back-to-portal': []
   'list-page': [page: number]
+  'list-per-page': [size: number]
 }>()
 
 const archivalApi = useArchivalFileApi()
@@ -191,30 +192,17 @@ function applySearch() {
         />
       </div>
 
-      <div
-        v-if="listPagination && listPagination.last_page > 1"
-        class="flex items-center justify-center gap-2"
-      >
-        <Button
-          variant="outline"
-          size="sm"
-          :disabled="listPagination.current_page <= 1 || listLoading"
-          @click="emit('list-page', listPagination.current_page - 1)"
-        >
-          Anterior
-        </Button>
-        <span class="text-sm text-muted-foreground">
-          Página {{ listPagination.current_page }} de {{ listPagination.last_page }}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          :disabled="listPagination.current_page >= listPagination.last_page || listLoading"
-          @click="emit('list-page', listPagination.current_page + 1)"
-        >
-          Siguiente
-        </Button>
-      </div>
+      <ListPaginationBar
+        v-if="listPagination && listPagination.total > 0"
+        :page="listPagination.current_page"
+        :last-page="listPagination.last_page"
+        :per-page="listPagination.per_page ?? 10"
+        :total="listPagination.total"
+        item-label="documentos"
+        :loading="listLoading"
+        @update:page="emit('list-page', $event)"
+        @update:per-page="emit('list-per-page', $event)"
+      />
     </div>
 
     <template v-else>

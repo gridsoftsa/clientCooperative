@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 import { ORG_OFFICE_TYPE_OPTIONS } from '~/constants/org-structure'
 import type { OrgOffice } from '~/types/org-structure'
 
@@ -20,21 +21,43 @@ function officeTypeLabel(type: string): string {
 const offices = ref<OrgOffice[]>([])
 const loading = ref(false)
 const deactivatingId = ref<number | null>(null)
+const pagination = ref({
+  current_page: 1,
+  last_page: 1,
+  per_page: DEFAULT_LIST_PAGE_SIZE,
+  total: 0,
+})
 
 async function fetchOffices() {
   loading.value = true
   try {
-    const res = await $api<{ data: OrgOffice[]; meta: { per_page: number; total: number } }>(
+    const res = await $api<{
+      data: OrgOffice[]
+      meta: { current_page: number, last_page: number, per_page: number, total: number }
+    }>(
       '/organizational-structure/org-offices',
-      { query: { per_page: 200 } },
+      { query: { page: pagination.value.current_page, per_page: pagination.value.per_page } },
     )
     offices.value = res.data
+    pagination.value = res.meta
   } catch {
     toast.error('Error al cargar agencias')
     offices.value = []
+    pagination.value = { ...pagination.value, current_page: 1, last_page: 1, total: 0 }
   } finally {
     loading.value = false
   }
+}
+
+function goToPage(page: number) {
+  pagination.value.current_page = page
+  void fetchOffices()
+}
+
+function changePerPage(size: number) {
+  pagination.value.per_page = size
+  pagination.value.current_page = 1
+  void fetchOffices()
 }
 
 async function deactivateOffice(id: number) {
@@ -153,6 +176,17 @@ onMounted(() => {
               </TableBody>
             </Table>
           </div>
+          <ListPaginationBar
+            v-if="pagination.total > 0"
+            :page="pagination.current_page"
+            :last-page="pagination.last_page"
+            :per-page="pagination.per_page"
+            :total="pagination.total"
+            item-label="agencias"
+            :loading="loading"
+            @update:page="goToPage"
+            @update:per-page="changePerPage"
+          />
         </CardContent>
       </Card>
     </div>

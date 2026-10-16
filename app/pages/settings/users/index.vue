@@ -241,25 +241,24 @@ watch(searchQuery, () => {
             </Table>
           </div>
 
-          <!-- Paginación -->
           <div v-if="pagination.last_page > 1" class="flex items-center justify-between">
             <div class="text-sm text-muted-foreground">
-              Mostrando {{ ((pagination.current_page - 1) * pagination.per_page) + 1 }} a 
-              {{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} de 
+              Mostrando {{ ((pagination.current_page - 1) * pagination.per_page) + 1 }} a
+              {{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} de
               {{ pagination.total }} usuarios
             </div>
             <div class="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 :disabled="pagination.current_page === 1"
                 @click="handlePageChange(pagination.current_page - 1)"
               >
                 Anterior
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 :disabled="pagination.current_page === pagination.last_page"
                 @click="handlePageChange(pagination.current_page + 1)"
               >

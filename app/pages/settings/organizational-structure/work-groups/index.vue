@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -25,6 +26,12 @@ interface WorkGroupRow {
 
 const rows = ref<WorkGroupRow[]>([])
 const loading = ref(true)
+const pagination = ref({
+  current_page: 1,
+  last_page: 1,
+  per_page: DEFAULT_LIST_PAGE_SIZE,
+  total: 0,
+})
 
 function kindLabel(kind: string | null | undefined): string {
   if (!kind) {
@@ -36,10 +43,14 @@ function kindLabel(kind: string | null | undefined): string {
 async function load() {
   loading.value = true
   try {
-    const res = await $api<{ data: WorkGroupRow[] }>('/organizational-structure/org-work-groups', {
-      query: { per_page: 200 },
+    const res = await $api<{
+      data: WorkGroupRow[]
+      meta: { current_page: number, last_page: number, per_page: number, total: number }
+    }>('/organizational-structure/org-work-groups', {
+      query: { page: pagination.value.current_page, per_page: pagination.value.per_page },
     })
     rows.value = res.data
+    pagination.value = res.meta
   } catch {
     toast.error('No se pudieron cargar los grupos')
     rows.value = []
@@ -63,6 +74,17 @@ async function softDeleteRow(id: number) {
   } catch (e: any) {
     toast.error(e?.data?.message || 'No se pudo eliminar')
   }
+}
+
+function goToPage(page: number) {
+  pagination.value.current_page = page
+  void load()
+}
+
+function changePerPage(size: number) {
+  pagination.value.per_page = size
+  pagination.value.current_page = 1
+  void load()
 }
 
 onMounted(async () => {
@@ -169,6 +191,17 @@ onMounted(async () => {
               </TableBody>
             </Table>
           </div>
+          <ListPaginationBar
+            v-if="pagination.total > 0"
+            :page="pagination.current_page"
+            :last-page="pagination.last_page"
+            :per-page="pagination.per_page"
+            :total="pagination.total"
+            item-label="grupos"
+            :loading="loading"
+            @update:page="goToPage"
+            @update:per-page="changePerPage"
+          />
         </CardContent>
       </Card>
     </div>

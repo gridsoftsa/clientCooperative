@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import type { WorkflowBoardFlow, WorkflowTaskCard, WorkflowTaskCollaboratorRow } from '~/types/workflow'
 import WorkflowTypeFlowCards from '~/components/workflow/WorkflowTypeFlowCards.vue'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -17,7 +18,7 @@ const workflowApi = useWorkflowApi()
 const loading = ref(true)
 const tasks = ref<WorkflowTaskCard[]>([])
 const pendingCollaborations = ref<WorkflowTaskCollaboratorRow[]>([])
-const meta = ref({ current_page: 1, last_page: 1, per_page: 20, total: 0 })
+const meta = ref({ current_page: 1, last_page: 1, per_page: DEFAULT_LIST_PAGE_SIZE, total: 0 })
 const { scope, canViewTeam, canViewAllTasks } = useWorkflowInboxScope()
 const statusFilter = ref<'open' | 'overdue' | 'due_soon' | 'completed'>('open')
 const typeFlows = ref<WorkflowBoardFlow[]>([])
@@ -120,6 +121,11 @@ async function loadTasks(page = 1) {
   finally {
     loading.value = false
   }
+}
+
+function changeWorkflowPerPage(size: number) {
+  meta.value.per_page = size
+  void loadTasks(1)
 }
 
 function openManage(task: WorkflowTaskCard) {
@@ -386,27 +392,18 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div v-if="meta.last_page > 1" class="mt-4 flex justify-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            :disabled="meta.current_page <= 1"
-            @click="loadTasks(meta.current_page - 1)"
-          >
-            Anterior
-          </Button>
-          <span class="flex items-center text-sm text-muted-foreground">
-            {{ meta.current_page }} / {{ meta.last_page }}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            :disabled="meta.current_page >= meta.last_page"
-            @click="loadTasks(meta.current_page + 1)"
-          >
-            Siguiente
-          </Button>
-        </div>
+        <ListPaginationBar
+          v-if="meta.total > 0"
+          class="mt-4"
+          :page="meta.current_page"
+          :last-page="meta.last_page"
+          :per-page="meta.per_page"
+          :total="meta.total"
+          item-label="tareas"
+          :loading="loading"
+          @update:page="loadTasks"
+          @update:per-page="changeWorkflowPerPage"
+        />
       </CardContent>
     </Card>
   </div>

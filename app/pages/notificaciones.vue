@@ -7,12 +7,11 @@ import {
   inboxNotificationOpenAction,
   inboxNotificationRelativeTime,
 } from '~/utils/inbox-notification-labels'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
 })
-
-const PAGE_SIZE = 10
 
 const MODULE_OPTIONS = [
   { value: 'all', label: 'Todos los módulos' },
@@ -41,7 +40,7 @@ const statusFilter = ref('all')
 const searchQuery = ref('')
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
-const pagination = ref({ current_page: 1, last_page: 1, per_page: PAGE_SIZE, total: 0 })
+const pagination = ref({ current_page: 1, last_page: 1, per_page: DEFAULT_LIST_PAGE_SIZE, total: 0 })
 const skipFilterWatch = ref(true)
 let searchDebounce: ReturnType<typeof setTimeout> | null = null
 
@@ -99,12 +98,17 @@ function openAction(row: InboxNotificationRow) {
   return inboxNotificationOpenAction(row)
 }
 
+function changeNotificationsPerPage(size: number) {
+  pagination.value.per_page = size
+  void load(1)
+}
+
 async function load(page = pagination.value.current_page) {
   loading.value = true
   try {
     const query: Record<string, string | number> = {
       page,
-      per_page: PAGE_SIZE,
+      per_page: pagination.value.per_page,
     }
     if (moduleFilter.value !== 'all') {
       query.module = moduleFilter.value
@@ -464,33 +468,17 @@ onMounted(async () => {
           </Table>
         </div>
 
-        <div
-          v-if="pagination.last_page > 1"
-          class="flex items-center justify-between gap-3 text-sm text-muted-foreground"
-        >
-          <p>
-            Página {{ pagination.current_page }} de {{ pagination.last_page }}
-            · {{ pagination.per_page }} por página
-          </p>
-          <div class="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="loading || pagination.current_page <= 1"
-              @click="load(pagination.current_page - 1)"
-            >
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="loading || pagination.current_page >= pagination.last_page"
-              @click="load(pagination.current_page + 1)"
-            >
-              Siguiente
-            </Button>
-          </div>
-        </div>
+        <ListPaginationBar
+          v-if="pagination.total > 0"
+          :page="pagination.current_page"
+          :last-page="pagination.last_page"
+          :per-page="pagination.per_page"
+          :total="pagination.total"
+          item-label="notificaciones"
+          :loading="loading"
+          @update:page="load"
+          @update:per-page="changeNotificationsPerPage"
+        />
       </CardContent>
     </Card>
   </div>

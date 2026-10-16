@@ -6,6 +6,7 @@ import type {
   InstitutionalLibraryHome,
   InstitutionalLibrarySection,
 } from '~/types/institutional-library'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const FILTER_ALL_ORG_UNITS = 'all'
@@ -38,7 +39,7 @@ const listPage = ref(1)
 
 const home = ref<InstitutionalLibraryHome | null>(null)
 const listDocuments = ref<InstitutionalLibraryDocument[]>([])
-const listPagination = ref({ current_page: 1, last_page: 1, total: 0 })
+const listPagination = ref({ current_page: 1, last_page: 1, total: 0, per_page: DEFAULT_LIST_PAGE_SIZE })
 
 const detailOpen = ref(false)
 const previewing = ref(false)
@@ -78,7 +79,7 @@ async function loadList() {
     const list = await libraryApi.fetchDocuments({
       ...homeQueryParams(),
       page: listPage.value,
-      per_page: 12,
+      per_page: listPagination.value.per_page,
     })
 
     listDocuments.value = list.data ?? []
@@ -86,6 +87,7 @@ async function loadList() {
       current_page: list.current_page,
       last_page: list.last_page,
       total: list.total,
+      per_page: list.per_page ?? listPagination.value.per_page,
     }
   }
   catch {
@@ -142,6 +144,12 @@ async function onSearch() {
 
 async function onListPage(page: number) {
   listPage.value = page
+  await loadList()
+}
+
+async function onListPerPage(size: number) {
+  listPagination.value.per_page = size
+  listPage.value = 1
   await loadList()
 }
 
@@ -233,6 +241,7 @@ onMounted(() => loadHome())
       @open-section="openSectionList"
       @back-to-portal="backToPortal"
       @list-page="onListPage"
+      @list-per-page="onListPerPage"
     />
 
     <Dialog v-model:open="detailOpen">

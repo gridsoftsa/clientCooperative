@@ -12,6 +12,7 @@ import type {
   VentanillaResponsibleUserRow,
   VentanillaTrafficLightValue,
 } from '~/types/ventanilla'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 interface OrgUnitOption {
   id: number
@@ -51,7 +52,7 @@ const filterAssignedUserId = ref('all')
 const filterRequiresResponse = ref('all')
 const filterMetadataFieldCode = ref('none')
 const filterMetadataValue = ref('')
-const pagination = ref({ current_page: 1, last_page: 1, per_page: 15, total: 0 })
+const pagination = ref({ current_page: 1, last_page: 1, per_page: DEFAULT_LIST_PAGE_SIZE, total: 0 })
 const exportingMetadata = ref(false)
 let dateFilterDebounce: ReturnType<typeof setTimeout> | null = null
 
@@ -272,11 +273,17 @@ function resetFilters() {
 }
 
 function goToPage(page: number) {
-  const nextPage = Math.min(Math.max(page, 1), pagination.value.last_page)
+  const nextPage = Math.min(Math.max(page, 1), Math.max(1, pagination.value.last_page))
   if (nextPage === pagination.value.current_page) {
     return
   }
   pagination.value.current_page = nextPage
+  loadList()
+}
+
+function changePerPage(size: number) {
+  pagination.value.per_page = size
+  pagination.value.current_page = 1
   loadList()
 }
 
@@ -695,33 +702,18 @@ function statusLabel(status: string): string {
         <p v-else class="py-8 text-center text-muted-foreground text-sm">
           No hay radicados registrados.
         </p>
-        <div
-          v-if="!loading && pagination.total > 0"
-          class="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm"
-        >
-          <p class="text-muted-foreground">
-            Página {{ pagination.current_page }} de {{ pagination.last_page }}
-            · {{ pagination.total }} radicado{{ pagination.total === 1 ? '' : 's' }}
-          </p>
-          <div class="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="pagination.current_page <= 1"
-              @click="goToPage(pagination.current_page - 1)"
-            >
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="pagination.current_page >= pagination.last_page"
-              @click="goToPage(pagination.current_page + 1)"
-            >
-              Siguiente
-            </Button>
-          </div>
-        </div>
+        <ListPaginationBar
+          v-if="pagination.total > 0"
+          class="mt-4"
+          :page="pagination.current_page"
+          :last-page="pagination.last_page"
+          :per-page="pagination.per_page"
+          :total="pagination.total"
+          item-label="radicados"
+          :loading="loading"
+          @update:page="goToPage"
+          @update:per-page="changePerPage"
+        />
       </CardContent>
     </Card>
   </div>

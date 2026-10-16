@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 import type { OrgStaffListItem } from '~/types/org-structure'
 
 definePageMeta({
@@ -30,7 +31,7 @@ const loading = ref(false)
 const pagination = ref({
   current_page: 1,
   last_page: 1,
-  per_page: 30,
+  per_page: DEFAULT_LIST_PAGE_SIZE,
   total: 0,
 })
 
@@ -61,6 +62,17 @@ function displayName(s: OrgStaffListItem): string {
   if (s.full_name)
     return s.full_name
   return [s.first_name, s.second_name, s.first_last_name, s.second_last_name].filter(Boolean).join(' ')
+}
+
+function goToPage(page: number) {
+  pagination.value.current_page = page
+  void fetchDirectory()
+}
+
+function changePerPage(size: number) {
+  pagination.value.per_page = size
+  pagination.value.current_page = 1
+  void fetchDirectory()
 }
 
 onMounted(() => {
@@ -149,29 +161,17 @@ onMounted(() => {
             </TableBody>
           </Table>
           </div>
-          <div v-if="!loading && pagination.last_page > 1" class="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
-            <p class="text-sm text-muted-foreground">
-              Página {{ pagination.current_page }} de {{ pagination.last_page }}
-            </p>
-            <div class="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                :disabled="pagination.current_page <= 1 || loading"
-                @click="pagination.current_page--; fetchDirectory()"
-              >
-                Anterior
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                :disabled="pagination.current_page >= pagination.last_page || loading"
-                @click="pagination.current_page++; fetchDirectory()"
-              >
-                Siguiente
-              </Button>
-            </div>
-          </div>
+          <ListPaginationBar
+            v-if="pagination.total > 0"
+            :page="pagination.current_page"
+            :last-page="pagination.last_page"
+            :per-page="pagination.per_page"
+            :total="pagination.total"
+            item-label="personas"
+            :loading="loading"
+            @update:page="goToPage"
+            @update:per-page="changePerPage"
+          />
         </CardContent>
       </Card>
     </div>

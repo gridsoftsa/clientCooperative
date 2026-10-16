@@ -50,6 +50,20 @@ const areaOptions = computed(() =>
   }),
 )
 
+const officeSelectOptions = computed(() =>
+  offices.value.map(o => ({
+    value: o.id,
+    label: o.name,
+  })),
+)
+
+const parentSelectOptions = computed(() =>
+  unitsInOffice.value.map(u => ({
+    value: u.id,
+    label: `${u.name} — ${u.code}`,
+  })),
+)
+
 async function loadCatalogs() {
   try {
     offices.value = await orgApi.fetchOffices({ activeOnly: true })
@@ -140,91 +154,92 @@ onMounted(() => {
             </CardDescription>
           </CardHeader>
           <CardContent class="space-y-6">
-            <div class="grid items-start gap-6 lg:grid-cols-2">
-              <div class="flex min-w-0 flex-col gap-2">
-                <Label for="office">Agencia *</Label>
-                <Select
-                  :model-value="form.org_office_id == null ? '' : String(form.org_office_id)"
-                  @update:model-value="(v) => { form.org_office_id = v ? Number(v) : null }"
-                >
-                  <SelectTrigger id="office">
-                    <SelectValue placeholder="Seleccione agencia" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem
-                      v-for="o in offices"
-                      :key="o.id"
-                      :value="String(o.id)"
-                    >
-                      {{ o.name }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+            <div class="grid grid-cols-1 items-start gap-x-5 gap-y-5 lg:grid-cols-12">
+              <div class="flex min-w-0 flex-col gap-1.5 lg:col-span-7">
+                <Label for="office" class="min-h-5 text-sm leading-5">Agencia *</Label>
+                <ArchivalSingleMultiselect
+                  id="office"
+                  v-model="form.org_office_id"
+                  coerce-number
+                  :can-clear="false"
+                  :options="officeSelectOptions"
+                  placeholder="Buscar y seleccionar agencia"
+                  no-options-text="No hay agencias activas"
+                  no-results-text="Sin coincidencias"
+                />
+                <p class="min-h-10 text-xs leading-5 text-muted-foreground">
+                  Sede a la que pertenece esta dependencia.
+                </p>
               </div>
-              <div class="flex min-w-0 flex-col gap-2">
-                <Label for="parent">Área padre (opcional)</Label>
-                <Select
-                  :model-value="form.parent_id == null ? 'none' : String(form.parent_id)"
-                  :disabled="!form.org_office_id"
-                  @update:model-value="(v) => { form.parent_id = v === 'none' ? null : Number(v) }"
-                >
-                  <SelectTrigger id="parent">
-                    <SelectValue placeholder="Sin padre — raíz del área" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">
-                      (Ninguno)
-                    </SelectItem>
-                    <SelectItem
-                      v-for="u in unitsInOffice"
-                      :key="u.id"
-                      :value="String(u.id)"
-                    >
-                      {{ u.name }} — {{ u.code }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+              <div class="flex min-w-0 flex-col gap-1.5 lg:col-span-5">
+                <Label for="parent" class="min-h-5 text-sm leading-5">Área padre (opcional)</Label>
+                <ArchivalSingleMultiselect
+                  id="parent"
+                  :key="`parent-${form.org_office_id ?? 'none'}-${parentSelectOptions.length}`"
+                  v-model="form.parent_id"
+                  coerce-number
+                  searchable
+                  :disabled="form.org_office_id == null"
+                  :options="parentSelectOptions"
+                  placeholder="Buscar y seleccionar área padre"
+                  no-options-text="Seleccione primero una agencia"
+                  no-results-text="Sin coincidencias"
+                />
+                <p class="min-h-10 text-xs leading-5 text-muted-foreground">
+                  Opcional. Solo áreas de la misma agencia.
+                </p>
               </div>
-              <div class="flex min-w-0 flex-col gap-2">
-                <Label for="name">Nombre *</Label>
-                <Input id="name" v-model="form.name" required />
+              <div class="flex min-w-0 flex-col gap-1.5 lg:col-span-8">
+                <Label for="name" class="min-h-5 text-sm leading-5">Nombre *</Label>
+                <Input id="name" v-model="form.name" required class="h-11" />
+                <p class="min-h-10 text-xs leading-5 text-muted-foreground">
+                  Nombre visible en organigrama y TRD.
+                </p>
               </div>
-              <div class="flex min-w-0 flex-col gap-2">
-                <Label for="code">Código *</Label>
-                <Input id="code" v-model="form.code" required />
+              <div class="flex min-w-0 flex-col gap-1.5 lg:col-span-4">
+                <Label for="code" class="min-h-5 text-sm leading-5">Código *</Label>
+                <Input id="code" v-model="form.code" required class="h-11" maxlength="64" />
+                <p class="min-h-10 text-xs leading-5 text-muted-foreground">
+                  Clave corta, única en el catálogo.
+                </p>
               </div>
-              <div class="flex min-w-0 flex-col gap-2">
-                <Label for="unit_type">Tipo (opcional)</Label>
-                <Input id="unit_type" v-model="form.unit_type" placeholder="Ej: Subdirección, Sección…" />
+              <div class="flex min-w-0 flex-col gap-1.5 lg:col-span-6">
+                <Label for="unit_type" class="min-h-5 text-sm leading-5">Tipo</Label>
+                <Input id="unit_type" v-model="form.unit_type" placeholder="Ej: Subdirección, Sección…" class="h-11" />
+                <p class="min-h-10 text-xs leading-5 text-muted-foreground">
+                  Opcional. Clasificación interna de la dependencia.
+                </p>
               </div>
-              <div class="flex min-w-0 flex-col gap-2">
+              <div class="flex min-w-0 flex-col gap-1.5 lg:col-span-6">
                 <OrgYesNoMultiselect
+                  class="!space-y-1.5"
                   :model-value="form.is_document_producer ? 'yes' : 'no'"
                   input-id="unit_create_doc_producer_ms"
-                  label="¿Es área productora documental (TRD)?"
-                  helper-text="Sí si esta dependencia clasifica expedientes conforme a TRD."
+                  label="Productora documental (TRD)"
                   @update:model-value="(v: OrgYesNoChoice) => { form.is_document_producer = v === 'yes' }"
                 />
+                <p class="min-h-10 text-xs leading-5 text-muted-foreground">
+                  Sí si esta dependencia clasifica expedientes conforme a TRD.
+                </p>
               </div>
-              <div class="flex min-w-0 flex-col gap-2">
-                <Label for="mgr_create_ms">Responsable / jefe del área (opcional)</Label>
+              <div class="flex min-w-0 flex-col gap-1.5 lg:col-span-6">
+                <Label for="mgr_create_ms" class="min-h-5 text-sm leading-5">Jefe del área</Label>
                 <OrgUnitManagerStaffMultiselect
                   v-model="form.manager_staff_id"
+                  class="!max-w-none"
                   :org-unit-id="null"
                   input-id="mgr_create_ms"
+                  helper-text="Se asigna al editar, con funcionarios vigentes del área."
                 />
-                <p class="text-xs text-muted-foreground">
-                  El jefe se asigna al editar el área, con funcionarios vigentes en esa dependencia.
+              </div>
+              <div class="flex min-w-0 flex-col gap-1.5 lg:col-span-6">
+                <Label for="mgr_pos_name" class="min-h-5 text-sm leading-5">Cargo de jefe (referencia)</Label>
+                <Input id="mgr_pos_name" v-model="form.manager_position_name" placeholder="Ej: Coordinador de área" class="h-11" />
+                <p class="min-h-10 text-xs leading-5 text-muted-foreground">
+                  Opcional. Puede completarse al crear un cargo «a cargo del área».
                 </p>
               </div>
-              <div class="flex min-w-0 flex-col gap-2">
-                <Label for="mgr_pos_name">Cargo de jefe (referencia)</Label>
-                <Input id="mgr_pos_name" v-model="form.manager_position_name" placeholder="Ej: Coordinador de área" />
-                <p class="text-xs text-muted-foreground">
-                  Opcional. Puede completarse al crear un cargo marcado «a cargo del área».
-                </p>
-              </div>
-              <div class="lg:col-span-2">
+              <div class="lg:col-span-12">
                 <OrgInstitutionalProcessesMultiselect
                   v-model="form.related_org_unit_ids"
                   :options="areaOptions"

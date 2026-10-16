@@ -2,6 +2,7 @@
 import { watchDebounced } from '@vueuse/core'
 import { toast } from 'vue-sonner'
 import { messageFromFetchError } from '~/utils/http-error-message'
+import { DEFAULT_LIST_PAGE_SIZE, LIST_PAGE_SIZE_OPTIONS } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -52,7 +53,7 @@ const EVENT_FILTER_OPTIONS: { value: string; label: string }[] = [
   { value: 'detach', label: 'Desvinculación' },
 ]
 
-const PER_PAGE_OPTIONS = [15, 25, 50] as const
+const PER_PAGE_OPTIONS = LIST_PAGE_SIZE_OPTIONS
 
 const { $api } = useNuxtApp()
 
@@ -63,7 +64,7 @@ const auditableTypes = ref<AuditableTypeOption[]>([])
 const pagination = ref<AuditMeta>({
   current_page: 1,
   last_page: 1,
-  per_page: 15,
+  per_page: DEFAULT_LIST_PAGE_SIZE,
   total: 0,
 })
 
@@ -216,7 +217,7 @@ function clearFilters(): void {
   filterAuditableType.value = ALL_MODELS
   filterEvent.value = ALL_EVENTS
   pagination.value.current_page = 1
-  pagination.value.per_page = 15
+  pagination.value.per_page = DEFAULT_LIST_PAGE_SIZE
   expandedId.value = null
 
   void fetchAudits()
@@ -527,52 +528,17 @@ onMounted(async () => {
           </Table>
         </div>
 
-        <div
-          v-if="!loading && pagination.last_page > 1"
-          class="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"
-        >
-          <p class="text-sm text-muted-foreground">
-            Página {{ pagination.current_page }} de {{ pagination.last_page }}
-          </p>
-          <div class="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="pagination.current_page <= 1"
-              @click="goPage(1)"
-            >
-              <Icon name="i-lucide-chevrons-left" class="mr-1 h-4 w-4" />
-              Primera
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="pagination.current_page <= 1"
-              @click="goPage(pagination.current_page - 1)"
-            >
-              <Icon name="i-lucide-chevron-left" class="mr-1 h-4 w-4" />
-              Anterior
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="pagination.current_page >= pagination.last_page"
-              @click="goPage(pagination.current_page + 1)"
-            >
-              Siguiente
-              <Icon name="i-lucide-chevron-right" class="ml-1 h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              :disabled="pagination.current_page >= pagination.last_page"
-              @click="goPage(pagination.last_page)"
-            >
-              Última
-              <Icon name="i-lucide-chevrons-right" class="ml-1 h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        <ListPaginationBar
+          v-if="pagination.total > 0"
+          :page="pagination.current_page"
+          :last-page="pagination.last_page"
+          :per-page="pagination.per_page"
+          :total="pagination.total"
+          item-label="eventos"
+          :loading="loading"
+          @update:page="goPage"
+          @update:per-page="(size) => { pagination.per_page = size }"
+        />
       </CardContent>
     </Card>
   </div>

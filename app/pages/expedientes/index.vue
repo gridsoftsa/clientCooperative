@@ -6,6 +6,7 @@ import {
   archivalFileStatusActions,
   type ArchivalFileStatusActionOption,
 } from '~/utils/archival-file-status'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -36,7 +37,7 @@ const createdTo = ref('')
 const closedFrom = ref('')
 const closedTo = ref('')
 const advancedOpen = ref(false)
-const meta = ref({ current_page: 1, last_page: 1, total: 0 })
+const meta = ref({ current_page: 1, last_page: 1, total: 0, per_page: DEFAULT_LIST_PAGE_SIZE })
 const fileTypes = ref<Array<{ id: number, name: string }>>([])
 const orgUnits = ref<Array<{ id: number, name: string }>>([])
 
@@ -88,7 +89,7 @@ async function loadFiles(page = 1) {
   loading.value = true
 
   try {
-    const query: Record<string, string | number> = { page, per_page: 15 }
+    const query: Record<string, string | number> = { page, per_page: meta.value.per_page }
     if (search.value.trim())
       query.search = search.value.trim()
     if (statusFilter.value !== STATUS_FILTER_ALL)
@@ -118,6 +119,7 @@ async function loadFiles(page = 1) {
       current_page: res.meta.current_page,
       last_page: res.meta.last_page,
       total: res.meta.total,
+      per_page: res.meta.per_page ?? meta.value.per_page,
     }
   }
   catch {
@@ -126,6 +128,11 @@ async function loadFiles(page = 1) {
   finally {
     loading.value = false
   }
+}
+
+function changeFilesPerPage(size: number) {
+  meta.value.per_page = size
+  void loadFiles(1)
 }
 
 function clearAdvanced() {
@@ -442,15 +449,18 @@ onMounted(async () => {
             </TableBody>
           </Table>
 
-          <div v-if="meta.last_page > 1" class="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-            <span>{{ meta.total }} expedientes</span>
-            <NumberedPagination
-              :page="meta.current_page"
-              :last-page="meta.last_page"
-              :disabled="loading"
-              @update:page="loadFiles"
-            />
-          </div>
+          <ListPaginationBar
+            v-if="meta.total > 0"
+            class="mt-4"
+            :page="meta.current_page"
+            :last-page="meta.last_page"
+            :per-page="meta.per_page"
+            :total="meta.total"
+            item-label="expedientes"
+            :loading="loading"
+            @update:page="loadFiles"
+            @update:per-page="changeFilesPerPage"
+          />
         </template>
       </CardContent>
     </Card>

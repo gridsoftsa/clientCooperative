@@ -8,6 +8,7 @@ import {
 } from '~/constants/archival-audit'
 import type { ArchivalAuditRow, ArchivalAuditScopeFilter } from '~/composables/useArchivalAuditApi'
 import { messageFromFetchError } from '~/utils/http-error-message'
+import { DEFAULT_LIST_PAGE_SIZE, LIST_PAGE_SIZE_OPTIONS } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -36,12 +37,12 @@ const typeOptions = ref<Array<{ type: string, label: string }>>([])
 const pagination = ref({
   current_page: 1,
   last_page: 1,
-  per_page: 15,
+  per_page: DEFAULT_LIST_PAGE_SIZE,
   total: 0,
   scope_label: '',
 })
 
-const PER_PAGE_OPTIONS = [15, 25, 50] as const
+const PER_PAGE_OPTIONS = LIST_PAGE_SIZE_OPTIONS
 
 function eventLabel(event: string): string {
   const map: Record<string, string> = {
@@ -162,7 +163,7 @@ function clearFilters() {
   filterAuditableType.value = ALL_MODELS
   filterEvent.value = ALL_EVENTS
   pagination.value.current_page = 1
-  pagination.value.per_page = 15
+  pagination.value.per_page = DEFAULT_LIST_PAGE_SIZE
   void fetchAudits()
 }
 
@@ -398,22 +399,17 @@ onMounted(async () => {
             </Table>
           </div>
 
-          <div
-            v-if="!loading && pagination.last_page > 1"
-            class="flex flex-wrap gap-2 justify-between items-center border-t pt-4"
-          >
-            <span class="text-sm text-muted-foreground">
-              {{ pagination.total }} evento(s) · página {{ pagination.current_page }} de {{ pagination.last_page }}
-            </span>
-            <div class="flex gap-2">
-              <Button variant="outline" size="sm" :disabled="pagination.current_page <= 1" @click="goPage(pagination.current_page - 1)">
-                Anterior
-              </Button>
-              <Button variant="outline" size="sm" :disabled="pagination.current_page >= pagination.last_page" @click="goPage(pagination.current_page + 1)">
-                Siguiente
-              </Button>
-            </div>
-          </div>
+          <ListPaginationBar
+            v-if="pagination.total > 0"
+            :page="pagination.current_page"
+            :last-page="pagination.last_page"
+            :per-page="pagination.per_page"
+            :total="pagination.total"
+            item-label="eventos"
+            :loading="loading"
+            @update:page="goPage"
+            @update:per-page="(size) => { pagination.per_page = size }"
+          />
         </CardContent>
       </Card>
     </div>

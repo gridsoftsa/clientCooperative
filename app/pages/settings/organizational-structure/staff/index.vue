@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 import type { OrgStaffListItem } from '~/types/org-structure'
 
 definePageMeta({
@@ -17,6 +18,12 @@ const loading = ref(false)
 const q = ref('')
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 const deactivatingId = ref<number | null>(null)
+const pagination = ref({
+  current_page: 1,
+  last_page: 1,
+  per_page: DEFAULT_LIST_PAGE_SIZE,
+  total: 0,
+})
 
 function displayName(s: OrgStaffListItem): string {
   if (s.full_name)
@@ -45,13 +52,18 @@ function locationLabel(assignment: NonNullable<OrgStaffListItem['current_assignm
 async function fetchStaff() {
   loading.value = true
   try {
-    const res = await $api<{ data: OrgStaffListItem[] }>('/organizational-structure/org-staff', {
+    const res = await $api<{
+      data: OrgStaffListItem[]
+      meta: { current_page: number, last_page: number, per_page: number, total: number }
+    }>('/organizational-structure/org-staff', {
       query: {
-        per_page: 200,
+        page: pagination.value.current_page,
+        per_page: pagination.value.per_page,
         ...(q.value.trim() ? { q: q.value.trim() } : {}),
       },
     })
     staff.value = res.data
+    pagination.value = res.meta
   } catch {
     toast.error('Error al cargar funcionarios')
     staff.value = []
@@ -64,9 +76,21 @@ watch(q, () => {
   if (debounceTimer)
     clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => {
+    pagination.value.current_page = 1
     fetchStaff()
   }, 400)
 })
+
+function goToPage(page: number) {
+  pagination.value.current_page = page
+  void fetchStaff()
+}
+
+function changePerPage(size: number) {
+  pagination.value.per_page = size
+  pagination.value.current_page = 1
+  void fetchStaff()
+}
 
 async function deactivateStaff(id: number) {
   if (!hasPermission('estructura_org_editar') || deactivatingId.value != null)
@@ -217,6 +241,17 @@ onMounted(() => {
             </TableBody>
           </Table>
           </div>
+          <ListPaginationBar
+            v-if="pagination.total > 0"
+            :page="pagination.current_page"
+            :last-page="pagination.last_page"
+            :per-page="pagination.per_page"
+            :total="pagination.total"
+            item-label="funcionarios"
+            :loading="loading"
+            @update:page="goToPage"
+            @update:per-page="changePerPage"
+          />
         </CardContent>
       </Card>
     </div>

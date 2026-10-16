@@ -25,11 +25,11 @@ withDefaults(
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-x-6">
       <div class="space-y-2">
         <Label :for="fromInputId" class="leading-snug">Vigente desde *</Label>
-        <Input :id="fromInputId" v-model="validFrom" type="date" required />
+        <Input :id="fromInputId" v-model="validFrom" type="date" required class="h-11" />
       </div>
       <div class="space-y-2">
         <Label :for="toInputId" class="leading-snug">Vigente hasta</Label>
-        <Input :id="toInputId" v-model="validTo" type="date" />
+        <Input :id="toInputId" v-model="validTo" type="date" class="h-11" />
       </div>
     </div>
   </div>

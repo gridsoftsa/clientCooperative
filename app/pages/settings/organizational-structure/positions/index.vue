@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { OrgPositionRow } from '~/composables/useOrgStructureApi'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -18,6 +19,12 @@ const unitOptions = ref<Array<{ id: number; label: string }>>([])
 const loading = ref(false)
 const filterUnitId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
+const pagination = ref({
+  current_page: 1,
+  last_page: 1,
+  per_page: DEFAULT_LIST_PAGE_SIZE,
+  total: 0,
+})
 
 async function loadUnitOptions() {
   try {
@@ -34,11 +41,18 @@ async function loadUnitOptions() {
 async function fetchPositions() {
   loading.value = true
   try {
-    const q: Record<string, string | number> = { per_page: 500 }
+    const q: Record<string, string | number> = {
+      page: pagination.value.current_page,
+      per_page: pagination.value.per_page,
+    }
     if (filterUnitId.value != null)
       q.org_unit_id = filterUnitId.value
-    const res = await $api<{ data: OrgPositionRow[] }>('/organizational-structure/org-positions', { query: q })
+    const res = await $api<{
+      data: OrgPositionRow[]
+      meta: { current_page: number, last_page: number, per_page: number, total: number }
+    }>('/organizational-structure/org-positions', { query: q })
     positions.value = res.data
+    pagination.value = res.meta
   } catch {
     toast.error('Error al cargar cargos')
     positions.value = []
@@ -48,8 +62,20 @@ async function fetchPositions() {
 }
 
 watch(filterUnitId, () => {
+  pagination.value.current_page = 1
   fetchPositions()
 })
+
+function goToPage(page: number) {
+  pagination.value.current_page = page
+  void fetchPositions()
+}
+
+function changePerPage(size: number) {
+  pagination.value.per_page = size
+  pagination.value.current_page = 1
+  void fetchPositions()
+}
 
 async function deactivatePosition(id: number) {
   if (!hasPermission('estructura_org_editar') || deactivatingId.value != null)
@@ -195,6 +221,17 @@ onMounted(async () => {
             </TableBody>
           </Table>
           </div>
+          <ListPaginationBar
+            v-if="pagination.total > 0"
+            :page="pagination.current_page"
+            :last-page="pagination.last_page"
+            :per-page="pagination.per_page"
+            :total="pagination.total"
+            item-label="cargos"
+            :loading="loading"
+            @update:page="goToPage"
+            @update:per-page="changePerPage"
+          />
         </CardContent>
       </Card>
     </div>

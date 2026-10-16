@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import type { ArchivalFile, ArchivalMasterDocumentSearchResult } from '~/types/archival-file'
 import { ARCHIVAL_FILE_STATUS_LABELS } from '~/types/archival-file'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -28,8 +29,8 @@ const debouncedDocumentSearch = refDebounced(documentSearch, 300)
 const documentTypeId = ref<number | null>(null)
 const docTypeOptions = ref<Array<{ id: number, label: string }>>([])
 
-const filesMeta = ref({ current_page: 1, last_page: 1, total: 0 })
-const documentsMeta = ref({ current_page: 1, last_page: 1, total: 0 })
+const filesMeta = ref({ current_page: 1, last_page: 1, total: 0, per_page: DEFAULT_LIST_PAGE_SIZE })
+const documentsMeta = ref({ current_page: 1, last_page: 1, total: 0, per_page: DEFAULT_LIST_PAGE_SIZE })
 
 function statusLabel(status: string): string {
   return ARCHIVAL_FILE_STATUS_LABELS[status as keyof typeof ARCHIVAL_FILE_STATUS_LABELS] ?? status
@@ -65,7 +66,7 @@ async function loadMasterFiles(page = 1) {
   try {
     const query: Record<string, string | number> = {
       page,
-      per_page: 15,
+      per_page: filesMeta.value.per_page,
       is_master_file: 1,
     }
     if (fileSearch.value.trim()) {
@@ -93,7 +94,7 @@ async function loadMasterDocuments(page = 1) {
       search: debouncedDocumentSearch.value.trim() || undefined,
       doc_document_type_id: documentTypeId.value ?? undefined,
       page,
-      per_page: 20,
+      per_page: documentsMeta.value.per_page,
     })
     masterDocuments.value = response.data ?? []
     documentsMeta.value = response.meta
@@ -105,6 +106,16 @@ async function loadMasterDocuments(page = 1) {
   finally {
     searching.value = false
   }
+}
+
+function changeMasterFilesPerPage(size: number) {
+  filesMeta.value.per_page = size
+  void loadMasterFiles(1)
+}
+
+function changeMasterDocumentsPerPage(size: number) {
+  documentsMeta.value.per_page = size
+  void loadMasterDocuments(1)
 }
 
 watch(activeTab, async (tab) => {
@@ -224,6 +235,18 @@ onMounted(async () => {
                 </TableRow>
               </TableBody>
             </Table>
+            <ListPaginationBar
+              v-if="filesMeta.total > 0"
+              class="mt-4"
+              :page="filesMeta.current_page"
+              :last-page="filesMeta.last_page"
+              :per-page="filesMeta.per_page"
+              :total="filesMeta.total"
+              item-label="expedientes"
+              :loading="loading"
+              @update:page="loadMasterFiles"
+              @update:per-page="changeMasterFilesPerPage"
+            />
           </CardContent>
         </Card>
       </TabsContent>
@@ -306,6 +329,18 @@ onMounted(async () => {
                 </TableRow>
               </TableBody>
             </Table>
+            <ListPaginationBar
+              v-if="documentsMeta.total > 0"
+              class="mt-4"
+              :page="documentsMeta.current_page"
+              :last-page="documentsMeta.last_page"
+              :per-page="documentsMeta.per_page"
+              :total="documentsMeta.total"
+              item-label="documentos"
+              :loading="searching"
+              @update:page="loadMasterDocuments"
+              @update:per-page="changeMasterDocumentsPerPage"
+            />
           </CardContent>
         </Card>
       </TabsContent>

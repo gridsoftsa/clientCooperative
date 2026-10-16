@@ -2,6 +2,7 @@
 import { toast } from 'vue-sonner'
 import { ARCHIVAL_FILE_MODEL_LABELS } from '~/constants/archival-file'
 import type { ArchivalFileModel, ArchivalFileType } from '~/types/archival-file'
+import { DEFAULT_LIST_PAGE_SIZE, LIST_PAGE_SIZE_OPTIONS } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -11,7 +12,7 @@ definePageMeta({
 
 const FILTER_ALL = 'all'
 const ORG_UNIT_NONE = 'none'
-const PER_PAGE_OPTIONS = [10, 15, 25, 50] as const
+const PER_PAGE_OPTIONS = LIST_PAGE_SIZE_OPTIONS
 const AREA_PREVIEW_LIMIT = 6
 
 const router = useRouter()
@@ -25,9 +26,9 @@ const orgUnits = ref<Array<{ id: number, name: string }>>([])
 const loading = ref(true)
 const togglingId = ref<number | null>(null)
 const viewMode = ref<'table' | 'by_area'>('table')
-const meta = ref({ current_page: 1, last_page: 1, total: 0, per_page: 15 })
+const meta = ref({ current_page: 1, last_page: 1, total: 0, per_page: DEFAULT_LIST_PAGE_SIZE })
 
-const showPagination = computed(() => viewMode.value === 'table' && meta.value.total > 0 && meta.value.last_page > 1)
+const showPagination = computed(() => viewMode.value === 'table' && meta.value.total > 0)
 const areaShowAll = ref<Record<string, boolean>>({})
 
 const search = ref('')
@@ -834,20 +835,18 @@ onMounted(async () => {
           </Collapsible>
         </div>
 
-        <div
+        <ListPaginationBar
           v-if="showPagination"
-          class="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground"
-        >
-          <span>
-            Página {{ meta.current_page }} de {{ meta.last_page }} · {{ meta.total }} tipo(s)
-          </span>
-          <NumberedPagination
-            :page="meta.current_page"
-            :last-page="meta.last_page"
-            :disabled="loading"
-            @update:page="load"
-          />
-        </div>
+          class="mt-6"
+          :page="meta.current_page"
+          :last-page="meta.last_page"
+          :per-page="meta.per_page"
+          :total="meta.total"
+          item-label="tipos"
+          :loading="loading"
+          @update:page="load"
+          @update:per-page="onPerPageChange"
+        />
       </CardContent>
     </Card>
   </div>

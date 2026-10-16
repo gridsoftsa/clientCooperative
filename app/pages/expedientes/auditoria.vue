@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import type { ArchivalFileEvent, ArchivalFileEventType } from '~/types/archival-file'
 import { ARCHIVAL_FILE_EVENT_TYPE_LABELS } from '~/constants/archival-file-events'
 import { defaultCurrentMonthDateRange } from '~/utils/dateInputValue'
+import { DEFAULT_LIST_PAGE_SIZE, LIST_PAGE_SIZE_OPTIONS } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -14,11 +15,11 @@ const router = useRouter()
 const archivalApi = useArchivalFileApi()
 
 const defaultDateRange = defaultCurrentMonthDateRange()
-const PER_PAGE_OPTIONS = [10, 15, 25, 50] as const
+const PER_PAGE_OPTIONS = LIST_PAGE_SIZE_OPTIONS
 
 const loading = ref(true)
 const events = ref<ArchivalFileEvent[]>([])
-const meta = ref({ current_page: 1, last_page: 1, total: 0, per_page: 15 })
+const meta = ref({ current_page: 1, last_page: 1, total: 0, per_page: DEFAULT_LIST_PAGE_SIZE })
 
 const search = ref('')
 const eventTypeFilter = ref<ArchivalFileEventType | 'all'>('all')
@@ -59,7 +60,7 @@ const groupedEvents = computed<EventGroup[]>(() => {
   return [...groups.values()]
 })
 
-const showPagination = computed(() => meta.value.total > 0 && meta.value.last_page > 1)
+const showPagination = computed(() => meta.value.total > 0)
 
 async function loadEvents(page = 1) {
   if (createdFrom.value && createdTo.value && createdFrom.value > createdTo.value) {
@@ -276,20 +277,18 @@ onMounted(() => loadEvents())
           </Collapsible>
         </div>
 
-        <div
+        <ListPaginationBar
           v-if="showPagination"
-          class="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground"
-        >
-          <span>
-            Página {{ meta.current_page }} de {{ meta.last_page }} · {{ meta.total }} evento(s)
-          </span>
-          <NumberedPagination
-            :page="meta.current_page"
-            :last-page="meta.last_page"
-            :disabled="loading"
-            @update:page="loadEvents"
-          />
-        </div>
+          class="mt-6"
+          :page="meta.current_page"
+          :last-page="meta.last_page"
+          :per-page="meta.per_page"
+          :total="meta.total"
+          item-label="eventos"
+          :loading="loading"
+          @update:page="loadEvents"
+          @update:per-page="onPerPageChange"
+        />
       </CardContent>
     </Card>
   </div>

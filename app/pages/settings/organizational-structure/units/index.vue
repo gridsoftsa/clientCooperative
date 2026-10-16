@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -15,9 +16,76 @@ const orgApi = useOrgStructureApi()
 
 const units = ref<OrgUnitRow[]>([])
 const offices = ref<Array<{ id: number; name: string; code: string }>>([])
+const parentCandidates = ref<OrgUnitRow[]>([])
 const loading = ref(false)
+const filterQuery = ref('')
 const filterOfficeId = ref<number | null>(null)
+const filterStatus = ref<'all' | 'active' | 'inactive'>('all')
+const filterProducer = ref<'all' | 'yes' | 'no'>('all')
+const filterHierarchy = ref<'all' | 'roots' | number>('all')
 const deactivatingId = ref<number | null>(null)
+const activatingId = ref<number | null>(null)
+const pagination = ref({
+  current_page: 1,
+  last_page: 1,
+  per_page: DEFAULT_LIST_PAGE_SIZE,
+  total: 0,
+})
+let searchDebounce: ReturnType<typeof setTimeout> | null = null
+
+const officeFilterOptions = computed(() => [
+  { value: 'all', label: 'Todas las agencias' },
+  ...offices.value.map(o => ({ value: String(o.id), label: o.name })),
+])
+
+const statusFilterOptions = [
+  { value: 'all', label: 'Todas' },
+  { value: 'active', label: 'Activas' },
+  { value: 'inactive', label: 'Inactivas' },
+]
+
+const producerFilterOptions = [
+  { value: 'all', label: 'Todas' },
+  { value: 'yes', label: 'Sí — productora TRD' },
+  { value: 'no', label: 'No' },
+]
+
+const hierarchyFilterOptions = computed(() => [
+  { value: 'all', label: 'Todas' },
+  { value: 'roots', label: 'Solo raíz (sin padre)' },
+  ...parentCandidates.value.map(u => ({
+    value: String(u.id),
+    label: `Hijas de ${u.name}`,
+  })),
+])
+
+const hasActiveFilters = computed(() =>
+  filterQuery.value.trim() !== ''
+  || filterOfficeId.value != null
+  || filterStatus.value !== 'all'
+  || filterProducer.value !== 'all'
+  || filterHierarchy.value !== 'all',
+)
+
+const officeFilterModel = computed({
+  get: () => (filterOfficeId.value == null ? 'all' : String(filterOfficeId.value)),
+  set: (value: string | number | null) => {
+    filterOfficeId.value = value === 'all' || value == null || value === '' ? null : Number(value)
+  },
+})
+
+const hierarchyFilterModel = computed({
+  get: () => (filterHierarchy.value === 'all' || filterHierarchy.value === 'roots'
+    ? filterHierarchy.value
+    : String(filterHierarchy.value)),
+  set: (value: string | number | null) => {
+    if (value === 'all' || value === 'roots' || value == null || value === '') {
+      filterHierarchy.value = value === 'roots' ? 'roots' : 'all'
+      return
+    }
+    filterHierarchy.value = Number(value)
+  },
+})
 
 async function loadOffices() {
   try {
@@ -27,24 +95,114 @@ async function loadOffices() {
   }
 }
 
+async function fetchParentCandidates() {
+  try {
+    parentCandidates.value = await orgApi.fetchUnits({
+      activeOnly: false,
+      orgOfficeId: filterOfficeId.value ?? undefined,
+    })
+  }
+  catch {
+    parentCandidates.value = []
+  }
+}
+
 async function fetchUnits() {
   loading.value = true
   try {
-    const q: Record<string, string | number> = { per_page: 500 }
+    const q: Record<string, string | number | boolean> = {
+      per_page: pagination.value.per_page,
+      page: pagination.value.current_page,
+    }
+    const search = filterQuery.value.trim()
+    if (search)
+      q.q = search
     if (filterOfficeId.value != null)
       q.org_office_id = filterOfficeId.value
-    const res = await $api<{ data: OrgUnitRow[] }>('/organizational-structure/org-units', { query: q })
+    if (filterStatus.value === 'active')
+      q.is_active = 1
+    if (filterStatus.value === 'inactive')
+      q.is_active = 0
+    if (filterProducer.value === 'yes')
+      q.is_document_producer = 1
+    if (filterProducer.value === 'no')
+      q.is_document_producer = 0
+    if (filterHierarchy.value === 'roots')
+      q.roots_only = 1
+    else if (typeof filterHierarchy.value === 'number')
+      q.parent_id = filterHierarchy.value
+    const res = await $api<{
+      data: OrgUnitRow[]
+      meta: { current_page: number, last_page: number, per_page: number, total: number }
+    }>('/organizational-structure/org-units', { query: q })
     units.value = res.data
+    pagination.value = {
+      current_page: res.meta.current_page,
+      last_page: res.meta.last_page,
+      per_page: res.meta.per_page,
+      total: res.meta.total,
+    }
   } catch {
     toast.error('Error al cargar áreas')
     units.value = []
+    pagination.value = { ...pagination.value, current_page: 1, last_page: 1, total: 0 }
   } finally {
     loading.value = false
   }
 }
 
+function resetToFirstPageAndFetch() {
+  pagination.value.current_page = 1
+  void fetchUnits()
+}
+
+function goToPage(page: number) {
+  const nextPage = Math.min(Math.max(page, 1), Math.max(1, pagination.value.last_page))
+  if (nextPage === pagination.value.current_page) {
+    return
+  }
+  pagination.value.current_page = nextPage
+  void fetchUnits()
+}
+
+function changePerPage(size: number) {
+  pagination.value.per_page = size
+  pagination.value.current_page = 1
+  void fetchUnits()
+}
+
+async function refreshUnitsKeepingPage() {
+  await fetchUnits()
+  if (units.value.length === 0 && pagination.value.current_page > 1) {
+    pagination.value.current_page -= 1
+    await fetchUnits()
+  }
+}
+
+function clearFilters() {
+  filterQuery.value = ''
+  filterOfficeId.value = null
+  filterStatus.value = 'all'
+  filterProducer.value = 'all'
+  filterHierarchy.value = 'all'
+}
+
+watch(filterQuery, () => {
+  if (searchDebounce)
+    clearTimeout(searchDebounce)
+  searchDebounce = setTimeout(() => {
+    resetToFirstPageAndFetch()
+  }, 400)
+})
+
+watch([filterOfficeId, filterStatus, filterProducer, filterHierarchy], () => {
+  resetToFirstPageAndFetch()
+})
+
 watch(filterOfficeId, () => {
-  fetchUnits()
+  if (typeof filterHierarchy.value === 'number')
+    filterHierarchy.value = 'all'
+  void fetchParentCandidates()
 })
 
 function managerLabel(unit: OrgUnitRow): string {
@@ -61,11 +219,16 @@ function managerLabel(unit: OrgUnitRow): string {
 async function deactivateUnit(id: number) {
   if (!hasPermission('estructura_org_editar') || deactivatingId.value != null)
     return
+  const confirmed = window.confirm(
+    '¿Inactivar esta área? El código seguirá reservado: no podrá crear otra con el mismo código. Si más adelante la necesita, use Activar.',
+  )
+  if (!confirmed)
+    return
   deactivatingId.value = id
   try {
     await $api(`/organizational-structure/org-units/${id}/deactivate`, { method: 'PATCH' })
     toast.success('Área inactivada')
-    await fetchUnits()
+    await refreshUnitsKeepingPage()
   } catch (e: any) {
     toast.error(e?.data?.message || 'No se pudo inactivar')
   } finally {
@@ -73,8 +236,24 @@ async function deactivateUnit(id: number) {
   }
 }
 
+async function activateUnit(id: number) {
+  if (!hasPermission('estructura_org_editar') || activatingId.value != null)
+    return
+  activatingId.value = id
+  try {
+    await $api(`/organizational-structure/org-units/${id}/activate`, { method: 'PATCH' })
+    toast.success('Área reactivada')
+    await refreshUnitsKeepingPage()
+  } catch (e: any) {
+    toast.error(e?.data?.message || 'No se pudo reactivar')
+  } finally {
+    activatingId.value = null
+  }
+}
+
 onMounted(async () => {
   await loadOffices()
+  await fetchParentCandidates()
   await fetchUnits()
 })
 </script>
@@ -112,33 +291,78 @@ onMounted(async () => {
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
-          <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 sm:flex-row sm:flex-wrap sm:items-end">
-            <div class="grid w-full gap-2 sm:max-w-xs sm:shrink-0">
-              <Label for="foffice" class="text-xs text-muted-foreground">Filtrar por agencia</Label>
-              <Select :model-value="filterOfficeId === null ? 'all' : String(filterOfficeId)" @update:model-value="(v) => { filterOfficeId = v === 'all' ? null : Number(v) }">
-                <SelectTrigger id="foffice" class="w-full">
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">
-                    Todas las agencias
-                  </SelectItem>
-                  <SelectItem
-                    v-for="o in offices"
-                    :key="o.id"
-                    :value="String(o.id)"
-                  >
-                    {{ o.name }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+          <div class="grid grid-cols-1 gap-3 rounded-lg border bg-muted/30 p-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+            <div class="flex min-w-0 flex-col gap-1.5 sm:col-span-2 xl:col-span-1 2xl:col-span-2">
+              <Label for="fsearch" class="text-xs text-muted-foreground">Buscar</Label>
+              <Input
+                id="fsearch"
+                v-model="filterQuery"
+                class="h-11"
+                placeholder="Nombre o código…"
+              />
+            </div>
+            <div class="flex min-w-0 flex-col gap-1.5">
+              <Label for="foffice" class="text-xs text-muted-foreground">Agencia</Label>
+              <ArchivalSingleMultiselect
+                id="foffice"
+                v-model="officeFilterModel"
+                :can-clear="false"
+                :options="officeFilterOptions"
+                placeholder="Todas las agencias"
+                no-options-text="No hay agencias"
+                no-results-text="Sin coincidencias"
+              />
+            </div>
+            <div class="flex min-w-0 flex-col gap-1.5">
+              <Label for="fstatus" class="text-xs text-muted-foreground">Estado</Label>
+              <ArchivalSingleMultiselect
+                id="fstatus"
+                v-model="filterStatus"
+                :can-clear="false"
+                :searchable="false"
+                :options="statusFilterOptions"
+                placeholder="Todas"
+              />
+            </div>
+            <div class="flex min-w-0 flex-col gap-1.5">
+              <Label for="fproducer" class="text-xs text-muted-foreground">Productora TRD</Label>
+              <ArchivalSingleMultiselect
+                id="fproducer"
+                v-model="filterProducer"
+                :can-clear="false"
+                :searchable="false"
+                :options="producerFilterOptions"
+                placeholder="Todas"
+              />
+            </div>
+            <div class="flex min-w-0 flex-col gap-1.5">
+              <Label for="fhierarchy" class="text-xs text-muted-foreground">Jerarquía</Label>
+              <ArchivalSingleMultiselect
+                id="fhierarchy"
+                v-model="hierarchyFilterModel"
+                :can-clear="false"
+                :options="hierarchyFilterOptions"
+                placeholder="Todas"
+                no-results-text="Sin coincidencias"
+              />
+            </div>
+            <div class="flex items-end">
+              <Button
+                type="button"
+                variant="outline"
+                class="h-11 w-full"
+                :disabled="!hasActiveFilters"
+                @click="clearFilters"
+              >
+                Limpiar filtros
+              </Button>
             </div>
           </div>
           <div v-if="loading" class="flex justify-center py-8">
             <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
           <div v-else-if="units.length === 0" class="py-12 text-center text-muted-foreground leading-relaxed">
-            No hay áreas. Cree antes al menos una agencia.
+            {{ hasActiveFilters ? 'Ningún área coincide con los filtros.' : 'No hay áreas. Cree antes al menos una agencia.' }}
           </div>
           <div v-else class="border rounded-lg overflow-hidden">
             <Table>
@@ -196,6 +420,18 @@ onMounted(async () => {
                         <Icon name="i-lucide-ban" class="size-4 shrink-0" />
                         Desactivar
                       </Button>
+                      <Button
+                        v-else
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
+                        :disabled="activatingId === u.id"
+                        @click="activateUnit(u.id)"
+                      >
+                        <Icon name="i-lucide-check-circle" class="size-4 shrink-0" />
+                        Activar
+                      </Button>
                     </PermissionGate>
                   </div>
                 </TableCell>
@@ -203,6 +439,17 @@ onMounted(async () => {
             </TableBody>
           </Table>
           </div>
+          <ListPaginationBar
+            v-if="pagination.total > 0"
+            :page="pagination.current_page"
+            :last-page="pagination.last_page"
+            :per-page="pagination.per_page"
+            :total="pagination.total"
+            item-label="áreas"
+            :loading="loading"
+            @update:page="goToPage"
+            @update:per-page="changePerPage"
+          />
         </CardContent>
       </Card>
     </div>

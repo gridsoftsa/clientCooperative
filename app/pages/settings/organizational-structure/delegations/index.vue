@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -25,6 +26,12 @@ const orgApi = useOrgStructureApi()
 const rows = ref<DelegationRow[]>([])
 const loading = ref(true)
 const openingReceiptId = ref<number | null>(null)
+const pagination = ref({
+  current_page: 1,
+  last_page: 1,
+  per_page: DEFAULT_LIST_PAGE_SIZE,
+  total: 0,
+})
 
 function staffLabel(s: { first_name?: string; first_last_name?: string }): string {
   return [s.first_name, s.first_last_name].filter(Boolean).join(' ')
@@ -50,16 +57,31 @@ async function viewReceipt(id: number) {
 async function load() {
   loading.value = true
   try {
-    const res = await $api<{ data: DelegationRow[] }>('/organizational-structure/org-delegations', {
-      query: { per_page: 200 },
+    const res = await $api<{
+      data: DelegationRow[]
+      meta: { current_page: number, last_page: number, per_page: number, total: number }
+    }>('/organizational-structure/org-delegations', {
+      query: { page: pagination.value.current_page, per_page: pagination.value.per_page },
     })
     rows.value = res.data
+    pagination.value = res.meta
   } catch {
     toast.error('No se pudieron cargar los registros de Backup')
     rows.value = []
   } finally {
     loading.value = false
   }
+}
+
+function goToPage(page: number) {
+  pagination.value.current_page = page
+  void load()
+}
+
+function changePerPage(size: number) {
+  pagination.value.per_page = size
+  pagination.value.current_page = 1
+  void load()
 }
 
 async function removeRow(id: number) {
@@ -198,6 +220,17 @@ onMounted(() => {
               </TableBody>
             </Table>
           </div>
+          <ListPaginationBar
+            v-if="pagination.total > 0"
+            :page="pagination.current_page"
+            :last-page="pagination.last_page"
+            :per-page="pagination.per_page"
+            :total="pagination.total"
+            item-label="registros"
+            :loading="loading"
+            @update:page="goToPage"
+            @update:per-page="changePerPage"
+          />
         </CardContent>
       </Card>
     </div>

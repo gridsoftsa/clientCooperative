@@ -6,6 +6,7 @@ import {
   ventanillaIntakeStatusLabel,
 } from '~/utils/ventanilla-intake-display'
 import type { VentanillaFunctionalTypeRow, VentanillaIntakeRow } from '~/types/ventanilla'
+import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
   layout: 'default',
@@ -22,7 +23,7 @@ const errorMessage = ref('')
 const search = ref('')
 const statusFilter = ref('pending_classification')
 const sourceFilter = ref('all')
-const pagination = ref({ current_page: 1, last_page: 1, per_page: 20, total: 0 })
+const pagination = ref({ current_page: 1, last_page: 1, per_page: DEFAULT_LIST_PAGE_SIZE, total: 0 })
 
 const pendingCount = computed(() =>
   statusFilter.value === 'pending_classification'
@@ -94,11 +95,17 @@ function filterAndLoad() {
 }
 
 function goToPage(page: number) {
-  const nextPage = Math.min(Math.max(page, 1), pagination.value.last_page)
+  const nextPage = Math.min(Math.max(page, 1), Math.max(1, pagination.value.last_page))
   if (nextPage === pagination.value.current_page) {
     return
   }
   pagination.value.current_page = nextPage
+  loadIntakes()
+}
+
+function changePerPage(size: number) {
+  pagination.value.per_page = size
+  pagination.value.current_page = 1
   loadIntakes()
 }
 
@@ -278,19 +285,18 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
-          <span class="text-muted-foreground">
-            Página {{ pagination.current_page }} de {{ pagination.last_page }}
-          </span>
-          <div class="flex gap-2">
-            <Button type="button" variant="outline" size="sm" :disabled="pagination.current_page <= 1" @click="goToPage(pagination.current_page - 1)">
-              Anterior
-            </Button>
-            <Button type="button" variant="outline" size="sm" :disabled="pagination.current_page >= pagination.last_page" @click="goToPage(pagination.current_page + 1)">
-              Siguiente
-            </Button>
-          </div>
-        </div>
+        <ListPaginationBar
+          v-if="pagination.total > 0"
+          class="mt-4"
+          :page="pagination.current_page"
+          :last-page="pagination.last_page"
+          :per-page="pagination.per_page"
+          :total="pagination.total"
+          item-label="entradas"
+          :loading="loading"
+          @update:page="goToPage"
+          @update:per-page="changePerPage"
+        />
       </CardContent>
     </Card>
   </div>
