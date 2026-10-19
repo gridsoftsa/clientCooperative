@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
+import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureApi'
 import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
@@ -25,6 +25,9 @@ const filterProducer = ref<'all' | 'yes' | 'no'>('all')
 const filterHierarchy = ref<'all' | 'roots' | number>('all')
 const deactivatingId = ref<number | null>(null)
 const activatingId = ref<number | null>(null)
+const expandedUnitId = ref<number | null>(null)
+const unitPositions = ref<Record<number, OrgPositionRow[]>>({})
+const loadingPositionsFor = ref<number | null>(null)
 const pagination = ref({
   current_page: 1,
   last_page: 1,
@@ -205,6 +208,30 @@ watch(filterOfficeId, () => {
   void fetchParentCandidates()
 })
 
+async function toggleUnitPositions(unitId: number) {
+  if (expandedUnitId.value === unitId) {
+    expandedUnitId.value = null
+    return
+  }
+  expandedUnitId.value = unitId
+  if (unitPositions.value[unitId])
+    return
+  loadingPositionsFor.value = unitId
+  try {
+    unitPositions.value = {
+      ...unitPositions.value,
+      [unitId]: await orgApi.fetchPositions({ orgUnitId: unitId }),
+    }
+  }
+  catch {
+    toast.error('No se pudieron cargar los cargos del área')
+    expandedUnitId.value = null
+  }
+  finally {
+    loadingPositionsFor.value = null
+  }
+}
+
 function managerLabel(unit: OrgUnitRow): string {
   const manager = unit.manager_staff
   if (!manager) {
@@ -381,9 +408,29 @@ onMounted(async () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow v-for="u in units" :key="u.id">
+              <template v-for="u in units" :key="u.id">
+              <TableRow>
                 <TableCell class="font-medium">
-                  {{ u.name }}
+                  <div class="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      class="h-8 w-8 shrink-0 px-0"
+                      :aria-expanded="expandedUnitId === u.id"
+                      :aria-label="expandedUnitId === u.id ? 'Ocultar cargos' : 'Ver cargos relacionados'"
+                      @click="toggleUnitPositions(u.id)"
+                    >
+                      <Icon
+                        :name="expandedUnitId === u.id ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                        class="h-4 w-4"
+                      />
+                    </Button>
+                    <span>{{ u.name }}</span>
+                    <Badge variant="outline" class="ml-1">
+                      {{ u.org_positions_count ?? 0 }}
+                    </Badge>
+                  </div>
                 </TableCell>
                 <TableCell>{{ u.code }}</TableCell>
                 <TableCell>{{ u.org_office?.name ?? '—' }}</TableCell>
@@ -399,6 +446,15 @@ onMounted(async () => {
                 </TableCell>
                 <TableCell class="text-right">
                   <div class="flex flex-wrap justify-end gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      class="h-8 gap-1.5 px-2 text-xs"
+                      @click="router.push(`/settings/organizational-structure/units/${u.id}/positions`)"
+                    >
+                      <Icon name="i-lucide-briefcase" class="size-4 shrink-0" />
+                      Cargos
+                    </Button>
                     <PermissionGate permission="estructura_org_editar">
                       <Button
                         variant="outline"
@@ -436,6 +492,53 @@ onMounted(async () => {
                   </div>
                 </TableCell>
               </TableRow>
+              <TableRow v-if="expandedUnitId === u.id" class="bg-muted/30 hover:bg-muted/30">
+                <TableCell colspan="8" class="p-3">
+                  <div v-if="loadingPositionsFor === u.id" class="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin" />
+                    Cargando cargos…
+                  </div>
+                  <p v-else-if="(unitPositions[u.id] ?? []).length === 0" class="text-sm text-muted-foreground">
+                    Esta área no tiene cargos.
+                    <button
+                      type="button"
+                      class="ml-1 underline underline-offset-2"
+                      @click="router.push(`/settings/organizational-structure/units/${u.id}/positions`)"
+                    >
+                      Crear el primero
+                    </button>
+                  </p>
+                  <div v-else class="overflow-hidden rounded-md border bg-background">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Cargo</TableHead>
+                          <TableHead>Código</TableHead>
+                          <TableHead>Nivel</TableHead>
+                          <TableHead>Estado</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        <TableRow v-for="position in unitPositions[u.id]" :key="position.id">
+                          <TableCell class="font-medium">
+                            {{ position.name }}
+                          </TableCell>
+                          <TableCell class="font-mono">
+                            {{ position.code }}
+                          </TableCell>
+                          <TableCell>{{ position.hierarchy_level }}</TableCell>
+                          <TableCell>
+                            <Badge :variant="position.is_active ? 'default' : 'secondary'">
+                              {{ position.is_active ? 'Activo' : 'Inactivo' }}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </TableCell>
+              </TableRow>
+              </template>
             </TableBody>
           </Table>
           </div>
