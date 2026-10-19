@@ -40,6 +40,7 @@ const chargesSelectedArea = ref<OrgYesNoChoice>('no')
 const codeSuffix = ref('')
 const legacyCode = ref<string | null>(null)
 const hydratingReportTo = ref(false)
+const reportToFieldsKey = ref(0)
 
 const form = ref({
   name: '',
@@ -100,6 +101,13 @@ async function loadUnitOptions() {
   }))
 }
 
+function ensurePeerPosition(row: { id: number, name: string, code: string } | null | undefined): void {
+  if (row == null || peerPositions.value.some(position => position.id === row.id)) {
+    return
+  }
+  peerPositions.value = [...peerPositions.value, { id: row.id, name: row.name, code: row.code }]
+}
+
 async function loadReportToCandidates(orgUnitId: number): Promise<void> {
   const [rows, staff] = await Promise.all([
     orgApi.fetchPositions({
@@ -137,12 +145,13 @@ async function loadReportToCandidates(orgUnitId: number): Promise<void> {
 }
 
 watch(reportToOrgUnitId, async (id: number | null) => {
-  if (!hydratingReportTo.value) {
-    form.value.reports_to_position_id = null
-    reportToTargetType.value = 'none'
-    reportToPositionChoiceId.value = null
-    reportToStaffChoiceId.value = null
+  if (hydratingReportTo.value) {
+    return
   }
+  form.value.reports_to_position_id = null
+  reportToTargetType.value = 'none'
+  reportToPositionChoiceId.value = null
+  reportToStaffChoiceId.value = null
   if (id == null) {
     peerPositions.value = []
     reportToStaffOptions.value = []
@@ -152,6 +161,9 @@ watch(reportToOrgUnitId, async (id: number | null) => {
 })
 
 watch([reportToTargetType, reportToPositionChoiceId, reportToStaffChoiceId], () => {
+  if (hydratingReportTo.value) {
+    return
+  }
   if (reportToTargetType.value === 'position') {
     form.value.reports_to_position_id = reportToPositionChoiceId.value
     return
@@ -163,6 +175,33 @@ watch([reportToTargetType, reportToPositionChoiceId, reportToStaffChoiceId], () 
   }
   form.value.reports_to_position_id = null
 })
+
+async function resolveReportsToPosition(
+  reportsToPositionId: number | null,
+  nested: OrgPositionRow['reports_to_position'],
+): Promise<NonNullable<OrgPositionRow['reports_to_position']> | null> {
+  if (reportsToPositionId == null) {
+    return null
+  }
+
+  if (nested?.org_unit_id != null) {
+    return nested
+  }
+
+  const bossId = nested?.id ?? reportsToPositionId
+  try {
+    const res = await $api<{ data: OrgPositionRow }>(`/organizational-structure/org-positions/${bossId}`)
+    return {
+      id: res.data.id,
+      name: res.data.name,
+      code: res.data.code,
+      org_unit_id: res.data.org_unit_id,
+    }
+  }
+  catch {
+    return nested ?? null
+  }
+}
 
 async function startEdit(position: OrgPositionRow) {
   if (!unit.value)
@@ -182,9 +221,28 @@ async function startEdit(position: OrgPositionRow) {
     valid_from: toDateInputValue(position.valid_from) || todayIsoDateString(),
     valid_to: toDateInputValue(position.valid_to),
   }
-  reportToOrgUnitId.value = position.reports_to_position?.org_unit_id ?? null
-  reportToTargetType.value = position.reports_to_position_id ? 'position' : 'none'
-  reportToPositionChoiceId.value = position.reports_to_position_id
+  reportToOrgUnitId.value = null
+  reportToTargetType.value = 'none'
+  reportToPositionChoiceId.value = null
+  reportToStaffChoiceId.value = null
+  peerPositions.value = []
+  reportToStaffOptions.value = []
+
+  const reportsTo = await resolveReportsToPosition(
+    position.reports_to_position_id,
+    position.reports_to_position ?? null,
+  )
+  const reportsUnitId = reportsTo?.org_unit_id ?? null
+  reportToOrgUnitId.value = reportsUnitId
+  if (reportsUnitId != null && reportsTo != null) {
+    await loadReportToCandidates(reportsUnitId)
+    ensurePeerPosition({ id: reportsTo.id, name: reportsTo.name, code: reportsTo.code })
+    await nextTick()
+    reportToTargetType.value = 'position'
+    reportToPositionChoiceId.value = reportsTo.id
+    form.value.reports_to_position_id = reportsTo.id
+  }
+  reportToFieldsKey.value += 1
   await nextTick()
   hydratingReportTo.value = false
 }
@@ -377,6 +435,7 @@ onMounted(async () => {
                 </div>
 
                 <OrgPositionReportsToFields
+                  :key="`area-report-${editingId ?? 'new'}-${reportToFieldsKey}`"
                   v-model:report-to-org-unit-id="reportToOrgUnitId"
                   v-model:report-to-target-type="reportToTargetType"
                   v-model:report-to-position-choice-id="reportToPositionChoiceId"
@@ -406,6 +465,13 @@ onMounted(async () => {
               />
 
               <div class="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  @click="router.push('/settings/organizational-structure/units')"
+                >
+                  Cancelar
+                </Button>
                 <Button v-if="editingId != null" type="button" variant="outline" @click="resetForm">
                   Cancelar edición
                 </Button>

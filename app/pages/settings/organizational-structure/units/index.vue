@@ -24,6 +24,7 @@ const filterStatus = ref<'all' | 'active' | 'inactive'>('all')
 const filterProducer = ref<'all' | 'yes' | 'no'>('all')
 const filterHierarchy = ref<'all' | 'roots' | number>('all')
 const deactivatingId = ref<number | null>(null)
+const deactivatingPositionId = ref<number | null>(null)
 const activatingId = ref<number | null>(null)
 const expandedUnitId = ref<number | null>(null)
 const unitPositions = ref<Record<number, OrgPositionRow[]>>({})
@@ -208,14 +209,7 @@ watch(filterOfficeId, () => {
   void fetchParentCandidates()
 })
 
-async function toggleUnitPositions(unitId: number) {
-  if (expandedUnitId.value === unitId) {
-    expandedUnitId.value = null
-    return
-  }
-  expandedUnitId.value = unitId
-  if (unitPositions.value[unitId])
-    return
+async function loadPositionsForUnit(unitId: number): Promise<void> {
   loadingPositionsFor.value = unitId
   try {
     unitPositions.value = {
@@ -225,10 +219,47 @@ async function toggleUnitPositions(unitId: number) {
   }
   catch {
     toast.error('No se pudieron cargar los cargos del área')
-    expandedUnitId.value = null
+    throw new Error('unit-positions-load-failed')
   }
   finally {
     loadingPositionsFor.value = null
+  }
+}
+
+async function toggleUnitPositions(unitId: number) {
+  if (expandedUnitId.value === unitId) {
+    expandedUnitId.value = null
+    return
+  }
+  expandedUnitId.value = unitId
+  if (unitPositions.value[unitId]) {
+    return
+  }
+  try {
+    await loadPositionsForUnit(unitId)
+  }
+  catch {
+    expandedUnitId.value = null
+  }
+}
+
+async function deactivateNestedPosition(unitId: number, positionId: number) {
+  if (!hasPermission('estructura_org_editar') || deactivatingPositionId.value != null) {
+    return
+  }
+  deactivatingPositionId.value = positionId
+  try {
+    await $api(`/organizational-structure/org-positions/${positionId}/deactivate`, { method: 'PATCH' })
+    toast.success('Cargo inactivado')
+    await loadPositionsForUnit(unitId)
+    await refreshUnitsKeepingPage()
+  }
+  catch (e: unknown) {
+    const err = e as { data?: { message?: string } }
+    toast.error(err?.data?.message || 'No se pudo inactivar')
+  }
+  finally {
+    deactivatingPositionId.value = null
   }
 }
 
@@ -516,6 +547,9 @@ onMounted(async () => {
                           <TableHead>Código</TableHead>
                           <TableHead>Nivel</TableHead>
                           <TableHead>Estado</TableHead>
+                          <TableHead class="text-right">
+                            Acciones
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -531,6 +565,32 @@ onMounted(async () => {
                             <Badge :variant="position.is_active ? 'default' : 'secondary'">
                               {{ position.is_active ? 'Activo' : 'Inactivo' }}
                             </Badge>
+                          </TableCell>
+                          <TableCell class="text-right">
+                            <div class="flex flex-wrap justify-end gap-1">
+                              <PermissionGate permission="estructura_org_editar">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  class="h-8 gap-1.5 px-2 text-xs"
+                                  @click="router.push(`/settings/organizational-structure/positions/${position.id}/edit`)"
+                                >
+                                  Editar
+                                </Button>
+                                <Button
+                                  v-if="position.is_active"
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  class="h-8 gap-1.5 px-2 text-xs"
+                                  :disabled="deactivatingPositionId === position.id"
+                                  @click="deactivateNestedPosition(u.id, position.id)"
+                                >
+                                  <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                                  Desactivar
+                                </Button>
+                              </PermissionGate>
+                            </div>
                           </TableCell>
                         </TableRow>
                       </TableBody>

@@ -24,6 +24,8 @@ const reportToOrgUnitId = ref<number | null>(null)
 const reportToTargetType = ref<'none' | 'position' | 'staff'>('none')
 const reportToPositionChoiceId = ref<number | null>(null)
 const reportToStaffChoiceId = ref<number | null>(null)
+const hydratingReportTo = ref(false)
+const reportToFieldsKey = ref(0)
 const loading = ref(true)
 
 const chargesSelectedArea = ref<OrgYesNoChoice>('no')
@@ -139,20 +141,57 @@ function syncReportToFormFromChoices(): void {
   form.value.reports_to_position_id = null
 }
 
-async function hydrateReportToFromSaved(reportsTo: OrgPositionRow['reports_to_position']): Promise<void> {
-  if (!reportsTo?.org_unit_id) {
-    reportToOrgUnitId.value = null
-    reportToTargetType.value = 'none'
-    reportToPositionChoiceId.value = null
-    reportToStaffChoiceId.value = null
+function ensurePeerPosition(row: { id: number, name: string, code: string } | null | undefined): void {
+  if (row == null || peerPositions.value.some(position => position.id === row.id)) {
+    return
+  }
+  peerPositions.value = [...peerPositions.value, { id: row.id, name: row.name, code: row.code }]
+}
+
+async function hydrateReportToFromSaved(
+  reportsToPositionId: number | null,
+  nested: OrgPositionRow['reports_to_position'],
+): Promise<void> {
+  hydratingReportTo.value = true
+  reportToOrgUnitId.value = null
+  reportToTargetType.value = 'none'
+  reportToPositionChoiceId.value = null
+  reportToStaffChoiceId.value = null
+  peerPositions.value = []
+  reportToStaffOptions.value = []
+
+  let reportsTo = nested ?? null
+  if (reportsToPositionId != null && (reportsTo == null || reportsTo.org_unit_id == null)) {
+    const bossId = reportsTo?.id ?? reportsToPositionId
+    try {
+      const res = await $api<{ data: OrgPositionRow }>(`/organizational-structure/org-positions/${bossId}`)
+      reportsTo = {
+        id: res.data.id,
+        name: res.data.name,
+        code: res.data.code,
+        org_unit_id: res.data.org_unit_id,
+      }
+    }
+    catch {
+      reportsTo = reportsTo ?? null
+    }
+  }
+
+  if (reportsTo?.org_unit_id == null) {
+    hydratingReportTo.value = false
     return
   }
 
   reportToOrgUnitId.value = reportsTo.org_unit_id
   await loadReportToCandidates(reportsTo.org_unit_id)
+  ensurePeerPosition({ id: reportsTo.id, name: reportsTo.name, code: reportsTo.code })
+  await nextTick()
   reportToTargetType.value = 'position'
   reportToPositionChoiceId.value = reportsTo.id
   form.value.reports_to_position_id = reportsTo.id
+  reportToFieldsKey.value += 1
+  await nextTick()
+  hydratingReportTo.value = false
 }
 
 watch(() => form.value.org_unit_id, async (id: number | null, prev: number | null | undefined) => {
@@ -171,6 +210,9 @@ watch(() => form.value.org_unit_id, async (id: number | null, prev: number | nul
 })
 
 watch(reportToOrgUnitId, async (id: number | null) => {
+  if (hydratingReportTo.value) {
+    return
+  }
   form.value.reports_to_position_id = null
   reportToTargetType.value = 'none'
   reportToPositionChoiceId.value = null
@@ -184,6 +226,9 @@ watch(reportToOrgUnitId, async (id: number | null) => {
 })
 
 watch([reportToTargetType, reportToPositionChoiceId, reportToStaffChoiceId], () => {
+  if (hydratingReportTo.value) {
+    return
+  }
   syncReportToFormFromChoices()
 })
 
@@ -208,7 +253,7 @@ async function loadPosition() {
     const posName = p.name.trim()
     chargesSelectedArea.value = mgrName !== '' && mgrName === posName ? 'yes' : 'no'
     await loadUnitManagerReference(p.org_unit_id)
-    await hydrateReportToFromSaved(p.reports_to_position)
+    await hydrateReportToFromSaved(p.reports_to_position_id, p.reports_to_position)
   } catch {
     toast.error('No se encontró el cargo')
     router.push('/settings/organizational-structure/positions')
@@ -354,6 +399,7 @@ onMounted(() => {
                 </div>
 
                 <OrgPositionReportsToFields
+                  :key="`area-report-${positionId}-${reportToFieldsKey}`"
                   v-model:report-to-org-unit-id="reportToOrgUnitId"
                   v-model:report-to-target-type="reportToTargetType"
                   v-model:report-to-position-choice-id="reportToPositionChoiceId"
