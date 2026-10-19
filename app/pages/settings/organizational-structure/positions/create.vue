@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import Multiselect from '@vueform/multiselect'
 import type { OrgYesNoChoice } from '~/constants/org-structure'
 import type { OrgUnitRow } from '~/composables/useOrgStructureApi'
 import type { OrgStaffListItem } from '~/types/org-structure'
@@ -73,13 +72,12 @@ function onPositionActiveChange(value: boolean) {
   form.value.is_active = value
 }
 
-function onReportToTargetTypeChange(value: unknown): void {
-  if (value === 'position' || value === 'staff' || value === 'none') {
-    reportToTargetType.value = value
-    return
-  }
-  reportToTargetType.value = 'none'
-}
+const unitSelectOptions = computed(() =>
+  unitOptions.value.map(unit => ({
+    value: unit.id,
+    label: unit.label,
+  })),
+)
 
 async function loadUnits() {
   const units = await orgApi.fetchUnits({ activeOnly: true })
@@ -241,20 +239,15 @@ onMounted(() => {
                 <div class="space-y-3 md:col-span-2 md:grid md:grid-cols-2 md:gap-x-6 md:gap-y-5 md:items-start">
                   <div class="space-y-3">
                     <Label for="unit_p" class="leading-snug">Área *</Label>
-                    <Multiselect
+                    <ArchivalSingleMultiselect
                       id="unit_p"
                       v-model="form.org_unit_id"
-                      mode="single"
-                      :object="false"
-                      :options="unitOptions"
-                      value-prop="id"
-                      label="label"
-                      :searchable="true"
+                      coerce-number
                       :can-clear="false"
-                      placeholder="Seleccione área…"
+                      :options="unitSelectOptions"
+                      placeholder="Buscar y seleccionar área"
                       no-options-text="No hay áreas configuradas"
                       no-results-text="Sin coincidencias"
-                      class="multiselect-roles"
                     />
                   </div>
                   <OrgYesNoMultiselect
@@ -305,118 +298,19 @@ onMounted(() => {
                   />
                 </div>
 
-                <div class="space-y-3 md:col-span-2">
-                  <Label for="rep" class="leading-snug">Reporta a (opcional)</Label>
-                  <p class="text-xs text-muted-foreground leading-relaxed">
-                    Elija el área donde está el jefe (p. ej. Gerencia) y luego el cargo o funcionario.
-                    Solo aparecen cargos marcados como referencia de jefe de esa área.
-                  </p>
-                  <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-                    <div class="space-y-2">
-                      <Label class="text-xs text-muted-foreground">Área de reporte</Label>
-                      <Select
-                        :model-value="reportToOrgUnitId == null ? 'none' : String(reportToOrgUnitId)"
-                        :disabled="!form.org_unit_id"
-                        @update:model-value="(v) => { reportToOrgUnitId = v === 'none' ? null : Number(v) }"
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione área" />
-                        </SelectTrigger>
-                        <SelectContent class="max-h-72">
-                          <SelectItem value="none">
-                            (Sin jefe inmediato)
-                          </SelectItem>
-                          <SelectItem
-                            v-for="u in unitOptions"
-                            :key="u.id"
-                            :value="String(u.id)"
-                          >
-                            {{ u.label }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div class="space-y-2">
-                      <Label class="text-xs text-muted-foreground">Tipo</Label>
-                      <Select
-                        :model-value="reportToTargetType"
-                        :disabled="!reportToOrgUnitId"
-                        @update:model-value="onReportToTargetTypeChange"
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccione tipo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">
-                            (Ninguno)
-                          </SelectItem>
-                          <SelectItem value="position">
-                            Cargo
-                          </SelectItem>
-                          <SelectItem value="staff">
-                            Funcionario
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div class="space-y-2">
-                      <Label class="text-xs text-muted-foreground">Selección</Label>
-                      <Select
-                        v-if="reportToTargetType === 'position'"
-                        :model-value="reportToPositionChoiceId == null ? 'none' : String(reportToPositionChoiceId)"
-                        :disabled="!reportToOrgUnitId"
-                        @update:model-value="(v) => { reportToPositionChoiceId = v === 'none' ? null : Number(v) }"
-                      >
-                        <SelectTrigger id="rep">
-                          <SelectValue placeholder="Seleccione cargo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">
-                            (Ninguno)
-                          </SelectItem>
-                          <SelectItem
-                            v-for="r in peerPositions"
-                            :key="r.id"
-                            :value="String(r.id)"
-                          >
-                            {{ r.name }} — {{ r.code }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <Select
-                        v-else-if="reportToTargetType === 'staff'"
-                        :model-value="reportToStaffChoiceId == null ? 'none' : String(reportToStaffChoiceId)"
-                        :disabled="!reportToOrgUnitId"
-                        @update:model-value="(v) => { reportToStaffChoiceId = v === 'none' ? null : Number(v) }"
-                      >
-                        <SelectTrigger id="rep">
-                          <SelectValue placeholder="Seleccione funcionario" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">
-                            (Ninguno)
-                          </SelectItem>
-                          <SelectItem
-                            v-for="s in reportToStaffOptions"
-                            :key="s.id"
-                            :value="String(s.id)"
-                          >
-                            {{ s.label }}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <Input
-                        v-else
-                        disabled
-                        placeholder="Seleccione área y tipo"
-                      />
-                    </div>
-                  </div>
-                </div>
+                <OrgPositionReportsToFields
+                  v-model:report-to-org-unit-id="reportToOrgUnitId"
+                  v-model:report-to-target-type="reportToTargetType"
+                  v-model:report-to-position-choice-id="reportToPositionChoiceId"
+                  v-model:report-to-staff-choice-id="reportToStaffChoiceId"
+                  :disabled="form.org_unit_id == null"
+                  :unit-options="unitOptions"
+                  :peer-positions="peerPositions"
+                  :staff-options="reportToStaffOptions"
+                  report-area-input-id="rep"
+                  report-type-input-id="rep_type"
+                  report-choice-input-id="rep_choice"
+                />
                 </div>
 
                 <OrgStructureValidityPeriodFields
@@ -430,9 +324,9 @@ onMounted(() => {
                   :model-value="form.is_active"
                   gender="masculine"
                   input-id="position_create_active_ms"
-                helper-text="Los cargos inactivos no se ofrecen al asignar funcionarios ni en flujos de alta."
-                @update:model-value="onPositionActiveChange"
-              />
+                  helper-text="Los cargos inactivos no se ofrecen al asignar funcionarios ni en flujos de alta."
+                  @update:model-value="onPositionActiveChange"
+                />
             </CardContent>
           </Card>
 
@@ -450,19 +344,3 @@ onMounted(() => {
     </div>
   </SettingsLayout>
 </template>
-
-<style src="@vueform/multiselect/themes/default.css"></style>
-<style scoped>
-.multiselect-roles {
-  --ms-font-size: 0.875rem;
-  --ms-line-height: 1.25rem;
-  --ms-radius: 0.375rem;
-  --ms-border-color: var(--border);
-  --ms-bg: var(--background);
-  --ms-py: 0.5rem;
-  --ms-dropdown-radius: 0.375rem;
-  min-height: 2.75rem;
-  width: 100%;
-  min-width: 0;
-}
-</style>
