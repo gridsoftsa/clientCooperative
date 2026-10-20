@@ -1,4 +1,5 @@
 import type { OrgInstitutionalProcess, OrgOffice, OrgStaffListItem } from '~/types/org-structure'
+import { orgSelectId } from '~/utils/org-select-id'
 
 export interface OrgUnitRow {
   id: number
@@ -55,8 +56,9 @@ export function useOrgStructureApi() {
     const q: Record<string, string | number | boolean> = { per_page: 500 }
     if (opts?.activeOnly)
       q.active_only = true
-    if (opts?.orgOfficeId)
-      q.org_office_id = opts.orgOfficeId
+    const officeId = orgSelectId(opts?.orgOfficeId)
+    if (officeId != null)
+      q.org_office_id = officeId
     const res = await $api<{ data: OrgUnitRow[] }>('/organizational-structure/org-units', { query: q })
     return res.data
   }
@@ -69,15 +71,16 @@ export function useOrgStructureApi() {
   }): Promise<OrgPositionRow[]> {
     const q: Record<string, string | number | boolean> = { per_page: 500 }
     if (opts?.activeOnly)
-      q.active_only = true
-    if (opts?.orgUnitId)
-      q.org_unit_id = opts.orgUnitId
+      q.active_only = 1
+    const unitId = orgSelectId(opts?.orgUnitId)
+    if (unitId != null)
+      q.org_unit_id = unitId
     if (opts?.managerOfOrgUnitOnly)
-      q.manager_of_org_unit_only = true
+      q.manager_of_org_unit_only = 1
     if (opts?.eligibleAsReportsTo)
-      q.eligible_as_reports_to = true
+      q.eligible_as_reports_to = 1
     const res = await $api<{ data: OrgPositionRow[] }>('/organizational-structure/org-positions', { query: q })
-    return res.data
+    return Array.isArray(res.data) ? res.data : []
   }
 
   async function fetchStaff(opts?: { activeOnly?: boolean; q?: string; orgUnitIds?: number[]; orgPositionIds?: number[] }): Promise<OrgStaffListItem[]> {

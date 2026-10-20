@@ -16,6 +16,7 @@ import {
   userCreatePrefillFromStaff,
   USER_CREATE_PREFILL_FROM_STAFF_KEY,
 } from '~/utils/staff-user-create-bridge'
+import { orgSelectId } from '~/utils/org-select-id'
 
 const props = withDefaults(
   defineProps<{
@@ -188,7 +189,13 @@ const officeSelectOptions = computed(() =>
 )
 
 const unitSelectOptions = computed(() =>
-  units.value.map(u => ({ value: u.id, label: `${u.name} — ${u.code}` })),
+  units.value.map((u) => {
+    const count = u.org_positions_count
+    const countLabel = typeof count === 'number'
+      ? ` · ${count} ${count === 1 ? 'cargo' : 'cargos'}`
+      : ''
+    return { value: u.id, label: `${u.name} — ${u.code}${countLabel}` }
+  }),
 )
 
 const positionSelectOptions = computed(() =>
@@ -532,11 +539,52 @@ async function loadEditCatalogs() {
   }
 }
 
+async function reloadPositionsIfUnitSelected(): Promise<void> {
+  const unitId = orgSelectId(ubicacionForm.value.org_unit_id)
+  if (unitId == null) {
+    return
+  }
+  await loadPositionsForUnit(unitId)
+}
+
+const showEmptyPositionsHint = computed(() =>
+  !props.readOnly
+  && orgSelectId(ubicacionForm.value.org_unit_id) != null
+  && positions.value.length === 0,
+)
+
+const selectedUnitPositionsHref = computed(() => {
+  const unitId = orgSelectId(ubicacionForm.value.org_unit_id)
+  if (unitId == null) {
+    return undefined
+  }
+  return `/settings/organizational-structure/units/${unitId}/positions`
+})
+
+async function loadPositionsForUnit(unitId: number, opts?: { activeOnly?: boolean }): Promise<void> {
+  try {
+    positions.value = await orgApi.fetchPositions({
+      activeOnly: opts?.activeOnly ?? true,
+      orgUnitId: unitId,
+    })
+  }
+  catch {
+    positions.value = []
+    toast.error('No se pudieron cargar los cargos de esta área')
+  }
+}
+
 async function loadSupervisorPositions(orgUnitId: number): Promise<void> {
-  supervisorPositions.value = (await orgApi.fetchPositions({
-    activeOnly: true,
-    orgUnitId,
-  })).map(p => ({ id: p.id, name: p.name, code: p.code }))
+  try {
+    supervisorPositions.value = (await orgApi.fetchPositions({
+      activeOnly: true,
+      orgUnitId,
+    })).map(p => ({ id: p.id, name: p.name, code: p.code }))
+  }
+  catch {
+    supervisorPositions.value = []
+    toast.error('No se pudieron cargar los cargos del jefe')
+  }
 }
 
 async function loadSupervisorChoices(orgUnitId: number, orgPositionId: number): Promise<void> {
@@ -651,6 +699,7 @@ async function hydrateUbicacionFormFromCurrentAssignment(): Promise<void> {
         units.value = []
       } finally {
         ubicacionHydrating.value = false
+        await reloadPositionsIfUnitSelected()
       }
     }
     return
@@ -664,7 +713,7 @@ async function hydrateUbicacionFormFromCurrentAssignment(): Promise<void> {
     ubicacionForm.value.org_position_id = null
     units.value = await orgApi.fetchUnits({ activeOnly: false, orgOfficeId: officeId })
     ubicacionForm.value.org_unit_id = unitId
-    positions.value = await orgApi.fetchPositions({ activeOnly: false, orgUnitId: unitId })
+    await loadPositionsForUnit(unitId, { activeOnly: false })
     ubicacionForm.value.org_position_id = positionId
     ubicacionForm.value.effective_from = ca.effective_from ?? todayISO()
     ubicacionForm.value.effective_to = ''
@@ -675,6 +724,9 @@ async function hydrateUbicacionFormFromCurrentAssignment(): Promise<void> {
     toast.error('No se pudo cargar la ubicación vigente en el formulario')
   } finally {
     ubicacionHydrating.value = false
+    if (positions.value.length === 0) {
+      await reloadPositionsIfUnitSelected()
+    }
   }
 }
 
@@ -684,13 +736,25 @@ watch(
     if (props.readOnly || ubicacionHydrating.value) {
       return
     }
+    const officeId = orgSelectId(id)
+    if (officeId != null && officeId !== id) {
+      ubicacionForm.value.org_office_id = officeId
+      return
+    }
     ubicacionForm.value.org_unit_id = null
     ubicacionForm.value.org_position_id = null
-    if (id == null) {
+    positions.value = []
+    if (officeId == null) {
       units.value = []
       return
     }
-    units.value = await orgApi.fetchUnits({ activeOnly: true, orgOfficeId: id })
+    try {
+      units.value = await orgApi.fetchUnits({ activeOnly: true, orgOfficeId: officeId })
+    }
+    catch {
+      units.value = []
+      toast.error('No se pudieron cargar las áreas de esta agencia')
+    }
   },
 )
 
@@ -700,12 +764,17 @@ watch(
     if (props.readOnly || ubicacionHydrating.value) {
       return
     }
+    const unitId = orgSelectId(id)
+    if (unitId != null && unitId !== id) {
+      ubicacionForm.value.org_unit_id = unitId
+      return
+    }
     ubicacionForm.value.org_position_id = null
-    if (id == null) {
+    if (unitId == null) {
       positions.value = []
       return
     }
-    positions.value = await orgApi.fetchPositions({ activeOnly: true, orgUnitId: id })
+    await loadPositionsForUnit(unitId)
   },
 )
 
@@ -713,14 +782,19 @@ watch(supervisorOrgUnitId, async (id: number | null) => {
   if (props.readOnly || supervisorHydrating.value) {
     return
   }
+  const unitId = orgSelectId(id)
+  if (unitId != null && unitId !== id) {
+    supervisorOrgUnitId.value = unitId
+    return
+  }
   supervisorOrgPositionId.value = null
   ubicacionForm.value.immediate_supervisor_staff_id = null
   supervisorChoices.value = []
-  if (id == null) {
+  if (unitId == null) {
     supervisorPositions.value = []
     return
   }
-  await loadSupervisorPositions(id)
+  await loadSupervisorPositions(unitId)
 })
 
 watch(supervisorOrgPositionId, async (id: number | null) => {
@@ -1604,7 +1678,7 @@ watch(
                             label="label"
                             :searchable="true"
                             :can-clear="false"
-                            :disabled="!ubicacionForm.org_office_id"
+                            :disabled="ubicacionHydrating || !ubicacionForm.org_office_id"
                             placeholder="Seleccione área…"
                             no-options-text="No hay áreas en esta agencia"
                             no-results-text="Sin coincidencias"
@@ -1616,6 +1690,7 @@ watch(
                           <Label for="pos_p" class="leading-snug">Cargo principal *</Label>
                           <Multiselect
                             id="pos_p"
+                            :key="`pos-${ubicacionForm.org_unit_id ?? 'none'}`"
                             v-model="ubicacionForm.org_position_id"
                             mode="single"
                             :object="false"
@@ -1624,12 +1699,26 @@ watch(
                             label="label"
                             :searchable="true"
                             :can-clear="false"
-                            :disabled="!ubicacionForm.org_unit_id"
+                            :disabled="ubicacionHydrating || !ubicacionForm.org_unit_id"
                             placeholder="Seleccione cargo…"
                             no-options-text="No hay cargos en esta área"
                             no-results-text="Sin coincidencias"
                             :class="ubicacionMultiselectErrorClass('org_position_id')"
                           />
+                          <p
+                            v-if="showEmptyPositionsHint"
+                            class="text-xs text-muted-foreground leading-relaxed"
+                          >
+                            Esta área aún no tiene cargos creados. Debe crearlos en
+                            <NuxtLink
+                              v-if="selectedUnitPositionsHref"
+                              :to="selectedUnitPositionsHref"
+                              class="font-medium text-primary underline underline-offset-2 hover:no-underline"
+                            >
+                              Cargos del área
+                            </NuxtLink>
+                            antes de asignar al funcionario. Si el cargo está en un subárea, seleccione esa área.
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -1663,6 +1752,7 @@ watch(
                         <div class="space-y-2">
                           <Label class="text-xs text-muted-foreground">Cargo del jefe</Label>
                           <Multiselect
+                            :key="`sup-pos-${supervisorOrgUnitId ?? 'none'}`"
                             v-model="supervisorOrgPositionId"
                             mode="single"
                             :object="false"
