@@ -38,6 +38,73 @@ export function isStaffUserCreateReturnPath(path: string): boolean {
   return path === STAFF_CREATE_RETURN_PATH || STAFF_EDIT_RETURN_PATH_PATTERN.test(path)
 }
 
+export function splitStaffNamePartsFromFullName(fullName: string): {
+  first_name: string
+  second_name: string
+  first_last_name: string
+  second_last_name: string
+} {
+  const empty = {
+    first_name: '',
+    second_name: '',
+    first_last_name: '',
+    second_last_name: '',
+  }
+  const parts = fullName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (parts.length === 0) {
+    return empty
+  }
+
+  if (parts.length === 1) {
+    return { ...empty, first_name: parts[0]! }
+  }
+
+  if (parts.length === 2) {
+    return {
+      ...empty,
+      first_name: parts[0]!,
+      first_last_name: parts[1]!,
+    }
+  }
+
+  if (parts.length === 3) {
+    return {
+      ...empty,
+      first_name: parts[0]!,
+      first_last_name: parts[1]!,
+      second_last_name: parts[2]!,
+    }
+  }
+
+  return {
+    first_name: parts[0]!,
+    second_name: parts.slice(1, -2).join(' '),
+    first_last_name: parts[parts.length - 2]!,
+    second_last_name: parts[parts.length - 1]!,
+  }
+}
+
+export function personDisplayNameFromUser(user: {
+  full_name?: string | null
+  name?: string | null
+}): string {
+  const fullName = user.full_name?.trim() ?? ''
+  if (fullName !== '') {
+    return fullName
+  }
+
+  const username = user.name?.trim() ?? ''
+  if (username !== '' && !username.includes('@')) {
+    return username
+  }
+
+  return ''
+}
+
 export function buildFullNameFromStaffParts(
   firstName: string,
   secondName: string,

@@ -10,6 +10,8 @@ import {
   isOrgStaffEmailValid,
   orgStaffContactEmailErrorMessage,
   orgStaffContactPhoneErrorMessage,
+  personDisplayNameFromUser,
+  splitStaffNamePartsFromFullName,
   userCreatePrefillFromStaff,
 } from '~/utils/staff-user-create-bridge'
 
@@ -45,7 +47,16 @@ const form = ref({
   is_active: true,
 })
 
-const userOptions = ref<Array<{ id: number; label: string }>>([])
+type LinkableUserOption = {
+  id: number
+  label: string
+  full_name: string | null
+  name: string
+  email: string
+  phone: string | null
+}
+
+const userOptions = ref<LinkableUserOption[]>([])
 const saving = ref(false)
 const activeTab = ref<'datos' | 'ubicacion'>('datos')
 
@@ -107,13 +118,23 @@ async function loadUsersIfAllowed() {
     return
   }
   try {
-    const res = await $api<{ data: Array<{ id: number, name: string | null, email: string }> }>(
+    const res = await $api<{ data: Array<{
+      id: number
+      name: string | null
+      full_name?: string | null
+      email: string
+      phone?: string | null
+    }> }>(
       '/users/linkable-for-org-staff',
       { query: { limit: 500 } },
     )
     userOptions.value = res.data.map(u => ({
       id: u.id,
-      label: `${u.name || u.email} · ${u.email}`,
+      name: u.name ?? '',
+      full_name: u.full_name ?? null,
+      email: u.email,
+      phone: u.phone ?? null,
+      label: `${personDisplayNameFromUser(u) || u.name || u.email} · ${u.email}`,
     }))
   } catch {
     userOptions.value = []
@@ -130,7 +151,14 @@ async function ensureSelectedUserInOptions(userId: number) {
     if (u.org_staff_id == null) {
       userOptions.value = [
         ...userOptions.value,
-        { id: u.id, label: `${u.name || u.email} · ${u.email}` },
+        {
+          id: u.id,
+          name: u.name,
+          full_name: u.full_name ?? null,
+          email: u.email,
+          phone: u.phone ?? null,
+          label: `${personDisplayNameFromUser(u) || u.name || u.email} · ${u.email}`,
+        },
       ]
     }
   } catch {
@@ -143,10 +171,42 @@ function applyReturnedUserFromQuery() {
   const userId = typeof raw === 'string' ? Number(raw) : null
   if (userId != null && Number.isFinite(userId) && userId > 0) {
     form.value.user_id = userId
-    void ensureSelectedUserInOptions(userId)
+    void ensureSelectedUserInOptions(userId).then(() => applySelectedUserToForm(userId))
     router.replace({ path: route.path })
   }
 }
+
+function applySelectedUserToForm(userId: number | null): void {
+  if (userId == null) {
+    return
+  }
+
+  const selected = userOptions.value.find(user => user.id === userId)
+  if (!selected) {
+    return
+  }
+
+  const displayName = personDisplayNameFromUser(selected)
+  if (displayName !== '') {
+    const parts = splitStaffNamePartsFromFullName(displayName)
+    form.value.first_name = parts.first_name
+    form.value.second_name = parts.second_name
+    form.value.first_last_name = parts.first_last_name
+    form.value.second_last_name = parts.second_last_name
+  }
+
+  if (selected.email.trim()) {
+    form.value.email = selected.email
+  }
+
+  if (selected.phone?.trim() && !form.value.phone.trim()) {
+    form.value.phone = selected.phone.trim()
+  }
+}
+
+watch(() => form.value.user_id, (userId) => {
+  applySelectedUserToForm(userId)
+})
 
 async function handleSubmit() {
   submitAttempted.value = true
@@ -249,7 +309,7 @@ function isFieldMissing(field: RequiredField): boolean {
 }
 
 function firstMissingField(): RequiredField | null {
-  const order: RequiredField[] = ['first_name', 'first_last_name', 'email', 'phone', 'date_of_birth', 'user_id', 'document_pair']
+  const order: RequiredField[] = ['user_id', 'first_name', 'first_last_name', 'email', 'phone', 'date_of_birth', 'document_pair']
   return order.find(field => isFieldMissing(field)) ?? null
 }
 
@@ -320,6 +380,9 @@ onMounted(async () => {
   restoreDraftFromStorage()
   await Promise.all([loadUsersIfAllowed(), fetchDocumentTypeOptions()])
   applyReturnedUserFromQuery()
+  if (form.value.user_id != null) {
+    applySelectedUserToForm(form.value.user_id)
+  }
 })
 </script>
 
@@ -332,7 +395,7 @@ onMounted(async () => {
             Registrar funcionario
           </h2>
           <p class="text-muted-foreground leading-relaxed">
-            Complete los datos personales y, al guardar, continúe en la pestaña Ubicación para definir agencia, área y cargo principal.
+            Empiece por el usuario del sistema; los nombres y el correo se completan con esa cuenta. Luego revise los datos personales y, al guardar, continúe en Ubicación.
           </p>
         </div>
         <Button variant="outline" class="shrink-0" @click="router.back()">
@@ -357,10 +420,75 @@ onMounted(async () => {
               <Card>
                 <CardHeader class="gap-2">
                   <CardTitle class="leading-snug">
+                    Vínculo con usuario del sistema *
+                  </CardTitle>
+                  <CardDescription class="leading-relaxed">
+                    Si el usuario todavía no existe, créelo primero con «Crear usuario». Al volver, selecciónelo aquí:
+                    el formulario se completará con el nombre completo y el correo de esa cuenta. Luego puede ajustar nombres y apellidos si hace falta.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent class="space-y-4">
+                  <template v-if="hasPermission('usuarios_ver')">
+                    <p class="rounded-lg border bg-muted/30 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+                      El usuario tiene un nombre unificado; al seleccionarlo se reparte en primer nombre, segundo nombre y apellidos.
+                      Si aún no ha creado la cuenta, use «Crear usuario» antes de registrar el funcionario.
+                    </p>
+                    <div class="space-y-3">
+                      <Label for="usr" class="leading-snug">Usuario *</Label>
+                      <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                        <div class="min-w-0">
+                          <Multiselect
+                            id="usr"
+                            v-model="form.user_id"
+                            mode="single"
+                            :object="false"
+                            :options="userSelectOptions"
+                            value-prop="value"
+                            label="label"
+                            :searchable="true"
+                            :can-clear="false"
+                            placeholder="Seleccione usuario…"
+                            no-options-text="No hay usuarios sin funcionario vinculado"
+                            no-results-text="Sin coincidencias"
+                            :class="formMultiselectErrorClass('user_id')"
+                          />
+                        </div>
+                        <PermissionGate permission="usuarios_crear">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            class="shrink-0 w-full lg:w-auto"
+                            @click="saveDraftAndGoCreateUser"
+                          >
+                            <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
+                            Crear usuario
+                          </Button>
+                        </PermissionGate>
+                      </div>
+                      <p
+                        v-if="submitAttempted && isFieldMissing('user_id')"
+                        class="text-sm text-destructive"
+                      >
+                        Seleccione o cree un usuario del sistema.
+                      </p>
+                    </div>
+                  </template>
+                  <p
+                    v-else
+                    class="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground leading-relaxed"
+                  >
+                    No tiene permiso para listar usuarios; puede crear el funcionario sin vínculo y asociarlo después desde la edición, si corresponde.
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader class="gap-2">
+                  <CardTitle class="leading-snug">
                     Información personal y contacto
                   </CardTitle>
                   <CardDescription class="leading-relaxed">
-                    Nombre completo, correo, teléfono y vínculo con usuario del sistema son obligatorios.
+                    Nombre, correo y teléfono son obligatorios. Si ya eligió un usuario, revise que nombres y apellidos hayan quedado bien separados.
                   </CardDescription>
                 </CardHeader>
                 <CardContent class="space-y-8">
@@ -469,66 +597,6 @@ onMounted(async () => {
                       </div>
                     </div>
                   </section>
-
-                  <template v-if="hasPermission('usuarios_ver')">
-                    <Separator />
-                    <section class="space-y-4">
-                      <div class="space-y-1">
-                        <p class="text-sm font-medium text-foreground leading-snug">
-                          Vínculo con usuario del sistema *
-                        </p>
-                        <p class="text-sm text-muted-foreground leading-relaxed">
-                          Obligatorio: asocie una cuenta existente sin funcionario vinculado o cree una nueva.
-                        </p>
-                      </div>
-                      <div class="space-y-3">
-                        <Label for="usr" class="leading-snug">Usuario *</Label>
-                        <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-                          <div class="min-w-0">
-                            <Multiselect
-                              id="usr"
-                              v-model="form.user_id"
-                              mode="single"
-                              :object="false"
-                              :options="userSelectOptions"
-                              value-prop="value"
-                              label="label"
-                              :searchable="true"
-                              :can-clear="false"
-                              placeholder="Seleccione usuario…"
-                              no-options-text="No hay usuarios sin funcionario vinculado"
-                              no-results-text="Sin coincidencias"
-                              :class="formMultiselectErrorClass('user_id')"
-                            />
-                          </div>
-                          <PermissionGate permission="usuarios_crear">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              class="shrink-0 w-full lg:w-auto"
-                              @click="saveDraftAndGoCreateUser"
-                            >
-                              <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-                              Crear usuario
-                            </Button>
-                          </PermissionGate>
-                        </div>
-                        <p
-                          v-if="submitAttempted && isFieldMissing('user_id')"
-                          class="text-sm text-destructive"
-                        >
-                          Seleccione o cree un usuario del sistema.
-                        </p>
-                      </div>
-                    </section>
-                  </template>
-
-                  <p
-                    v-else
-                    class="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground leading-relaxed"
-                  >
-                    No tiene permiso para listar usuarios; puede crear el funcionario sin vínculo y asociarlo después desde la edición, si corresponde.
-                  </p>
                 </CardContent>
               </Card>
 
