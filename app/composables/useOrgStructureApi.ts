@@ -65,6 +65,7 @@ export function useOrgStructureApi() {
     activeOnly?: boolean
     orgUnitId?: number
     managerOfOrgUnitOnly?: boolean
+    eligibleAsReportsTo?: boolean
   }): Promise<OrgPositionRow[]> {
     const q: Record<string, string | number | boolean> = { per_page: 500 }
     if (opts?.activeOnly)
@@ -73,6 +74,8 @@ export function useOrgStructureApi() {
       q.org_unit_id = opts.orgUnitId
     if (opts?.managerOfOrgUnitOnly)
       q.manager_of_org_unit_only = true
+    if (opts?.eligibleAsReportsTo)
+      q.eligible_as_reports_to = true
     const res = await $api<{ data: OrgPositionRow[] }>('/organizational-structure/org-positions', { query: q })
     return res.data
   }

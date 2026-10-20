@@ -26,11 +26,26 @@ const unitSelectOptions = computed(() =>
   })),
 )
 
-const typeSelectOptions = [
-  { value: 'none', label: '(Ninguno)' },
-  { value: 'position', label: 'Cargo' },
-  { value: 'staff', label: 'Funcionario' },
-]
+const typeSelectOptions = computed(() => {
+  const options = [
+    { value: 'position', label: 'Cargo' },
+    { value: 'staff', label: 'Funcionario' },
+  ]
+
+  if (reportToOrgUnitId.value == null) {
+    return [{ value: 'none', label: '(Ninguno)' }, ...options]
+  }
+
+  return options
+})
+
+const reportsToIncomplete = computed(() =>
+  reportToOrgUnitId.value != null && (
+    reportToTargetType.value === 'none'
+    || (reportToTargetType.value === 'position' && reportToPositionChoiceId.value == null)
+    || (reportToTargetType.value === 'staff' && reportToStaffChoiceId.value == null)
+  ),
+)
 
 const positionSelectOptions = computed(() =>
   props.peerPositions.map(position => ({
@@ -51,8 +66,8 @@ const staffSelectOptions = computed(() =>
   <div class="space-y-3 md:col-span-2">
     <Label :for="reportAreaInputId">Reporta a (opcional)</Label>
     <p class="text-xs leading-relaxed text-muted-foreground">
-      Elija el área donde está el jefe (p. ej. Gerencia) y luego el cargo o funcionario.
-      Solo aparecen cargos marcados como referencia de jefe de esa área.
+      Si no reporta a nadie, deje el área vacía. Si elige un área, debe seleccionar el cargo o el funcionario;
+      el área sola no se guarda. Aparecen el cargo a cargo del área y los cargos con personal a cargo.
     </p>
     <div class="grid grid-cols-1 items-start gap-4 md:grid-cols-3">
       <div class="flex min-w-0 flex-col gap-1.5">
@@ -82,7 +97,9 @@ const staffSelectOptions = computed(() =>
         />
       </div>
       <div class="flex min-w-0 flex-col gap-1.5">
-        <Label :for="reportChoiceInputId" class="text-xs text-muted-foreground">Selección</Label>
+        <Label :for="reportChoiceInputId" class="text-xs text-muted-foreground">
+          Selección{{ reportToOrgUnitId != null ? ' *' : '' }}
+        </Label>
         <ArchivalSingleMultiselect
           v-if="reportToTargetType === 'position'"
           :id="reportChoiceInputId"
@@ -92,7 +109,7 @@ const staffSelectOptions = computed(() =>
           :disabled="disabled || reportToOrgUnitId == null"
           :options="positionSelectOptions"
           placeholder="Seleccione cargo"
-          no-options-text="No hay cargos de jefe en esa área"
+          no-options-text="No hay cargos a cargo del área ni con personal a cargo"
           no-results-text="Sin coincidencias"
         />
         <ArchivalSingleMultiselect
@@ -119,5 +136,8 @@ const staffSelectOptions = computed(() =>
         />
       </div>
     </div>
+    <p v-if="reportsToIncomplete" class="text-xs text-destructive leading-relaxed">
+      Falta el cargo o el funcionario. Sin esa selección, «Reporta a» no se guarda.
+    </p>
   </div>
 </template>

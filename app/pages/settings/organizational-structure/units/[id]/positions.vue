@@ -5,6 +5,7 @@ import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureAp
 import type { OrgStaffListItem } from '~/types/org-structure'
 import { todayIsoDateString, toDateInputValue } from '~/utils/dateInputValue'
 import { isOrgPositionCodeSuffix, orgPositionCodePrefix, splitOrgPositionAreaCode } from '~/utils/org-position-area-code'
+import { ORG_POSITION_REPORTS_TO_REQUIRED_MESSAGE, orgPositionReportsToIncomplete } from '~/utils/org-position-reports-to'
 
 definePageMeta({
   layout: 'default',
@@ -113,7 +114,7 @@ async function loadReportToCandidates(orgUnitId: number): Promise<void> {
     orgApi.fetchPositions({
       activeOnly: false,
       orgUnitId,
-      managerOfOrgUnitOnly: true,
+      eligibleAsReportsTo: true,
     }),
     orgApi.fetchStaff({
       activeOnly: false,
@@ -149,14 +150,15 @@ watch(reportToOrgUnitId, async (id: number | null) => {
     return
   }
   form.value.reports_to_position_id = null
-  reportToTargetType.value = 'none'
   reportToPositionChoiceId.value = null
   reportToStaffChoiceId.value = null
   if (id == null) {
+    reportToTargetType.value = 'none'
     peerPositions.value = []
     reportToStaffOptions.value = []
     return
   }
+  reportToTargetType.value = 'position'
   await loadReportToCandidates(id)
 })
 
@@ -265,6 +267,10 @@ async function handleSubmit() {
   }
   if (areaManagerConflict.value) {
     toast.error(`El área ya tiene el cargo «${areaManagerConflict.value}» como referencia de jefe.`)
+    return
+  }
+  if (orgPositionReportsToIncomplete(reportToOrgUnitId.value, form.value.reports_to_position_id)) {
+    toast.error(ORG_POSITION_REPORTS_TO_REQUIRED_MESSAGE)
     return
   }
 
