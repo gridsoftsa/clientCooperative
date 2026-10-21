@@ -664,8 +664,8 @@ onMounted(async () => {
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="font-medium">{{ type.name }}</span>
                     <Badge v-if="type.is_system" variant="outline" class="text-xs">
-                      Sistema
-                    </Badge>
+                  Sistema
+                </Badge>
                   </div>
                   <p v-if="producerAreasLabel(type)" class="text-xs text-muted-foreground">
                     {{ producerAreasLabel(type) }}
@@ -684,7 +684,7 @@ onMounted(async () => {
                     {{ catalogDetail(type) }}
                   </div>
                   <div v-if="type.trd_table?.org_unit" class="text-xs text-muted-foreground">
-                    TRD: {{ type.trd_table.org_unit.name }}
+                  TRD: {{ type.trd_table.org_unit.name }}
                   </div>
                 </div>
               </TableCell>

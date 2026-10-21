@@ -330,17 +330,17 @@ async function renderChart(): Promise<void> {
       .svgHeight(height)
       .compact(true)
       .nodeWidth(() => 272)
-      .nodeHeight(() => 136)
-      .childrenMargin(() => 56)
+      .nodeHeight(() => 154)
+      .childrenMargin(() => 40)
       .siblingsMargin(() => 18)
       .neighbourMargin(() => 28)
-      .compactMarginBetween(() => 14)
+      .compactMarginBetween(() => 18)
       .compactMarginPair(() => 22)
       .rootMargin(28)
-      .nodeButtonWidth(() => 48)
-      .nodeButtonHeight(() => 24)
-      .nodeButtonX(() => -24)
-      .nodeButtonY(() => 8)
+      .nodeButtonWidth(() => 58)
+      .nodeButtonHeight(() => 28)
+      .nodeButtonX(() => -29)
+      .nodeButtonY(() => -34)
       .initialExpandLevel(INITIAL_EXPAND_LEVEL)
       .setActiveNodeCentered(true)
       .scaleExtent([0.35, 2.2])
@@ -352,9 +352,9 @@ async function renderChart(): Promise<void> {
         const expanded = Boolean(node.children)
         const count = Number(node.data?._directSubordinatesPaging ?? node.data?._directSubordinates ?? 0)
         const chevron = expanded
-          ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 15l6-6 6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-          : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-        return `<div style="box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:4px;width:100%;height:100%;border:1px solid ${palette.border};border-radius:999px;background:${palette.surface};color:${palette.muted};font-size:11px;font-weight:600;line-height:1;box-shadow:0 1px 2px rgb(24 24 27 / 0.08);">${chevron}<span>${count}</span></div>`
+          ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 15l6-6 6 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+          : '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        return `<div style="box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:5px;width:100%;height:100%;border:1px solid ${palette.border};border-radius:999px;background:${palette.badgeBg};color:${palette.text};font-size:12px;font-weight:700;line-height:1;box-shadow:0 1px 3px rgb(24 24 27 / 0.12);">${chevron}<span>${count}</span></div>`
       })
       .nodeContent((d: any) => {
         const data = d?.data as OrgChartNode
@@ -371,7 +371,7 @@ async function renderChart(): Promise<void> {
           : ''
 
         return `
-          <div style="box-sizing:border-box;height:100%;width:100%;overflow:hidden;border:1px solid ${palette.border};border-left:4px solid ${kindStyle.accent};border-radius:12px;background:${palette.surface};padding:10px 12px;display:flex;flex-direction:column;">
+          <div style="box-sizing:border-box;height:100%;width:100%;overflow:hidden;border:1px solid ${palette.border};border-left:4px solid ${kindStyle.accent};border-radius:12px;background:${palette.surface};padding:10px 12px 38px;display:flex;flex-direction:column;">
             <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
               <span style="font-size:14px;line-height:16px;">${kindStyle.icon}</span>
               <span style="font-size:11px;line-height:16px;color:${palette.muted};text-transform:uppercase;letter-spacing:0.04em;">${kindStyle.label}</span>
