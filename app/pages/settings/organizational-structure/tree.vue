@@ -45,6 +45,18 @@ const selectedOfficeId = ref<number | null>(null)
 const officeChoices = ref<Array<{ id: number; label: string }>>([])
 const loadingOffices = ref(false)
 
+const officeFilterOptions = computed(() => [
+  { value: 'all', label: 'Todas las agencias' },
+  ...officeChoices.value.map(o => ({ value: String(o.id), label: o.label })),
+])
+
+const officeFilterModel = computed({
+  get: () => (selectedOfficeId.value == null ? 'all' : String(selectedOfficeId.value)),
+  set: (value: string | number | null) => {
+    selectedOfficeId.value = value === 'all' || value == null || value === '' ? null : Number(value)
+  },
+})
+
 const tree = ref<TreeOffice[]>([])
 const loading = ref(false)
 const chartContainer = ref<HTMLDivElement | null>(null)
@@ -317,20 +329,32 @@ async function renderChart(): Promise<void> {
       .svgWidth(width)
       .svgHeight(height)
       .compact(true)
-      .nodeWidth(() => 260)
-      .nodeHeight(() => 118)
-      .childrenMargin(() => 40)
+      .nodeWidth(() => 272)
+      .nodeHeight(() => 136)
+      .childrenMargin(() => 56)
       .siblingsMargin(() => 18)
       .neighbourMargin(() => 28)
       .compactMarginBetween(() => 14)
       .compactMarginPair(() => 22)
       .rootMargin(28)
+      .nodeButtonWidth(() => 48)
+      .nodeButtonHeight(() => 24)
+      .nodeButtonX(() => -24)
+      .nodeButtonY(() => 8)
       .initialExpandLevel(INITIAL_EXPAND_LEVEL)
       .setActiveNodeCentered(true)
       .scaleExtent([0.35, 2.2])
       .duration(280)
       .linkUpdate(function (this: SVGPathElement) {
         d3.select(this).attr('stroke', palette.line).attr('stroke-width', 1.5)
+      })
+      .buttonContent(({ node }: { node: any }) => {
+        const expanded = Boolean(node.children)
+        const count = Number(node.data?._directSubordinatesPaging ?? node.data?._directSubordinates ?? 0)
+        const chevron = expanded
+          ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 15l6-6 6 6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+          : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        return `<div style="box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:4px;width:100%;height:100%;border:1px solid ${palette.border};border-radius:999px;background:${palette.surface};color:${palette.muted};font-size:11px;font-weight:600;line-height:1;box-shadow:0 1px 2px rgb(24 24 27 / 0.08);">${chevron}<span>${count}</span></div>`
       })
       .nodeContent((d: any) => {
         const data = d?.data as OrgChartNode
@@ -343,17 +367,17 @@ async function renderChart(): Promise<void> {
         const kindStyle = kindStyles[data.kind] ?? kindStyles.office
 
         const badgeHtml = data.badge
-          ? `<span style="display:inline-block;margin-top:8px;padding:2px 8px;border:1px solid ${palette.border};border-radius:999px;font-size:11px;line-height:16px;background:${palette.badgeBg};color:${palette.badgeText};">${escapeHtml(data.badge)}</span>`
+          ? `<span style="display:inline-block;max-width:100%;margin-top:6px;padding:2px 8px;border:1px solid ${palette.border};border-radius:999px;font-size:11px;line-height:16px;background:${palette.badgeBg};color:${palette.badgeText};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(data.badge)}</span>`
           : ''
 
         return `
-          <div style="box-sizing:border-box;height:100%;width:100%;border:1px solid ${palette.border};border-left:4px solid ${kindStyle.accent};border-radius:12px;background:${palette.surface};padding:12px 14px;display:flex;flex-direction:column;justify-content:space-between;">
-            <div style="display:flex;align-items:center;gap:8px;">
+          <div style="box-sizing:border-box;height:100%;width:100%;overflow:hidden;border:1px solid ${palette.border};border-left:4px solid ${kindStyle.accent};border-radius:12px;background:${palette.surface};padding:10px 12px;display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
               <span style="font-size:14px;line-height:16px;">${kindStyle.icon}</span>
               <span style="font-size:11px;line-height:16px;color:${palette.muted};text-transform:uppercase;letter-spacing:0.04em;">${kindStyle.label}</span>
             </div>
-            <div style="font-size:15px;font-weight:600;line-height:20px;color:${palette.text};margin-top:6px;">${escapeHtml(data.label)}</div>
-            <div style="font-size:12px;line-height:16px;color:${palette.muted};margin-top:6px;">${escapeHtml(data.subtitle)}</div>
+            <div style="font-size:14px;font-weight:600;line-height:18px;color:${palette.text};margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${escapeHtml(data.label)}</div>
+            <div style="font-size:12px;line-height:16px;color:${palette.muted};margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(data.subtitle)}</div>
             ${badgeHtml}
           </div>
         `
@@ -512,28 +536,16 @@ onBeforeUnmount(() => {
           >
             <div class="space-y-2 min-w-[min(100%,280px)] sm:max-w-md">
               <Label for="tree-office-filter" class="text-sm">Agencia</Label>
-              <Select
+              <ArchivalSingleMultiselect
                 id="tree-office-filter"
+                v-model="officeFilterModel"
                 :disabled="loadingOffices || loading"
-                :model-value="selectedOfficeId == null ? 'all' : String(selectedOfficeId)"
-                @update:model-value="(v) => { selectedOfficeId = v === 'all' ? null : Number(v) }"
-              >
-                <SelectTrigger class="w-full">
-                  <SelectValue placeholder="Todas las agencias" />
-                </SelectTrigger>
-                <SelectContent class="max-h-72">
-                  <SelectItem value="all">
-                    Todas las agencias
-                  </SelectItem>
-                  <SelectItem
-                    v-for="o in officeChoices"
-                    :key="o.id"
-                    :value="String(o.id)"
-                  >
-                    {{ o.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                :can-clear="false"
+                :options="officeFilterOptions"
+                placeholder="Todas las agencias"
+                no-options-text="No hay agencias configuradas"
+                no-results-text="Sin coincidencias"
+              />
             </div>
           </div>
 
