@@ -50,13 +50,13 @@ const loading = ref(false)
 const chartContainer = ref<HTMLDivElement | null>(null)
 const chartReady = ref(false)
 
-const INITIAL_EXPAND_LEVEL = 3
-/** Altura del lienzo SVG (viewport); el contenedor hace scroll si el árbol es más grande. */
-const CHART_VIEWPORT_HEIGHT = 440
-/** Escala inicial del zoom de D3 (1 = 100%). */
-const INITIAL_ZOOM = 1
+/** Agencia y áreas visibles; los cargos se expanden al hacer clic (menos dispersión inicial). */
+const INITIAL_EXPAND_LEVEL = 1
+const READABLE_MIN_SCALE = 0.82
+const READABLE_MAX_SCALE = 1.12
 
 let orgChart: any = null
+let chartResizeObserver: ResizeObserver | null = null
 
 function unitsForOffice(office: TreeOffice): TreeUnit[] {
   const raw = office as TreeOffice & { orgUnits?: TreeUnit[] }
@@ -166,6 +166,97 @@ function toChartNodes(input: TreeOffice[]): OrgChartNode[] {
   return nodes
 }
 
+function chartViewportSize(): { width: number, height: number } {
+  const el = chartContainer.value
+  if (!el) {
+    return { width: 800, height: 640 }
+  }
+  return {
+    width: Math.max(el.clientWidth, 320),
+    height: Math.max(el.clientHeight, 480),
+  }
+}
+
+function syncChartSurfaceSize(): void {
+  if (!orgChart || !chartContainer.value) {
+    return
+  }
+  const { width, height } = chartViewportSize()
+  const attrs = orgChart.getChartState?.()
+  if (!attrs) {
+    return
+  }
+  attrs.svgWidth = width
+  attrs.svgHeight = height
+  attrs.svg?.attr('width', width).attr('height', height)
+}
+
+function boundsForChartNodes(nodes: Array<Record<string, any>>): { x0: number, x1: number, y0: number, y1: number } {
+  const attrs = orgChart.getChartState()
+  const layout = attrs.layoutBindings[attrs.layout]
+  return {
+    x0: (d3.min(nodes, (d: any) => d.x + layout.nodeLeftX(d)) ?? 0) - 48,
+    x1: (d3.max(nodes, (d: any) => d.x + layout.nodeRightX(d)) ?? 0) + 48,
+    y0: (d3.min(nodes, (d: any) => d.y + layout.nodeTopY(d)) ?? 0) - 40,
+    y1: (d3.max(nodes, (d: any) => d.y + layout.nodeBottomY(d)) ?? 0) + 80,
+  }
+}
+
+function applyZoomToChartNodes(
+  nodes: Array<Record<string, any>>,
+  opts?: { animate?: boolean, minScale?: number, maxScale?: number },
+): void {
+  if (!orgChart || nodes.length === 0) {
+    return
+  }
+  const attrs = orgChart.getChartState()
+  const { svgWidth: w, svgHeight: h, svg, zoomBehavior, duration, centerG } = attrs
+  if (!svg || !zoomBehavior) {
+    return
+  }
+  const { x0, x1, y0, y1 } = boundsForChartNodes(nodes)
+  const minScale = opts?.minScale ?? READABLE_MIN_SCALE
+  const maxScale = opts?.maxScale ?? READABLE_MAX_SCALE
+  const spanX = Math.max(x1 - x0, 1)
+  const spanY = Math.max(y1 - y0, 1)
+  let scaleVal = 0.9 / Math.max(spanX / w, spanY / h)
+  scaleVal = Math.min(maxScale, Math.max(minScale, scaleVal))
+  const identity = d3.zoomIdentity
+    .translate(w / 2, h / 2)
+    .scale(scaleVal)
+    .translate(-(x0 + x1) / 2, -(y0 + y1) / 2)
+  const ms = opts?.animate === false ? 0 : duration
+  svg.transition().duration(ms).call(zoomBehavior.transform, identity)
+  centerG?.transition().duration(ms).attr('transform', 'translate(0,0)')
+}
+
+function focusReadableView(animate = false): void {
+  if (!orgChart) {
+    return
+  }
+  const root = orgChart.getChartState()?.root
+  if (!root) {
+    return
+  }
+  const focus = [root, ...(root.children ?? [])]
+  applyZoomToChartNodes(focus, { animate, minScale: READABLE_MIN_SCALE, maxScale: READABLE_MAX_SCALE })
+}
+
+function fitEntireTree(): void {
+  orgChart?.fit({ animate: true, scale: true })
+}
+
+function zoomChart(direction: 'in' | 'out'): void {
+  if (!orgChart) {
+    return
+  }
+  if (direction === 'in') {
+    orgChart.zoomIn()
+    return
+  }
+  orgChart.zoomOut()
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll('&', '&amp;')
@@ -218,19 +309,26 @@ async function renderChart(): Promise<void> {
           positionAccent: '#9333ea',
         }
 
+    const { width, height } = chartViewportSize()
+
     orgChart
       .container(chartContainer.value)
       .data(nodes)
-      .svgHeight(CHART_VIEWPORT_HEIGHT)
-      .nodeWidth(() => 280)
-      .nodeHeight(() => 130)
-      .childrenMargin(() => 56)
-      .compactMarginBetween(() => 24)
-      .compactMarginPair(() => 50)
+      .svgWidth(width)
+      .svgHeight(height)
+      .compact(true)
+      .nodeWidth(() => 260)
+      .nodeHeight(() => 118)
+      .childrenMargin(() => 40)
+      .siblingsMargin(() => 18)
+      .neighbourMargin(() => 28)
+      .compactMarginBetween(() => 14)
+      .compactMarginPair(() => 22)
+      .rootMargin(28)
       .initialExpandLevel(INITIAL_EXPAND_LEVEL)
-      .initialZoom(INITIAL_ZOOM)
-      .setActiveNodeCentered(false)
-      .duration(450)
+      .setActiveNodeCentered(true)
+      .scaleExtent([0.35, 2.2])
+      .duration(280)
       .linkUpdate(function (this: SVGPathElement) {
         d3.select(this).attr('stroke', palette.line).attr('stroke-width', 1.5)
       })
@@ -262,6 +360,9 @@ async function renderChart(): Promise<void> {
       })
       .render()
 
+    await nextTick()
+    syncChartSurfaceSize()
+    focusReadableView(false)
     chartReady.value = true
   }
   catch (err) {
@@ -319,6 +420,9 @@ async function loadTree(): Promise<void> {
     loading.value = false
     await nextTick()
     await nextTick()
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve())
+    })
     await renderChart()
   }
 }
@@ -328,6 +432,15 @@ onMounted(async () => {
     await fetchUser()
   }
   await refreshTree()
+  if (import.meta.client && chartContainer.value && typeof ResizeObserver !== 'undefined') {
+    chartResizeObserver = new ResizeObserver(() => {
+      if (!chartReady.value) {
+        return
+      }
+      syncChartSurfaceSize()
+    })
+    chartResizeObserver.observe(chartContainer.value)
+  }
 })
 
 watch(selectedOfficeId, () => {
@@ -346,6 +459,8 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  chartResizeObserver?.disconnect()
+  chartResizeObserver = null
   if (orgChart) {
     orgChart.clear()
     orgChart = null
@@ -357,7 +472,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
+  <SettingsLayout :wide="true" hide-intro>
     <div class="w-full flex flex-col gap-4">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1 max-w-3xl">
@@ -429,15 +544,57 @@ onBeforeUnmount(() => {
             Sin datos de estructura. Cree al menos una agencia y áreas.
           </div>
           <div v-else class="space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                :disabled="!chartReady"
+                @click="zoomChart('out')"
+              >
+                <Icon name="i-lucide-zoom-out" class="mr-1.5 h-4 w-4" />
+                Alejar
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                :disabled="!chartReady"
+                @click="zoomChart('in')"
+              >
+                <Icon name="i-lucide-zoom-in" class="mr-1.5 h-4 w-4" />
+                Acercar
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                :disabled="!chartReady"
+                @click="focusReadableView(true)"
+              >
+                <Icon name="i-lucide-scan" class="mr-1.5 h-4 w-4" />
+                Vista cercana
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                :disabled="!chartReady"
+                @click="fitEntireTree"
+              >
+                <Icon name="i-lucide-maximize-2" class="mr-1.5 h-4 w-4" />
+                Ver todo
+              </Button>
+            </div>
             <div
               ref="chartContainer"
-              class="w-full overflow-auto rounded-md border p-2 sm:p-3 bg-background max-h-[min(480px,55vh)] min-h-[360px]"
+              class="org-chart-canvas w-full overflow-hidden rounded-md border bg-background h-[min(780px,calc(100dvh-14rem))] min-h-[520px]"
             />
             <p v-if="!chartReady" class="text-sm text-muted-foreground leading-relaxed">
-              Cargando visualizacion del organigrama...
+              Cargando visualización del organigrama...
             </p>
             <p v-else class="text-xs text-muted-foreground leading-relaxed">
-              Zoom inicial al {{ INITIAL_ZOOM * 100 }}%. Use la rueda del mouse para acercar o alejar. Nivel expandido al cargar: {{ INITIAL_EXPAND_LEVEL }}.
+              Arrastre para moverse. Rueda del mouse para zoom. Al cargar se muestran agencia y áreas; pulse el botón del nodo para ver los cargos.
             </p>
           </div>
         </CardContent>
@@ -445,3 +602,11 @@ onBeforeUnmount(() => {
     </div>
   </SettingsLayout>
 </template>
+
+<style scoped>
+.org-chart-canvas :deep(svg.svg-chart-container) {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+</style>
