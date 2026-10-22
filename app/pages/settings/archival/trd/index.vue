@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import type { TrdTableRow } from '~/types/archival-trd'
+import { messageFromFetchError } from '~/utils/http-error-message'
 
 definePageMeta({
   layout: 'default',
@@ -10,11 +12,20 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const router = useRouter()
 
-import type { TrdTableRow } from '~/types/archival-trd'
-
 const trdApi = useTrdApi()
 const rows = ref<TrdTableRow[]>([])
 const loading = ref(false)
+const importing = ref(false)
+const importInput = ref<HTMLInputElement | null>(null)
+
+interface TrdImportSummary {
+  producer_office_name: string
+  producer_office_code: string
+  series_count: number
+  subseries_count: number
+  document_types_count: number
+  replaced_draft: boolean
+}
 
 async function fetchTables() {
   loading.value = true
@@ -26,6 +37,46 @@ async function fetchTables() {
     rows.value = []
   } finally {
     loading.value = false
+  }
+}
+
+function openImportPicker() {
+  importInput.value?.click()
+}
+
+async function onImportFile(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+
+  if (!file) {
+    return
+  }
+
+  if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    toast.error('Use el Excel de la TRD en formato .xlsx (ADM-GD-FO-01).')
+    return
+  }
+
+  importing.value = true
+  try {
+    const body = new FormData()
+    body.append('file', file)
+    const res = await $api<{ data: TrdTableRow, summary: TrdImportSummary }>('/archival/trd-tables/import', {
+      method: 'POST',
+      body,
+    })
+    const summary = res.summary
+    const action = summary.replaced_draft ? 'Se actualizó el borrador' : 'Se creó la TRD en borrador'
+    toast.success(`${action} de ${summary.producer_office_name} (${summary.producer_office_code})`, {
+      description: `${summary.series_count} series, ${summary.subseries_count} subseries y ${summary.document_types_count} tipos documentales.`,
+    })
+    await fetchTables()
+    await router.push(trdApi.tablePath(res.data.id))
+  } catch (error: unknown) {
+    toast.error(messageFromFetchError(error, 'No se pudo importar la tabla de retención'))
+  } finally {
+    importing.value = false
   }
 }
 
@@ -51,6 +102,20 @@ onMounted(fetchTables)
           <Button variant="outline" @click="router.push('/settings/archival/trd/consult')">
             TRD vigente
           </Button>
+          <PermissionGate :all-permissions="['trd_tablas_editar', 'trd_catalogo_editar']">
+            <input
+              ref="importInput"
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              class="hidden"
+              @change="onImportFile"
+            >
+            <Button variant="outline" :disabled="importing" @click="openImportPicker">
+              <Icon v-if="importing" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              <Icon v-else name="i-lucide-file-spreadsheet" class="mr-2 h-4 w-4" />
+              Importar Excel
+            </Button>
+          </PermissionGate>
           <PermissionGate permission="trd_tablas_editar">
             <Button @click="router.push('/settings/archival/trd/create')">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
