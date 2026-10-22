@@ -34,6 +34,8 @@ const open = defineModel<boolean>('open', { required: true })
 
 const props = defineProps<{
   file: File | null
+  preview: TrdImportPreview | null
+  previewing: boolean
 }>()
 
 const emit = defineEmits<{
@@ -42,9 +44,7 @@ const emit = defineEmits<{
 
 const { $api } = useNuxtApp()
 
-const previewing = ref(false)
 const importing = ref(false)
-const preview = ref<TrdImportPreview | null>(null)
 const areaMode = ref<'existing' | 'create'>('create')
 const selectedUnitId = ref('')
 const areaName = ref('')
@@ -52,13 +52,13 @@ const areaCode = ref('')
 const officeId = ref('')
 const confirmingCreate = ref(false)
 
-const selectableUnits = computed(() => preview.value?.org_units ?? [])
+const selectableUnits = computed(() => props.preview?.org_units ?? [])
 
 const selectedUnit = computed(() =>
   selectableUnits.value.find(unit => String(unit.id) === selectedUnitId.value) ?? null,
 )
 
-const showOfficePicker = computed(() => (preview.value?.offices.length ?? 0) > 1)
+const showOfficePicker = computed(() => (props.preview?.offices.length ?? 0) > 1)
 
 const primaryLabel = computed(() => {
   if (confirmingCreate.value) {
@@ -73,7 +73,7 @@ const primaryLabel = computed(() => {
 })
 
 const matchingUnit = computed(() => {
-  const id = preview.value?.matching_org_unit_id
+  const id = props.preview?.matching_org_unit_id
   if (id == null) {
     return null
   }
@@ -81,13 +81,21 @@ const matchingUnit = computed(() => {
   return selectableUnits.value.find(unit => unit.id === id) ?? null
 })
 
+const dismissGuardUntil = ref(0)
+
 watch(open, (isOpen) => {
   if (isOpen) {
-    void loadPreview()
+    dismissGuardUntil.value = Date.now() + 600
     return
   }
 
   confirmingCreate.value = false
+})
+
+watch(() => props.preview, (data) => {
+  if (data) {
+    resetForm(data)
+  }
 })
 
 watch(areaMode, () => {
@@ -95,7 +103,6 @@ watch(areaMode, () => {
 })
 
 function resetForm(data: TrdImportPreview) {
-  preview.value = data
   areaName.value = data.producer_office_name
   areaCode.value = data.producer_office_code
   officeId.value = data.offices[0] ? String(data.offices[0].id) : ''
@@ -115,26 +122,9 @@ function resetForm(data: TrdImportPreview) {
   selectedUnitId.value = ''
 }
 
-async function loadPreview() {
-  if (!props.file) {
-    return
-  }
-
-  previewing.value = true
-  preview.value = null
-  try {
-    const body = new FormData()
-    body.append('file', props.file)
-    const res = await $api<{ data: TrdImportPreview }>('/archival/trd-tables/import-preview', {
-      method: 'POST',
-      body,
-    })
-    resetForm(res.data)
-  } catch (error: unknown) {
-    toast.error(messageFromFetchError(error, 'No se pudo leer el Excel'))
-    open.value = false
-  } finally {
-    previewing.value = false
+function guardDismiss(event: Event) {
+  if (Date.now() < dismissGuardUntil.value) {
+    event.preventDefault()
   }
 }
 
@@ -176,7 +166,7 @@ function requestImport() {
 }
 
 async function submitImport() {
-  if (!props.file || !preview.value) {
+  if (!props.file || !props.preview) {
     return
   }
 
@@ -219,7 +209,12 @@ async function submitImport() {
 
 <template>
   <Dialog v-model:open="open">
-    <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+    <DialogContent
+      class="max-h-[90vh] overflow-y-auto sm:max-w-lg"
+      @pointer-down-outside="guardDismiss"
+      @focus-outside="guardDismiss"
+      @interact-outside="guardDismiss"
+    >
       <DialogHeader>
         <DialogTitle>Importar tabla de retención</DialogTitle>
         <DialogDescription>

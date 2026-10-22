@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { TrdTableRow } from '~/types/archival-trd'
+import { messageFromFetchError } from '~/utils/http-error-message'
 
 definePageMeta({
   layout: 'default',
@@ -16,7 +17,27 @@ const rows = ref<TrdTableRow[]>([])
 const loading = ref(false)
 const importOpen = ref(false)
 const importFile = ref<File | null>(null)
-const importInput = ref<HTMLInputElement | null>(null)
+const importPreview = ref<TrdImportPreview | null>(null)
+const importPreviewing = ref(false)
+
+interface TrdImportPreview {
+  producer_office_name: string
+  producer_office_code: string
+  approved_at: string
+  series_count: number
+  subseries_count: number
+  document_types_count: number
+  matching_org_unit_id: number | null
+  offices: Array<{ id: number, name: string, code: string }>
+  org_units: Array<{
+    id: number
+    name: string
+    code: string
+    org_office_id: number
+    is_document_producer: boolean
+    trd_state: 'draft' | 'published' | null
+  }>
+}
 
 async function fetchTables() {
   loading.value = true
@@ -31,16 +52,13 @@ async function fetchTables() {
   }
 }
 
-function openImportPicker() {
-  importInput.value?.click()
-}
-
 async function onImportFile(event: Event) {
   const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
+  const file = input.files?.[0] ?? null
   input.value = ''
 
   if (!file) {
+    toast.error('No se pudo leer el archivo seleccionado.')
     return
   }
 
@@ -50,7 +68,26 @@ async function onImportFile(event: Event) {
   }
 
   importFile.value = file
-  importOpen.value = true
+  importPreview.value = null
+  importPreviewing.value = true
+
+  const body = new FormData()
+  body.append('file', file)
+
+  try {
+    const res = await $api<{ data: TrdImportPreview }>('/archival/trd-tables/import-preview', {
+      method: 'POST',
+      body,
+    })
+    importPreview.value = res.data
+    await nextTick()
+    importOpen.value = true
+  } catch (error: unknown) {
+    importFile.value = null
+    toast.error(messageFromFetchError(error, 'No se pudo leer el Excel'))
+  } finally {
+    importPreviewing.value = false
+  }
 }
 
 async function onImported(tableId: number) {
@@ -81,18 +118,29 @@ onMounted(fetchTables)
             TRD vigente
           </Button>
           <PermissionGate :all-permissions="['trd_tablas_editar', 'trd_catalogo_editar']">
-            <input
-              ref="importInput"
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              class="hidden"
-              @change="onImportFile"
+            <Button
+              as="label"
+              variant="outline"
+              :class="importPreviewing ? 'pointer-events-none opacity-60' : 'cursor-pointer'"
             >
-            <Button variant="outline" @click="openImportPicker">
-              <Icon name="i-lucide-file-spreadsheet" class="mr-2 h-4 w-4" />
+              <input
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                class="sr-only"
+                :disabled="importPreviewing"
+                @change="onImportFile"
+              >
+              <Icon v-if="importPreviewing" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+              <Icon v-else name="i-lucide-file-spreadsheet" class="mr-2 h-4 w-4" />
               Importar Excel
             </Button>
-            <TrdImportDialog v-model:open="importOpen" :file="importFile" @imported="onImported" />
+            <TrdImportDialog
+              v-model:open="importOpen"
+              :file="importFile"
+              :preview="importPreview"
+              :previewing="importPreviewing"
+              @imported="onImported"
+            />
           </PermissionGate>
           <PermissionGate permission="trd_tablas_editar">
             <Button @click="router.push('/settings/archival/trd/create')">
