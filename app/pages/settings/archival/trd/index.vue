@@ -15,7 +15,6 @@ const router = useRouter()
 const trdApi = useTrdApi()
 const rows = ref<TrdTableRow[]>([])
 const loading = ref(false)
-const importOpen = ref(false)
 const importFile = ref<File | null>(null)
 const importPreview = ref<TrdImportPreview | null>(null)
 const importPreviewing = ref(false)
@@ -80,8 +79,6 @@ async function onImportFile(event: Event) {
       body,
     })
     importPreview.value = res.data
-    await nextTick()
-    importOpen.value = true
   } catch (error: unknown) {
     importFile.value = null
     toast.error(messageFromFetchError(error, 'No se pudo leer el Excel'))
@@ -90,7 +87,13 @@ async function onImportFile(event: Event) {
   }
 }
 
+function clearImport() {
+  importFile.value = null
+  importPreview.value = null
+}
+
 async function onImported(tableId: number) {
+  clearImport()
   await fetchTables()
   await router.push(trdApi.tablePath(tableId))
 }
@@ -134,13 +137,6 @@ onMounted(fetchTables)
               <Icon v-else name="i-lucide-file-spreadsheet" class="mr-2 h-4 w-4" />
               Importar Excel
             </Button>
-            <TrdImportDialog
-              v-model:open="importOpen"
-              :file="importFile"
-              :preview="importPreview"
-              :previewing="importPreviewing"
-              @imported="onImported"
-            />
           </PermissionGate>
           <PermissionGate permission="trd_tablas_editar">
             <Button @click="router.push('/settings/archival/trd/create')">
@@ -150,6 +146,14 @@ onMounted(fetchTables)
           </PermissionGate>
         </div>
       </div>
+
+      <TrdImportDialog
+        v-if="importFile && importPreview"
+        :file="importFile"
+        :preview="importPreview"
+        @cancel="clearImport"
+        @imported="onImported"
+      />
 
       <Card>
         <CardHeader>

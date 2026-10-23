@@ -30,16 +30,14 @@ interface TrdImportPreview {
   org_units: TrdImportUnit[]
 }
 
-const open = defineModel<boolean>('open', { required: true })
-
 const props = defineProps<{
-  file: File | null
-  preview: TrdImportPreview | null
-  previewing: boolean
+  file: File
+  preview: TrdImportPreview
 }>()
 
 const emit = defineEmits<{
   imported: [tableId: number]
+  cancel: []
 }>()
 
 const { $api } = useNuxtApp()
@@ -52,13 +50,15 @@ const areaCode = ref('')
 const officeId = ref('')
 const confirmingCreate = ref(false)
 
-const selectableUnits = computed(() => props.preview?.org_units ?? [])
+const panel = ref<HTMLElement | null>(null)
+
+const selectableUnits = computed(() => props.preview.org_units)
 
 const selectedUnit = computed(() =>
   selectableUnits.value.find(unit => String(unit.id) === selectedUnitId.value) ?? null,
 )
 
-const showOfficePicker = computed(() => (props.preview?.offices.length ?? 0) > 1)
+const showOfficePicker = computed(() => props.preview.offices.length > 1)
 
 const primaryLabel = computed(() => {
   if (confirmingCreate.value) {
@@ -73,7 +73,7 @@ const primaryLabel = computed(() => {
 })
 
 const matchingUnit = computed(() => {
-  const id = props.preview?.matching_org_unit_id
+  const id = props.preview.matching_org_unit_id
   if (id == null) {
     return null
   }
@@ -81,21 +81,9 @@ const matchingUnit = computed(() => {
   return selectableUnits.value.find(unit => unit.id === id) ?? null
 })
 
-const dismissGuardUntil = ref(0)
-
-watch(open, (isOpen) => {
-  if (isOpen) {
-    dismissGuardUntil.value = Date.now() + 600
-    return
-  }
-
-  confirmingCreate.value = false
-})
-
-watch(() => props.preview, (data) => {
-  if (data) {
-    resetForm(data)
-  }
+onMounted(() => {
+  resetForm(props.preview)
+  panel.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 })
 
 watch(areaMode, () => {
@@ -105,7 +93,9 @@ watch(areaMode, () => {
 function resetForm(data: TrdImportPreview) {
   areaName.value = data.producer_office_name
   areaCode.value = data.producer_office_code
-  officeId.value = data.offices[0] ? String(data.offices[0].id) : ''
+  const preferredOffice = data.offices.find(office => /direcci[oó]n general/i.test(office.name))
+    ?? data.offices[0]
+  officeId.value = preferredOffice ? String(preferredOffice.id) : ''
   confirmingCreate.value = false
 
   const match = data.matching_org_unit_id == null
@@ -120,12 +110,6 @@ function resetForm(data: TrdImportPreview) {
 
   areaMode.value = 'create'
   selectedUnitId.value = ''
-}
-
-function guardDismiss(event: Event) {
-  if (Date.now() < dismissGuardUntil.value) {
-    event.preventDefault()
-  }
 }
 
 function onAreaMode(value: unknown) {
@@ -166,10 +150,6 @@ function requestImport() {
 }
 
 async function submitImport() {
-  if (!props.file || !props.preview) {
-    return
-  }
-
   importing.value = true
   try {
     const body = new FormData()
@@ -196,7 +176,6 @@ async function submitImport() {
     toast.success(`${action} en ${summary.org_unit_name}`, {
       description: `${summary.series_count} series, ${summary.subseries_count} subseries y ${summary.document_types_count} tipos documentales.`,
     })
-    open.value = false
     emit('imported', res.data.id)
   } catch (error: unknown) {
     confirmingCreate.value = false
@@ -208,25 +187,15 @@ async function submitImport() {
 </script>
 
 <template>
-  <Dialog v-model:open="open">
-    <DialogContent
-      class="max-h-[90vh] overflow-y-auto sm:max-w-lg"
-      @pointer-down-outside="guardDismiss"
-      @focus-outside="guardDismiss"
-      @interact-outside="guardDismiss"
-    >
-      <DialogHeader>
-        <DialogTitle>Importar tabla de retención</DialogTitle>
-        <DialogDescription>
-          Elija el área donde quedará la TRD, o confirme la creación de una nueva.
-        </DialogDescription>
-      </DialogHeader>
-
-      <div v-if="previewing" class="flex justify-center py-10">
-        <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-
-      <div v-else-if="preview" class="space-y-4">
+  <div ref="panel">
+  <Card>
+    <CardHeader>
+      <CardTitle>Importar tabla de retención</CardTitle>
+      <CardDescription>
+        Elija el área donde quedará la TRD, o confirme la creación de una nueva.
+      </CardDescription>
+    </CardHeader>
+    <CardContent class="space-y-4">
         <div class="rounded-md border bg-muted/40 px-3 py-2 text-sm leading-relaxed">
           <p class="font-medium">{{ preview.producer_office_name }}</p>
           <p class="text-muted-foreground">
@@ -300,26 +269,26 @@ async function submitImport() {
         <div v-if="confirmingCreate" class="rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-sm leading-relaxed">
           Se creará el área «{{ areaName.trim() }}» ({{ areaCode.trim() }}) como productora documental y se importará la TRD en borrador.
         </div>
-      </div>
 
-      <DialogFooter>
-        <Button variant="outline" type="button" :disabled="importing" @click="open = false">
-          Cancelar
-        </Button>
-        <Button
-          v-if="confirmingCreate"
-          variant="outline"
-          type="button"
-          :disabled="importing"
-          @click="confirmingCreate = false"
-        >
-          Volver
-        </Button>
-        <Button type="button" :disabled="previewing || importing || !preview" @click="requestImport">
-          <Icon v-if="importing" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-          {{ primaryLabel }}
-        </Button>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>
+        <div class="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" type="button" :disabled="importing" @click="emit('cancel')">
+            Cancelar
+          </Button>
+          <Button
+            v-if="confirmingCreate"
+            variant="outline"
+            type="button"
+            :disabled="importing"
+            @click="confirmingCreate = false"
+          >
+            Volver
+          </Button>
+          <Button type="button" :disabled="importing" @click="requestImport">
+            <Icon v-if="importing" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+            {{ primaryLabel }}
+          </Button>
+        </div>
+    </CardContent>
+  </Card>
+  </div>
 </template>
