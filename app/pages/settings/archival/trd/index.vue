@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import TrdImportDialog from '~/components/archival/TrdImportDialog.vue'
 import type { TrdTableRow } from '~/types/archival-trd'
 import { messageFromFetchError } from '~/utils/http-error-message'
 
