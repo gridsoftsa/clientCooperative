@@ -507,40 +507,50 @@ watch(selectedRole, (role) => {
                 />
               </div>
 
-              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-                <div class="space-y-3">
-                  <div class="flex items-center justify-between gap-2">
-                    <Label for="password" class="leading-snug">Contraseña</Label>
-                    <Button type="button" variant="outline" size="sm" @click="generatePassword">
-                      <Icon name="i-lucide-refresh-cw" class="mr-1.5 h-3.5 w-3.5" />
-                      Generar
-                    </Button>
-                  </div>
-                  <p class="text-xs text-muted-foreground">
+              <div class="space-y-4 rounded-lg border p-4">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <p class="min-w-0 text-xs leading-relaxed text-muted-foreground">
                     Opcional. Si la dejas vacía, se generará automáticamente y se enviará por correo. {{ PASSWORD_REQUIREMENTS }}
                   </p>
-                  <PasswordInput
-                    id="password"
-                    v-model="form.password"
-                    placeholder="Contraseña robusta (opcional)"
-                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    class="shrink-0 self-start"
+                    @click="generatePassword"
+                  >
+                    <Icon name="i-lucide-refresh-cw" class="mr-1.5 h-3.5 w-3.5" />
+                    Generar
+                  </Button>
                 </div>
 
-                <div class="space-y-3">
-                  <Label for="password_confirmation" class="leading-snug">Confirmar contraseña</Label>
-                  <PasswordInput
-                    id="password_confirmation"
-                    v-model="form.password_confirmation"
-                    placeholder="Repite la contraseña"
-                  />
+                <div class="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+                  <div class="min-w-0 space-y-2">
+                    <Label for="password" class="leading-snug">Contraseña</Label>
+                    <PasswordInput
+                      id="password"
+                      v-model="form.password"
+                      autocomplete="new-password"
+                      placeholder="Contraseña robusta (opcional)"
+                    />
+                  </div>
+                  <div class="min-w-0 space-y-2">
+                    <Label for="password_confirmation" class="leading-snug">Confirmar contraseña</Label>
+                    <PasswordInput
+                      id="password_confirmation"
+                      v-model="form.password_confirmation"
+                      autocomplete="new-password"
+                      placeholder="Repite la contraseña"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div class="flex items-center gap-2 md:col-span-2">
-                <Checkbox id="send_welcome_email" v-model:checked="form.send_welcome_email" />
-                <Label for="send_welcome_email" class="text-sm font-normal leading-snug">
-                  Enviar credenciales por correo al usuario
-                </Label>
+                <div class="flex items-center gap-2">
+                  <Checkbox id="send_welcome_email" v-model="form.send_welcome_email" />
+                  <Label for="send_welcome_email" class="text-sm font-normal leading-snug">
+                    Enviar credenciales por correo al usuario
+                  </Label>
+                </div>
               </div>
             </CardContent>
           </Card>
