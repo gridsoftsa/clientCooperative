@@ -257,13 +257,15 @@ async function submitImport() {
               <RadioGroupItem value="create" />
               <span class="text-sm font-medium">Crear un área</span>
             </label>
-            <div class="space-y-2">
-              <Label for="trd-import-area-name">Nombre</Label>
-              <Input id="trd-import-area-name" v-model="areaName" @focus="areaMode = 'create'" />
-            </div>
-            <div class="space-y-2">
-              <Label for="trd-import-area-code">Código</Label>
-              <Input id="trd-import-area-code" v-model="areaCode" @focus="areaMode = 'create'" />
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
+              <div class="min-w-0 space-y-2">
+                <Label for="trd-import-area-name">Nombre</Label>
+                <Input id="trd-import-area-name" v-model="areaName" @focus="areaMode = 'create'" />
+              </div>
+              <div class="min-w-0 space-y-2">
+                <Label for="trd-import-area-code">Código</Label>
+                <Input id="trd-import-area-code" v-model="areaCode" @focus="areaMode = 'create'" />
+              </div>
             </div>
             <div v-if="showOfficePicker" class="space-y-2">
               <Label for="trd-import-office">Agencia</Label>

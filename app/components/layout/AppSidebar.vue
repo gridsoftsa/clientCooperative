@@ -42,6 +42,10 @@ const user = computed(() => ({
 
 // Filtrar elementos del menú basados en permisos
 function canAccessItem(item: NavLink | NavGroup): boolean {
+  if ('hidden' in item && item.hidden) {
+    return false
+  }
+
   // Durante SSR o si no hay usuario autenticado, solo mostrar elementos públicos
   if (import.meta.server || !authUser.value) {
     return !item.permission && !item.role && !item.adminOnly && !item.module && !item.modules?.length

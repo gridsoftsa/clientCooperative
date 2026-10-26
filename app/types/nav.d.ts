@@ -13,6 +13,8 @@ export interface NavLink {
   module?: 'creditos' | 'gestion_documental'
   /** El usuario debe tener todos estos módulos activos. */
   modules?: Array<'creditos' | 'gestion_documental'>
+  /** Conserva el ítem en la definición del menú sin mostrarlo. */
+  hidden?: boolean
 }
 
 export interface NavSectionTitle {

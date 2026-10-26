@@ -299,11 +299,13 @@ export const navMenu: NavMenu[] = [
             title: 'Resumen',
             link: '/settings/archival',
             anyPermission: ['trd_catalogo_ver', 'trd_tablas_ver', 'expedientes_tipos_configurar'],
+            hidden: true,
           },
           {
             title: 'Catálogo (series)',
             link: '/settings/archival/catalog/series',
             permission: 'trd_catalogo_ver',
+            hidden: true,
           },
           {
             title: 'Tablas TRD',
