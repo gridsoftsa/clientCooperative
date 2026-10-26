@@ -44,10 +44,10 @@ const { $api } = useNuxtApp()
 
 const importing = ref(false)
 const areaMode = ref<'existing' | 'create'>('create')
-const selectedUnitId = ref('')
+const selectedUnitId = ref<number | null>(null)
 const areaName = ref('')
 const areaCode = ref('')
-const officeId = ref('')
+const officeId = ref<number | null>(null)
 const confirmingCreate = ref(false)
 
 const panel = ref<HTMLElement | null>(null)
@@ -55,8 +55,19 @@ const panel = ref<HTMLElement | null>(null)
 const selectableUnits = computed(() => props.preview.org_units)
 
 const selectedUnit = computed(() =>
-  selectableUnits.value.find(unit => String(unit.id) === selectedUnitId.value) ?? null,
+  selectableUnits.value.find(unit => unit.id === selectedUnitId.value) ?? null,
 )
+
+const unitOptions = computed(() => selectableUnits.value.map(unit => ({
+  value: unit.id,
+  label: unitLabel(unit),
+  disabled: unit.trd_state === 'published',
+})))
+
+const officeOptions = computed(() => props.preview.offices.map(office => ({
+  value: office.id,
+  label: `${office.name} (${office.code})`,
+})))
 
 const showOfficePicker = computed(() => props.preview.offices.length > 1)
 
@@ -95,7 +106,7 @@ function resetForm(data: TrdImportPreview) {
   areaCode.value = data.producer_office_code
   const preferredOffice = data.offices.find(office => /direcci[oó]n general/i.test(office.name))
     ?? data.offices[0]
-  officeId.value = preferredOffice ? String(preferredOffice.id) : ''
+  officeId.value = preferredOffice ? preferredOffice.id : null
   confirmingCreate.value = false
 
   const match = data.matching_org_unit_id == null
@@ -104,16 +115,28 @@ function resetForm(data: TrdImportPreview) {
 
   if (match && match.trd_state !== 'published') {
     areaMode.value = 'existing'
-    selectedUnitId.value = String(match.id)
+    selectedUnitId.value = match.id
     return
   }
 
   areaMode.value = 'create'
-  selectedUnitId.value = ''
+  selectedUnitId.value = null
 }
 
 function onAreaMode(value: unknown) {
   areaMode.value = value === 'create' ? 'create' : 'existing'
+}
+
+function onUnitPicked(value: string | number | null) {
+  if (value != null && value !== '') {
+    areaMode.value = 'existing'
+  }
+}
+
+function onOfficePicked(value: string | number | null) {
+  if (value != null && value !== '') {
+    areaMode.value = 'create'
+  }
 }
 
 function unitLabel(unit: TrdImportUnit): string {
@@ -141,7 +164,7 @@ function requestImport() {
     return
   }
 
-  if (areaMode.value === 'existing' && !selectedUnitId.value) {
+  if (areaMode.value === 'existing' && selectedUnitId.value == null) {
     toast.error('Seleccione un área')
     return
   }
@@ -159,12 +182,12 @@ async function submitImport() {
       body.append('create_org_unit', '1')
       body.append('org_unit_name', areaName.value.trim())
       body.append('org_unit_code', areaCode.value.trim())
-      if (officeId.value) {
-        body.append('org_office_id', officeId.value)
+      if (officeId.value != null) {
+        body.append('org_office_id', String(officeId.value))
       }
     } else {
       body.append('create_org_unit', '0')
-      body.append('org_unit_id', selectedUnitId.value)
+      body.append('org_unit_id', String(selectedUnitId.value))
     }
 
     const res = await $api<{ data: TrdTableRow, summary: { replaced_draft: boolean, org_unit_name: string, series_count: number, subseries_count: number, document_types_count: number } }>('/archival/trd-tables/import', {
@@ -216,21 +239,17 @@ async function submitImport() {
               <RadioGroupItem value="existing" />
               <span class="text-sm font-medium">Usar un área existente</span>
             </label>
-            <Select v-model="selectedUnitId" @update:model-value="areaMode = 'existing'">
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione un área" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="unit in selectableUnits"
-                  :key="unit.id"
-                  :value="String(unit.id)"
-                  :disabled="unit.trd_state === 'published'"
-                >
-                  {{ unitLabel(unit) }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <ArchivalSingleMultiselect
+              id="trd-import-unit"
+              v-model="selectedUnitId"
+              coerce-number
+              searchable
+              :options="unitOptions"
+              placeholder="Buscar área por nombre o código"
+              no-options-text="No hay áreas"
+              no-results-text="Sin coincidencias"
+              @update:model-value="onUnitPicked"
+            />
           </div>
 
           <div class="space-y-3 rounded-md border p-3">
@@ -248,20 +267,18 @@ async function submitImport() {
             </div>
             <div v-if="showOfficePicker" class="space-y-2">
               <Label for="trd-import-office">Agencia</Label>
-              <Select v-model="officeId" @update:model-value="areaMode = 'create'">
-                <SelectTrigger id="trd-import-office">
-                  <SelectValue placeholder="Seleccione la agencia" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem
-                    v-for="office in preview.offices"
-                    :key="office.id"
-                    :value="String(office.id)"
-                  >
-                    {{ office.name }} ({{ office.code }})
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+              <ArchivalSingleMultiselect
+                id="trd-import-office"
+                v-model="officeId"
+                coerce-number
+                searchable
+                :can-clear="false"
+                :options="officeOptions"
+                placeholder="Buscar agencia por nombre o código"
+                no-options-text="No hay agencias"
+                no-results-text="Sin coincidencias"
+                @update:model-value="onOfficePicked"
+              />
             </div>
           </div>
         </RadioGroup>
