@@ -217,7 +217,7 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
 <template>
   <div class="mx-auto w-full max-w-4xl space-y-5 px-4 py-6 md:px-6">
     <div class="flex items-start gap-3">
-      <Button variant="ghost" size="icon" class="shrink-0" @click="router.push('/workflow/colaboracion')">
+      <Button variant="outline" size="icon" class="shrink-0" aria-label="Volver" @click="router.push('/workflow/colaboracion')">
         <Icon name="i-lucide-arrow-left" class="size-4" />
       </Button>
       <div class="min-w-0 space-y-1">

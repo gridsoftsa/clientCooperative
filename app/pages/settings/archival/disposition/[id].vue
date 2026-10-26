@@ -59,10 +59,9 @@ onMounted(load)
 <template>
   <SettingsLayout :wide="true">
     <div class="w-full flex flex-col gap-4">
-      <Button variant="ghost" size="sm" class="w-fit -ml-2" @click="router.push('/settings/archival/disposition')">
-        <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+      <PageBackButton to="/settings/archival/disposition">
         Actas
-      </Button>
+      </PageBackButton>
 
       <div v-if="act" class="space-y-4">
         <div class="flex flex-wrap items-start justify-between gap-4">

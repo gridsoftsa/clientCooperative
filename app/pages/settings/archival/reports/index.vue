@@ -12,10 +12,9 @@ const router = useRouter()
   <SettingsLayout :wide="true">
     <div class="w-full flex flex-col gap-4">
       <div class="space-y-1">
-        <Button variant="ghost" size="sm" class="h-8 w-fit -ml-2 px-2" @click="router.push('/settings/archival')">
-          <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+        <PageBackButton to="/settings/archival">
           TRD y archivo
-        </Button>
+        </PageBackButton>
         <h2 class="text-2xl font-bold tracking-tight">
           Reportes archivísticos
         </h2>

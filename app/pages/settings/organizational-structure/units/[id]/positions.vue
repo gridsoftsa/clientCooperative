@@ -345,15 +345,9 @@ onMounted(async () => {
     <div class="w-full flex flex-col gap-4">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            class="h-8 w-fit -ml-2 px-2"
-            @click="router.push('/settings/organizational-structure/units')"
-          >
-            <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+          <PageBackButton to="/settings/organizational-structure/units">
             Áreas y dependencias
-          </Button>
+          </PageBackButton>
           <h2 class="text-2xl font-bold tracking-tight">
             Cargos del área
           </h2>

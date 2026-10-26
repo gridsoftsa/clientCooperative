@@ -368,10 +368,9 @@ defineExpose({
     <div v-else class="space-y-4">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Button type="button" variant="ghost" size="sm" class="-ml-2" :disabled="saving" @click="backToList">
-            <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
+          <PageBackButton @click="backToList" :disabled="saving">
             Volver al listado
-          </Button>
+          </PageBackButton>
           <h2 class="mt-1 text-base font-semibold">
             {{ formTitle }}
           </h2>

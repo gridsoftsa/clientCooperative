@@ -179,15 +179,9 @@ onMounted(load)
   <SettingsLayout :wide="true" hide-intro>
     <div class="flex w-full flex-col gap-6">
       <div class="space-y-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          class="h-8 w-fit -ml-2 px-2"
-          @click="router.push(cancelPath())"
-        >
-          <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+        <PageBackButton :to="cancelPath()">
           Volver a subseries
-        </Button>
+        </PageBackButton>
         <h2 class="text-2xl font-bold tracking-tight">
           {{ restrictionsOnly ? 'Restricciones de la subserie' : 'Editar subserie' }}
         </h2>

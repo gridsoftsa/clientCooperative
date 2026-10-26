@@ -81,10 +81,9 @@ onMounted(async () => {
 <template>
   <SettingsLayout :wide="true">
     <div class="w-full max-w-2xl flex flex-col gap-4">
-      <Button variant="ghost" size="sm" class="w-fit -ml-2" @click="router.push('/settings/archival/disposition')">
-        <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+      <PageBackButton to="/settings/archival/disposition">
         Actas
-      </Button>
+      </PageBackButton>
       <h2 class="text-2xl font-bold tracking-tight">
         Nueva acta de disposición
       </h2>

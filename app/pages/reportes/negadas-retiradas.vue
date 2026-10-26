@@ -279,12 +279,9 @@ onUnmounted(() => {
 <template>
   <div class="flex w-full flex-col gap-5">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <Button variant="ghost" class="w-fit gap-2 px-2 text-muted-foreground" as-child>
-        <NuxtLink to="/reportes">
-          <Icon name="i-lucide-arrow-left" class="size-4" />
-          Todos los reportes
-        </NuxtLink>
-      </Button>
+      <PageBackButton to="/reportes">
+        Todos los reportes
+      </PageBackButton>
     </div>
 
     <div>

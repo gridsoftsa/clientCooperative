@@ -19,10 +19,9 @@ function onCreated(type: ArchivalFileType) {
   <div class="mx-auto w-full max-w-[90rem] space-y-4 px-4 pb-6 md:px-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="space-y-1">
-        <Button variant="ghost" size="sm" class="-ml-2" @click="router.push('/expedientes/tipos')">
-          <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
+        <PageBackButton to="/expedientes/tipos">
           Tipos de expediente
-        </Button>
+        </PageBackButton>
         <h1 class="text-2xl font-semibold tracking-tight">
           Nuevo tipo de expediente
         </h1>

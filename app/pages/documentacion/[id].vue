@@ -173,10 +173,9 @@ watch(applicationId, () => {
   <div class="flex w-full flex-col gap-4">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="space-y-1">
-        <Button variant="ghost" size="sm" class="-ml-2 mb-1" @click="goBack">
-          <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
+        <PageBackButton @click="goBack">
           Volver
-        </Button>
+        </PageBackButton>
         <h2 class="text-2xl font-bold tracking-tight">
           Expediente documental
         </h2>

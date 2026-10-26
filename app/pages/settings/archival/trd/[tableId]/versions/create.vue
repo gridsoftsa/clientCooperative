@@ -73,10 +73,9 @@ onMounted(loadTable)
     <div class="flex w-full flex-col gap-6">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="space-y-1">
-          <Button variant="ghost" size="sm" class="h-8 w-fit -ml-2 px-2" @click="router.push(trdApi.tablePath(tableId))">
-            <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+          <PageBackButton :to="trdApi.tablePath(tableId)">
             Volver a versiones
-          </Button>
+          </PageBackButton>
           <h2 class="text-2xl font-bold tracking-tight">
             Nueva versión TRD
           </h2>

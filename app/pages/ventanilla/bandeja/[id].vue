@@ -126,10 +126,9 @@ onMounted(() => {
   <div class="space-y-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="space-y-2">
-        <Button variant="ghost" size="sm" class="-ml-2" @click="router.push('/ventanilla/bandeja')">
-          <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
+        <PageBackButton to="/ventanilla/bandeja">
           Volver a bandeja
-        </Button>
+        </PageBackButton>
         <div v-if="intake">
           <div class="flex flex-wrap items-center gap-2">
             <h1 class="text-2xl font-semibold tracking-tight">

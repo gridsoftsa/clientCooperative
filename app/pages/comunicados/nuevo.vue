@@ -405,12 +405,9 @@ onMounted(loadOptions)
   <div class="mx-auto w-full max-w-7xl space-y-6 px-4 pb-8 md:px-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <Button variant="ghost" size="sm" as-child class="mb-2 -ml-2">
-          <NuxtLink to="/comunicados">
-            <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
-            Volver
-          </NuxtLink>
-        </Button>
+        <PageBackButton to="/comunicados">
+          Volver
+        </PageBackButton>
         <h1 class="text-2xl font-semibold tracking-tight">
           Nueva publicación
         </h1>

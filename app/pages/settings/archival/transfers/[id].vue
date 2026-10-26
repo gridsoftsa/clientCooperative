@@ -418,10 +418,9 @@ onMounted(load)
 <template>
   <SettingsLayout :wide="true" hide-intro>
     <div class="flex w-full flex-col gap-4">
-      <Button variant="ghost" size="sm" class="-ml-2 w-fit" @click="router.push('/settings/archival/transfers')">
-        <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+      <PageBackButton to="/settings/archival/transfers">
         Actas
-      </Button>
+      </PageBackButton>
 
       <div v-if="loading" class="flex items-center gap-2 py-10 text-sm text-muted-foreground">
         <Icon name="i-lucide-loader-2" class="h-4 w-4 animate-spin" />

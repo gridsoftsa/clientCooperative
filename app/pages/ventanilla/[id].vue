@@ -561,7 +561,7 @@ async function viewSticker() {
       class="sticky top-0 z-10 -mx-4 space-y-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:-mx-6 md:px-6"
     >
       <div class="flex items-center gap-3">
-        <Button variant="ghost" size="icon" @click="navigateTo('/ventanilla')">
+        <Button variant="outline" size="icon" class="shrink-0" @click="navigateTo('/ventanilla')" aria-label="Volver">
           <Icon name="i-lucide-arrow-left" class="size-4" />
         </Button>
         <div class="flex-1">

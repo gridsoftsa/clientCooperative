@@ -255,10 +255,9 @@ watch(deleteStageDialogOpen, (open) => {
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <div class="mb-1 flex items-center gap-2">
-          <Button variant="ghost" size="sm" class="-ml-2" @click="router.push('/workflow/configuracion')">
-            <Icon name="lucide:arrow-left" class="mr-1 size-4" />
+          <PageBackButton to="/workflow/configuracion">
             Volver
-          </Button>
+          </PageBackButton>
         </div>
         <h1 class="text-2xl font-semibold tracking-tight">
           {{ definition?.name ?? 'Flujo de trabajo' }}

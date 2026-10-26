@@ -157,10 +157,9 @@ function applySearch() {
     <div v-if="viewMode === 'list'" class="space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Button variant="ghost" size="sm" class="-ml-2" @click="clearCategoryFilter">
-            <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
+          <PageBackButton @click="clearCategoryFilter">
             Volver al portal
-          </Button>
+          </PageBackButton>
           <h2 class="text-lg font-semibold tracking-tight">
             {{ selectedCategoryMeta?.label ?? 'Documentos' }}
             <span v-if="selectedOrgUnitName" class="text-muted-foreground"> — {{ selectedOrgUnitName }}</span>
