@@ -538,28 +538,31 @@ onMounted(async () => {
                   </Label>
                 </div>
 
-                <div v-if="changePassword" class="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  <div class="space-y-3">
-                    <Label for="password" class="leading-snug">Nueva Contraseña *</Label>
-                    <p class="text-xs text-muted-foreground">
-                      {{ PASSWORD_REQUIREMENTS }}
-                    </p>
-                    <PasswordInput
-                      id="password"
-                      v-model="form.password"
-                      required
-                      placeholder="Contraseña robusta"
-                    />
-                  </div>
-
-                  <div class="space-y-3">
-                    <Label for="password_confirmation" class="leading-snug">Confirmar Contraseña *</Label>
-                    <PasswordInput
-                      id="password_confirmation"
-                      v-model="form.password_confirmation"
-                      required
-                      placeholder="Repite la contraseña"
-                    />
+                <div v-if="changePassword" class="space-y-4">
+                  <p class="text-xs leading-relaxed text-muted-foreground">
+                    {{ PASSWORD_REQUIREMENTS }}
+                  </p>
+                  <div class="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+                    <div class="min-w-0 space-y-2">
+                      <Label for="password" class="leading-snug">Nueva Contraseña *</Label>
+                      <PasswordInput
+                        id="password"
+                        v-model="form.password"
+                        required
+                        autocomplete="new-password"
+                        placeholder="Contraseña robusta"
+                      />
+                    </div>
+                    <div class="min-w-0 space-y-2">
+                      <Label for="password_confirmation" class="leading-snug">Confirmar Contraseña *</Label>
+                      <PasswordInput
+                        id="password_confirmation"
+                        v-model="form.password_confirmation"
+                        required
+                        autocomplete="new-password"
+                        placeholder="Repite la contraseña"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
