@@ -468,12 +468,12 @@ onMounted(async () => {
             />
           </div>
           <Select v-model="modelFilter" @update:model-value="() => load(1)">
-            <SelectTrigger class="w-44">
-              <SelectValue placeholder="Modelo" />
+            <SelectTrigger class="w-52">
+              <SelectValue placeholder="De quién es" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem :value="FILTER_ALL">
-                Todos los modelos
+                Todos
               </SelectItem>
               <SelectItem
                 v-for="(label, value) in ARCHIVAL_FILE_MODEL_LABELS"
@@ -641,7 +641,7 @@ onMounted(async () => {
                 Nombre
               </TableHead>
               <TableHead class="w-[10rem]">
-                Modelo
+                De quién es
               </TableHead>
               <TableHead class="min-w-[16rem]">
                 Catálogo / TRD

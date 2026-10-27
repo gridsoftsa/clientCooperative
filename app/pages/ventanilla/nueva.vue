@@ -1003,7 +1003,7 @@ async function submit() {
   <div class="mx-auto w-full space-y-4 px-4 pb-8 md:px-6">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div class="flex min-w-0 items-start gap-3">
-        <Button variant="ghost" size="icon" class="shrink-0" @click="router.push('/ventanilla')">
+        <Button variant="outline" size="icon" class="shrink-0" aria-label="Volver" @click="router.push('/ventanilla')">
           <Icon name="i-lucide-arrow-left" class="size-4" />
         </Button>
         <div class="min-w-0">

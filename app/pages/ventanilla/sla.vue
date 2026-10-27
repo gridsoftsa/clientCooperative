@@ -486,7 +486,7 @@ function formatHolidayDate(value: string): string {
   <div class="mx-auto max-w-6xl space-y-4 p-4 md:p-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <Button variant="ghost" size="icon" @click="navigateTo('/ventanilla')">
+        <Button variant="outline" size="icon" class="shrink-0" aria-label="Volver" @click="navigateTo('/ventanilla')">
           <Icon name="i-lucide-arrow-left" class="size-4" />
         </Button>
         <div>

@@ -254,10 +254,9 @@ onMounted(async () => {
 <template>
   <SettingsLayout :wide="true">
     <div class="flex w-full max-w-2xl flex-col gap-4">
-      <Button variant="ghost" size="sm" class="-ml-2 w-fit" @click="router.push('/settings/archival/transfers')">
-        <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+      <PageBackButton to="/settings/archival/transfers">
         Actas
-      </Button>
+      </PageBackButton>
       <h2 class="text-2xl font-bold tracking-tight">
         {{ editingActId ? 'Editar borrador de acta' : 'Nueva acta de transferencia' }}
       </h2>

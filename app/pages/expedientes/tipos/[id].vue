@@ -208,10 +208,9 @@ watch(
   <div class="mx-auto w-full max-w-[90rem] space-y-4 px-4 pb-6 md:px-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="space-y-1">
-        <Button variant="ghost" size="sm" class="-ml-2" @click="router.push('/expedientes/tipos')">
-          <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
+        <PageBackButton to="/expedientes/tipos">
           Tipos de expediente
-        </Button>
+        </PageBackButton>
         <h1 class="text-2xl font-semibold tracking-tight">
           {{ fileType?.name ?? 'Tipo de expediente' }}
         </h1>
@@ -266,7 +265,7 @@ watch(
         </TabsList>
 
         <TabsContent value="general" class="mt-3">
-          <Card>
+          <Card class="max-w-xl">
             <CardContent class="min-w-0 p-4 md:p-6">
               <ArchivalFileTypeForm
                 :initial="fileType"

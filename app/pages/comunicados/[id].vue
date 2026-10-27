@@ -133,12 +133,9 @@ onMounted(load)
 
 <template>
   <div class="mx-auto w-full max-w-7xl space-y-6 px-4 pb-8 md:px-6">
-    <Button variant="ghost" size="sm" as-child class="-ml-2">
-      <NuxtLink to="/comunicados">
-        <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
-        Volver al feed
-      </NuxtLink>
-    </Button>
+    <PageBackButton to="/comunicados">
+      Volver al feed
+    </PageBackButton>
 
     <div v-if="loading" class="py-16 text-center text-muted-foreground">
       Cargando...

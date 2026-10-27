@@ -14,7 +14,7 @@ const archivalApi = useArchivalFileApi()
 const { $api } = useNuxtApp()
 const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promise<T>
 const orgUnits = ref<Array<{ id: number, name: string }>>([])
-const orgUnitId = ref<string | undefined>(undefined)
+const orgUnitId = ref<number | null>(null)
 const loading = ref(false)
 const tree = ref<ArchivalFileTreeNode | null>(null)
 const showAllTrdFolders = ref(true)
@@ -25,6 +25,13 @@ const archiveOptions = [
   { value: 'central' as const, label: ARCHIVAL_PHASE_TARGET_LABELS.central },
   { value: 'historical' as const, label: ARCHIVAL_PHASE_TARGET_LABELS.historical },
 ]
+
+const orgUnitSelectOptions = computed(() =>
+  orgUnits.value.map(unit => ({
+    value: unit.id,
+    label: unit.name,
+  })),
+)
 
 const displayTree = computed(() => {
   if (!tree.value) {
@@ -38,15 +45,7 @@ const displayTree = computed(() => {
   return filterArchivalAreaTreeToFoldersWithDocuments(tree.value)
 })
 
-const selectedOrgUnitNumericId = computed(() => {
-  if (!orgUnitId.value) {
-    return null
-  }
-
-  const parsed = Number(orgUnitId.value)
-
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
-})
+const selectedOrgUnitNumericId = computed(() => orgUnitId.value)
 
 async function loadOrgUnits() {
   try {
@@ -85,11 +84,9 @@ function onArchiveChange(value: unknown) {
   }
 }
 
-function onOrgUnitChange(value: unknown) {
-  const next = value == null || value === '' ? undefined : String(value)
-  orgUnitId.value = next
+watch(orgUnitId, () => {
   void loadRepository()
-}
+})
 
 onMounted(async () => {
   await loadOrgUnits()
@@ -116,22 +113,17 @@ onMounted(async () => {
     <Card>
       <CardHeader class="pb-4">
         <div class="flex flex-wrap items-stretch gap-3">
-          <div class="flex flex-col justify-end gap-2">
-            <Label>Área productora</Label>
-            <Select :model-value="orgUnitId" @update:model-value="onOrgUnitChange">
-              <SelectTrigger class="h-9 w-72">
-                <SelectValue placeholder="Seleccione área" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="unit in orgUnits"
-                  :key="unit.id"
-                  :value="String(unit.id)"
-                >
-                  {{ unit.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+          <div class="flex min-w-[18rem] flex-1 flex-col justify-end gap-2 md:max-w-md">
+            <Label for="area-repository-org-unit">Área productora</Label>
+            <ArchivalSingleMultiselect
+              id="area-repository-org-unit"
+              v-model="orgUnitId"
+              coerce-number
+              :options="orgUnitSelectOptions"
+              placeholder="Buscar y seleccionar un área…"
+              no-options-text="No hay áreas"
+              no-results-text="Sin coincidencias"
+            />
           </div>
           <div class="flex flex-col justify-end gap-2">
             <Label>Archivo</Label>

@@ -111,12 +111,9 @@ onMounted(load)
 <template>
   <div class="mx-auto max-w-3xl space-y-6">
     <div class="space-y-1">
-      <Button variant="ghost" size="sm" as-child class="-ml-2">
-        <NuxtLink to="/comunicados">
-          <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
-          Volver a comunicados
-        </NuxtLink>
-      </Button>
+      <PageBackButton to="/comunicados">
+        Volver a comunicados
+      </PageBackButton>
       <h1 class="text-2xl font-semibold tracking-tight">
         Parametrización de comunicados
       </h1>

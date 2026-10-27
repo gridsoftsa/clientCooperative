@@ -8,7 +8,6 @@ definePageMeta({
 })
 
 const router = useRouter()
-const archivalApi = useArchivalFileApi()
 
 function onCreated(type: ArchivalFileType) {
   router.push(`/expedientes/tipos/${type.id}?tab=areas&view=nueva`)
@@ -16,34 +15,22 @@ function onCreated(type: ArchivalFileType) {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-[90rem] space-y-4 px-4 pb-6 md:px-6">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div class="space-y-1">
-        <Button variant="ghost" size="sm" class="-ml-2" @click="router.push('/expedientes/tipos')">
-          <Icon name="i-lucide-arrow-left" class="mr-1 size-4" />
-          Tipos de expediente
-        </Button>
-        <h1 class="text-2xl font-semibold tracking-tight">
-          Nuevo tipo de expediente
-        </h1>
-        <p class="max-w-3xl text-sm text-muted-foreground">
-          Defina el nombre y el modelo del tipo. La clave técnica se asigna sola al guardar. Las áreas productoras se agregan después, una a una. El metadato al adjuntar documentos no se elige aquí.
-        </p>
-      </div>
-      <Button variant="outline" class="shrink-0" @click="router.push('/expedientes/tipos')">
-        Volver al listado
-      </Button>
+  <div class="mx-auto w-full max-w-xl space-y-6 px-4 pb-8 md:px-6">
+    <div class="space-y-1">
+      <PageBackButton to="/expedientes/tipos">
+        Tipos de expediente
+      </PageBackButton>
+      <h1 class="text-2xl font-semibold tracking-tight">
+        Nuevo tipo de expediente
+      </h1>
+      <p class="text-sm text-muted-foreground">
+        Ponga un nombre y elija de quién es cada expediente. La TRD de cada área se configura después.
+      </p>
     </div>
 
     <Card>
-      <CardHeader>
-        <CardTitle>Datos generales</CardTitle>
-        <CardDescription>
-          Información del tipo. El metadato de documentos se configura en cada tipo documental del catálogo.
-        </CardDescription>
-      </CardHeader>
-      <CardContent class="p-4 md:p-6">
-        <ArchivalFileTypeForm is-create @saved="onCreated" />
+      <CardContent class="pt-6">
+        <ArchivalFileTypeForm is-create @saved="onCreated" @cancel="router.push('/expedientes/tipos')" />
       </CardContent>
     </Card>
   </div>

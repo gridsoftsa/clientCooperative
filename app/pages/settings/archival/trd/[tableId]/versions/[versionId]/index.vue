@@ -1312,10 +1312,9 @@ watch(
     <div v-else-if="version" class="w-full flex flex-col gap-4">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="min-w-0 space-y-1">
-          <Button variant="ghost" size="sm" class="h-8 w-fit -ml-2 px-2" @click="router.push(trdApi.tablePath(tableId))">
-            <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+          <PageBackButton :to="trdApi.tablePath(tableId)">
             Volver a versiones
-          </Button>
+          </PageBackButton>
           <h2 class="text-2xl font-bold tracking-tight">
             Versión v{{ version.version_number }}
           </h2>
@@ -1875,15 +1874,9 @@ watch(
         <TabsContent value="rules" class="mt-4 space-y-4">
           <div v-if="showRuleForm && canEdit" class="space-y-4">
             <div class="space-y-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                class="h-8 w-fit -ml-2 px-2"
-                @click="closeRuleForm"
-              >
-                <Icon name="i-lucide-arrow-left" class="mr-1 h-4 w-4" />
+              <PageBackButton @click="closeRuleForm">
                 Volver a reglas
-              </Button>
+              </PageBackButton>
             </div>
             <Card>
               <CardHeader>
