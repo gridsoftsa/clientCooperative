@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import { ARCHIVAL_FILE_MODEL_LABELS } from '~/constants/archival-file'
+import { ARCHIVAL_FILE_MODEL_OPTIONS } from '~/constants/archival-file'
 import { suggestArchivalFileTypeKey } from '~/utils/archival-file-type-key'
 import type { ArchivalFileModel, ArchivalFileType } from '~/types/archival-file'
 import {
@@ -35,13 +35,7 @@ const form = reactive({
 
 const isSystem = computed(() => props.initial?.is_system === true)
 
-const effectiveTypeKey = computed(() => {
-  if (props.isCreate) {
-    return suggestArchivalFileTypeKey(form.name)
-  }
-
-  return form.type_key.trim()
-})
+const suggestedTypeKey = computed(() => suggestArchivalFileTypeKey(form.name))
 
 function applyInitial(type: ArchivalFileType | null | undefined) {
   form.type_key = type?.type_key ?? ''
@@ -104,106 +98,119 @@ async function submit() {
   }
 }
 
+function setModel(value: string | number) {
+  if (value === 'entity_case' || value === 'org_area') {
+    form.model = value
+  }
+}
+
 watch(() => props.initial, (value) => {
   applyInitial(value)
 }, { immediate: true })
 </script>
 
 <template>
-  <form class="mx-auto w-full max-w-2xl space-y-6" @submit.prevent="submit">
-    <div class="grid gap-4 sm:grid-cols-2">
-      <div class="space-y-2">
-        <Label for="file_type_name">Nombre *</Label>
-        <Input
-          id="file_type_name"
-          v-model="form.name"
-          :disabled="saving"
-          placeholder="Ej. Expediente de crédito"
-          :class="archivalInputWarningClass(submitAttempted && !form.name.trim())"
-        />
-        <p v-if="isCreate" class="text-xs text-muted-foreground">
-          Clave técnica al guardar:
-          <span class="font-mono">{{ effectiveTypeKey || 'expediente_contrato_file' }}</span>
-        </p>
-      </div>
+  <form class="w-full space-y-5" @submit.prevent="submit">
+    <div class="space-y-2">
+      <Label for="file_type_name">Nombre *</Label>
+      <Input
+        id="file_type_name"
+        v-model="form.name"
+        :disabled="saving"
+        placeholder="Ej. Expediente de crédito"
+        :class="archivalInputWarningClass(submitAttempted && !form.name.trim())"
+      />
+      <p v-if="isCreate && form.name.trim()" class="text-xs text-muted-foreground">
+        Clave técnica: <span class="font-mono">{{ suggestedTypeKey }}</span>
+      </p>
+    </div>
 
-      <div class="space-y-2">
-        <Label>Modelo</Label>
-        <Select v-model="form.model" :disabled="saving">
-          <SelectTrigger class="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem
-              v-for="(label, value) in ARCHIVAL_FILE_MODEL_LABELS"
-              :key="value"
-              :value="value"
-            >
-              {{ label }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <p class="text-xs text-muted-foreground">
-          {{ form.model === 'org_area'
-            ? 'Un repositorio por dependencia. La TRD se configura después, por área.'
-            : 'Un expediente por persona, contrato o caso.' }}
-        </p>
-      </div>
+    <div v-if="!isCreate" class="space-y-2">
+      <Label for="file_type_key">Clave técnica</Label>
+      <Input
+        id="file_type_key"
+        v-model="form.type_key"
+        :disabled="isSystem || saving"
+        placeholder="credit_file"
+        class="font-mono"
+        :class="archivalInputWarningClass(submitAttempted && !form.type_key.trim())"
+      />
+      <p v-if="isSystem" class="text-xs text-muted-foreground">
+        La clave de tipos del sistema no se puede modificar.
+      </p>
+    </div>
 
-      <div v-if="!isCreate" class="space-y-2 sm:col-span-2">
-        <Label for="file_type_key">Clave técnica</Label>
-        <Input
-          id="file_type_key"
-          v-model="form.type_key"
-          :disabled="isSystem || saving"
-          placeholder="credit_file"
-          class="font-mono"
-          :class="archivalInputWarningClass(submitAttempted && !form.type_key.trim())"
-        />
-        <p v-if="isSystem" class="text-xs text-muted-foreground">
-          La clave de tipos del sistema no se puede modificar.
-        </p>
-      </div>
+    <fieldset class="space-y-2">
+      <legend class="text-sm font-medium leading-none">
+        Modelo
+      </legend>
+      <p class="text-xs text-muted-foreground">
+        Define si cada expediente es de una persona o caso, o del archivo de un área.
+      </p>
+      <RadioGroup
+        :model-value="form.model"
+        :disabled="saving"
+        class="grid gap-2 sm:grid-cols-2"
+        @update:model-value="setModel($event)"
+      >
+        <label
+          v-for="option in ARCHIVAL_FILE_MODEL_OPTIONS"
+          :key="option.value"
+          class="flex cursor-pointer gap-3 rounded-lg border p-3 text-left transition-colors"
+          :class="form.model === option.value
+            ? 'border-primary bg-primary/5'
+            : 'hover:bg-muted/40'"
+        >
+          <RadioGroupItem :value="option.value" class="mt-0.5" />
+          <span class="min-w-0 space-y-1">
+            <span class="block text-sm font-medium leading-none">
+              {{ option.label }}
+            </span>
+            <span class="block text-xs leading-relaxed text-muted-foreground">
+              {{ option.summary }}
+              {{ option.when }}
+              Ej.: {{ option.examples }}
+            </span>
+          </span>
+        </label>
+      </RadioGroup>
+    </fieldset>
 
-      <div class="space-y-2">
-        <Label for="file_type_sort">Orden en listados</Label>
+    <div class="space-y-2">
+      <Label for="file_type_description">Descripción</Label>
+      <Textarea
+        id="file_type_description"
+        v-model="form.description"
+        rows="3"
+        :disabled="saving"
+        placeholder="Opcional"
+      />
+    </div>
+
+    <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+      <Checkbox id="file_type_active" v-model="form.is_active" :disabled="saving">
+        Activo
+      </Checkbox>
+      <Checkbox id="file_type_master" v-model="form.allows_master_documents" :disabled="saving">
+        Permite documentos maestros
+      </Checkbox>
+      <div class="ml-auto flex items-center gap-2">
+        <Label for="file_type_sort" class="whitespace-nowrap font-normal text-muted-foreground">
+          Orden
+        </Label>
         <Input
           id="file_type_sort"
           v-model.number="form.sort_order"
           type="number"
           min="0"
           :disabled="saving"
-        />
-      </div>
-
-      <div class="flex flex-col justify-end gap-2">
-        <div class="rounded-md border px-3 py-2">
-          <Checkbox id="file_type_active" v-model="form.is_active" :disabled="saving">
-            Activo
-          </Checkbox>
-        </div>
-        <div class="rounded-md border px-3 py-2">
-          <Checkbox id="file_type_master" v-model="form.allows_master_documents" :disabled="saving">
-            Permite documentos maestros
-          </Checkbox>
-        </div>
-      </div>
-
-      <div class="space-y-2 sm:col-span-2">
-        <Label for="file_type_description">Descripción</Label>
-        <Textarea
-          id="file_type_description"
-          v-model="form.description"
-          rows="3"
-          :disabled="saving"
-          placeholder="Opcional. Uso interno del tipo."
+          class="w-20"
         />
       </div>
     </div>
 
-    <div class="flex flex-wrap justify-end gap-2 border-t pt-4">
+    <div class="flex justify-end gap-2 border-t pt-4">
       <Button
-        v-if="!isCreate"
         type="button"
         variant="outline"
         :disabled="saving"

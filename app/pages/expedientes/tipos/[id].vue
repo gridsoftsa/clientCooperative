@@ -265,7 +265,7 @@ watch(
         </TabsList>
 
         <TabsContent value="general" class="mt-3">
-          <Card>
+          <Card class="max-w-xl">
             <CardContent class="min-w-0 p-4 md:p-6">
               <ArchivalFileTypeForm
                 :initial="fileType"

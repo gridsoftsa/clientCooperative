@@ -8,7 +8,6 @@ definePageMeta({
 })
 
 const router = useRouter()
-const archivalApi = useArchivalFileApi()
 
 function onCreated(type: ArchivalFileType) {
   router.push(`/expedientes/tipos/${type.id}?tab=areas&view=nueva`)
@@ -16,7 +15,7 @@ function onCreated(type: ArchivalFileType) {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-3xl space-y-4 px-4 pb-6 md:px-6">
+  <div class="mx-auto w-full max-w-xl space-y-6 px-4 pb-8 md:px-6">
     <div class="space-y-1">
       <PageBackButton to="/expedientes/tipos">
         Tipos de expediente
@@ -25,19 +24,13 @@ function onCreated(type: ArchivalFileType) {
         Nuevo tipo de expediente
       </h1>
       <p class="text-sm text-muted-foreground">
-        Indique nombre y modelo. Luego se configuran las áreas productoras y la TRD de cada una.
+        Indique el nombre y el modelo. Las áreas productoras y la TRD se configuran en el siguiente paso.
       </p>
     </div>
 
     <Card>
-      <CardHeader>
-        <CardTitle>Datos del tipo</CardTitle>
-        <CardDescription>
-          NIT, periodo u otros campos al adjuntar un archivo se configuran en el tipo documental de la TRD (catálogo archivístico).
-        </CardDescription>
-      </CardHeader>
-      <CardContent class="p-4 md:p-6">
-        <ArchivalFileTypeForm is-create @saved="onCreated" />
+      <CardContent class="pt-6">
+        <ArchivalFileTypeForm is-create @saved="onCreated" @cancel="router.push('/expedientes/tipos')" />
       </CardContent>
     </Card>
   </div>
