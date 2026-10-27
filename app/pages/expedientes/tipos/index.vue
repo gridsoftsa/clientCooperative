@@ -14,6 +14,7 @@ const FILTER_ALL = 'all'
 const ORG_UNIT_NONE = 'none'
 const PER_PAGE_OPTIONS = LIST_PAGE_SIZE_OPTIONS
 const AREA_PREVIEW_LIMIT = 6
+const TABLE_AREA_PREVIEW_LIMIT = 4
 
 const router = useRouter()
 const archivalApi = useArchivalFileApi()
@@ -30,6 +31,7 @@ const meta = ref({ current_page: 1, last_page: 1, total: 0, per_page: DEFAULT_LI
 
 const showPagination = computed(() => viewMode.value === 'table' && meta.value.total > 0)
 const areaShowAll = ref<Record<string, boolean>>({})
+const tableAreaShowAll = ref<Record<number, boolean>>({})
 
 const search = ref('')
 const orgUnitFilter = ref<string>(FILTER_ALL)
@@ -373,16 +375,43 @@ function requiredCount(type: ArchivalFileType): number {
   return type.required_documents?.length ?? 0
 }
 
-function producerAreasLabel(type: ArchivalFileType): string | null {
+function producerAreaListRows(type: ArchivalFileType): Array<{ name: string, trd: string | null }> {
   const areas = type.producer_areas ?? []
 
   if (areas.length === 0) {
-    return null
+    if (type.doc_series && type.doc_subseries) {
+      return [{
+        name: type.trd_table?.org_unit?.name ?? 'TRD',
+        trd: `${type.doc_series.code} — ${type.doc_subseries.code}`,
+      }]
+    }
+
+    return []
   }
 
-  return areas
-    .map(area => area.org_unit?.name ?? `Área #${area.org_unit_id}`)
-    .join(', ')
+  return areas.map(area => ({
+    name: area.org_unit?.name ?? `Área #${area.org_unit_id}`,
+    trd: area.doc_series && area.doc_subseries
+      ? `${area.doc_series.code}/${area.doc_subseries.code}`
+      : null,
+  }))
+}
+
+function visibleProducerAreaRows(type: ArchivalFileType): Array<{ name: string, trd: string | null }> {
+  const rows = producerAreaListRows(type)
+
+  if (tableAreaShowAll.value[type.id] || rows.length <= TABLE_AREA_PREVIEW_LIMIT) {
+    return rows
+  }
+
+  return rows.slice(0, TABLE_AREA_PREVIEW_LIMIT)
+}
+
+function toggleTableAreaShowAll(typeId: number): void {
+  tableAreaShowAll.value = {
+    ...tableAreaShowAll.value,
+    [typeId]: !tableAreaShowAll.value[typeId],
+  }
 }
 
 function catalogSummary(type: ArchivalFileType): string {
@@ -403,32 +432,6 @@ function catalogSummary(type: ArchivalFileType): string {
   const configured = areas.filter(area => area.doc_series && area.doc_subseries).length
 
   return `${configured} área${configured === 1 ? '' : 's'} con TRD`
-}
-
-function catalogDetail(type: ArchivalFileType): string | null {
-  const areas = type.producer_areas ?? []
-
-  if (areas.length === 1 && areas[0]?.doc_series && areas[0]?.doc_subseries) {
-    return `${areas[0].doc_series.name} / ${areas[0].doc_subseries.name}`
-  }
-
-  if (areas.length > 1) {
-    return areas
-      .filter(area => area.org_unit && area.doc_series && area.doc_subseries)
-      .map(area => `${area.org_unit?.name}: ${area.doc_series?.code}/${area.doc_subseries?.code}`)
-      .join(' · ')
-      || null
-  }
-
-  if (type.doc_series && type.doc_subseries) {
-    return `${type.doc_series.name} / ${type.doc_subseries.name}`
-  }
-
-  if (type.doc_series) {
-    return type.doc_series.name
-  }
-
-  return null
 }
 
 onMounted(async () => {
@@ -659,33 +662,51 @@ onMounted(async () => {
           </TableHeader>
           <TableBody>
             <TableRow v-for="type in types" :key="type.id">
-              <TableCell>
-                <div class="space-y-1">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class="font-medium">{{ type.name }}</span>
-                    <Badge v-if="type.is_system" variant="outline" class="text-xs">
-                  Sistema
-                </Badge>
-                  </div>
-                  <p v-if="producerAreasLabel(type)" class="text-xs text-muted-foreground">
-                    {{ producerAreasLabel(type) }}
-                  </p>
+              <TableCell class="align-top">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="font-medium">{{ type.name }}</span>
+                  <Badge v-if="type.is_system" variant="outline" class="text-xs">
+                    Sistema
+                  </Badge>
                 </div>
               </TableCell>
-              <TableCell class="text-sm">
+              <TableCell class="align-top text-sm">
                 {{ ARCHIVAL_FILE_MODEL_LABELS[type.model] }}
               </TableCell>
-              <TableCell>
-                <div class="space-y-1 text-sm">
-                  <div class="font-mono text-xs">
-                    {{ catalogSummary(type) }}
-                  </div>
-                  <div v-if="catalogDetail(type)" class="text-muted-foreground">
-                    {{ catalogDetail(type) }}
-                  </div>
-                  <div v-if="type.trd_table?.org_unit" class="text-xs text-muted-foreground">
-                  TRD: {{ type.trd_table.org_unit.name }}
-                  </div>
+              <TableCell class="align-top">
+                <div class="max-w-xs min-w-0 space-y-1.5">
+                  <p
+                    v-if="producerAreaListRows(type).length === 0"
+                    class="text-xs text-muted-foreground"
+                  >
+                    Sin TRD
+                  </p>
+                  <ul v-else class="divide-y rounded-md border">
+                    <li
+                      v-for="(row, rowIndex) in visibleProducerAreaRows(type)"
+                      :key="`${type.id}-area-${rowIndex}`"
+                      class="px-2.5 py-1.5"
+                    >
+                      <p class="truncate text-xs font-medium">
+                        {{ row.name }}
+                      </p>
+                      <p class="truncate font-mono text-[11px] text-muted-foreground">
+                        {{ row.trd ?? 'Sin TRD' }}
+                      </p>
+                    </li>
+                  </ul>
+                  <Button
+                    v-if="producerAreaListRows(type).length > TABLE_AREA_PREVIEW_LIMIT"
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    class="h-7 px-0 text-xs"
+                    @click="toggleTableAreaShowAll(type.id)"
+                  >
+                    {{ tableAreaShowAll[type.id]
+                      ? 'Ver menos'
+                      : `Ver ${producerAreaListRows(type).length - TABLE_AREA_PREVIEW_LIMIT} más` }}
+                  </Button>
                 </div>
               </TableCell>
               <TableCell class="text-center">
