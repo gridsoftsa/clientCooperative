@@ -14,7 +14,6 @@ const FILTER_ALL = 'all'
 const ORG_UNIT_NONE = 'none'
 const PER_PAGE_OPTIONS = LIST_PAGE_SIZE_OPTIONS
 const AREA_PREVIEW_LIMIT = 6
-const TABLE_AREA_PREVIEW_LIMIT = 4
 
 const router = useRouter()
 const archivalApi = useArchivalFileApi()
@@ -31,7 +30,7 @@ const meta = ref({ current_page: 1, last_page: 1, total: 0, per_page: DEFAULT_LI
 
 const showPagination = computed(() => viewMode.value === 'table' && meta.value.total > 0)
 const areaShowAll = ref<Record<string, boolean>>({})
-const tableAreaShowAll = ref<Record<number, boolean>>({})
+const expandedTypeId = ref<number | null>(null)
 
 const search = ref('')
 const orgUnitFilter = ref<string>(FILTER_ALL)
@@ -375,14 +374,21 @@ function requiredCount(type: ArchivalFileType): number {
   return type.required_documents?.length ?? 0
 }
 
-function producerAreaListRows(type: ArchivalFileType): Array<{ name: string, trd: string | null }> {
+function producerAreaExpandRows(type: ArchivalFileType): Array<{
+  name: string
+  code: string
+  catalog: string
+  configured: boolean
+}> {
   const areas = type.producer_areas ?? []
 
   if (areas.length === 0) {
     if (type.doc_series && type.doc_subseries) {
       return [{
         name: type.trd_table?.org_unit?.name ?? 'TRD',
-        trd: `${type.doc_series.code} — ${type.doc_subseries.code}`,
+        code: `${type.doc_series.code} — ${type.doc_subseries.code}`,
+        catalog: `${type.doc_series.name} / ${type.doc_subseries.name}`,
+        configured: true,
       }]
     }
 
@@ -391,27 +397,18 @@ function producerAreaListRows(type: ArchivalFileType): Array<{ name: string, trd
 
   return areas.map(area => ({
     name: area.org_unit?.name ?? `Área #${area.org_unit_id}`,
-    trd: area.doc_series && area.doc_subseries
+    code: area.doc_series && area.doc_subseries
       ? `${area.doc_series.code}/${area.doc_subseries.code}`
-      : null,
+      : '—',
+    catalog: area.doc_series && area.doc_subseries
+      ? `${area.doc_series.name} / ${area.doc_subseries.name}`
+      : 'Sin TRD',
+    configured: Boolean(area.doc_series && area.doc_subseries),
   }))
 }
 
-function visibleProducerAreaRows(type: ArchivalFileType): Array<{ name: string, trd: string | null }> {
-  const rows = producerAreaListRows(type)
-
-  if (tableAreaShowAll.value[type.id] || rows.length <= TABLE_AREA_PREVIEW_LIMIT) {
-    return rows
-  }
-
-  return rows.slice(0, TABLE_AREA_PREVIEW_LIMIT)
-}
-
-function toggleTableAreaShowAll(typeId: number): void {
-  tableAreaShowAll.value = {
-    ...tableAreaShowAll.value,
-    [typeId]: !tableAreaShowAll.value[typeId],
-  }
+function toggleTypeAreas(typeId: number): void {
+  expandedTypeId.value = expandedTypeId.value === typeId ? null : typeId
 }
 
 function catalogSummary(type: ArchivalFileType): string {
@@ -637,124 +634,169 @@ onMounted(async () => {
           </Button>
         </div>
 
-        <Table v-else-if="viewMode === 'table'">
-          <TableHeader>
-            <TableRow>
-              <TableHead class="min-w-[14rem]">
-                Nombre
-              </TableHead>
-              <TableHead class="w-[10rem]">
-                De quién es
-              </TableHead>
-              <TableHead class="min-w-[16rem]">
-                Catálogo / TRD
-              </TableHead>
-              <TableHead class="w-[7rem] text-center">
-                Obligatorios
-              </TableHead>
-              <TableHead class="w-[7rem]">
-                Estado
-              </TableHead>
-              <TableHead class="w-[11rem] text-right">
-                Acciones
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow v-for="type in types" :key="type.id">
-              <TableCell class="align-top">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="font-medium">{{ type.name }}</span>
-                  <Badge v-if="type.is_system" variant="outline" class="text-xs">
-                    Sistema
-                  </Badge>
-                </div>
-              </TableCell>
-              <TableCell class="align-top text-sm">
-                {{ ARCHIVAL_FILE_MODEL_LABELS[type.model] }}
-              </TableCell>
-              <TableCell class="align-top">
-                <div class="max-w-xs min-w-0 space-y-1.5">
-                  <p
-                    v-if="producerAreaListRows(type).length === 0"
-                    class="text-xs text-muted-foreground"
-                  >
-                    Sin TRD
-                  </p>
-                  <ul v-else class="divide-y rounded-md border">
-                    <li
-                      v-for="(row, rowIndex) in visibleProducerAreaRows(type)"
-                      :key="`${type.id}-area-${rowIndex}`"
-                      class="px-2.5 py-1.5"
+        <div v-else-if="viewMode === 'table'" class="overflow-hidden rounded-lg border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead class="min-w-[16rem]">
+                  Nombre
+                </TableHead>
+                <TableHead class="w-[10rem]">
+                  De quién es
+                </TableHead>
+                <TableHead class="w-[7rem] text-center">
+                  Obligatorios
+                </TableHead>
+                <TableHead class="w-[7rem]">
+                  Estado
+                </TableHead>
+                <TableHead class="w-[11rem] text-right">
+                  Acciones
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <template v-for="type in types" :key="type.id">
+                <TableRow>
+                  <TableCell class="font-medium">
+                    <div class="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        class="h-8 w-8 shrink-0 px-0"
+                        :aria-expanded="expandedTypeId === type.id"
+                        :aria-label="expandedTypeId === type.id ? 'Ocultar áreas TRD' : 'Ver áreas TRD'"
+                        @click="toggleTypeAreas(type.id)"
+                      >
+                        <Icon
+                          :name="expandedTypeId === type.id ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                          class="size-4"
+                        />
+                      </Button>
+                      <span>{{ type.name }}</span>
+                      <Badge v-if="type.is_system" variant="outline" class="ml-1 text-xs">
+                        Sistema
+                      </Badge>
+                      <Badge variant="outline" class="ml-1">
+                        {{ producerAreaExpandRows(type).length }}
+                      </Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell class="text-sm">
+                    {{ ARCHIVAL_FILE_MODEL_LABELS[type.model] }}
+                  </TableCell>
+                  <TableCell class="text-center">
+                    {{ requiredCount(type) }}
+                  </TableCell>
+                  <TableCell>
+                    <Badge :variant="type.is_active ? 'default' : 'secondary'">
+                      {{ type.is_active ? 'Activo' : 'Inactivo' }}
+                    </Badge>
+                  </TableCell>
+                  <TableCell class="text-right">
+                    <div class="flex flex-wrap justify-end gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
+                        @click="router.push(`/expedientes/tipos/${type.id}`)"
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        v-if="type.is_active"
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs"
+                        :disabled="togglingId === type.id"
+                        @click="toggleActive(type, false)"
+                      >
+                        <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                        Desactivar
+                      </Button>
+                      <Button
+                        v-else
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        class="h-8 px-2 text-xs"
+                        :disabled="togglingId === type.id"
+                        @click="toggleActive(type, true)"
+                      >
+                        Activar
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+                <TableRow v-if="expandedTypeId === type.id" class="bg-muted/30 hover:bg-muted/30">
+                  <TableCell colspan="5" class="p-3">
+                    <p
+                      v-if="producerAreaExpandRows(type).length === 0"
+                      class="text-sm text-muted-foreground"
                     >
-                      <p class="truncate text-xs font-medium">
-                        {{ row.name }}
-                      </p>
-                      <p class="truncate font-mono text-[11px] text-muted-foreground">
-                        {{ row.trd ?? 'Sin TRD' }}
-                      </p>
-                    </li>
-                  </ul>
-                  <Button
-                    v-if="producerAreaListRows(type).length > TABLE_AREA_PREVIEW_LIMIT"
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    class="h-7 px-0 text-xs"
-                    @click="toggleTableAreaShowAll(type.id)"
-                  >
-                    {{ tableAreaShowAll[type.id]
-                      ? 'Ver menos'
-                      : `Ver ${producerAreaListRows(type).length - TABLE_AREA_PREVIEW_LIMIT} más` }}
-                  </Button>
-                </div>
-              </TableCell>
-              <TableCell class="text-center">
-                {{ requiredCount(type) }}
-              </TableCell>
-              <TableCell>
-                <Badge :variant="type.is_active ? 'default' : 'secondary'">
-                  {{ type.is_active ? 'Activo' : 'Inactivo' }}
-                </Badge>
-              </TableCell>
-              <TableCell class="text-right">
-                <div class="flex flex-wrap justify-end gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    class="h-8 gap-1.5 px-2 text-xs"
-                    @click="router.push(`/expedientes/tipos/${type.id}`)"
-                  >
-                    Editar
-                  </Button>
-                  <Button
-                    v-if="type.is_active"
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    class="h-8 gap-1.5 px-2 text-xs"
-                    :disabled="togglingId === type.id"
-                    @click="toggleActive(type, false)"
-                  >
-                    <Icon name="i-lucide-ban" class="size-4 shrink-0" />
-                    Desactivar
-                  </Button>
-                  <Button
-                    v-else
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    class="h-8 px-2 text-xs"
-                    :disabled="togglingId === type.id"
-                    @click="toggleActive(type, true)"
-                  >
-                    Activar
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+                      Este tipo no tiene áreas productoras.
+                      <button
+                        type="button"
+                        class="ml-1 underline underline-offset-2"
+                        @click="router.push(`/expedientes/tipos/${type.id}?tab=areas`)"
+                      >
+                        Configurar la primera
+                      </button>
+                    </p>
+                    <div v-else class="overflow-hidden rounded-md border bg-background">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Área productora</TableHead>
+                            <TableHead>Código</TableHead>
+                            <TableHead>Serie / subserie</TableHead>
+                            <TableHead>TRD</TableHead>
+                            <TableHead class="text-right">
+                              Acciones
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          <TableRow
+                            v-for="(row, rowIndex) in producerAreaExpandRows(type)"
+                            :key="`${type.id}-area-${rowIndex}`"
+                          >
+                            <TableCell class="font-medium">
+                              {{ row.name }}
+                            </TableCell>
+                            <TableCell class="font-mono">
+                              {{ row.code }}
+                            </TableCell>
+                            <TableCell class="text-sm text-muted-foreground">
+                              {{ row.catalog }}
+                            </TableCell>
+                            <TableCell>
+                              <Badge :variant="row.configured ? 'default' : 'secondary'">
+                                {{ row.configured ? 'Configurada' : 'Pendiente' }}
+                              </Badge>
+                            </TableCell>
+                            <TableCell class="text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                class="h-8 gap-1.5 px-2 text-xs"
+                                @click="router.push(`/expedientes/tipos/${type.id}?tab=areas`)"
+                              >
+                                Editar
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              </template>
+            </TableBody>
+          </Table>
+        </div>
 
         <div v-else class="space-y-2">
           <p v-if="groupedByArea.length === 0" class="py-8 text-center text-sm text-muted-foreground">
