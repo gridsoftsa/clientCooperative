@@ -219,6 +219,15 @@ onMounted(async () => {
                   Este es un rol del sistema y no se puede modificar su nombre
                 </p>
               </div>
+              <div class="space-y-2 border-t pt-4">
+                <div>
+                  <p class="text-sm font-medium">Usuarios con este rol</p>
+                  <p class="text-sm text-muted-foreground">
+                    Cuentas que tienen el rol asignado. Las inactivas siguen en la lista para ver la relación.
+                  </p>
+                </div>
+                <SettingsRoleAssignedUsers :users="role.users" />
+              </div>
             </CardContent>
           </Card>
 

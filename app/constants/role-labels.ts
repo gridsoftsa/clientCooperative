@@ -15,6 +15,11 @@ const ROLE_DISPLAY_LABELS: Record<string, string> = {
   jefe_area: 'Jefe de área',
 }
 
+export function roleAssignedUserLabel(user: { name: string, full_name?: string | null }): string {
+  const fullName = user.full_name?.trim()
+  return fullName || user.name
+}
+
 export function getRoleDisplayLabel(name: string): string {
   const fixed = ROLE_DISPLAY_LABELS[name]
   if (fixed) {
