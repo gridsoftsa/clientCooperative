@@ -16,29 +16,24 @@ function onCreated(type: ArchivalFileType) {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-[90rem] space-y-4 px-4 pb-6 md:px-6">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div class="space-y-1">
-        <PageBackButton to="/expedientes/tipos">
-          Tipos de expediente
-        </PageBackButton>
-        <h1 class="text-2xl font-semibold tracking-tight">
-          Nuevo tipo de expediente
-        </h1>
-        <p class="max-w-3xl text-sm text-muted-foreground">
-          Defina el nombre y el modelo del tipo. La clave técnica se asigna sola al guardar. Las áreas productoras se agregan después, una a una. El metadato al adjuntar documentos no se elige aquí.
-        </p>
-      </div>
-      <Button variant="outline" class="shrink-0" @click="router.push('/expedientes/tipos')">
-        Volver al listado
-      </Button>
+  <div class="mx-auto w-full max-w-3xl space-y-4 px-4 pb-6 md:px-6">
+    <div class="space-y-1">
+      <PageBackButton to="/expedientes/tipos">
+        Tipos de expediente
+      </PageBackButton>
+      <h1 class="text-2xl font-semibold tracking-tight">
+        Nuevo tipo de expediente
+      </h1>
+      <p class="text-sm text-muted-foreground">
+        Indique nombre y modelo. Luego se configuran las áreas productoras y la TRD de cada una.
+      </p>
     </div>
 
     <Card>
       <CardHeader>
-        <CardTitle>Datos generales</CardTitle>
+        <CardTitle>Datos del tipo</CardTitle>
         <CardDescription>
-          Información del tipo. El metadato de documentos se configura en cada tipo documental del catálogo.
+          NIT, periodo u otros campos al adjuntar un archivo se configuran en el tipo documental de la TRD (catálogo archivístico).
         </CardDescription>
       </CardHeader>
       <CardContent class="p-4 md:p-6">

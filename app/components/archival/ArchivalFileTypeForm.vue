@@ -2,7 +2,6 @@
 import { toast } from 'vue-sonner'
 import { ARCHIVAL_FILE_MODEL_LABELS } from '~/constants/archival-file'
 import { suggestArchivalFileTypeKey } from '~/utils/archival-file-type-key'
-import type { ArchivalMetadataSchemaRow } from '~/composables/useArchivalMetadataApi'
 import type { ArchivalFileModel, ArchivalFileType } from '~/types/archival-file'
 import {
   archivalInputWarningClass,
@@ -20,19 +19,15 @@ const emit = defineEmits<{
 }>()
 
 const archivalApi = useArchivalFileApi()
-const metaApi = useArchivalMetadataApi()
 
-const loading = ref(true)
 const saving = ref(false)
 const submitAttempted = ref(false)
-const metadataSchemas = ref<ArchivalMetadataSchemaRow[]>([])
 
 const form = reactive({
   type_key: '',
   name: '',
   description: '',
   model: 'entity_case' as ArchivalFileModel,
-  archival_metadata_schema_id: '',
   allows_master_documents: false,
   is_active: true,
   sort_order: 0,
@@ -48,56 +43,14 @@ const effectiveTypeKey = computed(() => {
   return form.type_key.trim()
 })
 
-const filteredMetadataSchemas = computed(() => {
-  const typeKey = effectiveTypeKey.value
-  const currentId = form.archival_metadata_schema_id
-    ? Number(form.archival_metadata_schema_id)
-    : null
-
-  return metadataSchemas.value.filter((schema) => {
-    if (currentId !== null && schema.id === currentId) {
-      return true
-    }
-
-    if (schema.status !== 'active' || schema.application_level !== 'file_type') {
-      return false
-    }
-
-    if (!typeKey) {
-      return true
-    }
-
-    return !schema.file_type_key || schema.file_type_key === typeKey
-  })
-})
-
 function applyInitial(type: ArchivalFileType | null | undefined) {
   form.type_key = type?.type_key ?? ''
   form.name = type?.name ?? ''
   form.description = type?.description ?? ''
   form.model = type?.model ?? 'entity_case'
-  form.archival_metadata_schema_id = type?.archival_metadata_schema_id ? String(type.archival_metadata_schema_id) : ''
   form.allows_master_documents = type?.allows_master_documents ?? false
   form.is_active = type?.is_active ?? true
   form.sort_order = type?.sort_order ?? 0
-}
-
-async function loadCatalogs() {
-  loading.value = true
-
-  try {
-    metadataSchemas.value = await metaApi.fetchSchemas({
-      application_level: 'file_type',
-      status: 'active',
-    })
-    applyInitial(props.initial)
-  }
-  catch {
-    toast.error('No se pudieron cargar los catálogos.')
-  }
-  finally {
-    loading.value = false
-  }
 }
 
 function buildPayload(): Record<string, unknown> {
@@ -105,7 +58,6 @@ function buildPayload(): Record<string, unknown> {
     name: form.name.trim(),
     description: form.description.trim() || null,
     model: form.model,
-    archival_metadata_schema_id: form.archival_metadata_schema_id ? Number(form.archival_metadata_schema_id) : null,
     allows_master_documents: form.allows_master_documents,
     is_active: form.is_active,
     sort_order: Number(form.sort_order) || 0,
@@ -153,153 +105,115 @@ async function submit() {
 }
 
 watch(() => props.initial, (value) => {
-  if (loading.value) {
-    return
-  }
-
   applyInitial(value)
-})
-
-onMounted(() => loadCatalogs())
+}, { immediate: true })
 </script>
 
 <template>
-  <form class="space-y-4" @submit.prevent="submit">
-    <div v-if="loading" class="py-8 text-center text-sm text-muted-foreground">
-      Cargando configuración…
-    </div>
-
-    <template v-else>
-      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <div v-if="isCreate" class="space-y-2 md:col-span-2 xl:col-span-3">
-          <p class="text-sm text-muted-foreground leading-relaxed">
-            La <span class="font-medium text-foreground">clave técnica</span> se generará automáticamente al crear
-            (por ejemplo, a partir del nombre:
-            <span class="font-mono text-xs">{{ effectiveTypeKey || 'expediente_contrato_file' }}</span>).
-            Las áreas productoras se configuran después, en una vista aparte.
-          </p>
-        </div>
-
-        <div v-else class="space-y-2">
-          <Label for="file_type_key">Clave técnica</Label>
-          <Input
-            id="file_type_key"
-            v-model="form.type_key"
-            :disabled="isSystem || saving"
-            placeholder="credit_file"
-            class="font-mono"
-            :class="archivalInputWarningClass(submitAttempted && !form.type_key.trim())"
-          />
-          <p v-if="isSystem" class="text-xs text-muted-foreground">
-            La clave de tipos del sistema no se puede modificar.
-          </p>
-        </div>
-
-        <div class="space-y-2">
-          <Label for="file_type_name">Nombre *</Label>
-          <Input
-            id="file_type_name"
-            v-model="form.name"
-            :disabled="saving"
-            :class="archivalInputWarningClass(submitAttempted && !form.name.trim())"
-          />
-        </div>
-
-        <div class="space-y-2">
-          <Label>Metadato del expediente</Label>
-          <Select
-            :model-value="form.archival_metadata_schema_id || '__none__'"
-            :disabled="saving"
-            @update:model-value="form.archival_metadata_schema_id = $event && $event !== '__none__' ? String($event) : ''"
-          >
-            <SelectTrigger class="w-full">
-              <SelectValue placeholder="Sin metadato de expediente" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">
-                Sin metadato de expediente
-              </SelectItem>
-              <SelectItem
-                v-for="schema in filteredMetadataSchemas"
-                :key="schema.id"
-                :value="String(schema.id)"
-              >
-                {{ schema.name }}
-                <span v-if="schema.version_number" class="text-muted-foreground"> v{{ schema.version_number }}</span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <p class="text-xs text-muted-foreground leading-relaxed">
-            Déjelo vacío en el caso habitual. Esto es solo para datos del
-            <span class="font-medium text-foreground">expediente</span>
-            (carpeta). El metadato al adjuntar un archivo (NIT, número, periodo, etc.) se define en cada
-            <span class="font-medium text-foreground">tipo documental</span>
-            del catálogo TRD.
-          </p>
-        </div>
-
-        <div class="space-y-2">
-          <Label>Modelo</Label>
-          <Select v-model="form.model" :disabled="saving">
-            <SelectTrigger class="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                v-for="(label, value) in ARCHIVAL_FILE_MODEL_LABELS"
-                :key="value"
-                :value="value"
-              >
-                {{ label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div class="space-y-2">
-          <Label>Orden</Label>
-          <Input v-model.number="form.sort_order" type="number" min="0" :disabled="saving" />
-        </div>
-
-        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border bg-muted/20 px-4 py-3">
-          <div class="flex items-center gap-2">
-            <Checkbox id="file_type_active" v-model="form.is_active" :disabled="saving" />
-            <Label for="file_type_active" class="font-normal">Activo</Label>
-          </div>
-          <div class="flex items-center gap-2">
-            <Checkbox id="file_type_master" v-model="form.allows_master_documents" :disabled="saving" />
-            <Label for="file_type_master" class="font-normal">Permite documentos maestros</Label>
-          </div>
-        </div>
-
-        <div class="space-y-2 md:col-span-2 xl:col-span-3">
-          <Label for="file_type_description">Descripción</Label>
-          <Textarea id="file_type_description" v-model="form.description" rows="2" :disabled="saving" />
-        </div>
-
-        <p
-          v-if="form.model === 'org_area'"
-          class="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground md:col-span-2 xl:col-span-3"
-        >
-          Tipos <span class="font-medium text-foreground">por área</span>: en la pestaña Áreas productoras configure la
-          TRD de cada dependencia. Al adjuntar documentos se aplicará el área del expediente.
+  <form class="mx-auto w-full max-w-2xl space-y-6" @submit.prevent="submit">
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div class="space-y-2">
+        <Label for="file_type_name">Nombre *</Label>
+        <Input
+          id="file_type_name"
+          v-model="form.name"
+          :disabled="saving"
+          placeholder="Ej. Expediente de crédito"
+          :class="archivalInputWarningClass(submitAttempted && !form.name.trim())"
+        />
+        <p v-if="isCreate" class="text-xs text-muted-foreground">
+          Clave técnica al guardar:
+          <span class="font-mono">{{ effectiveTypeKey || 'expediente_contrato_file' }}</span>
         </p>
       </div>
 
-      <div class="flex flex-wrap justify-end gap-2 border-t pt-4">
-        <Button
-          v-if="!isCreate"
-          type="button"
-          variant="outline"
-          :disabled="saving"
-          @click="emit('cancel')"
-        >
-          Cancelar
-        </Button>
-        <Button type="submit" :disabled="saving">
-          {{ saving ? 'Guardando…' : (isCreate ? 'Crear tipo' : 'Guardar cambios') }}
-        </Button>
+      <div class="space-y-2">
+        <Label>Modelo</Label>
+        <Select v-model="form.model" :disabled="saving">
+          <SelectTrigger class="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem
+              v-for="(label, value) in ARCHIVAL_FILE_MODEL_LABELS"
+              :key="value"
+              :value="value"
+            >
+              {{ label }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p class="text-xs text-muted-foreground">
+          {{ form.model === 'org_area'
+            ? 'Un repositorio por dependencia. La TRD se configura después, por área.'
+            : 'Un expediente por persona, contrato o caso.' }}
+        </p>
       </div>
-    </template>
+
+      <div v-if="!isCreate" class="space-y-2 sm:col-span-2">
+        <Label for="file_type_key">Clave técnica</Label>
+        <Input
+          id="file_type_key"
+          v-model="form.type_key"
+          :disabled="isSystem || saving"
+          placeholder="credit_file"
+          class="font-mono"
+          :class="archivalInputWarningClass(submitAttempted && !form.type_key.trim())"
+        />
+        <p v-if="isSystem" class="text-xs text-muted-foreground">
+          La clave de tipos del sistema no se puede modificar.
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <Label for="file_type_sort">Orden en listados</Label>
+        <Input
+          id="file_type_sort"
+          v-model.number="form.sort_order"
+          type="number"
+          min="0"
+          :disabled="saving"
+        />
+      </div>
+
+      <div class="flex flex-col justify-end gap-2">
+        <div class="rounded-md border px-3 py-2">
+          <Checkbox id="file_type_active" v-model="form.is_active" :disabled="saving">
+            Activo
+          </Checkbox>
+        </div>
+        <div class="rounded-md border px-3 py-2">
+          <Checkbox id="file_type_master" v-model="form.allows_master_documents" :disabled="saving">
+            Permite documentos maestros
+          </Checkbox>
+        </div>
+      </div>
+
+      <div class="space-y-2 sm:col-span-2">
+        <Label for="file_type_description">Descripción</Label>
+        <Textarea
+          id="file_type_description"
+          v-model="form.description"
+          rows="3"
+          :disabled="saving"
+          placeholder="Opcional. Uso interno del tipo."
+        />
+      </div>
+    </div>
+
+    <div class="flex flex-wrap justify-end gap-2 border-t pt-4">
+      <Button
+        v-if="!isCreate"
+        type="button"
+        variant="outline"
+        :disabled="saving"
+        @click="emit('cancel')"
+      >
+        Cancelar
+      </Button>
+      <Button type="submit" :disabled="saving">
+        {{ saving ? 'Guardando…' : (isCreate ? 'Crear tipo' : 'Guardar cambios') }}
+      </Button>
+    </div>
   </form>
 </template>
