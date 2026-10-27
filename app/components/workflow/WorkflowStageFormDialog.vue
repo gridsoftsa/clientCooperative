@@ -92,7 +92,11 @@ function buildPayload(): WorkflowStagePayload {
     allows_return: form.allows_return,
     allows_reassign: form.allows_reassign,
     is_terminal: form.is_terminal,
-    sla_business_days: form.sla_business_days,
+    sla_business_days: typeof form.sla_business_days === 'number'
+      && Number.isFinite(form.sla_business_days)
+      && form.sla_business_days >= 1
+      ? form.sla_business_days
+      : null,
     ventanilla_role: form.ventanilla_role === 'none' ? null : form.ventanilla_role,
     assignee_user_id: null,
     assignee_org_unit_id: null,
@@ -137,10 +141,9 @@ async function save() {
     emit('saved')
   }
   catch (e: unknown) {
-    const msg = e && typeof e === 'object' && 'data' in e
-      ? JSON.stringify((e as { data?: unknown }).data)
-      : 'No se pudo guardar la etapa.'
-    toast.error(typeof msg === 'string' && msg.length < 120 ? msg : 'No se pudo guardar la etapa.')
+    const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    toast.error(first ?? (err.data?.message && err.data.message !== 'Server Error' ? err.data.message : null) ?? 'No se pudo guardar la etapa.')
   }
   finally {
     saving.value = false
