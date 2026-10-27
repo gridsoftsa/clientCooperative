@@ -15,7 +15,7 @@ function onCreated(type: ArchivalFileType) {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-xl space-y-6 px-4 pb-8 md:px-6">
+  <div class="mx-auto w-full max-w-3xl space-y-6 px-4 pb-8 md:px-6">
     <div class="space-y-1">
       <PageBackButton to="/expedientes/tipos">
         Tipos de expediente
@@ -29,7 +29,7 @@ function onCreated(type: ArchivalFileType) {
     </div>
 
     <Card>
-      <CardContent class="pt-6">
+      <CardContent class="p-6 md:p-8">
         <ArchivalFileTypeForm is-create @saved="onCreated" @cancel="router.push('/expedientes/tipos')" />
       </CardContent>
     </Card>

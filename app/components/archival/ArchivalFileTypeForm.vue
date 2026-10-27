@@ -110,34 +110,47 @@ watch(() => props.initial, (value) => {
 </script>
 
 <template>
-  <form class="w-full space-y-5" @submit.prevent="submit">
-    <div class="space-y-2">
-      <Label for="file_type_name">Nombre *</Label>
-      <Input
-        id="file_type_name"
-        v-model="form.name"
-        :disabled="saving"
-        placeholder="Ej. Expediente de crédito"
-        :class="archivalInputWarningClass(submitAttempted && !form.name.trim())"
-      />
-      <p v-if="isCreate && form.name.trim()" class="text-xs text-muted-foreground">
-        Clave técnica: <span class="font-mono">{{ suggestedTypeKey }}</span>
-      </p>
-    </div>
+  <form class="w-full space-y-6" @submit.prevent="submit">
+    <div class="grid gap-5 md:grid-cols-2 md:items-start">
+      <div class="space-y-2">
+        <Label for="file_type_name">Nombre *</Label>
+        <Input
+          id="file_type_name"
+          v-model="form.name"
+          :disabled="saving"
+          placeholder="Ej. Expediente de crédito"
+          :class="archivalInputWarningClass(submitAttempted && !form.name.trim())"
+        />
+        <p v-if="isCreate && form.name.trim()" class="text-xs text-muted-foreground">
+          Clave técnica: <span class="font-mono">{{ suggestedTypeKey }}</span>
+        </p>
+      </div>
 
-    <div v-if="!isCreate" class="space-y-2">
-      <Label for="file_type_key">Clave técnica</Label>
-      <Input
-        id="file_type_key"
-        v-model="form.type_key"
-        :disabled="isSystem || saving"
-        placeholder="credit_file"
-        class="font-mono"
-        :class="archivalInputWarningClass(submitAttempted && !form.type_key.trim())"
-      />
-      <p v-if="isSystem" class="text-xs text-muted-foreground">
-        La clave de tipos del sistema no se puede modificar.
-      </p>
+      <div v-if="!isCreate" class="space-y-2">
+        <Label for="file_type_key">Clave técnica</Label>
+        <Input
+          id="file_type_key"
+          v-model="form.type_key"
+          :disabled="isSystem || saving"
+          placeholder="credit_file"
+          class="font-mono"
+          :class="archivalInputWarningClass(submitAttempted && !form.type_key.trim())"
+        />
+        <p v-if="isSystem" class="text-xs text-muted-foreground">
+          La clave de tipos del sistema no se puede modificar.
+        </p>
+      </div>
+
+      <div class="space-y-2" :class="isCreate ? 'md:col-span-1' : 'md:col-span-2'">
+        <Label for="file_type_description">Descripción</Label>
+        <Textarea
+          id="file_type_description"
+          v-model="form.description"
+          rows="3"
+          :disabled="saving"
+          placeholder="Opcional"
+        />
+      </div>
     </div>
 
     <fieldset class="space-y-3">
@@ -147,19 +160,19 @@ watch(() => props.initial, (value) => {
       <RadioGroup
         :model-value="form.model"
         :disabled="saving"
-        class="grid gap-2"
+        class="grid items-stretch gap-3 md:grid-cols-2"
         @update:model-value="setModel($event)"
       >
         <label
           v-for="option in ARCHIVAL_FILE_MODEL_OPTIONS"
           :key="option.value"
-          class="flex cursor-pointer gap-3 rounded-lg border p-3 text-left transition-colors"
+          class="flex h-full min-h-36 cursor-pointer gap-3 rounded-lg border p-4 text-left transition-colors"
           :class="form.model === option.value
             ? 'border-primary bg-primary/5'
             : 'hover:bg-muted/40'"
         >
           <RadioGroupItem :value="option.value" class="mt-1" />
-          <span class="min-w-0 space-y-1">
+          <span class="min-w-0 space-y-1.5">
             <span class="flex flex-wrap items-center gap-2">
               <span class="text-sm font-medium leading-none">
                 {{ option.label }}
@@ -178,17 +191,6 @@ watch(() => props.initial, (value) => {
         </label>
       </RadioGroup>
     </fieldset>
-
-    <div class="space-y-2">
-      <Label for="file_type_description">Descripción</Label>
-      <Textarea
-        id="file_type_description"
-        v-model="form.description"
-        rows="3"
-        :disabled="saving"
-        placeholder="Opcional"
-      />
-    </div>
 
     <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
       <Checkbox id="file_type_active" v-model="form.is_active" :disabled="saving">
