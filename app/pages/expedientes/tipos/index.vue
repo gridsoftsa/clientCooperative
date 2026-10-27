@@ -635,22 +635,22 @@ onMounted(async () => {
         </div>
 
         <div v-else-if="viewMode === 'table'" class="overflow-hidden rounded-lg border">
-          <Table>
+          <Table class="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead class="min-w-[16rem]">
+                <TableHead class="w-[36%]">
                   Nombre
                 </TableHead>
-                <TableHead class="w-[10rem]">
+                <TableHead class="w-[18%]">
                   De quién es
                 </TableHead>
-                <TableHead class="w-[7rem] text-center">
+                <TableHead class="w-[12%] text-center">
                   Obligatorios
                 </TableHead>
-                <TableHead class="w-[7rem]">
+                <TableHead class="w-[12%]">
                   Estado
                 </TableHead>
-                <TableHead class="w-[11rem] text-right">
+                <TableHead class="w-[22%] text-right">
                   Acciones
                 </TableHead>
               </TableRow>
@@ -658,13 +658,13 @@ onMounted(async () => {
             <TableBody>
               <template v-for="type in types" :key="type.id">
                 <TableRow>
-                  <TableCell class="font-medium">
-                    <div class="flex items-center gap-1">
+                  <TableCell class="align-top font-medium whitespace-normal">
+                    <div class="flex items-start gap-1">
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        class="h-8 w-8 shrink-0 px-0"
+                        class="mt-0.5 h-8 w-8 shrink-0 px-0"
                         :aria-expanded="expandedTypeId === type.id"
                         :aria-label="expandedTypeId === type.id ? 'Ocultar áreas TRD' : 'Ver áreas TRD'"
                         @click="toggleTypeAreas(type.id)"
@@ -674,27 +674,31 @@ onMounted(async () => {
                           class="size-4"
                         />
                       </Button>
-                      <span>{{ type.name }}</span>
-                      <Badge v-if="type.is_system" variant="outline" class="ml-1 text-xs">
-                        Sistema
-                      </Badge>
-                      <Badge variant="outline" class="ml-1">
-                        {{ producerAreaExpandRows(type).length }}
-                      </Badge>
+                      <div class="min-w-0 flex-1">
+                        <span class="break-words leading-snug">{{ type.name }}</span>
+                        <span class="ml-1 inline-flex flex-wrap items-center gap-1 align-middle">
+                          <Badge v-if="type.is_system" variant="outline" class="text-xs">
+                            Sistema
+                          </Badge>
+                          <Badge variant="outline">
+                            {{ producerAreaExpandRows(type).length }}
+                          </Badge>
+                        </span>
+                      </div>
                     </div>
                   </TableCell>
-                  <TableCell class="text-sm">
+                  <TableCell class="align-top text-sm whitespace-normal">
                     {{ ARCHIVAL_FILE_MODEL_LABELS[type.model] }}
                   </TableCell>
-                  <TableCell class="text-center">
+                  <TableCell class="align-top text-center">
                     {{ requiredCount(type) }}
                   </TableCell>
-                  <TableCell>
+                  <TableCell class="align-top">
                     <Badge :variant="type.is_active ? 'default' : 'secondary'">
                       {{ type.is_active ? 'Activo' : 'Inactivo' }}
                     </Badge>
                   </TableCell>
-                  <TableCell class="text-right">
+                  <TableCell class="align-top text-right">
                     <div class="flex flex-wrap justify-end gap-1">
                       <Button
                         variant="outline"
