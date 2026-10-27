@@ -18,6 +18,8 @@ const deleteWithReason = useApiDeleteWithReason()
 const deleteRoleDialogOpen = ref(false)
 const rolePendingDelete = ref<{ id: number; name: string } | null>(null)
 const deletingRole = ref(false)
+const usersDialogOpen = ref(false)
+const roleForUsers = ref<Role | null>(null)
 
 const roles = ref<Role[]>([])
 const loading = ref(false)
@@ -62,6 +64,11 @@ function handleSearch() {
 function handlePageChange(page: number) {
   pagination.value.current_page = page
   fetchRoles()
+}
+
+function openUsersDialog(role: Role) {
+  roleForUsers.value = role
+  usersDialogOpen.value = true
 }
 
 function openDeleteRoleDialog(id: number, name: string) {
@@ -217,7 +224,17 @@ watch(searchQuery, () => {
                     {{ new Date(role.created_at).toLocaleDateString() }}
                   </TableCell>
                   <TableCell class="text-right">
-                    <div class="flex justify-end gap-2">
+                    <div class="flex flex-wrap justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        class="gap-1.5"
+                        @click="openUsersDialog(role)"
+                      >
+                        <Icon name="i-lucide-users" class="h-4 w-4 shrink-0" />
+                        Usuarios
+                        <span class="text-muted-foreground">({{ role.users?.length ?? 0 }})</span>
+                      </Button>
                       <PermissionGate permission="roles_editar">
                         <Button
                           variant="warning"
@@ -277,6 +294,18 @@ watch(searchQuery, () => {
       </CardContent>
     </Card>
     </div>
+
+    <Dialog v-model:open="usersDialogOpen">
+      <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Usuarios con este rol</DialogTitle>
+          <DialogDescription v-if="roleForUsers">
+            {{ getRoleDisplayLabel(roleForUsers.name) }}. Las cuentas inactivas siguen en la lista.
+          </DialogDescription>
+        </DialogHeader>
+        <SettingsRoleAssignedUsers :users="roleForUsers?.users" />
+      </DialogContent>
+    </Dialog>
 
     <ConfirmWithReasonDialog
       v-model:open="deleteRoleDialogOpen"

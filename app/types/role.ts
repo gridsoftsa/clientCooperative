@@ -7,6 +7,14 @@ export interface Permission {
   updated_at?: string
 }
 
+export interface RoleAssignedUser {
+  id: number
+  name: string
+  full_name?: string | null
+  email: string
+  is_active: boolean
+}
+
 export interface Role {
   id: number
   name: string
@@ -14,6 +22,7 @@ export interface Role {
   permissions?: string[]
   enabled_modules?: Array<'creditos' | 'gestion_documental'>
   permissions_count?: number
+  users?: RoleAssignedUser[]
   created_at: string
   updated_at: string
 }
