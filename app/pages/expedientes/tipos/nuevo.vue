@@ -24,7 +24,7 @@ function onCreated(type: ArchivalFileType) {
         Nuevo tipo de expediente
       </h1>
       <p class="text-sm text-muted-foreground">
-        Indique el nombre y el modelo. Las áreas productoras y la TRD se configuran en el siguiente paso.
+        Ponga un nombre y elija de quién es cada expediente. La TRD de cada área se configura después.
       </p>
     </div>
 

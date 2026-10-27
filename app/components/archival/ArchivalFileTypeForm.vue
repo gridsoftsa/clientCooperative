@@ -140,17 +140,14 @@ watch(() => props.initial, (value) => {
       </p>
     </div>
 
-    <fieldset class="space-y-2">
+    <fieldset class="space-y-3">
       <legend class="text-sm font-medium leading-none">
-        Modelo
+        ¿De quién es cada expediente?
       </legend>
-      <p class="text-xs text-muted-foreground">
-        Define si cada expediente es de una persona o caso, o del archivo de un área.
-      </p>
       <RadioGroup
         :model-value="form.model"
         :disabled="saving"
-        class="grid gap-2 sm:grid-cols-2"
+        class="grid gap-2"
         @update:model-value="setModel($event)"
       >
         <label
@@ -161,15 +158,21 @@ watch(() => props.initial, (value) => {
             ? 'border-primary bg-primary/5'
             : 'hover:bg-muted/40'"
         >
-          <RadioGroupItem :value="option.value" class="mt-0.5" />
+          <RadioGroupItem :value="option.value" class="mt-1" />
           <span class="min-w-0 space-y-1">
-            <span class="block text-sm font-medium leading-none">
-              {{ option.label }}
+            <span class="flex flex-wrap items-center gap-2">
+              <span class="text-sm font-medium leading-none">
+                {{ option.label }}
+              </span>
+              <Badge v-if="option.recommended" variant="secondary" class="text-[10px] font-normal">
+                Lo más usado
+              </Badge>
+            </span>
+            <span class="block text-xs font-medium text-foreground/80">
+              {{ option.question }}
             </span>
             <span class="block text-xs leading-relaxed text-muted-foreground">
-              {{ option.summary }}
-              {{ option.when }}
-              Ej.: {{ option.examples }}
+              {{ option.detail }}
             </span>
           </span>
         </label>
