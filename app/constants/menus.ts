@@ -193,6 +193,24 @@ export const navMenu: NavMenu[] = [
           },
         ],
       },
+      {
+        title: 'Talento humano',
+        icon: 'i-lucide-contact',
+        module: 'gestion_documental',
+        permission: 'talento_ver',
+        children: [
+          {
+            title: 'Empleados',
+            link: '/talento-humano/empleados',
+            permission: 'talento_ver',
+          },
+          {
+            title: 'Proveedores',
+            link: '/talento-humano/proveedores',
+            permission: 'talento_ver',
+          },
+        ],
+      },
     ],
   },
   {

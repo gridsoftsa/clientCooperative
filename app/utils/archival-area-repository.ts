@@ -46,8 +46,12 @@ export function canOpenArchivalAreaDocument(node: ArchivalFileTreeNode): boolean
 }
 
 export function archivalAreaNodeIcon(node: ArchivalFileTreeNode, open = false): string {
-  if (node.type === 'applicant') {
+  if (node.type === 'applicant' || (node.type === 'folder' && node.source === 'talent_party' && node.talent_party_kind !== 'supplier')) {
     return 'i-lucide-user-round'
+  }
+
+  if (node.type === 'folder' && node.source === 'talent_party' && node.talent_party_kind === 'supplier') {
+    return 'i-lucide-truck'
   }
 
   if (node.type === 'filing') {
@@ -84,6 +88,10 @@ export function archivalAreaNodeTypeLabel(node: ArchivalFileTreeNode): string {
     case 'applicant':
       return 'Solicitante'
     case 'folder':
+      if (node.source === 'talent_party') {
+        return node.talent_party_kind === 'supplier' ? 'Proveedor' : 'Empleado'
+      }
+
       return 'Carpeta'
     case 'document':
       return 'Documento'

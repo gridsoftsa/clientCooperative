@@ -144,10 +144,28 @@ const selectedFileId = computed(() =>
 
 const isDocumentTypeContext = computed(() => currentNode.value?.type === 'document_type')
 
+const talentPartyNode = computed(() =>
+  breadcrumb.value.find(node => node.source === 'talent_party') ?? null,
+)
+
+const insideTalentParty = computed(() => talentPartyNode.value != null)
+
+const talentPartyHref = computed(() => {
+  const node = talentPartyNode.value
+  if (!node?.talent_party_id || !hasPermission('talento_ver')) {
+    return null
+  }
+
+  const section = node.talent_party_kind === 'supplier' ? 'proveedores' : 'empleados'
+
+  return `/talento-humano/${section}/${node.talent_party_id}`
+})
+
 const canCreateManualFolder = computed(() =>
   canUpload.value
   && props.tree?.type === 'area'
   && isDocumentTypeContext.value
+  && !insideTalentParty.value
   && currentNode.value?.doc_document_type_id != null,
 )
 
@@ -488,6 +506,20 @@ function formatBytes(size?: number): string {
                 Nueva carpeta
               </Button>
             </div>
+
+            <p
+              v-if="insideTalentParty"
+              class="rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+            >
+              Los archivos de esta carpeta se cargan en Talento humano.
+              <NuxtLink
+                v-if="talentPartyHref"
+                :to="talentPartyHref"
+                class="font-medium text-foreground underline-offset-4 hover:underline"
+              >
+                Abrir carpeta
+              </NuxtLink>
+            </p>
 
             <p
               v-if="isDocumentTypeContext && retentionPreviewText"

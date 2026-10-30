@@ -248,6 +248,8 @@ export interface ArchivalFileTreeNode {
   referenced_title?: string | null
   source?: string
   source_label?: string
+  talent_party_id?: number
+  talent_party_kind?: 'employee' | 'supplier'
   uploaded_by_name?: string
   size_bytes?: number
   uploaded_at?: string

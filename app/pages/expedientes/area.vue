@@ -90,6 +90,10 @@ watch(orgUnitId, () => {
 
 onMounted(async () => {
   await loadOrgUnits()
+  const fromQuery = Number(useRoute().query.org_unit_id)
+  if (Number.isFinite(fromQuery) && orgUnits.value.some(unit => unit.id === fromQuery)) {
+    orgUnitId.value = fromQuery
+  }
 })
 </script>
 
