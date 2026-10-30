@@ -47,7 +47,7 @@ function formatDate(value?: string | null) {
         </Badge>
       </div>
       <div>
-        <CardTitle class="line-clamp-2 text-base leading-snug">
+        <CardTitle class="min-w-0 whitespace-normal break-all text-base leading-snug [overflow-wrap:anywhere]">
           {{ document.title }}
         </CardTitle>
         <CardDescription class="mt-1">

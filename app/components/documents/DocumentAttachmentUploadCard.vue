@@ -104,7 +104,7 @@ function onFileChange(event: Event) {
 
 <template>
   <div
-    class="rounded-xl border bg-card shadow-sm transition-colors"
+    class="min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm transition-colors"
     :class="[
       compact ? 'p-3' : 'p-4',
       primary ? 'border-primary/30 ring-1 ring-primary/10' : 'border-border',
@@ -208,7 +208,7 @@ function onFileChange(event: Event) {
 
       <button
         type="button"
-        class="flex w-full items-center gap-4 rounded-xl border border-dashed px-4 text-left transition-colors"
+        class="flex w-full min-w-0 items-start gap-3 overflow-hidden rounded-xl border border-dashed px-3 text-left transition-colors sm:gap-4 sm:px-4"
         :class="[
           compact ? 'py-2.5' : 'py-4',
           fileMissing ? 'border-amber-500 bg-amber-500/5' : 'border-muted-foreground/30 bg-muted/20 hover:bg-muted/35',
@@ -224,8 +224,11 @@ function onFileChange(event: Event) {
           <Icon :name="file ? 'i-lucide-file-check-2' : 'i-lucide-upload-cloud'" class="size-5" />
         </div>
 
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-foreground">
+        <div class="min-w-0 flex-1 overflow-hidden">
+          <p
+            class="text-sm font-medium leading-snug break-all text-foreground"
+            :title="file ? file.name : undefined"
+          >
             {{ file ? file.name : 'Seleccionar archivo' }}
           </p>
           <p class="mt-0.5 text-xs text-muted-foreground">

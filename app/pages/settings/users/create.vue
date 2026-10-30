@@ -3,7 +3,7 @@ import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import type { Role } from '~/types/role'
 import type { UserAccountStatus } from '~/types/user'
-import { requiresOrgStaffLink, type ApplicationDomain } from '~/constants/application-domains'
+import { defaultAdminApplicationDomains, requiresOrgStaffLink, type ApplicationDomain } from '~/constants/application-domains'
 import { ACCOUNT_STATUS_FORM_OPTIONS } from '~/utils/accountStatus'
 import { generateRobustPassword, PASSWORD_REQUIREMENTS, validateRobustPassword } from '~/utils/password'
 import {
@@ -28,6 +28,7 @@ const { $api } = useNuxtApp()
 const router = useRouter()
 const route = useRoute()
 const { mapRoleSelectOptions } = useRoleAssignmentScope()
+const { hasModule } = usePermissions()
 const { goBack: goBackFallback } = useNavigationBack('/settings/users')
 
 const returnTo = computed(() => {
@@ -59,7 +60,7 @@ const form = ref({
   sucursal_id: null as number | null,
   org_staff_id: null as number | null,
   allowed_sucursal_ids: [] as number[],
-  admin_application_domains: ['creditos', 'gestion_documental'] as ApplicationDomain[],
+  admin_application_domains: defaultAdminApplicationDomains(hasModule) as ApplicationDomain[],
   roles: [] as string[],
 })
 
@@ -90,12 +91,17 @@ const sucursalSelectOptions = computed(() =>
 const showAllowedSucursales = computed(() => selectedRole.value === 'admin')
 const showAdminApplicationDomains = computed(() => selectedRole.value === 'admin')
 
-const requiresOrgStaff = computed(() =>
-  requiresOrgStaffLink(
+const requiresOrgStaff = computed(() => {
+  if (!hasModule('gestion_documental')) {
+    return false
+  }
+
+  return requiresOrgStaffLink(
     form.value.roles,
     selectedRole.value === 'admin' ? form.value.admin_application_domains : undefined,
-  ),
-)
+    roles.value,
+  )
+})
 
 const accountStatus = ref<UserAccountStatus>('active')
 
@@ -340,7 +346,7 @@ watch(selectedRole, (role) => {
   form.value.roles = role ? [role] : []
   if (role !== 'admin') {
     form.value.allowed_sucursal_ids = []
-    form.value.admin_application_domains = ['creditos', 'gestion_documental']
+    form.value.admin_application_domains = defaultAdminApplicationDomains(hasModule)
   }
 }, { immediate: true })
 </script>
@@ -460,7 +466,7 @@ watch(selectedRole, (role) => {
                       Obligatorio para roles de ventanilla, workflow y gestión documental (debe existir en estructura organizacional).
                     </template>
                     <template v-else>
-                      Para roles de crédito puede crear la cuenta sin vínculo y asociar el funcionario después en estructura organizacional.
+                      Con roles solo de crédito puede crear la cuenta sin funcionario. El vínculo se puede hacer después en estructura organizacional.
                     </template>
                   </p>
                   <Multiselect

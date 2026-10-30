@@ -327,6 +327,22 @@ export function useArchivalFileApi() {
     return res
   }
 
+  async function createAreaManualFolder(formData: FormData) {
+    return await api<{
+      data: {
+        archival_file_id: number
+        file_number: string
+        title: string
+        documents_count: number
+        published_to_library: boolean
+      }
+      message: string
+    }>('/archival-files/area/folders', {
+      method: 'POST',
+      body: formData,
+    })
+  }
+
   async function fetchRetentionReport(query: Record<string, string | number | boolean> = {}) {
     return await api<{
       data: Array<Record<string, unknown>>
@@ -550,6 +566,7 @@ export function useArchivalFileApi() {
     transferFile,
     saveDocumentSelection,
     uploadAreaDocument,
+    createAreaManualFolder,
     fetchRetentionReport,
     fetchIncompleteReport,
     fetchReportsSummary,

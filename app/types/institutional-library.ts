@@ -24,7 +24,9 @@ export interface InstitutionalLibraryDocument {
   mime_type?: string | null
   is_institutional_published?: boolean
   institutional_category?: InstitutionalLibraryCategoryValue | null
+  institutional_categories?: InstitutionalLibraryCategoryValue[]
   institutional_category_label?: string | null
+  institutional_category_labels?: string[]
   institutional_category_icon?: string | null
   effective_from?: string | null
   effective_to?: string | null
@@ -93,6 +95,7 @@ export interface InstitutionalLibraryHome {
 export interface PublishInstitutionalLibraryPayload {
   archival_file_id: number
   institutional_category?: InstitutionalLibraryCategoryValue
+  institutional_categories?: InstitutionalLibraryCategoryValue[]
   effective_from?: string
   effective_to?: string | null
   is_featured?: boolean

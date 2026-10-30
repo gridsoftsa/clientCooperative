@@ -90,6 +90,22 @@ export const ADMIN_ASSIGNABLE_APPLICATION_DOMAINS: Array<Exclude<ApplicationDoma
   'gestion_documental',
 ]
 
+export function defaultAdminApplicationDomains(
+  hasProductModule: (module: ProductModule) => boolean,
+): ApplicationDomain[] {
+  const domains: ApplicationDomain[] = []
+
+  if (hasProductModule('creditos')) {
+    domains.push('creditos')
+  }
+
+  if (hasProductModule('gestion_documental')) {
+    domains.push('gestion_documental')
+  }
+
+  return domains.length > 0 ? domains : ['creditos']
+}
+
 export function manageableDomainsFromAuthUser(
   roles: string[] | undefined,
   adminApplicationDomains: string[] | undefined,
@@ -161,15 +177,45 @@ export function roleBelongsToApplicationDomain(
   return domains.includes(domain)
 }
 
+export type OrgStaffLinkRoleHint = {
+  name: string
+  enabled_modules?: Array<'creditos' | 'gestion_documental'>
+  permissions?: string[]
+}
+
+function permissionNameImpliesGestionDocumental(permissionName: string): boolean {
+  const category = permissionName.split('_')[0] ?? ''
+
+  return getPermissionApplicationDomain(category) === 'gestion_documental'
+}
+
+function customRoleImpliesGestionDocumental(hint: OrgStaffLinkRoleHint | undefined): boolean {
+  if (!hint) {
+    return false
+  }
+
+  const permissions = hint.permissions ?? []
+  if (permissions.some(permissionNameImpliesGestionDocumental)) {
+    return true
+  }
+
+  const modules = hint.enabled_modules ?? []
+
+  return modules.length === 1 && modules.includes('gestion_documental')
+}
+
 /**
  * Indica si la cuenta debe vincularse a un funcionario en estructura organizacional.
- * Crédito puro (asesor, analista, etc.) y admin solo de créditos: opcional.
+ * Crédito puro (asesor, analista, roles de crédito) y admin solo de créditos: opcional.
  * Gestión documental, workflow, ventanilla y admin con módulo documental: obligatorio.
  */
 export function requiresOrgStaffLink(
   roleNames: string[],
   adminApplicationDomains?: ApplicationDomain[],
+  roleHints: OrgStaffLinkRoleHint[] = [],
 ): boolean {
+  const hintsByName = new Map(roleHints.map(hint => [hint.name, hint]))
+
   for (const roleName of roleNames) {
     if (roleName === 'super_admin' || roleName === 'user') {
       continue
@@ -193,7 +239,11 @@ export function requiresOrgStaffLink(
       return true
     }
 
-    if (domains.length === 0) {
+    if (domains.includes('creditos')) {
+      continue
+    }
+
+    if (customRoleImpliesGestionDocumental(hintsByName.get(roleName))) {
       return true
     }
   }

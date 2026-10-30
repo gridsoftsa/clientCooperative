@@ -232,6 +232,22 @@ function openExpediente() {
       >
         {{ node.retention.final_disposition_label }}
       </Badge>
+      <Badge
+        v-if="isDocument && node.is_institutional_published"
+        variant="secondary"
+        class="text-[10px] sm:text-xs"
+        title="Publicado en la biblioteca institucional"
+      >
+        Biblioteca
+      </Badge>
+      <Badge
+        v-if="isDocument && node.is_institutional_published && node.is_featured"
+        variant="outline"
+        class="text-[10px] sm:text-xs"
+        title="Destacado en el banner de la biblioteca institucional"
+      >
+        Destacado
+      </Badge>
 
       <Button
         v-if="canShowDetails"
@@ -321,7 +337,7 @@ function openExpediente() {
           type="button"
           @click.stop="emit('publishToLibrary', node)"
         >
-          Publicar
+          {{ node.is_institutional_published ? 'Editar publicación' : 'Publicar' }}
         </Button>
       </div>
     </div>

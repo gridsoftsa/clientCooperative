@@ -484,16 +484,14 @@ html.dark .multiselect-municipality .multiselect-search,
   --ms-border-color-active: color-mix(in srgb, var(--primary) 48%, var(--border));
 }
 
-/* Al abrir en modo searchable, la etiqueta no debe tapar el input de búsqueda */
+/* Al abrir, la etiqueta no debe tapar el input de búsqueda. Si queda enfocado
+   con el menú cerrado (típico en un diálogo), hay que seguir viendo lo elegido. */
 .archival-single-multiselect.multiselect.is-open .multiselect-single-label,
-.archival-single-multiselect.multiselect.is-active .multiselect-single-label,
-.archival-single-multiselect.multiselect.is-open .multiselect-placeholder,
-.archival-single-multiselect.multiselect.is-active .multiselect-placeholder {
+.archival-single-multiselect.multiselect.is-open .multiselect-placeholder {
   display: none !important;
 }
 
-.archival-single-multiselect.multiselect.is-open .multiselect-search,
-.archival-single-multiselect.multiselect.is-active .multiselect-search {
+.archival-single-multiselect.multiselect.is-open .multiselect-search {
   display: block !important;
   position: relative;
   z-index: 1;
@@ -549,6 +547,8 @@ html.dark .archival-single-multiselect .multiselect-search,
 
 /* Dropdown teletransportado: ancho lo fija Popper (sameWidth) + sync en @open */
 .multiselect-dropdown.archival-single-multiselect-dropdown {
+  z-index: 200 !important;
+  pointer-events: auto !important;
   min-width: 12rem !important;
   max-width: min(36rem, calc(100vw - 1.5rem)) !important;
   box-sizing: border-box !important;

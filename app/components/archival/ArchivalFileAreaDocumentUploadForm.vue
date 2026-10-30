@@ -90,14 +90,14 @@ async function handleUpload() {
   <div v-if="canUpload" class="space-y-4 rounded-xl border bg-card p-4 shadow-sm">
     <div>
       <p class="text-sm font-medium">
-        Cargar documento al expediente #{{ archivalFileId }}
+        Agregar documento a esta carpeta
       </p>
       <p class="text-xs text-muted-foreground">
-        Repositorio por área productora.
+        Folios obligatorios. Se aplican los tiempos de retención de la TRD del tipo documental.
       </p>
     </div>
 
-    <div class="space-y-2">
+    <div v-if="!defaultDocTypeId" class="space-y-2">
       <Label for="area-doc-type">Tipo documental (ID) *</Label>
       <Input
         id="area-doc-type"

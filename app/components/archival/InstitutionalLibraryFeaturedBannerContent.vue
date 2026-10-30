@@ -26,7 +26,7 @@ function formatDate(value?: string | null) {
     </Badge>
     <div class="space-y-2">
       <h2
-        class="font-semibold tracking-tight"
+        class="min-w-0 whitespace-normal break-all font-semibold tracking-tight [overflow-wrap:anywhere]"
         :class="compact ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'"
       >
         {{ document.title }}

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import { RadioGroup, RadioGroupItem } from '~/components/ui/radio-group'
 import type { InstitutionalLibraryCategoryValue } from '~/types/institutional-library'
+import { preventArchivalMultiselectDialogDismiss } from '~/composables/useArchivalMultiselect'
 
 const props = defineProps<{
   open: boolean
@@ -22,8 +22,8 @@ const loading = ref(false)
 const categories = ref<Array<{ value: InstitutionalLibraryCategoryValue, label: string }>>([])
 
 const form = ref({
-  institutional_category: '' as InstitutionalLibraryCategoryValue | '',
-  effective_from: new Date().toISOString().slice(0, 10),
+  institutional_category: null as InstitutionalLibraryCategoryValue | null,
+  effective_from: todayLocalIsoDate(),
   effective_to: '' as string,
   is_featured: false,
   featured_duration: 'indefinite' as 'indefinite' | 'until',
@@ -41,14 +41,28 @@ watch(() => props.open, async (isOpen) => {
     return
   }
 
-  categories.value = await libraryApi.fetchCatalog()
-  form.value.institutional_category = props.defaultCategory ?? categories.value[0]?.value ?? ''
-  form.value.effective_from = new Date().toISOString().slice(0, 10)
+  try {
+    categories.value = await libraryApi.fetchCatalog()
+  }
+  catch {
+    categories.value = []
+    toast.error('No se pudieron cargar las categorías de biblioteca.')
+  }
+  form.value.institutional_category = props.defaultCategory ?? null
+  form.value.effective_from = todayLocalIsoDate()
   form.value.effective_to = ''
   form.value.is_featured = false
   form.value.featured_duration = 'indefinite'
   form.value.featured_until = ''
 }, { immediate: true })
+
+function todayLocalIsoDate(): string {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+
+  return `${now.getFullYear()}-${month}-${day}`
+}
 
 function setFeatured(checked: boolean): void {
   form.value.is_featured = checked
@@ -68,7 +82,7 @@ async function submit() {
   }
 
   if (!form.value.institutional_category) {
-    toast.error('Seleccione una categoría.')
+    toast.error('Seleccione una categoría de biblioteca institucional.')
     return
   }
 
@@ -85,7 +99,7 @@ async function submit() {
 
     await libraryApi.publishDocument(props.documentId, {
       archival_file_id: props.fileId,
-      institutional_category: form.value.institutional_category,
+      institutional_categories: [form.value.institutional_category],
       effective_from: form.value.effective_from,
       effective_to: form.value.effective_to || null,
       is_featured: form.value.is_featured,
@@ -114,7 +128,12 @@ async function submit() {
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="max-w-lg">
+    <DialogContent
+      class="max-w-lg"
+      @pointer-down-outside="preventArchivalMultiselectDialogDismiss"
+      @focus-outside="preventArchivalMultiselectDialogDismiss"
+      @interact-outside="preventArchivalMultiselectDialogDismiss"
+    >
       <DialogHeader>
         <DialogTitle>Publicar en biblioteca institucional</DialogTitle>
         <DialogDescription class="line-clamp-2">
@@ -131,22 +150,12 @@ async function submit() {
         <div class="space-y-2">
           <Label>Categoría</Label>
           <p class="text-xs text-muted-foreground leading-relaxed">
-            Clasificación en la biblioteca institucional. Las opciones se administran en Parametrización → Biblioteca institucional.
+            Elija una clasificación. Las opciones se administran en Parametrización → Biblioteca institucional.
           </p>
-          <Select v-model="form.institutional_category">
-            <SelectTrigger>
-              <SelectValue placeholder="Seleccione categoría" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                v-for="category in categories"
-                :key="category.value"
-                :value="category.value"
-              >
-                {{ category.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <ArchivalLibraryCategorySelect
+            v-model="form.institutional_category"
+            :options="categories"
+          />
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
@@ -178,27 +187,34 @@ async function submit() {
             </span>
           </label>
 
-          <div v-if="form.is_featured" class="space-y-3 pl-8">
-            <p class="text-xs font-medium">
+          <fieldset v-if="form.is_featured" class="space-y-3 pl-8">
+            <legend class="text-xs font-medium">
               Duración del destacado
-            </p>
-            <RadioGroup
-              :model-value="form.featured_duration"
-              @update:model-value="form.featured_duration = $event === 'until' ? 'until' : 'indefinite'"
-            >
-              <label class="flex items-start gap-2">
-                <RadioGroupItem value="indefinite" />
-                <span class="text-sm leading-snug">
-                  <strong>Indefinido.</strong> Se mantiene destacado hasta que se quite la publicación o se edite.
-                </span>
-              </label>
-              <label class="flex items-start gap-2">
-                <RadioGroupItem value="until" />
-                <span class="text-sm leading-snug">
-                  <strong>Hasta una fecha.</strong> Deja de destacarse al día siguiente de esa fecha.
-                </span>
-              </label>
-            </RadioGroup>
+            </legend>
+            <label class="flex cursor-pointer items-start gap-2">
+              <input
+                v-model="form.featured_duration"
+                type="radio"
+                name="library-featured-duration"
+                value="indefinite"
+                class="mt-0.5 size-4 shrink-0 accent-primary"
+              >
+              <span class="text-sm leading-snug">
+                <strong>Indefinido.</strong> Se mantiene destacado hasta que se quite la publicación o se edite.
+              </span>
+            </label>
+            <label class="flex cursor-pointer items-start gap-2">
+              <input
+                v-model="form.featured_duration"
+                type="radio"
+                name="library-featured-duration"
+                value="until"
+                class="mt-0.5 size-4 shrink-0 accent-primary"
+              >
+              <span class="text-sm leading-snug">
+                <strong>Hasta una fecha.</strong> Deja de destacarse al día siguiente de esa fecha.
+              </span>
+            </label>
             <div v-if="form.featured_duration === 'until'" class="space-y-2 sm:max-w-xs">
               <Label for="library-featured-until">Destacado hasta</Label>
               <Input
@@ -208,7 +224,7 @@ async function submit() {
                 :min="form.effective_from"
               />
             </div>
-          </div>
+          </fieldset>
         </div>
       </div>
 

@@ -287,7 +287,7 @@ async function loadCatalog() {
       : tree
     catalogTree.value = scopedTree
     docTypeOptions.value = flattenCatalogDocumentTypes(scopedTree)
-    preselectMissingDocType()
+    preselectExpedienteDocType()
   }
   catch {
     toast.error('No se pudo cargar el catálogo documental.')
@@ -295,6 +295,53 @@ async function loadCatalog() {
   finally {
     loadingCatalog.value = false
   }
+}
+
+function documentTypeIdsInTree(node: ArchivalFileTreeNode | null): number[] {
+  if (!node) {
+    return []
+  }
+
+  const ids: number[] = []
+  if (node.type === 'document' && node.doc_document_type_id != null) {
+    ids.push(node.doc_document_type_id)
+  }
+
+  for (const child of node.children ?? []) {
+    ids.push(...documentTypeIdsInTree(child))
+  }
+
+  return ids
+}
+
+const configuredDocTypeId = computed((): number | null => {
+  const fromArea = fileTypeProducerArea.value?.doc_document_type_id
+  if (fromArea != null) {
+    return fromArea
+  }
+
+  return props.file.file_type?.doc_document_type_id ?? null
+})
+
+const expedienteDocTypeId = computed((): number | null => {
+  if (configuredDocTypeId.value != null) {
+    return configuredDocTypeId.value
+  }
+
+  const fromTree = [...new Set(documentTypeIdsInTree(props.tree))]
+  if (fromTree.length === 1) {
+    return fromTree[0] ?? null
+  }
+
+  return null
+})
+
+function docTypeIsAllowed(docTypeId: number): boolean {
+  if (docTypeOptions.value.length === 0) {
+    return true
+  }
+
+  return docTypeOptions.value.some(option => option.id === docTypeId)
 }
 
 function preselectMissingDocType() {
@@ -305,6 +352,25 @@ function preselectMissingDocType() {
   const first = missingRequiredChoices.value[0]
   if (first && !docDocumentTypeId.value) {
     docDocumentTypeId.value = first.docDocumentTypeId
+  }
+}
+
+function preselectExpedienteDocType(): void {
+  if (props.presetDocTypeId != null) {
+    docDocumentTypeId.value = props.presetDocTypeId
+
+    return
+  }
+
+  preselectMissingDocType()
+
+  if (docDocumentTypeId.value != null || attachNonRequired.value) {
+    return
+  }
+
+  const docTypeId = expedienteDocTypeId.value
+  if (docTypeId != null && docTypeIsAllowed(docTypeId)) {
+    docDocumentTypeId.value = docTypeId
   }
 }
 
@@ -445,7 +511,7 @@ function resetForm() {
   docDocumentTypeId.value = null
   uploadSource.value = 'manual'
   attachNonRequired.value = false
-  preselectMissingDocType()
+  preselectExpedienteDocType()
 }
 
 async function handleSubmit() {
@@ -560,7 +626,12 @@ watch(
 
 watch(
   () => props.required?.missing,
-  () => preselectMissingDocType(),
+  () => preselectExpedienteDocType(),
+)
+
+watch(
+  () => expedienteDocTypeId.value,
+  () => preselectExpedienteDocType(),
 )
 
 watch(attachNonRequired, (isOther) => {
@@ -568,7 +639,7 @@ watch(attachNonRequired, (isOther) => {
     docDocumentTypeId.value = null
   }
   else {
-    preselectMissingDocType()
+    preselectExpedienteDocType()
   }
 })
 
@@ -709,7 +780,12 @@ onMounted(() => {
           Serie y subserie del tipo de expediente para
           <span class="font-medium text-foreground">{{ props.file.org_unit?.name ?? 'esta área' }}</span>
           ({{ fileTypeProducerArea?.doc_series?.code }} / {{ fileTypeProducerArea?.doc_subseries?.code }}).
-          Solo elija el tipo documental (políticas, formatos, procedimientos, etc.).
+          <template v-if="expedienteDocTypeId != null && docDocumentTypeId === expedienteDocTypeId">
+            El tipo documental queda en el que ya usa este expediente. Cámbielo solo si el archivo es de otro tipo de la misma subserie.
+          </template>
+          <template v-else>
+            Elija el tipo documental de esta subserie.
+          </template>
         </p>
         <p
           v-else-if="(props.file.file_type?.producer_areas?.length ?? 0) > 0 && !fileTypeProducerArea"

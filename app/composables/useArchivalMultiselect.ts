@@ -73,3 +73,22 @@ export function onArchivalMultiselectOpen(instance: MultiselectOpenInstance): vo
 
   scheduleArchivalDropdownSync(instance.$el, instance)
 }
+
+export function isArchivalMultiselectOutsideEvent(event: Event): boolean {
+  const target = event.target
+  if (!(target instanceof Element)) {
+    return false
+  }
+
+  return Boolean(
+    target.closest(
+      '.archival-single-multiselect-dropdown, .archival-single-multiselect, .archival-multi-multiselect',
+    ),
+  )
+}
+
+export function preventArchivalMultiselectDialogDismiss(event: Event): void {
+  if (isArchivalMultiselectOutsideEvent(event)) {
+    event.preventDefault()
+  }
+}

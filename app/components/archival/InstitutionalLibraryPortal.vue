@@ -317,7 +317,7 @@ function applySearch() {
                     Vigente
                   </Badge>
                 </div>
-                <h4 class="mt-3 line-clamp-2 text-sm font-semibold leading-snug">
+                <h4 class="mt-3 min-w-0 whitespace-normal break-all text-sm font-semibold leading-snug [overflow-wrap:anywhere]">
                   {{ document.title }}
                 </h4>
                 <p class="mt-1 text-xs text-muted-foreground">

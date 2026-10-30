@@ -160,7 +160,7 @@ function onCarouselKeydown(event: KeyboardEvent) {
         </Button>
 
         <div
-          class="relative h-[17.5rem] w-full max-w-5xl sm:h-[20rem]"
+          class="relative h-[21rem] w-full max-w-5xl sm:h-[24rem]"
           style="perspective: 1100px"
         >
           <article
@@ -169,7 +169,7 @@ function onCarouselKeydown(event: KeyboardEvent) {
             class="absolute top-1/2 left-1/2 w-[11.25rem] origin-center cursor-pointer overflow-hidden rounded-2xl bg-gradient-to-br p-4 text-white transition-all duration-300 ease-out sm:w-[13.5rem] sm:p-5"
             :class="[
               faceClass(index),
-              circularOffset(index) === 0 ? 'h-[15.5rem] sm:h-[17.75rem]' : 'h-[13.5rem] sm:h-[15.5rem]',
+              circularOffset(index) === 0 ? 'h-[18.5rem] sm:h-[21rem]' : 'h-[15.5rem] sm:h-[17.5rem]',
             ]"
             :style="slideStyle(index)"
             @click="openActive(document, index)"
@@ -211,7 +211,10 @@ function onCarouselKeydown(event: KeyboardEvent) {
                 class="flex min-h-0 flex-1 flex-col"
                 :class="circularOffset(index) === 0 ? 'mt-3 justify-between' : 'mt-4 justify-center'"
               >
-                <div :class="circularOffset(index) === 0 ? '' : 'text-center'">
+                <div
+                  class="min-h-0 min-w-0 overflow-y-auto"
+                  :class="circularOffset(index) === 0 ? '' : 'text-center'"
+                >
                   <p
                     v-if="circularOffset(index) !== 0 && document.institutional_category_label"
                     class="mb-1 text-[10px] font-medium uppercase tracking-wide text-white/70"
@@ -219,10 +222,10 @@ function onCarouselKeydown(event: KeyboardEvent) {
                     {{ document.institutional_category_label }}
                   </p>
                   <h3
-                    class="font-semibold tracking-tight"
+                    class="min-w-0 whitespace-normal break-all font-semibold tracking-tight [overflow-wrap:anywhere]"
                     :class="circularOffset(index) === 0
-                      ? 'line-clamp-2 text-lg leading-snug sm:text-xl'
-                      : 'line-clamp-3 text-lg leading-tight sm:text-xl'"
+                      ? 'text-base leading-snug sm:text-lg'
+                      : 'text-sm leading-snug sm:text-base'"
                   >
                     {{ document.title }}
                   </h3>

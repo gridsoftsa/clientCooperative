@@ -20,6 +20,7 @@ const props = withDefaults(
     label?: string
     /** Normaliza el valor a número (catálogo TRD, ids de entidad). */
     coerceNumber?: boolean
+    appendToBody?: boolean
   }>(),
   {
     searchable: true,
@@ -29,6 +30,7 @@ const props = withDefaults(
     noOptionsText: 'Sin opciones',
     noResultsText: 'Sin coincidencias',
     coerceNumber: false,
+    appendToBody: true,
   },
 )
 
@@ -69,7 +71,7 @@ const innerModel = computed({
     :searchable="searchable"
     :can-clear="canClear"
     :close-on-select="true"
-    :append-to-body="true"
+    :append-to-body="appendToBody"
     :close-on-scroll="false"
     :disabled="disabled"
     :classes="ARCHIVAL_MULTISELECT_CLASSES"

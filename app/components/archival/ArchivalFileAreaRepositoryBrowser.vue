@@ -11,8 +11,14 @@ import {
   countArchivalAreaDescendants,
   filterArchivalAreaChildren,
   filterArchivalAreaChildrenByUploadedDate,
+  filterArchivalAreaTrdNavTree,
   findArchivalTreeNode,
+  findArchivalTreeNodeByArchivalFileId,
   findArchivalTreePath,
+  formatArchivalRetentionPreview,
+  archivalAreaNodeIsFeaturedInLibrary,
+  archivalAreaNodeIsPublishedToLibrary,
+  isArchivalAreaManualFolder,
   partitionArchivalAreaChildren,
 } from '~/utils/archival-area-repository'
 import { toast } from 'vue-sonner'
@@ -51,16 +57,23 @@ const viewingDocumentId = ref<string | null>(null)
 const selectedNodeId = ref('')
 const selectedDocument = ref<ArchivalFileTreeNode | null>(null)
 const searchQuery = ref('')
+const classificationQuery = ref('')
 const filterDateFrom = ref('')
 const filterDateTo = ref('')
 const navCollapsed = ref(false)
 const folderExpansion = ref<ArchivalAreaFolderExpansion>('default')
 const folderExpansionTick = ref(0)
+const manualFolderOpen = ref(false)
+const pendingSelectFileId = ref<number | null>(null)
 
 const canDownload = computed(() =>
   hasPermission('expedientes_documentos_descargar') || hasPermission('documentacion_ver'),
 )
 const canOpenExpediente = computed(() => hasPermission('expedientes_ver'))
+const canUpload = computed(() =>
+  props.allowUpload
+  && (hasPermission('expedientes_editar') || hasPermission('expedientes_documentos_adjuntar')),
+)
 
 const currentNode = computed(() => {
   if (!props.tree) {
@@ -124,14 +137,62 @@ const currentDocTypeId = computed(() => {
   return undefined
 })
 
-const selectedFileId = computed(() => selectedDocument.value?.archival_file_id ?? null)
+const selectedFileId = computed(() =>
+  selectedDocument.value?.archival_file_id
+  ?? (isArchivalAreaManualFolder(currentNode.value) ? currentNode.value?.archival_file_id ?? null : null),
+)
+
+const isDocumentTypeContext = computed(() => currentNode.value?.type === 'document_type')
+
+const canCreateManualFolder = computed(() =>
+  canUpload.value
+  && props.tree?.type === 'area'
+  && isDocumentTypeContext.value
+  && currentNode.value?.doc_document_type_id != null,
+)
+
+const targetUploadFileId = computed(() => {
+  if (isArchivalAreaManualFolder(currentNode.value)) {
+    return currentNode.value?.archival_file_id ?? null
+  }
+
+  return selectedFileId.value
+})
+
+const trdNavTree = computed(() => {
+  if (!props.tree) {
+    return null
+  }
+
+  return filterArchivalAreaTrdNavTree(props.tree, classificationQuery.value)
+})
+
+const trdNavExpansion = computed<ArchivalAreaFolderExpansion>(() =>
+  classificationQuery.value.trim() ? 'all' : folderExpansion.value,
+)
+
+const retentionPreviewText = computed(() =>
+  formatArchivalRetentionPreview(currentNode.value?.retention ?? null),
+)
 
 watch(
   () => props.tree,
   (tree) => {
+    const pendingFileId = pendingSelectFileId.value
+    if (tree && pendingFileId != null) {
+      const created = findArchivalTreeNodeByArchivalFileId(tree, pendingFileId)
+        selectedNodeId.value = created?.id ?? (selectedNodeId.value || tree.id)
+      pendingSelectFileId.value = null
+      selectedDocument.value = null
+      return
+    }
+
+    if (tree && selectedNodeId.value && findArchivalTreeNode(tree, selectedNodeId.value)) {
+      return
+    }
+
     selectedNodeId.value = tree?.id ?? ''
     selectedDocument.value = null
-    searchQuery.value = ''
     folderExpansion.value = 'default'
     folderExpansionTick.value = 0
   },
@@ -216,6 +277,15 @@ async function openDocumentView(document: ArchivalFileTreeNode) {
   finally {
     viewingDocumentId.value = null
   }
+}
+
+function clearTrdFolderSearch() {
+  classificationQuery.value = ''
+}
+
+function onManualFolderCreated(archivalFileId: number) {
+  pendingSelectFileId.value = archivalFileId
+  emit('uploaded')
 }
 
 function formatBytes(size?: number): string {
@@ -331,16 +401,43 @@ function formatBytes(size?: number): string {
                 Expandir
               </Button>
             </div>
+            <div class="relative mt-2">
+              <Icon name="i-lucide-search" class="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                v-model="classificationQuery"
+                placeholder="Buscar serie, subserie o tipo…"
+                class="h-9 pl-8 pr-8"
+              />
+              <Button
+                v-if="classificationQuery.trim()"
+                type="button"
+                variant="ghost"
+                size="icon"
+                class="absolute right-0.5 top-0.5 size-8"
+                title="Limpiar búsqueda"
+                aria-label="Limpiar búsqueda"
+                @click="clearTrdFolderSearch"
+              >
+                <Icon name="i-lucide-x" class="size-3.5" />
+              </Button>
+            </div>
           </div>
 
           <div class="flex-1 overflow-y-auto p-2">
             <ArchivalFileAreaFolderNav
-              :node="tree"
+              v-if="trdNavTree"
+              :node="trdNavTree"
               :selected-id="currentNode?.id ?? tree.id"
-              :expansion="folderExpansion"
+              :expansion="trdNavExpansion"
               :expansion-tick="folderExpansionTick"
               @select="selectFolder"
             />
+            <p
+              v-else
+              class="px-2 py-6 text-center text-xs leading-relaxed text-muted-foreground"
+            >
+              No hay series, subseries o tipos documentales que coincidan.
+            </p>
           </div>
         </div>
       </ResizablePanel>
@@ -368,18 +465,36 @@ function formatBytes(size?: number): string {
               </template>
             </div>
 
-            <div class="min-w-0 space-y-1">
-              <h2
-                class="truncate text-lg font-semibold tracking-tight"
-                :title="currentNode?.name"
+            <div class="flex min-w-0 items-start justify-between gap-3">
+              <div class="min-w-0 space-y-1">
+                <h2
+                  class="truncate text-lg font-semibold tracking-tight"
+                  :title="currentNode?.name"
+                >
+                  {{ currentNode?.name }}
+                </h2>
+                <p class="truncate text-sm text-muted-foreground">
+                  {{ archivalAreaNodeTypeLabel(currentNode!) }}
+                  · {{ visibleChildrenCount }} elementos en esta carpeta
+                </p>
+              </div>
+              <Button
+                v-if="canCreateManualFolder"
+                type="button"
+                class="h-9 shrink-0"
+                @click="manualFolderOpen = true"
               >
-                {{ currentNode?.name }}
-              </h2>
-              <p class="truncate text-sm text-muted-foreground">
-                {{ archivalAreaNodeTypeLabel(currentNode!) }}
-                · {{ visibleChildrenCount }} elementos en esta carpeta
-              </p>
+                <Icon name="i-lucide-folder-plus" class="mr-1.5 size-4" />
+                Nueva carpeta
+              </Button>
             </div>
+
+            <p
+              v-if="isDocumentTypeContext && retentionPreviewText"
+              class="rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+            >
+              {{ retentionPreviewText }}
+            </p>
 
             <div class="flex min-w-0 flex-wrap items-center gap-2">
               <div class="min-w-[14rem] max-w-md flex-1">
@@ -420,9 +535,17 @@ function formatBytes(size?: number): string {
               v-if="partitionedChildren.folders.length === 0
                 && partitionedChildren.documents.length === 0
                 && partitionedChildren.files.length === 0"
-              class="flex min-h-[12rem] items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground"
+              class="flex min-h-[12rem] flex-col items-center justify-center rounded-lg border border-dashed px-4 text-center text-sm text-muted-foreground"
             >
-              No hay elementos en esta carpeta con los filtros actuales.
+              <span>No hay elementos en esta carpeta con los filtros actuales.</span>
+              <Button
+                v-if="canCreateManualFolder"
+                type="button"
+                class="mt-4"
+                @click="manualFolderOpen = true"
+              >
+                Crear carpeta y cargar archivos
+              </Button>
             </div>
 
             <div v-else class="space-y-6">
@@ -456,6 +579,21 @@ function formatBytes(size?: number): string {
                           {{ archivalAreaNodeTypeLabel(folder) }}
                           <span v-if="folder.file_number"> · {{ folder.file_number }}</span>
                         </p>
+                        <div
+                          v-if="archivalAreaNodeIsPublishedToLibrary(folder)"
+                          class="mt-2 flex flex-wrap gap-1"
+                        >
+                          <Badge variant="secondary" class="text-xs">
+                            Publicado en biblioteca
+                          </Badge>
+                          <Badge
+                            v-if="archivalAreaNodeIsFeaturedInLibrary(folder)"
+                            variant="outline"
+                            class="text-xs"
+                          >
+                            Destacado
+                          </Badge>
+                        </div>
                         <p class="mt-2 text-xs text-muted-foreground">
                           {{ folder.children?.length ?? 0 }} elementos
                           <span v-if="countArchivalAreaDescendants(folder) > (folder.children?.length ?? 0)">
@@ -520,6 +658,20 @@ function formatBytes(size?: number): string {
                             class="text-xs"
                           >
                             {{ document.retention.label }}
+                          </Badge>
+                          <Badge
+                            v-if="document.is_institutional_published"
+                            variant="secondary"
+                            class="text-xs"
+                          >
+                            Publicado en biblioteca
+                          </Badge>
+                          <Badge
+                            v-if="document.is_institutional_published && document.is_featured"
+                            variant="outline"
+                            class="text-xs"
+                          >
+                            Destacado
                           </Badge>
                         </div>
                         <p
@@ -603,23 +755,23 @@ function formatBytes(size?: number): string {
           </div>
 
           <div
-            v-if="selectedDocument && selectedFileId && allowUpload"
+            v-if="targetUploadFileId && canUpload"
             class="border-t bg-muted/20 p-4"
           >
             <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p class="text-sm font-medium">
-                  Expediente #{{ selectedFileId }}
+                  Carpeta / expediente #{{ targetUploadFileId }}
                 </p>
                 <p class="text-xs text-muted-foreground">
-                  {{ selectedDocument.name }}
+                  {{ currentNode?.name }}
                 </p>
               </div>
               <Button
                 v-if="canOpenExpediente"
                 variant="outline"
                 size="sm"
-                @click="openExpediente(selectedFileId)"
+                @click="openExpediente(targetUploadFileId)"
               >
                 Abrir expediente completo
               </Button>
@@ -627,7 +779,7 @@ function formatBytes(size?: number): string {
 
             <ArchivalFileAreaDocumentUploadForm
               :org-unit-id="orgUnitId"
-              :archival-file-id="selectedFileId"
+              :archival-file-id="targetUploadFileId"
               :default-doc-type-id="currentDocTypeId"
               @uploaded="emit('uploaded')"
             />
@@ -641,6 +793,17 @@ function formatBytes(size?: number): string {
       :title="inlinePreviewTitle"
       :preview-url="inlinePreviewUrl"
       :preview-kind="inlinePreviewKind"
+    />
+    <ArchivalFileAreaManualFolderDialog
+      v-if="currentNode?.doc_document_type_id"
+      :open="manualFolderOpen"
+      :org-unit-id="orgUnitId"
+      :doc-document-type-id="currentNode.doc_document_type_id"
+      :document-type-name="currentNode.name"
+      :retention="currentNode.retention"
+      :publishable-to-library="Boolean(currentNode.doc_series_publishable_to_institutional_library)"
+      @update:open="manualFolderOpen = $event"
+      @created="onManualFolderCreated"
     />
   </div>
 </template>

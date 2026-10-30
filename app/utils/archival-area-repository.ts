@@ -1,4 +1,4 @@
-import type { ArchivalFileTreeNode } from '~/types/archival-file'
+import type { ArchivalDocumentRetentionSummary, ArchivalFileTreeNode } from '~/types/archival-file'
 
 const FOLDER_TYPES = new Set<ArchivalFileTreeNode['type']>([
   'area',
@@ -126,6 +126,28 @@ export function findArchivalTreeNode(
   const path = findArchivalTreePath(root, targetId)
 
   return path?.at(-1) ?? null
+}
+
+export function findArchivalTreeNodeByArchivalFileId(
+  root: ArchivalFileTreeNode | null,
+  archivalFileId: number,
+): ArchivalFileTreeNode | null {
+  if (!root) {
+    return null
+  }
+
+  if (root.archival_file_id === archivalFileId && isArchivalAreaFolderNode(root)) {
+    return root
+  }
+
+  for (const child of root.children ?? []) {
+    const found = findArchivalTreeNodeByArchivalFileId(child, archivalFileId)
+    if (found) {
+      return found
+    }
+  }
+
+  return null
 }
 
 export type ArchivalAreaFolderExpansion = 'default' | 'all' | 'collapsed'
@@ -302,10 +324,141 @@ export function filterArchivalAreaChildrenByUploadedDate(
       return archivalAreaNodeMatchesUploadedDateRange(child, start, end)
     }
 
-    if (child.type === 'filing') {
+    if (child.type === 'filing' || (child.type === 'folder' && child.archival_file_id != null)) {
       return archivalAreaFolderHasDocumentInUploadedDateRange(child, start, end)
     }
 
     return true
   })
+}
+
+export type ArchivalAreaClassificationSearchHit = {
+  id: string
+  name: string
+  type: 'series' | 'subseries' | 'document_type'
+  typeLabel: string
+  pathLabel: string
+}
+
+export function filterArchivalAreaTrdNavTree(
+  node: ArchivalFileTreeNode,
+  query: string,
+): ArchivalFileTreeNode | null {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) {
+    return node
+  }
+
+  const folderChildren = (node.children ?? []).filter(child => isArchivalAreaFolderNode(child))
+  const selfMatch = node.name.toLowerCase().includes(normalized)
+
+  if (selfMatch) {
+    return {
+      ...node,
+      children: folderChildren,
+    }
+  }
+
+  const kept = folderChildren
+    .map(child => filterArchivalAreaTrdNavTree(child, query))
+    .filter((child): child is ArchivalFileTreeNode => child != null)
+
+  if (kept.length === 0) {
+    return null
+  }
+
+  return {
+    ...node,
+    children: kept,
+  }
+}
+
+export function searchArchivalAreaClassification(
+  root: ArchivalFileTreeNode | null,
+  query: string,
+  limit = 25,
+): ArchivalAreaClassificationSearchHit[] {
+  const normalized = query.trim().toLowerCase()
+  if (!root || !normalized) {
+    return []
+  }
+
+  const hits: ArchivalAreaClassificationSearchHit[] = []
+
+  function walk(node: ArchivalFileTreeNode, ancestors: string[]): void {
+    if (node.type === 'series' || node.type === 'subseries' || node.type === 'document_type') {
+      const haystack = node.name.toLowerCase()
+      if (haystack.includes(normalized)) {
+        hits.push({
+          id: node.id,
+          name: node.name,
+          type: node.type,
+          typeLabel: archivalAreaNodeTypeLabel(node),
+          pathLabel: ancestors.join(' · '),
+        })
+      }
+    }
+
+    const nextAncestors = isArchivalAreaFolderNode(node) && node.type !== 'area'
+      ? [...ancestors, node.name]
+      : ancestors
+
+    for (const child of node.children ?? []) {
+      if (hits.length >= limit) {
+        return
+      }
+      walk(child, nextAncestors)
+    }
+  }
+
+  walk(root, [])
+
+  return hits.slice(0, limit)
+}
+
+export function formatArchivalRetentionPreview(
+  retention?: ArchivalDocumentRetentionSummary | null,
+): string | null {
+  if (!retention) {
+    return null
+  }
+
+  const parts = [
+    `${retention.years_management} año(s) en archivo de gestión`,
+    `${retention.years_central} año(s) en archivo central`,
+  ]
+
+  if (retention.years_historical != null && retention.years_historical > 0) {
+    parts.push(`${retention.years_historical} año(s) en archivo histórico`)
+  }
+
+  if (retention.final_disposition_label) {
+    parts.push(`disposición: ${retention.final_disposition_label}`)
+  }
+
+  if (retention.inherited_from_label) {
+    parts.push(`según ${retention.inherited_from_label.toLowerCase()} de la TRD`)
+  }
+
+  return parts.join(' · ')
+}
+
+export function isArchivalAreaManualFolder(node: ArchivalFileTreeNode | null | undefined): boolean {
+  return node?.type === 'folder' && node.source === 'manual' && node.archival_file_id != null
+}
+
+export function archivalAreaNodeIsPublishedToLibrary(node: ArchivalFileTreeNode): boolean {
+  if (node.is_institutional_published) {
+    return true
+  }
+
+  return (node.children ?? []).some(child => archivalAreaNodeIsPublishedToLibrary(child))
+}
+
+export function archivalAreaNodeIsFeaturedInLibrary(node: ArchivalFileTreeNode): boolean {
+  if (node.is_featured && node.is_institutional_published) {
+    return true
+  }
+
+  return (node.children ?? []).some(child => archivalAreaNodeIsFeaturedInLibrary(child))
 }

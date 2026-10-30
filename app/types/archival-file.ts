@@ -257,6 +257,11 @@ export interface ArchivalFileTreeNode {
   can_view_content?: boolean
   can_download_content?: boolean
   retention?: ArchivalDocumentRetentionSummary | null
+  publishable_to_institutional_library?: boolean
+  is_institutional_published?: boolean
+  is_featured?: boolean
+  institutional_category?: string | null
+  institutional_categories?: string[]
 }
 
 export interface ArchivalFileDocumentVersion {

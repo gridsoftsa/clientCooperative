@@ -2,7 +2,7 @@
 import { toast } from 'vue-sonner'
 import Multiselect from '@vueform/multiselect'
 import type { User, UserAccountStatus } from '~/types/user'
-import { requiresOrgStaffLink, type ApplicationDomain } from '~/constants/application-domains'
+import { defaultAdminApplicationDomains, requiresOrgStaffLink, type ApplicationDomain } from '~/constants/application-domains'
 import { ACCOUNT_STATUS_FORM_OPTIONS } from '~/utils/accountStatus'
 import { normalizeRoleNames } from '~/utils/userRoles'
 import { PASSWORD_REQUIREMENTS, validateRobustPassword } from '~/utils/password'
@@ -20,6 +20,7 @@ const router = useRouter()
 const { goBack } = useNavigationBack('/settings/users')
 const { user: authUser, refetchUserSilently } = useAuth()
 const { mapRoleSelectOptions } = useRoleAssignmentScope()
+const { hasModule } = usePermissions()
 
 const userId = route.params.id as string
 
@@ -34,7 +35,7 @@ const form = ref({
   sucursal_id: null as number | null,
   org_staff_id: null as number | null,
   allowed_sucursal_ids: [] as number[],
-  admin_application_domains: ['creditos', 'gestion_documental'] as ApplicationDomain[],
+  admin_application_domains: defaultAdminApplicationDomains(hasModule) as ApplicationDomain[],
   roles: [] as string[],
 })
 
@@ -68,12 +69,17 @@ const sucursalSelectOptions = computed(() =>
 const showAllowedSucursales = computed(() => form.value.roles.includes('admin') && !form.value.roles.includes('super_admin'))
 const showAdminApplicationDomains = computed(() => form.value.roles.includes('admin') && !form.value.roles.includes('super_admin'))
 
-const requiresOrgStaff = computed(() =>
-  requiresOrgStaffLink(
+const requiresOrgStaff = computed(() => {
+  if (!hasModule('gestion_documental')) {
+    return false
+  }
+
+  return requiresOrgStaffLink(
     form.value.roles,
     form.value.roles.includes('admin') ? form.value.admin_application_domains : undefined,
-  ),
-)
+    roles.value,
+  )
+})
 
 const isOwnUser = computed(() => authUser.value?.id === parseInt(userId))
 
@@ -169,7 +175,7 @@ const fetchUser = async () => {
       allowed_sucursal_ids: response.data.allowed_sucursal_ids ?? [],
       admin_application_domains: (response.data.admin_application_domains?.length
         ? response.data.admin_application_domains
-        : ['creditos', 'gestion_documental']) as ApplicationDomain[],
+        : defaultAdminApplicationDomains(hasModule)) as ApplicationDomain[],
       roles: normalizeRoleNames(response.data.roles),
     }
     lockedUntilDisplay.value = response.data.locked_until ?? null
@@ -455,7 +461,7 @@ onMounted(async () => {
                       Obligatorio para roles de ventanilla, workflow y gestión documental.
                     </template>
                     <template v-else>
-                      Opcional para roles de crédito; puede vincularse después en estructura organizacional.
+                      Con roles solo de crédito puede dejarlo vacío y guardar. El vínculo se puede hacer después en estructura organizacional.
                     </template>
                   </p>
                   <Multiselect

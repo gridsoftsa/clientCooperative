@@ -102,7 +102,7 @@ onMounted(async () => {
         </h1>
         <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
           {{ archive === 'management'
-            ? 'Archivo de gestión: documentos vigentes del área. Tras el plazo de retención en gestión, el expediente se traslada al archivo central (y luego al histórico) desde el detalle del expediente.'
+            ? 'Archivo de gestión: documentos vigentes del área. En un tipo documental puede crear una carpeta, cargar archivos con folios y, si la serie TRD lo permite, publicarlos en biblioteca. Tras el plazo de retención en gestión, el expediente se traslada al archivo central (y luego al histórico).'
             : archive === 'central'
               ? 'Archivo central: expedientes ya trasladados desde gestión. Consulta y descarga; no se cargan documentos nuevos aquí.'
               : 'Archivo histórico: expedientes con valor permanente. Consulta y descarga; no se cargan documentos nuevos aquí.' }}
