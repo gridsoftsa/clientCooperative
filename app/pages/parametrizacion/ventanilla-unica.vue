@@ -9,7 +9,7 @@ definePageMeta({
 <template>
   <ParametrizacionVentanillaUnicaParametrizacionView
     page-title="Ventanilla única"
-    page-description="Opciones que aparecen al crear un radicado: el tipo de trámite y cómo llegó el documento."
+    page-description="Opciones del radicado de gestión documental: prefijo del consecutivo, tipo de trámite y cómo llegó el documento."
     breadcrumb-label="Ventanilla única"
     :sister-link="{ to: '/parametrizacion/estructura', label: 'Estructura' }"
     back-to="/ventanilla/nueva"

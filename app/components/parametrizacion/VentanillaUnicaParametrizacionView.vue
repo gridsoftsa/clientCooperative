@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { VentanillaFunctionalTypeRow, VentanillaReceptionMediumRow } from '~/types/ventanilla'
+import type { VentanillaFilingPrefixRow, VentanillaFunctionalTypeRow, VentanillaReceptionMediumRow } from '~/types/ventanilla'
 import { messageFromFetchError } from '~/utils/http-error-message'
 
-type CatalogSection = 'functional-types' | 'reception-media'
+type CatalogSection = 'functional-types' | 'reception-media' | 'prefixes'
 
 const props = withDefaults(
   defineProps<{
@@ -15,7 +15,7 @@ const props = withDefaults(
   }>(),
   {
     pageTitle: 'Ventanilla única',
-    pageDescription: 'Opciones que aparecen al crear un radicado: el tipo de trámite y cómo llegó el documento.',
+    pageDescription: 'Opciones del radicado de gestión documental: prefijo del consecutivo, tipo de trámite y cómo llegó el documento.',
     breadcrumbLabel: 'Ventanilla única',
     sisterLink: () => ({ to: '/parametrizacion/estructura', label: 'Estructura' }),
     backTo: '/ventanilla/nueva',
@@ -38,11 +38,29 @@ const canEditReception = computed(() =>
   hasPermission('ventanilla_configurar') || hasPermission('plantillas_ver'),
 )
 
+const canEditPrefixes = canEditReception
+
 const visibleCatalogSections = computed(() =>
-  catalogSections.filter((section) =>
-    section.value === 'functional-types' ? canEditFunctionalTypes.value : canEditReception.value,
-  ),
+  catalogSections.filter((section) => {
+    if (section.value === 'prefixes') {
+      return canEditPrefixes.value
+    }
+
+    return section.value === 'functional-types' ? canEditFunctionalTypes.value : canEditReception.value
+  }),
 )
+
+function sectionCount(section: CatalogSection): number | null {
+  if (section === 'functional-types') {
+    return functionalTypes.value.length
+  }
+
+  if (section === 'reception-media') {
+    return receptionMedia.value.length
+  }
+
+  return null
+}
 
 const effectiveBackTo = computed(() => {
   const returnTo = route.query.return_to
@@ -53,9 +71,13 @@ const effectiveBackTo = computed(() => {
   return props.backTo
 })
 
-const canEdit = computed(() =>
-  selectedSection.value === 'functional-types' ? canEditFunctionalTypes.value : canEditReception.value,
-)
+const canEdit = computed(() => {
+  if (selectedSection.value === 'prefixes') {
+    return canEditPrefixes.value
+  }
+
+  return selectedSection.value === 'functional-types' ? canEditFunctionalTypes.value : canEditReception.value
+})
 
 const loading = ref(true)
 const saving = ref(false)
@@ -63,6 +85,7 @@ const selectedSection = ref<CatalogSection>('functional-types')
 
 const functionalTypes = ref<VentanillaFunctionalTypeRow[]>([])
 const receptionMedia = ref<VentanillaReceptionMediumRow[]>([])
+const filingPrefixes = ref<VentanillaFilingPrefixRow[]>([])
 const archivalFileTypes = ref<Array<{
   id: number
   name: string
@@ -73,6 +96,7 @@ const orgUnits = ref<Array<{ id: number, name: string, code: string }>>([])
 const savedVersion = ref(0)
 
 const catalogSections: Array<{ value: CatalogSection, label: string, icon: string }> = [
+  { value: 'prefixes', label: 'Prefijos de radicado', icon: 'i-lucide-hash' },
   { value: 'functional-types', label: 'Tipos funcionales', icon: 'i-lucide-tags' },
   { value: 'reception-media', label: 'Medios de recepción', icon: 'i-lucide-radio' },
 ]
@@ -80,12 +104,14 @@ const catalogSections: Array<{ value: CatalogSection, label: string, icon: strin
 async function loadCatalog() {
   loading.value = true
   try {
-    const [data, fileTypes] = await Promise.all([
+    const [data, fileTypes, prefixes] = await Promise.all([
       ventanillaApi.fetchCatalogSettings(),
       archivalApi.fetchFileTypes(),
+      canEditPrefixes.value ? ventanillaApi.fetchFilingPrefixes() : Promise.resolve([]),
     ])
     functionalTypes.value = data.functional_types ?? []
     receptionMedia.value = data.reception_media ?? []
+    filingPrefixes.value = prefixes
     orgUnits.value = data.org_units ?? []
     archivalFileTypes.value = (fileTypes ?? []).map(type => ({
       id: type.id,
@@ -99,6 +125,7 @@ async function loadCatalog() {
     toast.error('No se pudieron cargar los catálogos de ventanilla')
     functionalTypes.value = []
     receptionMedia.value = []
+    filingPrefixes.value = []
   } finally {
     loading.value = false
   }
@@ -221,6 +248,46 @@ async function saveReception(rows: Array<{
   }
 }
 
+function onPrefixInput(index: number, value: string | number) {
+  const row = filingPrefixes.value[index]
+  if (!row) {
+    return
+  }
+
+  row.prefix = String(value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
+}
+
+function draftFormat(row: VentanillaFilingPrefixRow): string {
+  const token = row.prefix.trim().toUpperCase()
+  if (!/^[A-Z0-9]{2,8}$/.test(token) || row.next_code.startsWith(`${token}-`)) {
+    return ''
+  }
+
+  return `${token}-${new Date().getFullYear()}-######`
+}
+
+async function savePrefixes() {
+  if (!canEditPrefixes.value) {
+    return
+  }
+
+  saving.value = true
+  try {
+    const response = await ventanillaApi.updateFilingPrefixes(
+      filingPrefixes.value.map(row => ({
+        filing_type: row.filing_type,
+        prefix: row.prefix,
+      })),
+    )
+    filingPrefixes.value = response.data
+    toast.success(response.message || 'Prefijos de radicado actualizados.')
+  } catch (e: unknown) {
+    toast.error(messageFromFetchError(e, 'No se pudieron guardar los prefijos de radicado'))
+  } finally {
+    saving.value = false
+  }
+}
+
 onMounted(() => {
   if (visibleCatalogSections.value.length > 0) {
     selectedSection.value = visibleCatalogSections.value[0]!.value
@@ -282,8 +349,8 @@ onMounted(() => {
         >
           <Icon :name="section.icon" class="size-4" />
           {{ section.label }}
-          <span class="text-muted-foreground text-xs tabular-nums">
-            {{ section.value === 'functional-types' ? functionalTypes.length : receptionMedia.length }}
+          <span v-if="sectionCount(section.value) !== null" class="text-muted-foreground text-xs tabular-nums">
+            {{ sectionCount(section.value) }}
           </span>
         </TabsTrigger>
       </TabsList>
@@ -291,6 +358,63 @@ onMounted(() => {
       <div v-if="loading" class="flex justify-center py-16">
         <Icon name="i-lucide-loader-2" class="h-10 w-10 animate-spin text-muted-foreground" />
       </div>
+
+      <TabsContent
+        v-else-if="selectedSection === 'prefixes'"
+        value="prefixes"
+        class="mt-0"
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle class="text-base">
+              Prefijo del consecutivo
+            </CardTitle>
+            <CardDescription>
+              Cada radicado nuevo de ventanilla usa el prefijo de su tipo, el año y una secuencia de seis dígitos. Los números ya asignados se conservan. Al cambiar el prefijo, la secuencia de ese tipo continúa.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-6">
+            <div
+              v-for="(row, index) in filingPrefixes"
+              :key="row.filing_type"
+              class="grid gap-3 border-b pb-4 last:border-b-0 last:pb-0 sm:grid-cols-[10rem_8rem_1fr] sm:items-end"
+            >
+              <div class="space-y-1">
+                <p class="text-sm font-medium">
+                  {{ row.label }}
+                </p>
+                <p class="font-mono text-xs text-muted-foreground">
+                  {{ row.next_code }}
+                </p>
+              </div>
+              <div class="space-y-2">
+                <Label :for="`filing-prefix-${row.filing_type}`">Prefijo</Label>
+                <Input
+                  :id="`filing-prefix-${row.filing_type}`"
+                  :model-value="row.prefix"
+                  maxlength="8"
+                  class="font-mono uppercase"
+                  autocomplete="off"
+                  :disabled="!canEditPrefixes || saving"
+                  @update:model-value="onPrefixInput(index, $event)"
+                />
+              </div>
+              <p v-if="draftFormat(row)" class="text-sm text-muted-foreground">
+                Al guardar, el formato será
+                <span class="font-mono">{{ draftFormat(row) }}</span>
+              </p>
+            </div>
+            <p class="text-xs text-muted-foreground">
+              De 2 a 8 letras o números, sin espacios ni guiones. Cada tipo usa un prefijo distinto. Los valores iniciales son IN, OUT e INT.
+            </p>
+            <div v-if="canEditPrefixes" class="flex justify-end">
+              <Button type="button" :disabled="saving || filingPrefixes.some(row => row.prefix.length < 2)" @click="savePrefixes">
+                Guardar prefijos
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
 
       <TabsContent
         v-else

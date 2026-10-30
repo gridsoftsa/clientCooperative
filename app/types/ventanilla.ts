@@ -110,6 +110,13 @@ export interface VentanillaCatalogSettingsData {
   org_units: Array<{ id: number, name: string, code: string }>
 }
 
+export interface VentanillaFilingPrefixRow {
+  filing_type: VentanillaFilingTypeValue
+  label: string
+  prefix: string
+  next_code: string
+}
+
 export interface VentanillaSlaSettingsRow {
   id: number
   calendar_name: string

@@ -1,6 +1,7 @@
 import type {
   VentanillaCatalogData,
   VentanillaCatalogSettingsData,
+  VentanillaFilingPrefixRow,
   VentanillaClassificationRuleRow,
   VentanillaFunctionalTypeTrdContextData,
   VentanillaEmailAccountRow,
@@ -124,6 +125,19 @@ export function useVentanillaApi() {
     const res = await api<{ data: VentanillaResponsibleUserRow[] }>('/ventanilla/responsible-users', { query })
 
     return res.data
+  }
+
+  async function fetchFilingPrefixes(): Promise<VentanillaFilingPrefixRow[]> {
+    const res = await api<{ data: VentanillaFilingPrefixRow[] }>('/ventanilla/filing-prefixes')
+
+    return res.data
+  }
+
+  async function updateFilingPrefixes(prefixes: Array<{ filing_type: string, prefix: string }>): Promise<{ data: VentanillaFilingPrefixRow[], message: string }> {
+    return await api<{ data: VentanillaFilingPrefixRow[], message: string }>('/ventanilla/filing-prefixes', {
+      method: 'PUT',
+      body: { prefixes },
+    })
   }
 
   async function fetchCatalogSettings(): Promise<VentanillaCatalogSettingsData> {
@@ -721,6 +735,8 @@ export function useVentanillaApi() {
     updateClassificationRule,
     deleteClassificationRule,
     fetchResponsibleUsers,
+    fetchFilingPrefixes,
+    updateFilingPrefixes,
     fetchCatalogSettings,
     createFunctionalType,
     updateFunctionalType,
