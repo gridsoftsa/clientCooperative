@@ -262,8 +262,11 @@ export interface ArchivalFileTreeNode {
   publishable_to_institutional_library?: boolean
   is_institutional_published?: boolean
   is_featured?: boolean
+  featured_until?: string | null
   institutional_category?: string | null
   institutional_categories?: string[]
+  effective_from?: string | null
+  effective_to?: string | null
 }
 
 export interface ArchivalFileDocumentVersion {

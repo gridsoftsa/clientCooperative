@@ -24,7 +24,6 @@ const emit = defineEmits<{
   replaceVersion: [node: ArchivalFileTreeNode]
   clickFile: [node: ArchivalFileTreeNode]
   publishToLibrary: [node: ArchivalFileTreeNode]
-  selectionUpdated: []
 }>()
 
 const archivalApi = useArchivalFileApi()
@@ -150,195 +149,185 @@ function openExpediente() {
 <template>
   <div class="min-w-0">
     <div
-      class="flex min-w-0 items-center gap-1 rounded-md px-1 py-1 hover:bg-muted/60 sm:gap-2 sm:px-2 sm:py-1.5"
+      class="flex min-w-0 flex-col gap-1 rounded-md px-1 py-1.5 hover:bg-muted/60 sm:px-2"
       :class="{ 'cursor-pointer': isFileNode }"
       :style="{ paddingLeft: `${indentPx}px` }"
       @click="handleNodeClick"
     >
-      <button
-        v-if="hasChildren"
-        type="button"
-        class="text-muted-foreground"
-        :title="expanded ? 'Contraer' : 'Expandir'"
-        :aria-label="expanded ? `Contraer ${node.name}` : `Expandir ${node.name}`"
-        :aria-expanded="expanded"
-        @click.stop="expanded = !expanded"
-      >
-        <Icon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-4" aria-hidden="true" />
-      </button>
-      <span v-else class="w-4" />
-
-      <Icon :name="iconName" class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-
-      <span
-        class="min-w-0 flex-1 truncate text-xs sm:text-sm"
-        :title="node.name"
-      >{{ node.name }}</span>
-
-      <ArchivalTrdPlacementDropdown
-        v-if="node.trd"
-        :trd="node.trd"
-        :compact="compact"
-      />
-
-      <Badge
-        v-if="node.is_reference && !compact"
-        variant="secondary"
-        class="text-xs"
-        :title="`Referencia a la versión ${node.referenced_version_number ?? '?'}`"
-      >
-        Ref. v{{ node.referenced_version_number ?? '?' }}
-      </Badge>
-      <Badge
-        v-if="isDocument && node.version_number"
-        :variant="node.is_current_version === false ? 'outline' : 'secondary'"
-        class="shrink-0 text-[10px] sm:text-xs"
-        :title="node.is_current_version === false ? `Versión ${node.version_number} histórica` : `Versión ${node.version_number} vigente`"
-      >
-        v{{ node.version_number }}
-        <span v-if="node.is_current_version !== false" class="sr-only"> vigente</span>
-      </Badge>
-      <Badge
-        v-if="!compact && isDocument && node.source_label"
-        variant="outline"
-        class="text-xs"
-        :title="`Origen: ${node.source_label}`"
-      >
-        {{ node.source_label }}
-      </Badge>
-      <Badge
-        v-if="!compact && node.status_label"
-        variant="outline"
-        class="text-xs"
-        :title="`Estado: ${node.status_label}`"
-      >
-        {{ node.status_label }}
-      </Badge>
-      <Badge
-        v-if="isDocument && !canAccessDocumentContent"
-        variant="secondary"
-        class="text-[10px] sm:text-xs"
-        title="Contenido restringido por clasificación. La TRD y los metadatos sí se pueden consultar."
-      >
-        Restringido
-      </Badge>
-      <Badge
-        v-if="isDocument && node.retention?.final_disposition_label"
-        variant="outline"
-        class="max-w-[7.5rem] min-w-0 truncate text-[10px] sm:max-w-[11rem] sm:text-xs"
-        :title="node.retention.inherited_from_label
-          ? `${node.retention.final_disposition_label} (heredada de ${node.retention.inherited_from_label})`
-          : node.retention.final_disposition_label"
-      >
-        {{ node.retention.final_disposition_label }}
-      </Badge>
-      <Badge
-        v-if="isDocument && node.is_institutional_published"
-        variant="secondary"
-        class="text-[10px] sm:text-xs"
-        title="Publicado en la biblioteca institucional"
-      >
-        Biblioteca
-      </Badge>
-      <Badge
-        v-if="isDocument && node.is_institutional_published && node.is_featured"
-        variant="outline"
-        class="text-[10px] sm:text-xs"
-        title="Destacado en el banner de la biblioteca institucional"
-      >
-        Destacado
-      </Badge>
-
-      <Button
-        v-if="canShowDetails"
-        variant="ghost"
-        size="sm"
-        type="button"
-        class="h-7 shrink-0 gap-1 px-1.5 text-xs text-muted-foreground sm:px-2"
-        :class="{ 'text-primary': detailsExpanded }"
-        :title="detailsExpanded ? 'Ocultar metadatos' : 'Ver metadatos'"
-        :aria-label="detailsExpanded ? `Ocultar metadatos de ${node.name}` : `Ver metadatos de ${node.name}`"
-        :aria-expanded="detailsExpanded"
-        @click.stop="toggleDetails"
-      >
-        <Icon :name="detailsExpanded ? 'i-lucide-chevron-up' : 'i-lucide-info'" class="size-3.5" />
-        <span v-if="!compact" class="hidden sm:inline">{{ detailsExpanded ? 'Ocultar' : 'Metadatos' }}</span>
-      </Button>
-
-      <div v-if="isDocument" class="flex shrink-0 flex-wrap items-center justify-end gap-0.5">
-        <Button
-          v-if="canViewDocument"
-          variant="ghost"
-          size="sm"
-          class="h-7 px-1.5 text-xs sm:px-2"
+      <div class="flex min-w-0 items-center gap-1.5">
+        <button
+          v-if="hasChildren"
           type="button"
-          :disabled="viewing"
-          :title="compact ? 'Ver documento' : undefined"
-          @click.stop="openDocumentView"
+          class="text-muted-foreground"
+          :title="expanded ? 'Contraer' : 'Expandir'"
+          :aria-label="expanded ? `Contraer ${node.name}` : `Expandir ${node.name}`"
+          :aria-expanded="expanded"
+          @click.stop="expanded = !expanded"
         >
-          <Icon v-if="compact" name="i-lucide-eye" class="size-3.5" />
-          <template v-else>
-            Ver
-          </template>
-        </Button>
-        <a
-          v-if="canDownload && downloadHref"
-          :href="downloadHref"
-          class="inline-flex h-7 items-center px-1.5 text-xs text-primary hover:underline sm:px-2"
-          :title="compact ? 'Descargar' : undefined"
-          @click.stop
-        >
-          <Icon v-if="compact" name="i-lucide-download" class="size-3.5" />
-          <template v-else>
-            Descargar
-          </template>
-        </a>
-        <Button
-          v-if="canOpenFile && node.archival_file_id"
-          variant="ghost"
-          size="sm"
-          class="h-7 px-1.5 text-xs sm:px-2"
-          type="button"
-          :title="compact ? 'Abrir expediente' : undefined"
-          @click.stop="openExpediente"
-        >
-          <Icon v-if="compact" name="i-lucide-briefcase" class="size-3.5" />
-          <template v-else>
-            Expediente
-          </template>
-        </Button>
+          <Icon :name="expanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-4" aria-hidden="true" />
+        </button>
+        <span v-else class="w-4 shrink-0" />
 
-        <template v-if="canManageDocuments && canAccessDocumentContent && !compact">
+        <Icon :name="iconName" class="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+
+        <span
+          class="min-w-0 flex-1 truncate text-sm"
+          :title="node.name"
+        >{{ node.name }}</span>
+
+        <Badge
+          v-if="!isDocument && node.status_label"
+          variant="outline"
+          class="shrink-0 text-[10px] sm:text-xs"
+          :title="`Estado: ${node.status_label}`"
+        >
+          {{ node.status_label }}
+        </Badge>
+      </div>
+
+      <div
+        v-if="isDocument || node.trd || canShowDetails"
+        class="flex min-w-0 flex-wrap items-center gap-1 pl-9"
+      >
+        <ArchivalTrdPlacementDropdown
+          v-if="node.trd"
+          :trd="node.trd"
+          :compact="compact"
+        />
+
+        <Badge
+          v-if="node.is_reference"
+          variant="secondary"
+          class="text-[10px] sm:text-xs"
+          :title="`Referencia a la versión ${node.referenced_version_number ?? '?'}`"
+        >
+          Ref. v{{ node.referenced_version_number ?? '?' }}
+        </Badge>
+        <Badge
+          v-if="isDocument && node.version_number"
+          :variant="node.is_current_version === false ? 'outline' : 'secondary'"
+          class="text-[10px] sm:text-xs"
+          :title="node.is_current_version === false ? `Versión ${node.version_number} histórica` : `Versión ${node.version_number} vigente`"
+        >
+          v{{ node.version_number }}
+          <span v-if="node.is_current_version !== false" class="sr-only"> vigente</span>
+        </Badge>
+        <Badge
+          v-if="isDocument && !canAccessDocumentContent"
+          variant="secondary"
+          class="text-[10px] sm:text-xs"
+          title="Contenido restringido por clasificación. La TRD y los metadatos sí se pueden consultar."
+        >
+          Restringido
+        </Badge>
+        <Badge
+          v-if="isDocument && node.is_institutional_published"
+          variant="secondary"
+          class="text-[10px] sm:text-xs"
+          title="Publicado en la biblioteca institucional"
+        >
+          Biblioteca
+        </Badge>
+        <Badge
+          v-if="isDocument && node.is_institutional_published && node.is_featured"
+          variant="outline"
+          class="text-[10px] sm:text-xs"
+          title="Destacado en el banner de la biblioteca institucional"
+        >
+          Destacado
+        </Badge>
+
+        <div class="ml-auto flex shrink-0 items-center gap-0.5">
           <Button
+            v-if="canShowDetails"
             variant="ghost"
-            size="sm"
-            class="h-7 px-2 text-xs"
+            size="icon"
             type="button"
+            class="size-7 text-muted-foreground"
+            :class="{ 'text-primary': detailsExpanded }"
+            :title="detailsExpanded ? 'Ocultar metadatos' : 'Ver metadatos'"
+            :aria-label="detailsExpanded ? `Ocultar metadatos de ${node.name}` : `Ver metadatos de ${node.name}`"
+            :aria-expanded="detailsExpanded"
+            @click.stop="toggleDetails"
+          >
+            <Icon :name="detailsExpanded ? 'i-lucide-chevron-up' : 'i-lucide-info'" class="size-3.5" />
+          </Button>
+          <Button
+            v-if="canViewDocument"
+            variant="ghost"
+            size="icon"
+            class="size-7"
+            type="button"
+            :disabled="viewing"
+            title="Ver documento"
+            :aria-label="`Ver ${node.name}`"
+            @click.stop="openDocumentView"
+          >
+            <Icon name="i-lucide-eye" class="size-3.5" />
+          </Button>
+          <a
+            v-if="canDownload && downloadHref"
+            :href="downloadHref"
+            class="inline-flex size-7 items-center justify-center rounded-md text-primary hover:bg-muted"
+            title="Descargar"
+            :aria-label="`Descargar ${node.name}`"
+            @click.stop
+          >
+            <Icon name="i-lucide-download" class="size-3.5" />
+          </a>
+          <Button
+            v-if="canOpenFile && node.archival_file_id"
+            variant="ghost"
+            size="icon"
+            class="size-7"
+            type="button"
+            title="Abrir expediente"
+            :aria-label="`Abrir expediente ${node.name}`"
+            @click.stop="openExpediente"
+          >
+            <Icon name="i-lucide-briefcase" class="size-3.5" />
+          </Button>
+          <Button
+            v-if="canManageDocuments && canAccessDocumentContent && isDocument"
+            variant="ghost"
+            size="icon"
+            class="size-7"
+            type="button"
+            title="Referenciar"
+            :aria-label="`Referenciar ${node.name}`"
             @click.stop="emit('reference', node)"
           >
-            Referenciar
+            <Icon name="i-lucide-link-2" class="size-3.5" />
           </Button>
           <Button
-            v-if="isVersionableDocument"
+            v-if="canManageDocuments && canAccessDocumentContent && isVersionableDocument"
             variant="ghost"
-            size="sm"
-            class="h-7 px-2 text-xs"
+            size="icon"
+            class="size-7"
             type="button"
+            title="Nueva versión"
+            :aria-label="`Nueva versión de ${node.name}`"
             @click.stop="emit('replaceVersion', node)"
           >
-            Nueva versión
+            <Icon name="i-lucide-files" class="size-3.5" />
           </Button>
-        </template>
-        <Button
-          v-if="canPublishThisDocument"
-          variant="ghost"
-          size="sm"
-          class="h-7 px-2 text-xs"
-          type="button"
-          @click.stop="emit('publishToLibrary', node)"
-        >
-          {{ node.is_institutional_published ? 'Editar publicación' : 'Publicar' }}
-        </Button>
+          <Button
+            v-if="canPublishThisDocument"
+            variant="outline"
+            size="sm"
+            class="h-7 gap-1 px-2 text-xs"
+            type="button"
+            :title="node.is_institutional_published ? 'Editar publicación en biblioteca' : 'Publicar en biblioteca'"
+            :aria-label="node.is_institutional_published ? `Editar publicación de ${node.name}` : `Publicar ${node.name} en biblioteca`"
+            @click.stop="emit('publishToLibrary', node)"
+          >
+            <Icon
+              :name="node.is_institutional_published ? 'i-lucide-square-pen' : 'i-lucide-library'"
+              class="size-3.5"
+            />
+            {{ node.is_institutional_published ? 'Editar publicación' : 'Publicar' }}
+          </Button>
+        </div>
       </div>
     </div>
 
@@ -354,7 +343,6 @@ function openExpediente() {
         :file-id="fileId"
         :can-view-documents="canView && canAccessDocumentContent"
         :can-download-documents="canDownload && canAccessDocumentContent"
-        @selection-updated="emit('selectionUpdated')"
       />
     </div>
 
@@ -377,7 +365,6 @@ function openExpediente() {
         @replace-version="emit('replaceVersion', $event)"
         @click-file="emit('clickFile', $event)"
         @publish-to-library="emit('publishToLibrary', $event)"
-        @selection-updated="emit('selectionUpdated')"
       />
     </div>
     <DocumentInlinePreviewDialog

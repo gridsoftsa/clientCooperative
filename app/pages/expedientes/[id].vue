@@ -20,6 +20,8 @@ import {
   type ArchivalFileStatusActionOption,
 } from '~/utils/archival-file-status'
 import { messageFromFetchError } from '~/utils/http-error-message'
+import type { LibraryPublicationDraft } from '~/types/institutional-library'
+import { coerceBoolean } from '~/utils/coerce-boolean'
 
 definePageMeta({
   layout: 'default',
@@ -45,6 +47,7 @@ const dispositionReason = ref('')
 const referenceDialogOpen = ref(false)
 const versionDialogOpen = ref(false)
 const publishDialogOpen = ref(false)
+const libraryPublishDraft = ref<LibraryPublicationDraft | null>(null)
 const transferDialogOpen = ref(false)
 const statusTransitionDialogOpen = ref(false)
 const completeConfirmOpen = ref(false)
@@ -310,15 +313,6 @@ async function loadAll() {
   }
 }
 
-async function refreshTree() {
-  try {
-    tree.value = await archivalApi.fetchTree(fileId.value)
-  }
-  catch {
-    toast.error('No se pudo actualizar el árbol documental.')
-  }
-}
-
 async function requestComplete() {
   if (!file.value) {
     return
@@ -392,6 +386,14 @@ function openPublishDialog(node: ArchivalFileTreeNode) {
     return
   }
   selectedTreeNode.value = node
+  libraryPublishDraft.value = {
+    alreadyPublished: coerceBoolean(node.is_institutional_published),
+    category: node.institutional_category ?? node.institutional_categories?.[0] ?? null,
+    effectiveFrom: node.effective_from ?? null,
+    effectiveTo: node.effective_to ?? null,
+    featured: coerceBoolean(node.is_featured),
+    featuredUntil: node.featured_until ?? null,
+  }
   publishDialogOpen.value = true
 }
 
@@ -437,6 +439,9 @@ onMounted(() => loadAll())
       <div class="shrink-0 space-y-3 border-b px-1 pb-3">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0 space-y-1">
+            <PageBackButton to="/expedientes">
+              Volver al listado
+            </PageBackButton>
             <p class="font-mono text-xs text-muted-foreground">
               {{ file.file_number }}
             </p>
@@ -569,7 +574,7 @@ onMounted(() => loadAll())
               Referenciar
             </Button>
           </CardHeader>
-          <CardContent class="min-h-0 min-w-0 flex-1 overflow-y-auto p-3 sm:p-4">
+          <CardContent class="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-4">
             <div class="mb-3">
               <Input
                 v-model="treeQuery"
@@ -598,7 +603,6 @@ onMounted(() => loadAll())
               @reference="openReferenceDialog"
               @replace-version="openVersionDialog"
               @publish-to-library="openPublishDialog"
-              @selection-updated="refreshTree"
             />
           </CardContent>
         </Card>
@@ -820,15 +824,11 @@ onMounted(() => loadAll())
         </Card>
       </div>
 
-      <div class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t bg-background px-1 py-2">
-        <Button variant="outline" size="sm" as-child>
-          <NuxtLink to="/expedientes">
-            <Icon name="i-lucide-arrow-left" class="size-4" />
-            Volver al listado
-          </NuxtLink>
-        </Button>
+      <div
+        v-if="canClose"
+        class="flex shrink-0 justify-end border-t bg-background px-1 py-2"
+      >
         <Button
-          v-if="canClose"
           size="sm"
           class="bg-emerald-600 text-white hover:bg-emerald-600/90"
           :disabled="closureReadiness !== null && !closureReadiness.ready"
@@ -864,6 +864,7 @@ onMounted(() => loadAll())
         :file-id="file.id"
         :document-id="selectedTreeNode?.archival_file_document_id ?? null"
         :document-title="selectedTreeNode?.name ?? ''"
+        :publication="libraryPublishDraft"
         @published="loadAll"
       />
 
@@ -891,7 +892,7 @@ onMounted(() => loadAll())
             <AlertDialogTitle>Completar expediente</AlertDialogTitle>
             <AlertDialogDescription>
               Esta acción da por terminada la gestión documental y deja el expediente como completado.
-              No sale de esta pantalla: para salir use <span class="font-medium">Volver al listado</span> en la parte inferior.
+              No sale de esta pantalla: para salir use <span class="font-medium">Volver al listado</span> en la parte superior.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { InstitutionalLibraryCategoryValue } from '~/types/institutional-library'
+import type { InstitutionalLibraryCategoryValue, LibraryPublicationDraft } from '~/types/institutional-library'
 import { preventArchivalMultiselectDialogDismiss } from '~/composables/useArchivalMultiselect'
+import { coerceBoolean } from '~/utils/coerce-boolean'
 
 const props = defineProps<{
   open: boolean
   fileId: number
   documentId: number | null
   documentTitle: string
-  defaultCategory?: InstitutionalLibraryCategoryValue | null
+  publication?: LibraryPublicationDraft | null
 }>()
 
 const emit = defineEmits<{
@@ -20,6 +21,10 @@ const libraryApi = useInstitutionalLibraryApi()
 
 const loading = ref(false)
 const categories = ref<Array<{ value: InstitutionalLibraryCategoryValue, label: string }>>([])
+const featuredCheckboxKey = ref(0)
+let publicationRequest = 0
+
+const alreadyPublished = computed(() => props.publication?.alreadyPublished === true)
 
 const form = ref({
   institutional_category: null as InstitutionalLibraryCategoryValue | null,
@@ -30,7 +35,7 @@ const form = ref({
   featured_until: '' as string,
 })
 
-watch(() => props.open, async (isOpen) => {
+watch(() => [props.open, props.publication] as const, async ([isOpen]) => {
   if (!isOpen) {
     return
   }
@@ -41,6 +46,9 @@ watch(() => props.open, async (isOpen) => {
     return
   }
 
+  const requestId = ++publicationRequest
+  applyCurrentPublication()
+
   try {
     categories.value = await libraryApi.fetchCatalog()
   }
@@ -48,13 +56,35 @@ watch(() => props.open, async (isOpen) => {
     categories.value = []
     toast.error('No se pudieron cargar las categorías de biblioteca.')
   }
-  form.value.institutional_category = props.defaultCategory ?? null
-  form.value.effective_from = todayLocalIsoDate()
-  form.value.effective_to = ''
-  form.value.is_featured = false
-  form.value.featured_duration = 'indefinite'
-  form.value.featured_until = ''
+
+  if (requestId !== publicationRequest || !props.open) {
+    return
+  }
+
+  applyCurrentPublication()
 }, { immediate: true })
+
+function isoDate(value: string | null | undefined): string {
+  if (!value) {
+    return ''
+  }
+
+  return value.slice(0, 10)
+}
+
+function applyCurrentPublication(): void {
+  const draft = props.publication
+  const featuredUntil = isoDate(draft?.featuredUntil)
+  const isFeatured = coerceBoolean(draft?.featured)
+
+  form.value.institutional_category = draft?.category ?? null
+  form.value.effective_from = isoDate(draft?.effectiveFrom) || todayLocalIsoDate()
+  form.value.effective_to = isoDate(draft?.effectiveTo)
+  form.value.is_featured = isFeatured
+  form.value.featured_duration = isFeatured && featuredUntil !== '' ? 'until' : 'indefinite'
+  form.value.featured_until = isFeatured ? featuredUntil : ''
+  featuredCheckboxKey.value += 1
+}
 
 function todayLocalIsoDate(): string {
   const now = new Date()
@@ -64,14 +94,15 @@ function todayLocalIsoDate(): string {
   return `${now.getFullYear()}-${month}-${day}`
 }
 
-function setFeatured(checked: boolean): void {
-  form.value.is_featured = checked
-  if (checked && form.value.featured_duration !== 'until') {
-    form.value.featured_duration = 'indefinite'
-  }
+function onFeaturedChange(checked: boolean): void {
   if (!checked) {
     form.value.featured_duration = 'indefinite'
     form.value.featured_until = ''
+    return
+  }
+
+  if (form.value.featured_duration !== 'until') {
+    form.value.featured_duration = 'indefinite'
   }
 }
 
@@ -106,9 +137,11 @@ async function submit() {
       featured_until: featuredUntil,
     })
     toast.success(
-      form.value.is_featured
-        ? 'Documento publicado y destacado en la biblioteca institucional.'
-        : 'Documento publicado en la biblioteca institucional.',
+      alreadyPublished.value
+        ? 'Publicación en biblioteca actualizada.'
+        : form.value.is_featured
+          ? 'Documento publicado y destacado en la biblioteca institucional.'
+          : 'Documento publicado en la biblioteca institucional.',
     )
     emit('update:open', false)
     emit('published')
@@ -135,7 +168,9 @@ async function submit() {
       @interact-outside="preventArchivalMultiselectDialogDismiss"
     >
       <DialogHeader>
-        <DialogTitle>Publicar en biblioteca institucional</DialogTitle>
+        <DialogTitle>
+          {{ alreadyPublished ? 'Editar publicación en biblioteca institucional' : 'Publicar en biblioteca institucional' }}
+        </DialogTitle>
         <DialogDescription class="line-clamp-2">
           {{ documentTitle }}
         </DialogDescription>
@@ -170,22 +205,22 @@ async function submit() {
         </div>
 
         <div class="rounded-lg border bg-muted/20 p-4 space-y-3">
-          <label class="flex items-start gap-3">
+          <div class="flex items-start gap-3">
             <Checkbox
               id="library-featured"
-              bare
-              :checked="form.is_featured"
-              @update:checked="setFeatured($event === true)"
+              :key="featuredCheckboxKey"
+              v-model="form.is_featured"
+              @update:model-value="onFeaturedChange($event === true)"
             />
-            <span class="space-y-1">
+            <label for="library-featured" class="space-y-1">
               <span class="block text-sm font-medium leading-none">
                 Destacar en biblioteca
               </span>
               <span class="block text-xs text-muted-foreground leading-relaxed">
                 El documento aparecerá en el banner principal de la biblioteca institucional.
               </span>
-            </span>
-          </label>
+            </label>
+          </div>
 
           <fieldset v-if="form.is_featured" class="space-y-3 pl-8">
             <legend class="text-xs font-medium">
@@ -233,7 +268,7 @@ async function submit() {
           Cancelar
         </Button>
         <Button type="button" :disabled="loading" @click="submit">
-          Publicar
+          {{ alreadyPublished ? 'Guardar cambios' : 'Publicar' }}
         </Button>
       </DialogFooter>
     </DialogContent>

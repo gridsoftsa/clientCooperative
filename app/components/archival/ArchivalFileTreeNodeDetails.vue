@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 import type { ArchivalFileTreeNode } from '~/types/archival-file'
-import { toast } from 'vue-sonner'
 import {
   archivalMetadataDisplayEntries,
   formatArchivalFileSize,
 } from '~/utils/archival-metadata-display'
-import { messageFromFetchError } from '~/utils/http-error-message'
 
 const props = defineProps<{
   node: ArchivalFileTreeNode
@@ -153,50 +151,11 @@ const showVersionHistory = computed(() =>
   && documentId.value != null,
 )
 
-const archivalApi = useArchivalFileApi()
-const { hasPermission } = usePermissions()
-const savingSelection = ref(false)
-
-const emit = defineEmits<{
-  selectionUpdated: []
-}>()
-
-const canRecordSelection = computed(() =>
-  isDocument.value
-  && !isReference.value
-  && Boolean(props.node.retention?.requires_selection)
-  && resolvedFileId.value != null
-  && documentId.value != null
-  && hasPermission('expedientes_transferir'),
-)
-
-async function recordSelection(decision: 'conservation' | 'elimination'): Promise<void> {
-  if (resolvedFileId.value == null || documentId.value == null) {
-    return
-  }
-
-  savingSelection.value = true
-  try {
-    const res = await archivalApi.saveDocumentSelection(resolvedFileId.value, [
-      { archival_file_document_id: documentId.value, decision },
-    ])
-    toast.success(res.message ?? 'Decisión registrada en el documento')
-    emit('selectionUpdated')
-  }
-  catch (error: unknown) {
-    toast.error(messageFromFetchError(error, 'No se pudo guardar la selección'))
-  }
-  finally {
-    savingSelection.value = false
-  }
-}
-
 const hasContent = computed(() =>
   structuralEntries.value.length > 0
   || metadataEntries.value.length > 0
   || filingMetadataEntries.value.length > 0
-  || showVersionHistory.value
-  || canRecordSelection.value,
+  || showVersionHistory.value,
 )
 </script>
 
@@ -255,39 +214,6 @@ const hasContent = computed(() =>
           </dd>
         </div>
       </dl>
-    </div>
-
-    <div
-      v-if="canRecordSelection"
-      class="space-y-2 rounded-md border bg-background/80 px-2 py-2"
-    >
-      <p class="text-xs text-muted-foreground">
-        La TRD indica <strong>selección</strong>: registre aquí si el documento se conserva o se elimina. No se elige en el acta de transferencia.
-      </p>
-      <div class="flex flex-wrap gap-3">
-        <label class="flex cursor-pointer items-center gap-2">
-          <input
-            type="radio"
-            class="size-4 accent-primary"
-            :name="`file-doc-selection-${documentId}`"
-            :checked="node.retention?.selection_decision === 'conservation'"
-            :disabled="savingSelection"
-            @change="recordSelection('conservation')"
-          >
-          Conservación
-        </label>
-        <label class="flex cursor-pointer items-center gap-2">
-          <input
-            type="radio"
-            class="size-4 accent-primary"
-            :name="`file-doc-selection-${documentId}`"
-            :checked="node.retention?.selection_decision === 'elimination'"
-            :disabled="savingSelection"
-            @change="recordSelection('elimination')"
-          >
-          Eliminación
-        </label>
-      </div>
     </div>
 
     <ArchivalFileDocumentVersionHistory

@@ -92,6 +92,15 @@ export interface InstitutionalLibraryHome {
   org_units: InstitutionalLibraryOrgUnitCount[]
 }
 
+export interface LibraryPublicationDraft {
+  alreadyPublished: boolean
+  category: string | null
+  effectiveFrom: string | null
+  effectiveTo: string | null
+  featured: boolean
+  featuredUntil: string | null
+}
+
 export interface PublishInstitutionalLibraryPayload {
   archival_file_id: number
   institutional_category?: InstitutionalLibraryCategoryValue

@@ -36,6 +36,7 @@ const submitAttempted = ref(false)
 const folderName = ref('')
 const fileRows = ref<DocumentAttachmentRow[]>([createDocumentAttachmentRow()])
 const publishToLibrary = ref(false)
+const completeOnCreate = ref(false)
 const institutionalCategory = ref<string | null>(null)
 const categories = ref<InstitutionalLibraryCategory[]>([])
 const effectiveFrom = ref('')
@@ -48,6 +49,8 @@ const canPublish = computed(() =>
   Boolean(props.publishableToLibrary) && hasPermission('expedientes_biblioteca_publicar'),
 )
 
+const canComplete = computed(() => hasPermission('expedientes_cerrar'))
+
 const retentionText = computed(() => formatArchivalRetentionPreview(props.retention))
 
 watch(() => props.open, async (isOpen) => {
@@ -58,6 +61,7 @@ watch(() => props.open, async (isOpen) => {
   folderName.value = ''
   fileRows.value = [createDocumentAttachmentRow()]
   publishToLibrary.value = false
+  completeOnCreate.value = false
   institutionalCategory.value = null
   effectiveFrom.value = todayLocalIsoDate()
   effectiveTo.value = ''
@@ -165,6 +169,7 @@ async function submit() {
     formData.append('doc_document_type_id', String(props.docDocumentTypeId))
     formData.append('title', title)
     formData.append('publish_to_library', publishToLibrary.value ? '1' : '0')
+    formData.append('complete_on_create', canComplete.value && completeOnCreate.value ? '1' : '0')
     if (publishToLibrary.value && institutionalCategory.value) {
       formData.append('institutional_categories[0]', institutionalCategory.value)
       if (effectiveFrom.value) {
@@ -293,6 +298,19 @@ async function submit() {
           @update:file="row.file = $event"
           @remove="removeFileRow(index)"
         />
+
+        <div v-if="canComplete" class="space-y-2 rounded-lg border p-4">
+          <Checkbox
+            id="area-manual-complete"
+            :model-value="completeOnCreate"
+            @update:model-value="completeOnCreate = $event === true"
+          >
+            Completar expediente al cargar
+          </Checkbox>
+          <p class="pl-6 text-xs leading-snug text-muted-foreground">
+            Da por terminada la gestión documental. No se podrán agregar más archivos y empiezan los plazos de la TRD. Si no lo marca, la carpeta queda activa.
+          </p>
+        </div>
 
         <div v-if="canPublish" class="space-y-3 rounded-lg border p-4">
           <Checkbox
