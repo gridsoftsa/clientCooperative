@@ -1,6 +1,7 @@
 import type {
   TalentPartyDetail,
   TalentPartyKind,
+  TalentPartySettings,
   TalentPartySummary,
   TalentTrdOption,
   TalentTrdSeries,
@@ -23,6 +24,21 @@ export function useTalentPartyApi() {
     return api<{ data: TalentPartyDetail }>(`/talent-parties/${id}`)
   }
 
+  function settings() {
+    return api<{ data: TalentPartySettings }>('/talent-parties/settings')
+  }
+
+  function updateSettings(body: {
+    kind: TalentPartyKind
+    trd_table_id: number | null
+    doc_subseries_ids: number[]
+  }) {
+    return api<{ data: TalentPartySettings, message: string }>('/talent-parties/settings', {
+      method: 'PUT',
+      body,
+    })
+  }
+
   function trdOptions() {
     return api<{ data: TalentTrdOption[] }>('/talent-parties/trd-options')
   }
@@ -35,8 +51,6 @@ export function useTalentPartyApi() {
     kind: TalentPartyKind
     display_name: string
     identifier?: string
-    trd_table_id: number
-    doc_subseries_ids: number[]
   }) {
     return api<{ data: TalentPartyDetail, message: string }>('/talent-parties', {
       method: 'POST',
@@ -54,6 +68,8 @@ export function useTalentPartyApi() {
   return {
     list,
     show,
+    settings,
+    updateSettings,
     trdOptions,
     trdSubseries,
     create,

@@ -51,6 +51,15 @@ export interface TalentPartyDetail extends TalentPartySummary {
   folders: TalentPartySubseriesFolder[]
 }
 
+export interface TalentPartySettings {
+  employee_trd_table_id: number | null
+  supplier_trd_table_id: number | null
+  employee_doc_subseries_ids: number[]
+  supplier_doc_subseries_ids: number[]
+  employee_trd: TalentTrdOption | null
+  supplier_trd: TalentTrdOption | null
+}
+
 export interface TalentTrdOption {
   id: number
   org_unit_id: number
