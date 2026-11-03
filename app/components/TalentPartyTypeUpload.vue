@@ -3,10 +3,13 @@ import type { TalentPartyDocumentTypeFolder } from '~/types/talent-party'
 import { toast } from 'vue-sonner'
 import { appendFileToFormData } from '~/utils/safe-upload-file-name'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   partyId: number
   documentType: TalentPartyDocumentTypeFolder
-}>()
+  showDocuments?: boolean
+}>(), {
+  showDocuments: true,
+})
 
 const emit = defineEmits<{
   uploaded: []
@@ -79,14 +82,14 @@ async function upload() {
   <div class="space-y-3 rounded-lg border p-4">
     <div>
       <p class="text-sm font-medium">
-        {{ documentType.code }} — {{ documentType.name }}
+        {{ showDocuments ? `${documentType.code} — ${documentType.name}` : 'Agregar documento a esta carpeta' }}
       </p>
       <p class="text-xs text-muted-foreground">
-        Subcarpeta del tipo documental
+        {{ showDocuments ? 'Subcarpeta del tipo documental' : 'Folios obligatorios. El archivo queda en este tipo documental.' }}
       </p>
     </div>
 
-    <ul v-if="documentType.documents.length" class="space-y-2">
+    <ul v-if="showDocuments && documentType.documents.length" class="space-y-2">
       <li
         v-for="document in documentType.documents"
         :key="document.id"
@@ -98,7 +101,7 @@ async function upload() {
         </span>
       </li>
     </ul>
-    <p v-else class="text-sm text-muted-foreground">
+    <p v-else-if="showDocuments" class="text-sm text-muted-foreground">
       Sin archivos en esta subcarpeta.
     </p>
 

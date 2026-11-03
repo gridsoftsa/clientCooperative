@@ -32,12 +32,14 @@ const props = withDefaults(defineProps<{
   navTitle?: string
   emptyTreeMessage?: string
   focusArchivalFileId?: number | null
+  talentPartyId?: number | null
 }>(), {
   loading: false,
   allowUpload: true,
   navTitle: 'Carpetas TRD',
   emptyTreeMessage: 'Seleccione un área para consultar su documentación.',
   focusArchivalFileId: null,
+  talentPartyId: null,
 })
 
 const emit = defineEmits<{
@@ -145,6 +147,21 @@ const selectedFileId = computed(() =>
 )
 
 const isDocumentTypeContext = computed(() => currentNode.value?.type === 'document_type')
+
+const talentDocumentType = computed(() => {
+  const node = currentNode.value
+  if (props.talentPartyId == null || node?.type !== 'document_type' || node.doc_document_type_id == null) {
+    return null
+  }
+
+  return {
+    id: node.doc_document_type_id,
+    code: '',
+    name: node.name,
+    archival_file_node_id: node.archival_file_node_id ?? null,
+    documents: [],
+  }
+})
 
 const talentPartyNode = computed(() =>
   breadcrumb.value.find(node => node.source === 'talent_party') ?? null,
@@ -802,7 +819,19 @@ function formatBytes(size?: number): string {
           </div>
 
           <div
-            v-if="targetUploadFileId && canUpload"
+            v-if="talentDocumentType && talentPartyId"
+            class="border-t bg-muted/20 p-4"
+          >
+            <TalentPartyTypeUpload
+              :party-id="talentPartyId"
+              :document-type="talentDocumentType"
+              :show-documents="false"
+              @uploaded="emit('uploaded')"
+            />
+          </div>
+
+          <div
+            v-else-if="targetUploadFileId && canUpload"
             class="border-t bg-muted/20 p-4"
           >
             <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
