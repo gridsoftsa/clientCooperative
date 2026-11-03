@@ -318,6 +318,31 @@ const filteredDocumentTypeOptions = computed(() => {
   return []
 })
 
+function numericSelectValue(value: number | null | undefined): string | undefined {
+  return value == null ? undefined : String(value)
+}
+
+function numericSelectId(value: unknown): number | null {
+  if (value == null || value === '') {
+    return null
+  }
+
+  const numeric = Number(value)
+
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+function catalogPathForSubseries(subseriesId: number): { seriesId: number, subseriesId: number } | null {
+  for (const serie of catalogTree.value) {
+    const sub = serie.subseries.find(item => item.id === subseriesId)
+    if (sub) {
+      return { seriesId: serie.id, subseriesId: sub.id }
+    }
+  }
+
+  return null
+}
+
 function catalogPathForDocumentType(typeId: number): { seriesId: number, subseriesId: number } | null {
   for (const serie of catalogTree.value) {
     for (const sub of serie.subseries) {
@@ -1034,6 +1059,12 @@ function openEditRule(rule: TrdRetentionRuleRow) {
 
   let seriesId = rule.doc_series_id ?? null
   let subseriesId = rule.doc_subseries_id ?? null
+  if (rule.scope_level === 'subseries' && subseriesId != null && seriesId == null) {
+    const path = catalogPathForSubseries(subseriesId)
+    if (path) {
+      seriesId = path.seriesId
+    }
+  }
   if (rule.scope_level === 'document_type' && rule.doc_document_type_id) {
     const path = catalogPathForDocumentType(rule.doc_document_type_id)
     if (path) {
@@ -1903,13 +1934,16 @@ watch(
                   </div>
                   <div v-if="ruleForm.scope_level === 'series'" class="flex min-w-0 flex-col gap-2">
                     <Label>Serie</Label>
-                    <Select v-model="ruleForm.doc_series_id">
+                    <Select
+                      :model-value="numericSelectValue(ruleForm.doc_series_id)"
+                      @update:model-value="ruleForm.doc_series_id = numericSelectId($event)"
+                    >
                       <SelectTrigger><SelectValue placeholder="Seleccione serie…" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem
                           v-for="s in seriesOptions"
                           :key="s.id"
-                          :value="s.id"
+                          :value="String(s.id)"
                           :disabled="isSeriesOptionDisabled(s.id)"
                         >
                           {{ s.label }}{{ isSeriesOptionDisabled(s.id) ? ' (ya tiene regla)' : '' }}
@@ -1920,10 +1954,13 @@ watch(
                   <template v-if="ruleForm.scope_level === 'subseries'">
                     <div class="flex min-w-0 flex-col gap-2">
                       <Label>Serie</Label>
-                      <Select v-model="ruleForm.doc_series_id">
+                      <Select
+                        :model-value="numericSelectValue(ruleForm.doc_series_id)"
+                        @update:model-value="ruleForm.doc_series_id = numericSelectId($event)"
+                      >
                         <SelectTrigger><SelectValue placeholder="Seleccione serie…" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem v-for="s in seriesOptions" :key="s.id" :value="s.id">
+                          <SelectItem v-for="s in seriesOptions" :key="s.id" :value="String(s.id)">
                             {{ s.label }}
                           </SelectItem>
                         </SelectContent>
@@ -1931,13 +1968,16 @@ watch(
                     </div>
                     <div class="flex min-w-0 flex-col gap-2">
                       <Label>Subserie</Label>
-                      <Select v-model="ruleForm.doc_subseries_id">
+                      <Select
+                        :model-value="numericSelectValue(ruleForm.doc_subseries_id)"
+                        @update:model-value="ruleForm.doc_subseries_id = numericSelectId($event)"
+                      >
                         <SelectTrigger><SelectValue placeholder="Seleccione subserie…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem
                             v-for="s in subseriesOptions"
                             :key="s.id"
-                            :value="s.id"
+                            :value="String(s.id)"
                             :disabled="isSubseriesOptionDisabled(s.id)"
                           >
                             {{ s.label }}{{ isSubseriesOptionDisabled(s.id) ? ' (ya tiene regla)' : '' }}
@@ -1949,13 +1989,16 @@ watch(
                   <template v-if="ruleForm.scope_level === 'document_type'">
                     <div class="flex min-w-0 flex-col gap-2">
                       <Label>Serie</Label>
-                      <Select v-model="ruleForm.doc_series_id">
+                      <Select
+                        :model-value="numericSelectValue(ruleForm.doc_series_id)"
+                        @update:model-value="ruleForm.doc_series_id = numericSelectId($event)"
+                      >
                         <SelectTrigger><SelectValue placeholder="Seleccione serie…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem
                             v-for="s in seriesOptionsForDocumentType"
                             :key="s.id"
-                            :value="s.id"
+                            :value="String(s.id)"
                           >
                             {{ s.label }}
                           </SelectItem>
@@ -1965,8 +2008,9 @@ watch(
                     <div class="flex min-w-0 flex-col gap-2">
                       <Label>Subserie</Label>
                       <Select
-                        v-model="ruleForm.doc_subseries_id"
+                        :model-value="numericSelectValue(ruleForm.doc_subseries_id)"
                         :disabled="!ruleForm.doc_series_id"
+                        @update:model-value="ruleForm.doc_subseries_id = numericSelectId($event)"
                       >
                         <SelectTrigger>
                           <SelectValue :placeholder="ruleForm.doc_series_id ? 'Seleccione subserie…' : 'Primero seleccione serie'" />
@@ -1975,7 +2019,7 @@ watch(
                           <SelectItem
                             v-for="s in subseriesOptionsForDocumentType"
                             :key="s.id"
-                            :value="s.id"
+                            :value="String(s.id)"
                           >
                             {{ s.label }}
                           </SelectItem>
@@ -1985,8 +2029,9 @@ watch(
                     <div class="flex min-w-0 flex-col gap-2 lg:col-span-2">
                       <Label>Tipo documental</Label>
                       <Select
-                        v-model="ruleForm.doc_document_type_id"
+                        :model-value="numericSelectValue(ruleForm.doc_document_type_id)"
                         :disabled="!ruleForm.doc_subseries_id"
+                        @update:model-value="ruleForm.doc_document_type_id = numericSelectId($event)"
                       >
                         <SelectTrigger>
                           <SelectValue
@@ -1997,7 +2042,7 @@ watch(
                           <SelectItem
                             v-for="t in filteredDocumentTypeOptions"
                             :key="t.id"
-                            :value="t.id"
+                            :value="String(t.id)"
                             :disabled="isDocumentTypeOptionDisabled(t.id)"
                           >
                             {{ t.label }}{{ isDocumentTypeOptionDisabled(t.id) ? ' (ya tiene regla)' : '' }}
