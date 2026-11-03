@@ -260,6 +260,7 @@ onMounted(async () => {
                 Avisos de ventanilla, workflow y comunicados. Las no leídas quedan resaltadas hasta que las abra.
               </p>
             </div>
+            <NotificationsInboxTabs />
             <Button
               variant="outline"
               size="sm"

@@ -182,10 +182,12 @@ onMounted(() => {
                 </TableCell>
                 <TableCell>{{ displayDocument(s) }}</TableCell>
                 <TableCell>{{ s.user?.email ?? '—' }}</TableCell>
-                <TableCell class="text-sm text-muted-foreground max-w-xs">
-                  <div class="space-y-1">
+                <TableCell class="max-w-xs whitespace-normal text-sm text-muted-foreground">
+                  <div class="min-w-0 space-y-1">
                     <template v-if="s.current_assignment?.org_office || s.current_assignment?.org_unit">
-                      <p>{{ locationLabel(s.current_assignment) }}</p>
+                      <p class="break-words" :title="locationLabel(s.current_assignment)">
+                        {{ locationLabel(s.current_assignment) }}
+                      </p>
                     </template>
                     <p
                       v-else
@@ -196,7 +198,8 @@ onMounted(() => {
                     <p
                       v-for="charge in (s.active_temporary_charges ?? [])"
                       :key="charge.id"
-                      class="text-xs text-primary"
+                      class="break-words text-xs text-primary"
+                      :title="locationLabel(charge)"
                     >
                       Backup: {{ locationLabel(charge) }}
                     </p>
@@ -207,7 +210,7 @@ onMounted(() => {
                     {{ s.is_active ? 'Activo' : 'Inactivo' }}
                   </Badge>
                 </TableCell>
-                <TableCell class="text-right">
+                <TableCell class="whitespace-normal text-right">
                   <div class="flex flex-wrap justify-end gap-1">
                     <Button
                       v-if="s.trd_file?.org_unit_id && s.trd_file.archival_file_id"

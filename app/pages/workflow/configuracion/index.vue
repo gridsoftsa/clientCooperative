@@ -212,14 +212,12 @@ onMounted(() => {
             <span>{{ bindingCount(def) }} tipos funcionales</span>
             <span v-if="def.instances_count">{{ def.instances_count }} procesos</span>
           </div>
-          <div v-if="def.stages?.length" class="mt-3 flex flex-wrap gap-2">
-            <Badge
-              v-for="stage in [...def.stages].sort((a, b) => a.sort_order - b.sort_order)"
-              :key="stage.id"
-              variant="outline"
-            >
-              {{ stage.sort_order }}. {{ stage.name }}
-            </Badge>
+          <div class="mt-4" @click.stop>
+            <WorkflowDefinitionPreview
+              :stages="def.stages ?? []"
+              :example="!def.stages?.length"
+              compact
+            />
           </div>
         </CardContent>
       </Card>
@@ -237,11 +235,11 @@ onMounted(() => {
     </div>
 
     <Dialog v-model:open="createDialogOpen">
-      <DialogContent class="sm:max-w-[480px]">
+      <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Nuevo flujo de trabajo</DialogTitle>
           <DialogDescription>
-            Después podrá agregar etapas y asociar tipos funcionales.
+            Defina el nombre. Luego configurará las etapas: cada una es un paso del radicado en el tablero.
           </DialogDescription>
         </DialogHeader>
         <div class="grid gap-4 py-2">
@@ -258,6 +256,7 @@ onMounted(() => {
             <Label>Descripción</Label>
             <Textarea v-model="createForm.description" rows="2" />
           </div>
+          <WorkflowDefinitionPreview example />
         </div>
         <DialogFooter>
           <Button variant="outline" @click="createDialogOpen = false">

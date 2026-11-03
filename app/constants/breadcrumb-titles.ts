@@ -37,6 +37,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'template-config': 'Plantillas',
   'notifications': 'Notificaciones',
   'notificaciones': 'Notificaciones',
+  'enviadas': 'Enviadas',
   'colaboracion': 'Mis colaboraciones',
   'workflow': 'Workflow',
   'nueva': 'Nueva',

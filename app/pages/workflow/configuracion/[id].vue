@@ -347,6 +347,12 @@ watch(deleteStageDialogOpen, (open) => {
       </TabsContent>
 
       <TabsContent value="stages" class="mt-4 space-y-4">
+        <Card>
+          <CardContent class="p-4">
+            <WorkflowDefinitionPreview :stages="stages" :example="stages.length === 0" />
+          </CardContent>
+        </Card>
+
         <div class="flex items-center justify-between">
           <p class="text-sm text-muted-foreground">
             {{ stages.length }} etapa(s) — el orden define las columnas del tablero
