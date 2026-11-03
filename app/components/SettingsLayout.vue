@@ -9,13 +9,18 @@ withDefaults(
     wide?: boolean
     /** Oculta el encabezado genérico «Configuración» cuando la página ya trae su título */
     hideIntro?: boolean
+    /** Ocupa el alto disponible y deja el scroll en el contenido */
+    fill?: boolean
   }>(),
-  { wide: false, hideIntro: false },
+  { wide: false, hideIntro: false, fill: false },
 )
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-[1600px] space-y-6 px-4 pb-16 pt-1 sm:px-6 lg:px-8">
+  <div
+    class="mx-auto w-full max-w-[1600px] px-4 pt-1 sm:px-6 lg:px-8"
+    :class="fill ? 'flex h-full min-h-0 flex-col overflow-hidden' : 'space-y-6 pb-16'"
+  >
     <template v-if="!hideIntro">
       <div class="space-y-0.5">
         <h2 class="text-2xl font-bold tracking-tight">
@@ -29,9 +34,12 @@ withDefaults(
     </template>
     <div
       class="min-w-0 w-full"
-      :class="wide ? '' : 'mx-auto max-w-2xl'"
+      :class="[
+        wide ? '' : 'mx-auto max-w-2xl',
+        fill ? 'flex min-h-0 flex-1 flex-col' : '',
+      ]"
     >
-      <div class="space-y-6">
+      <div :class="fill ? 'flex min-h-0 flex-1 flex-col' : 'space-y-6'">
         <slot />
       </div>
     </div>

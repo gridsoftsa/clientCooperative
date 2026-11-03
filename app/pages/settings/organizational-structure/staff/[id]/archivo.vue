@@ -70,9 +70,9 @@ watch(staffId, () => {
 </script>
 
 <template>
-  <SettingsLayout :wide="true">
-    <div class="flex w-full flex-col gap-4">
-      <div class="space-y-1">
+  <SettingsLayout :wide="true" hide-intro fill>
+    <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+      <div class="shrink-0 space-y-1">
         <PageBackButton :to="`/settings/organizational-structure/staff`">
           Funcionarios
         </PageBackButton>
@@ -86,8 +86,8 @@ watch(staffId, () => {
         </p>
       </div>
 
-      <Card>
-        <CardContent class="p-0 sm:p-0">
+      <Card class="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <CardContent class="flex min-h-0 flex-1 flex-col p-0 sm:p-0">
           <div
             v-if="loading"
             class="px-6 py-10 text-sm text-muted-foreground"
@@ -105,6 +105,7 @@ watch(staffId, () => {
             :tree="tree"
             :org-unit-id="party?.org_unit_id ?? 0"
             :talent-party-id="party?.id ?? null"
+            contained
             nav-title="Carpetas"
             empty-tree-message="Este archivo no tiene series configuradas."
             @uploaded="load"

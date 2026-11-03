@@ -33,6 +33,7 @@ const props = withDefaults(defineProps<{
   emptyTreeMessage?: string
   focusArchivalFileId?: number | null
   talentPartyId?: number | null
+  contained?: boolean
 }>(), {
   loading: false,
   allowUpload: true,
@@ -40,6 +41,7 @@ const props = withDefaults(defineProps<{
   emptyTreeMessage: 'Seleccione un área para consultar su documentación.',
   focusArchivalFileId: null,
   talentPartyId: null,
+  contained: false,
 })
 
 const emit = defineEmits<{
@@ -356,7 +358,10 @@ function formatBytes(size?: number): string {
 </script>
 
 <template>
-  <div class="overflow-hidden rounded-xl border bg-card">
+  <div
+    class="overflow-hidden rounded-xl border bg-card"
+    :class="contained ? 'flex h-full min-h-0 flex-col' : ''"
+  >
     <div v-if="loading" class="flex min-h-[28rem] items-center justify-center text-sm text-muted-foreground">
       Cargando repositorio...
     </div>
@@ -367,7 +372,8 @@ function formatBytes(size?: number): string {
 
     <div
       v-else
-      class="flex min-h-[32rem]"
+      class="flex min-h-0"
+      :class="contained ? 'h-full flex-1' : 'min-h-[32rem]'"
     >
       <aside
         v-if="navCollapsed"
@@ -394,7 +400,8 @@ function formatBytes(size?: number): string {
       <ResizablePanelGroup
         id="archival-area-repository"
         direction="horizontal"
-        class="min-h-[32rem] min-w-0 flex-1"
+        class="min-h-0 min-w-0 flex-1"
+        :class="contained ? 'h-full' : 'min-h-[32rem]'"
       >
       <ResizablePanel
         v-if="!navCollapsed"
@@ -402,10 +409,10 @@ function formatBytes(size?: number): string {
         :default-size="28"
         :min-size="20"
         :max-size="40"
-        class="border-r bg-muted/20"
+        class="min-h-0 overflow-hidden border-r bg-muted/20"
       >
-        <div class="flex h-full flex-col">
-          <div class="border-b px-3 py-3">
+        <div class="flex h-full min-h-0 flex-col overflow-hidden">
+          <div class="shrink-0 border-b px-3 py-3">
             <div class="flex items-start justify-between gap-2">
               <div class="min-w-0">
                 <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -473,7 +480,7 @@ function formatBytes(size?: number): string {
             </div>
           </div>
 
-          <div class="flex-1 overflow-y-auto p-2">
+          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
             <ArchivalFileAreaFolderNav
               v-if="trdNavTree"
               :node="trdNavTree"
@@ -494,9 +501,12 @@ function formatBytes(size?: number): string {
 
       <ResizableHandle v-if="!navCollapsed" with-handle />
 
-      <ResizablePanel id="archival-area-content" :default-size="navCollapsed ? 100 : 72" :min-size="45">
-        <div class="flex h-full min-h-[32rem] flex-col">
-          <div class="space-y-3 border-b px-4 py-3">
+      <ResizablePanel id="archival-area-content" class="min-h-0 overflow-hidden" :default-size="navCollapsed ? 100 : 72" :min-size="45">
+        <div
+          class="flex h-full min-h-0 flex-col overflow-hidden"
+          :class="contained ? '' : 'min-h-[32rem]'"
+        >
+          <div class="shrink-0 space-y-3 border-b px-4 py-3">
             <div class="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
               <template v-for="(crumb, index) in breadcrumb" :key="crumb.id">
                 <button
@@ -594,7 +604,7 @@ function formatBytes(size?: number): string {
             </p>
           </div>
 
-          <div class="flex-1 overflow-y-auto p-4">
+          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
             <div
               v-if="partitionedChildren.folders.length === 0
                 && partitionedChildren.documents.length === 0
@@ -820,7 +830,7 @@ function formatBytes(size?: number): string {
 
           <div
             v-if="talentDocumentType && talentPartyId"
-            class="border-t bg-muted/20 p-4"
+            class="max-h-[40%] shrink-0 overflow-y-auto overscroll-contain border-t bg-muted/20 p-4"
           >
             <TalentPartyTypeUpload
               :party-id="talentPartyId"
@@ -832,7 +842,7 @@ function formatBytes(size?: number): string {
 
           <div
             v-else-if="targetUploadFileId && canUpload"
-            class="border-t bg-muted/20 p-4"
+            class="max-h-[40%] shrink-0 overflow-y-auto overscroll-contain border-t bg-muted/20 p-4"
           >
             <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div>
