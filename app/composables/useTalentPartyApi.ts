@@ -32,6 +32,7 @@ export function useTalentPartyApi() {
     kind: TalentPartyKind
     trd_table_id: number | null
     doc_subseries_ids: number[]
+    disabled_doc_document_type_ids?: number[]
   }) {
     return api<{ data: TalentPartySettings, message: string }>('/talent-parties/settings', {
       method: 'PUT',

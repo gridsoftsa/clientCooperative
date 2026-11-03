@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TalentPartyKind, TalentPartySummary, TalentTrdSeries } from '~/types/talent-party'
+import type { TalentPartyKind, TalentPartySettings, TalentPartySummary, TalentTrdSeries, TalentTrdSubseries } from '~/types/talent-party'
 import { toast } from 'vue-sonner'
 
 const props = withDefaults(defineProps<{
@@ -33,6 +33,9 @@ const trdOptions = ref<Array<{ value: number, label: string }>>([])
 const series = ref<TalentTrdSeries[]>([])
 const seriesLoading = ref(false)
 const selectedSubseries = ref<number[]>([])
+const disabledDocumentTypeIds = ref<number[]>([])
+const expandedSubseriesIds = ref<number[]>([])
+const subseriesScroller = ref<HTMLElement | null>(null)
 
 const title = computed(() => props.kind === 'supplier' ? 'Proveedores' : 'Empleados')
 const singular = computed(() => props.kind === 'supplier' ? 'proveedor' : 'empleado')
@@ -77,22 +80,21 @@ async function loadTrdOptions() {
   }
 }
 
-async function applySettings(data: {
-  employee_trd: { id: number, label: string } | null
-  supplier_trd: { id: number, label: string } | null
-  employee_doc_subseries_ids: number[]
-  supplier_doc_subseries_ids: number[]
-}) {
+async function applySettings(data: TalentPartySettings) {
   const configured = props.kind === 'supplier' ? data.supplier_trd : data.employee_trd
   const subseriesIds = props.kind === 'supplier'
     ? data.supplier_doc_subseries_ids
     : data.employee_doc_subseries_ids
+  const disabledIds = props.kind === 'supplier'
+    ? data.supplier_disabled_doc_document_type_ids
+    : data.employee_disabled_doc_document_type_ids
   savedTrdTableId.value = configured?.id ?? null
   savedTrdLabel.value = configured?.label ?? ''
   savedSubseriesCount.value = subseriesIds.length
   applyingSettings.value = true
   settingsTrdTableId.value = savedTrdTableId.value
   selectedSubseries.value = [...subseriesIds]
+  disabledDocumentTypeIds.value = [...(disabledIds ?? [])]
   await nextTick()
   applyingSettings.value = false
 }
@@ -120,6 +122,9 @@ async function saveSettings() {
       kind: props.kind,
       trd_table_id: settingsTrdTableId.value,
       doc_subseries_ids: settingsTrdTableId.value == null ? [] : selectedSubseries.value,
+      disabled_doc_document_type_ids: settingsTrdTableId.value == null
+        ? []
+        : disabledDocumentTypeIds.value.filter(id => selectedDocumentTypeIds().includes(id)),
     })
     await applySettings(response.data)
     settingsOpen.value = false
@@ -155,14 +160,106 @@ function setSubseriesSelected(id: number, checked: boolean) {
     if (!selectedSubseries.value.includes(subseriesId)) {
       selectedSubseries.value = [...selectedSubseries.value, subseriesId]
     }
+    if (!expandedSubseriesIds.value.includes(subseriesId)) {
+      expandedSubseriesIds.value = [...expandedSubseriesIds.value, subseriesId]
+    }
     return
   }
 
   selectedSubseries.value = selectedSubseries.value.filter(item => item !== subseriesId)
+  const typeIds = new Set(documentTypeIdsForSubseries(subseriesId))
+  disabledDocumentTypeIds.value = disabledDocumentTypeIds.value.filter(typeId => !typeIds.has(typeId))
+}
+
+function isSubseriesExpanded(id: number): boolean {
+  return expandedSubseriesIds.value.includes(Number(id))
+}
+
+function toggleSubseriesExpanded(id: number) {
+  const subseriesId = Number(id)
+  if (isSubseriesExpanded(subseriesId)) {
+    expandedSubseriesIds.value = expandedSubseriesIds.value.filter(item => item !== subseriesId)
+    return
+  }
+
+  expandedSubseriesIds.value = [...expandedSubseriesIds.value, subseriesId]
+}
+
+function documentTypeIdsForSubseries(id: number): number[] {
+  for (const item of series.value) {
+    const subseries = item.subseries.find(row => row.id === id)
+    if (subseries) {
+      return subseries.document_types.map(type => type.id)
+    }
+  }
+
+  return []
+}
+
+function selectedDocumentTypeIds(): number[] {
+  return selectedSubseries.value.flatMap(id => documentTypeIdsForSubseries(id))
+}
+
+function isDocumentTypeEnabled(subseriesId: number, typeId: number): boolean {
+  return isSubseriesSelected(subseriesId) && !disabledDocumentTypeIds.value.includes(Number(typeId))
+}
+
+function setDocumentTypeEnabled(subseriesId: number, typeId: number, checked: boolean) {
+  if (!isSubseriesSelected(subseriesId)) {
+    return
+  }
+
+  const documentTypeId = Number(typeId)
+  if (checked) {
+    disabledDocumentTypeIds.value = disabledDocumentTypeIds.value.filter(id => id !== documentTypeId)
+    return
+  }
+
+  if (!disabledDocumentTypeIds.value.includes(documentTypeId)) {
+    disabledDocumentTypeIds.value = [...disabledDocumentTypeIds.value, documentTypeId]
+  }
+}
+
+function documentTypeSummary(subseries: TalentTrdSubseries): string {
+  const total = subseries.document_types.length
+  const noun = total === 1 ? 'tipo documental' : 'tipos documentales'
+  if (!isSubseriesSelected(subseries.id)) {
+    return `${total} ${noun}`
+  }
+
+  const disabled = subseries.document_types.filter(type => disabledDocumentTypeIds.value.includes(type.id)).length
+  if (disabled === 0) {
+    return `${total} ${noun}`
+  }
+
+  const disabledLabel = disabled === 1 ? '1 deshabilitado' : `${disabled} deshabilitados`
+
+  return `${total} ${noun} · ${disabledLabel}`
+}
+
+function expandSubseriesLabel(id: number): string {
+  return isSubseriesExpanded(id) ? 'Ocultar tipos documentales' : 'Ver tipos documentales'
 }
 
 function subseriesCheckboxId(id: number): string {
   return `talent-subseries-${props.kind}-${id}`
+}
+
+function documentTypeCheckboxId(subseriesId: number, typeId: number): string {
+  return `talent-doctype-${props.kind}-${subseriesId}-${typeId}`
+}
+
+function keepSubseriesScroll(event: FocusEvent): void {
+  const scroller = subseriesScroller.value
+    ?? (event.currentTarget instanceof HTMLElement ? event.currentTarget : null)
+  if (!scroller) {
+    return
+  }
+
+  const top = scroller.scrollTop
+  requestAnimationFrame(() => {
+    scroller.scrollTop = top
+  })
 }
 
 function areaRepositoryFolderHref(orgUnitId: number | null | undefined, archivalFileId: number | null | undefined): string | null {
@@ -198,6 +295,8 @@ watch(settingsTrdTableId, (tableId, previous) => {
   }
 
   selectedSubseries.value = []
+  disabledDocumentTypeIds.value = []
+  expandedSubseriesIds.value = []
   void loadSeries(tableId)
 })
 
@@ -295,11 +394,12 @@ onMounted(() => {
 
     <Dialog v-model:open="settingsOpen">
       <DialogContent
-        class="flex h-[min(85vh,44rem)] max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
+        class="h-[min(85vh,44rem)] max-h-[85vh] !flex !flex-col gap-0 !overflow-hidden p-0 sm:max-w-3xl"
         @pointer-down-outside="preventArchivalMultiselectDialogDismiss"
         @focus-outside="preventArchivalMultiselectDialogDismiss"
         @interact-outside="preventArchivalMultiselectDialogDismiss"
       >
+        <div class="flex h-full min-h-0 flex-1 flex-col">
         <DialogHeader class="shrink-0 space-y-2 px-6 pt-6 pr-12">
           <DialogTitle>
             {{ showRegistry ? `Configuración de ${title.toLowerCase()}` : 'Configuración del archivo en TRD' }}
@@ -332,7 +432,11 @@ onMounted(() => {
           </p>
         </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        <div
+          ref="subseriesScroller"
+          class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-6 py-4 [overflow-anchor:none]"
+          @focusin="keepSubseriesScroll"
+        >
           <div
             v-if="seriesLoading"
             class="text-sm text-muted-foreground"
@@ -360,25 +464,84 @@ onMounted(() => {
               <div
                 v-for="subseries in item.subseries"
                 :key="subseries.id"
-                class="flex items-start gap-3 rounded-md border px-3 py-2"
+                class="rounded-md border"
                 :class="isSubseriesSelected(subseries.id) ? 'border-primary/40 bg-primary/5' : ''"
               >
-                <Checkbox
-                  :id="subseriesCheckboxId(subseries.id)"
-                  class="mt-0.5"
-                  :disabled="!canManage || settingsSaving"
-                  :model-value="isSubseriesSelected(subseries.id)"
-                  @update:model-value="setSubseriesSelected(subseries.id, $event === true)"
-                />
-                <Label
-                  :for="subseriesCheckboxId(subseries.id)"
-                  class="min-w-0 cursor-pointer font-normal"
-                >
-                  <span class="block text-sm font-normal">{{ subseries.code }} — {{ subseries.name }}</span>
-                  <span class="block text-xs font-normal text-muted-foreground">
-                    {{ subseries.document_types.length }} tipo{{ subseries.document_types.length === 1 ? '' : 's' }} documental{{ subseries.document_types.length === 1 ? '' : 'es' }}
+                <div class="flex items-start gap-3 px-3 py-2">
+                  <span class="mt-0.5 inline-flex shrink-0">
+                    <Checkbox
+                      :id="subseriesCheckboxId(subseries.id)"
+                      bare
+                      :disabled="!canManage || settingsSaving"
+                      :model-value="isSubseriesSelected(subseries.id)"
+                      @update:model-value="setSubseriesSelected(subseries.id, $event === true)"
+                    />
                   </span>
-                </Label>
+                  <Label
+                    :for="subseriesCheckboxId(subseries.id)"
+                    class="min-w-0 flex-1 cursor-pointer font-normal"
+                    @mousedown.prevent
+                  >
+                    <span class="block text-sm font-normal">{{ subseries.code }} — {{ subseries.name }}</span>
+                    <span class="block text-xs font-normal text-muted-foreground">
+                      {{ documentTypeSummary(subseries) }}
+                    </span>
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    class="size-8 shrink-0"
+                    :disabled="subseries.document_types.length === 0"
+                    :aria-label="expandSubseriesLabel(subseries.id)"
+                    @click="toggleSubseriesExpanded(subseries.id)"
+                  >
+                    <Icon
+                      :name="isSubseriesExpanded(subseries.id) ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                      class="size-4"
+                    />
+                  </Button>
+                </div>
+                <div
+                  v-if="isSubseriesExpanded(subseries.id)"
+                  class="space-y-2 border-t px-3 py-2 pl-10"
+                >
+                  <p
+                    v-if="subseries.document_types.length === 0"
+                    class="text-xs text-muted-foreground"
+                  >
+                    Sin tipos documentales activos.
+                  </p>
+                  <p
+                    v-else-if="!isSubseriesSelected(subseries.id)"
+                    class="text-xs text-muted-foreground"
+                  >
+                    Seleccione la subserie para habilitar o deshabilitar tipos.
+                  </p>
+                  <div
+                    v-for="documentType in subseries.document_types"
+                    :key="documentType.id"
+                    class="flex items-start gap-3"
+                  >
+                    <span class="mt-0.5 inline-flex shrink-0">
+                      <Checkbox
+                        :id="documentTypeCheckboxId(subseries.id, documentType.id)"
+                        bare
+                        :disabled="!canManage || settingsSaving || !isSubseriesSelected(subseries.id)"
+                        :model-value="isDocumentTypeEnabled(subseries.id, documentType.id)"
+                        @update:model-value="setDocumentTypeEnabled(subseries.id, documentType.id, $event === true)"
+                      />
+                    </span>
+                    <Label
+                      :for="documentTypeCheckboxId(subseries.id, documentType.id)"
+                      class="min-w-0 cursor-pointer font-normal"
+                      :class="!isSubseriesSelected(subseries.id) ? 'cursor-not-allowed opacity-60' : ''"
+                      @mousedown.prevent
+                    >
+                      <span class="block text-sm font-normal">{{ documentType.code }} — {{ documentType.name }}</span>
+                    </Label>
+                  </div>
+                </div>
               </div>
               <p
                 v-if="item.subseries.length === 0"
@@ -390,7 +553,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <DialogFooter v-if="canManage" class="shrink-0 border-t px-6 py-4">
+        <DialogFooter v-if="canManage" class="mt-auto shrink-0 border-t bg-background px-6 py-4">
           <Button
             type="button"
             :disabled="settingsSaving"
@@ -404,6 +567,7 @@ onMounted(() => {
             Guardar configuración
           </Button>
         </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
 
