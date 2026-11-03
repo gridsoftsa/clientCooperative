@@ -56,6 +56,8 @@ export interface TalentPartySettings {
   supplier_trd_table_id: number | null
   employee_doc_subseries_ids: number[]
   supplier_doc_subseries_ids: number[]
+  employee_disabled_doc_document_type_ids: number[]
+  supplier_disabled_doc_document_type_ids: number[]
   employee_trd: TalentTrdOption | null
   supplier_trd: TalentTrdOption | null
 }
