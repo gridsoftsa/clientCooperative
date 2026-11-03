@@ -33,6 +33,7 @@ const trdOptions = ref<Array<{ value: number, label: string }>>([])
 const series = ref<TalentTrdSeries[]>([])
 const seriesLoading = ref(false)
 const selectedSubseries = ref<number[]>([])
+const subseriesScroller = ref<HTMLElement | null>(null)
 
 const title = computed(() => props.kind === 'supplier' ? 'Proveedores' : 'Empleados')
 const singular = computed(() => props.kind === 'supplier' ? 'proveedor' : 'empleado')
@@ -165,6 +166,19 @@ function subseriesCheckboxId(id: number): string {
   return `talent-subseries-${props.kind}-${id}`
 }
 
+function keepSubseriesScroll(event: FocusEvent): void {
+  const scroller = subseriesScroller.value
+    ?? (event.currentTarget instanceof HTMLElement ? event.currentTarget : null)
+  if (!scroller) {
+    return
+  }
+
+  const top = scroller.scrollTop
+  requestAnimationFrame(() => {
+    scroller.scrollTop = top
+  })
+}
+
 function areaRepositoryFolderHref(orgUnitId: number | null | undefined, archivalFileId: number | null | undefined): string | null {
   if (!orgUnitId || !archivalFileId) {
     return null
@@ -295,11 +309,12 @@ onMounted(() => {
 
     <Dialog v-model:open="settingsOpen">
       <DialogContent
-        class="flex h-[min(85vh,44rem)] max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
+        class="h-[min(85vh,44rem)] max-h-[85vh] !flex !flex-col gap-0 !overflow-hidden p-0 sm:max-w-3xl"
         @pointer-down-outside="preventArchivalMultiselectDialogDismiss"
         @focus-outside="preventArchivalMultiselectDialogDismiss"
         @interact-outside="preventArchivalMultiselectDialogDismiss"
       >
+        <div class="flex h-full min-h-0 flex-1 flex-col">
         <DialogHeader class="shrink-0 space-y-2 px-6 pt-6 pr-12">
           <DialogTitle>
             {{ showRegistry ? `Configuración de ${title.toLowerCase()}` : 'Configuración del archivo en TRD' }}
@@ -332,7 +347,11 @@ onMounted(() => {
           </p>
         </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        <div
+          ref="subseriesScroller"
+          class="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-6 py-4 [overflow-anchor:none]"
+          @focusin="keepSubseriesScroll"
+        >
           <div
             v-if="seriesLoading"
             class="text-sm text-muted-foreground"
@@ -363,16 +382,19 @@ onMounted(() => {
                 class="flex items-start gap-3 rounded-md border px-3 py-2"
                 :class="isSubseriesSelected(subseries.id) ? 'border-primary/40 bg-primary/5' : ''"
               >
-                <Checkbox
-                  :id="subseriesCheckboxId(subseries.id)"
-                  class="mt-0.5"
-                  :disabled="!canManage || settingsSaving"
-                  :model-value="isSubseriesSelected(subseries.id)"
-                  @update:model-value="setSubseriesSelected(subseries.id, $event === true)"
-                />
+                <span class="mt-0.5 inline-flex shrink-0">
+                  <Checkbox
+                    :id="subseriesCheckboxId(subseries.id)"
+                    bare
+                    :disabled="!canManage || settingsSaving"
+                    :model-value="isSubseriesSelected(subseries.id)"
+                    @update:model-value="setSubseriesSelected(subseries.id, $event === true)"
+                  />
+                </span>
                 <Label
                   :for="subseriesCheckboxId(subseries.id)"
                   class="min-w-0 cursor-pointer font-normal"
+                  @mousedown.prevent
                 >
                   <span class="block text-sm font-normal">{{ subseries.code }} — {{ subseries.name }}</span>
                   <span class="block text-xs font-normal text-muted-foreground">
@@ -390,7 +412,7 @@ onMounted(() => {
           </div>
         </div>
 
-        <DialogFooter v-if="canManage" class="shrink-0 border-t px-6 py-4">
+        <DialogFooter v-if="canManage" class="mt-auto shrink-0 border-t bg-background px-6 py-4">
           <Button
             type="button"
             :disabled="settingsSaving"
@@ -404,6 +426,7 @@ onMounted(() => {
             Guardar configuración
           </Button>
         </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
 
