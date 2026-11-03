@@ -124,7 +124,12 @@ onMounted(() => {
             Funcionarios
           </h2>
         </div>
-        <div class="shrink-0">
+        <div class="flex shrink-0 flex-wrap items-center gap-2">
+          <TalentPartyList
+            kind="employee"
+            manage-permission="estructura_org_editar"
+            :show-registry="false"
+          />
           <PermissionGate permission="estructura_org_editar">
             <Button @click="router.push('/settings/organizational-structure/staff/create')">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
@@ -204,6 +209,17 @@ onMounted(() => {
                 </TableCell>
                 <TableCell class="text-right">
                   <div class="flex flex-wrap justify-end gap-1">
+                    <Button
+                      v-if="s.trd_file?.org_unit_id && s.trd_file.archival_file_id"
+                      variant="outline"
+                      size="sm"
+                      class="h-8 gap-1.5 px-2 text-xs"
+                      as-child
+                    >
+                      <NuxtLink :to="`/expedientes/area?org_unit_id=${s.trd_file.org_unit_id}&archival_file_id=${s.trd_file.archival_file_id}`">
+                        Ver archivo
+                      </NuxtLink>
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

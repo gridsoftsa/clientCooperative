@@ -2,9 +2,14 @@
 import type { TalentPartyKind, TalentPartySummary, TalentTrdSeries } from '~/types/talent-party'
 import { toast } from 'vue-sonner'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   kind: TalentPartyKind
-}>()
+  managePermission?: string
+  showRegistry?: boolean
+}>(), {
+  managePermission: 'talento_gestionar',
+  showRegistry: true,
+})
 
 const router = useRouter()
 const talentApi = useTalentPartyApi()
@@ -14,6 +19,7 @@ const parties = ref<TalentPartySummary[]>([])
 const loading = ref(true)
 const search = ref('')
 const createOpen = ref(false)
+const settingsOpen = ref(false)
 const saving = ref(false)
 const settingsSaving = ref(false)
 const displayName = ref('')
@@ -28,10 +34,9 @@ const series = ref<TalentTrdSeries[]>([])
 const seriesLoading = ref(false)
 const selectedSubseries = ref<number[]>([])
 
-const section = computed(() => props.kind === 'supplier' ? 'proveedores' : 'empleados')
 const title = computed(() => props.kind === 'supplier' ? 'Proveedores' : 'Empleados')
 const singular = computed(() => props.kind === 'supplier' ? 'proveedor' : 'empleado')
-const canManage = computed(() => hasPermission('talento_gestionar'))
+const canManage = computed(() => hasPermission(props.managePermission))
 const canCreate = computed(() => savedTrdTableId.value != null && savedSubseriesCount.value > 0)
 const draftSubseriesCount = computed(() => selectedSubseries.value.length)
 
@@ -117,6 +122,7 @@ async function saveSettings() {
       doc_subseries_ids: settingsTrdTableId.value == null ? [] : selectedSubseries.value,
     })
     await applySettings(response.data)
+    settingsOpen.value = false
     toast.success(response.message || 'Configuración guardada.')
   }
   catch (error: unknown) {
@@ -157,6 +163,14 @@ function setSubseriesSelected(id: number, checked: boolean) {
 
 function subseriesCheckboxId(id: number): string {
   return `talent-subseries-${props.kind}-${id}`
+}
+
+function areaRepositoryFolderHref(orgUnitId: number | null | undefined, archivalFileId: number | null | undefined): string | null {
+  if (!orgUnitId || !archivalFileId) {
+    return null
+  }
+
+  return `/expedientes/area?org_unit_id=${orgUnitId}&archival_file_id=${archivalFileId}`
 }
 
 async function loadSeries(tableId: number | null) {
@@ -215,7 +229,12 @@ async function createParty() {
     })
     toast.success(response.message || 'Carpeta creada.')
     createOpen.value = false
-    await router.push(`/talento-humano/${section.value}/${response.data.id}`)
+    const href = areaRepositoryFolderHref(response.data.org_unit_id, response.data.archival_file_id)
+    if (href) {
+      await router.push(href)
+      return
+    }
+    await loadParties()
   }
   catch (error: unknown) {
     toast.error(apiErrorMessage(error, 'No se pudo crear la carpeta.'))
@@ -226,45 +245,72 @@ async function createParty() {
 }
 
 onMounted(() => {
-  void loadParties()
+  if (props.showRegistry) {
+    void loadParties()
+  }
   void loadTrdOptions()
   void loadSettings()
 })
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-start justify-between gap-4">
+  <div :class="showRegistry ? 'space-y-6' : 'contents'">
+    <div v-if="showRegistry" class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight">
           {{ title }}
         </h1>
         <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Cada {{ singular }} es una carpeta con las subseries guardadas abajo. Al crearla solo se indica el nombre y la identificación.
+          Cada {{ singular }} es una carpeta con la TRD y las subseries de la configuración. Al crearla solo se indica el nombre y la identificación.
         </p>
       </div>
-      <Button
-        v-if="canManage"
-        type="button"
-        :disabled="!canCreate"
-        @click="openCreate"
-      >
-        <Icon name="i-lucide-folder-plus" class="mr-1.5 size-4" />
-        Crear {{ singular }}
-      </Button>
+      <div v-if="canManage" class="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          @click="settingsOpen = true"
+        >
+          <Icon name="i-lucide-settings" class="mr-1.5 size-4" />
+          Configuración de archivo
+        </Button>
+        <Button
+          type="button"
+          :disabled="!canCreate"
+          @click="openCreate"
+        >
+          <Icon name="i-lucide-folder-plus" class="mr-1.5 size-4" />
+          Crear {{ singular }}
+        </Button>
+      </div>
     </div>
+    <Button
+      v-else-if="canManage"
+      type="button"
+      variant="outline"
+      @click="settingsOpen = true"
+    >
+      <Icon name="i-lucide-settings" class="mr-1.5 size-4" />
+      Configuración de archivo
+    </Button>
 
-    <Card>
-      <CardHeader>
-        <CardTitle class="text-base">
-          Configuración de {{ title.toLowerCase() }}
-        </CardTitle>
-        <CardDescription>
-          La TRD y las subseries se aplican a cada carpeta nueva. No hay que volver a elegirlas al crear un {{ singular }}.
-        </CardDescription>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <div class="max-w-xl space-y-2">
+    <Dialog v-model:open="settingsOpen">
+      <DialogContent
+        class="flex h-[min(85vh,44rem)] max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
+        @pointer-down-outside="preventArchivalMultiselectDialogDismiss"
+        @focus-outside="preventArchivalMultiselectDialogDismiss"
+        @interact-outside="preventArchivalMultiselectDialogDismiss"
+      >
+        <DialogHeader class="shrink-0 space-y-2 px-6 pt-6 pr-12">
+          <DialogTitle>
+            {{ showRegistry ? `Configuración de ${title.toLowerCase()}` : 'Configuración del archivo en TRD' }}
+          </DialogTitle>
+          <DialogDescription>
+            {{ showRegistry
+              ? `La TRD y las subseries se aplican a cada carpeta nueva. No hay que volver a elegirlas al crear un ${singular}.`
+              : 'La TRD y las subseries se usan cuando, al registrar un funcionario, se marca Crear archivo en TRD.' }}
+          </DialogDescription>
+        </DialogHeader>
+        <div class="shrink-0 space-y-2 px-6 pt-4">
           <Label :for="`talent-settings-trd-${kind}`">TRD del área</Label>
           <ArchivalSingleMultiselect
             :id="`talent-settings-trd-${kind}`"
@@ -286,63 +332,65 @@ onMounted(() => {
           </p>
         </div>
 
-        <div
-          v-if="seriesLoading"
-          class="text-sm text-muted-foreground"
-        >
-          Cargando subseries...
-        </div>
-        <div
-          v-else-if="settingsTrdTableId != null && series.length === 0"
-          class="text-sm text-muted-foreground"
-        >
-          Esta TRD no tiene series activas en el catálogo del área.
-        </div>
-        <div
-          v-else
-          class="space-y-4"
-        >
+        <div class="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           <div
-            v-for="item in series"
-            :key="item.id"
-            class="space-y-2"
+            v-if="seriesLoading"
+            class="text-sm text-muted-foreground"
           >
-            <p class="text-sm font-medium">
-              {{ item.code }} — {{ item.name }}
-            </p>
+            Cargando subseries...
+          </div>
+          <div
+            v-else-if="settingsTrdTableId != null && series.length === 0"
+            class="text-sm text-muted-foreground"
+          >
+            Esta TRD no tiene series activas en el catálogo del área.
+          </div>
+          <div
+            v-else
+            class="space-y-4"
+          >
             <div
-              v-for="subseries in item.subseries"
-              :key="subseries.id"
-              class="flex items-start gap-3 rounded-md border px-3 py-2"
-              :class="isSubseriesSelected(subseries.id) ? 'border-primary/40 bg-primary/5' : ''"
+              v-for="item in series"
+              :key="item.id"
+              class="space-y-2"
             >
-              <Checkbox
-                :id="subseriesCheckboxId(subseries.id)"
-                class="mt-0.5"
-                :disabled="!canManage || settingsSaving"
-                :model-value="isSubseriesSelected(subseries.id)"
-                @update:model-value="setSubseriesSelected(subseries.id, $event === true)"
-              />
-              <Label
-                :for="subseriesCheckboxId(subseries.id)"
-                class="min-w-0 cursor-pointer font-normal"
+              <p class="text-sm font-medium">
+                {{ item.code }} — {{ item.name }}
+              </p>
+              <div
+                v-for="subseries in item.subseries"
+                :key="subseries.id"
+                class="flex items-start gap-3 rounded-md border px-3 py-2"
+                :class="isSubseriesSelected(subseries.id) ? 'border-primary/40 bg-primary/5' : ''"
               >
-                <span class="block text-sm font-normal">{{ subseries.code }} — {{ subseries.name }}</span>
-                <span class="block text-xs font-normal text-muted-foreground">
-                  {{ subseries.document_types.length }} tipo{{ subseries.document_types.length === 1 ? '' : 's' }} documental{{ subseries.document_types.length === 1 ? '' : 'es' }}
-                </span>
-              </Label>
+                <Checkbox
+                  :id="subseriesCheckboxId(subseries.id)"
+                  class="mt-0.5"
+                  :disabled="!canManage || settingsSaving"
+                  :model-value="isSubseriesSelected(subseries.id)"
+                  @update:model-value="setSubseriesSelected(subseries.id, $event === true)"
+                />
+                <Label
+                  :for="subseriesCheckboxId(subseries.id)"
+                  class="min-w-0 cursor-pointer font-normal"
+                >
+                  <span class="block text-sm font-normal">{{ subseries.code }} — {{ subseries.name }}</span>
+                  <span class="block text-xs font-normal text-muted-foreground">
+                    {{ subseries.document_types.length }} tipo{{ subseries.document_types.length === 1 ? '' : 's' }} documental{{ subseries.document_types.length === 1 ? '' : 'es' }}
+                  </span>
+                </Label>
+              </div>
+              <p
+                v-if="item.subseries.length === 0"
+                class="text-sm text-muted-foreground"
+              >
+                Sin subseries activas.
+              </p>
             </div>
-            <p
-              v-if="item.subseries.length === 0"
-              class="text-sm text-muted-foreground"
-            >
-              Sin subseries activas.
-            </p>
           </div>
         </div>
 
-        <div v-if="canManage" class="flex justify-end">
+        <DialogFooter v-if="canManage" class="shrink-0 border-t px-6 py-4">
           <Button
             type="button"
             :disabled="settingsSaving"
@@ -355,11 +403,11 @@ onMounted(() => {
             />
             Guardar configuración
           </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
-    <Card>
+    <Card v-if="showRegistry">
       <CardHeader class="pb-4">
         <div class="max-w-md space-y-2">
           <Label for="talent-party-search">Buscar</Label>
@@ -408,12 +456,13 @@ onMounted(() => {
               <TableCell>{{ party.documents_count }}</TableCell>
               <TableCell class="text-right">
                 <Button
+                  v-if="areaRepositoryFolderHref(party.org_unit_id, party.archival_file_id)"
                   variant="outline"
                   size="sm"
                   as-child
                 >
-                  <NuxtLink :to="`/talento-humano/${section}/${party.id}`">
-                    Abrir
+                  <NuxtLink :to="areaRepositoryFolderHref(party.org_unit_id, party.archival_file_id) || '/expedientes/area'">
+                    Ver archivo
                   </NuxtLink>
                 </Button>
               </TableCell>

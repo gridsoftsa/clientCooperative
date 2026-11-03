@@ -32,6 +32,10 @@ const { options: documentTypeOptions, fetchOptions: fetchDocumentTypeOptions } =
   { value: 'NIT', label: 'NIT' },
 ])
 
+const talentApi = useTalentPartyApi()
+const createTrdFile = ref(false)
+const trdConfigReady = ref(false)
+
 const form = ref({
   user_id: null as number | null,
   first_name: '',
@@ -250,6 +254,7 @@ async function handleSubmit() {
         document_number: form.value.document_number.trim() || undefined,
         date_of_birth: form.value.date_of_birth.trim(),
         is_active: form.value.is_active,
+        create_trd_file: trdConfigReady.value && createTrdFile.value,
       },
     })
     toast.success('Funcionario creado')
@@ -376,9 +381,20 @@ watch(form, () => {
   }
 }, { deep: true })
 
+async function loadTrdConfig() {
+  try {
+    const response = await talentApi.settings()
+    const settings = response.data
+    trdConfigReady.value = settings.employee_trd_table_id != null && settings.employee_doc_subseries_ids.length > 0
+  }
+  catch {
+    trdConfigReady.value = false
+  }
+}
+
 onMounted(async () => {
   restoreDraftFromStorage()
-  await Promise.all([loadUsersIfAllowed(), fetchDocumentTypeOptions()])
+  await Promise.all([loadUsersIfAllowed(), fetchDocumentTypeOptions(), loadTrdConfig()])
   applyReturnedUserFromQuery()
   if (form.value.user_id != null) {
     applySelectedUserToForm(form.value.user_id)
@@ -597,6 +613,35 @@ onMounted(async () => {
                       </div>
                     </div>
                   </section>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader class="gap-2">
+                  <CardTitle class="leading-snug">
+                    Archivo en TRD
+                  </CardTitle>
+                  <CardDescription class="leading-relaxed">
+                    Opcional. Usa la TRD y las subseries guardadas en Funcionarios.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div class="flex items-start gap-3">
+                    <Checkbox
+                      id="staff-create-trd-file"
+                      :model-value="createTrdFile"
+                      :disabled="!trdConfigReady || saving"
+                      @update:model-value="createTrdFile = $event === true"
+                    />
+                    <Label for="staff-create-trd-file" class="font-normal leading-snug">
+                      Crear archivo en TRD
+                      <span class="mt-1 block text-xs font-normal text-muted-foreground">
+                        {{ trdConfigReady
+                          ? 'Al guardar se crea la carpeta del funcionario con las subseries configuradas.'
+                          : 'No hay configuración de archivo. Esta opción permanece deshabilitada hasta guardarla en Funcionarios.' }}
+                      </span>
+                    </Label>
+                  </div>
                 </CardContent>
               </Card>
 

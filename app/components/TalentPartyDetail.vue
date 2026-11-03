@@ -11,15 +11,22 @@ const talentApi = useTalentPartyApi()
 const party = ref<TalentPartyDetail | null>(null)
 const loading = ref(true)
 
-const section = computed(() => props.kind === 'supplier' ? 'proveedores' : 'empleados')
-const singular = computed(() => props.kind === 'supplier' ? 'proveedor' : 'empleado')
+const section = computed(() => props.kind === 'supplier'
+  ? '/settings/organizational-structure/suppliers'
+  : '/settings/organizational-structure/staff')
+const singular = computed(() => props.kind === 'supplier' ? 'proveedor' : 'funcionario')
 const repositoryHref = computed(() => {
   const orgUnitId = party.value?.org_unit_id
+  const archivalFileId = party.value?.archival_file_id
   if (!orgUnitId) {
     return '/expedientes/area'
   }
 
-  return `/expedientes/area?org_unit_id=${orgUnitId}`
+  if (!archivalFileId) {
+    return `/expedientes/area?org_unit_id=${orgUnitId}`
+  }
+
+  return `/expedientes/area?org_unit_id=${orgUnitId}&archival_file_id=${archivalFileId}`
 })
 
 async function load() {
@@ -27,7 +34,10 @@ async function load() {
   try {
     const response = await talentApi.show(props.partyId)
     if (response.data.kind !== props.kind) {
-      await navigateTo(`/talento-humano/${response.data.kind === 'supplier' ? 'proveedores' : 'empleados'}/${response.data.id}`)
+      const target = response.data.kind === 'supplier'
+        ? `/settings/organizational-structure/suppliers/${response.data.id}`
+        : '/settings/organizational-structure/staff'
+      await navigateTo(target)
       return
     }
     party.value = response.data
@@ -56,7 +66,7 @@ watch(() => props.partyId, () => {
           class="mb-2 -ml-2"
           as-child
         >
-          <NuxtLink :to="`/talento-humano/${section}`">
+          <NuxtLink :to="section">
             <Icon name="i-lucide-arrow-left" class="mr-1.5 size-4" />
             Volver
           </NuxtLink>

@@ -31,11 +31,13 @@ const props = withDefaults(defineProps<{
   allowUpload?: boolean
   navTitle?: string
   emptyTreeMessage?: string
+  focusArchivalFileId?: number | null
 }>(), {
   loading: false,
   allowUpload: true,
   navTitle: 'Carpetas TRD',
   emptyTreeMessage: 'Seleccione un área para consultar su documentación.',
+  focusArchivalFileId: null,
 })
 
 const emit = defineEmits<{
@@ -152,13 +154,24 @@ const insideTalentParty = computed(() => talentPartyNode.value != null)
 
 const talentPartyHref = computed(() => {
   const node = talentPartyNode.value
-  if (!node?.talent_party_id || !hasPermission('talento_ver')) {
+  if (!node?.talent_party_id) {
     return null
   }
 
-  const section = node.talent_party_kind === 'supplier' ? 'proveedores' : 'empleados'
+  const canOpenStructure = hasPermission('estructura_org_ver') || hasPermission('talento_ver')
+  if (!canOpenStructure) {
+    return null
+  }
 
-  return `/talento-humano/${section}/${node.talent_party_id}`
+  if (node.talent_party_kind === 'supplier') {
+    return `/settings/organizational-structure/suppliers/${node.talent_party_id}`
+  }
+
+  if (node.org_staff_id) {
+    return `/settings/organizational-structure/staff/${node.org_staff_id}`
+  }
+
+  return null
 })
 
 const canCreateManualFolder = computed(() =>
@@ -196,13 +209,15 @@ const retentionPreviewText = computed(() =>
 watch(
   () => props.tree,
   (tree) => {
-    const pendingFileId = pendingSelectFileId.value
+    const pendingFileId = pendingSelectFileId.value ?? props.focusArchivalFileId
     if (tree && pendingFileId != null) {
       const created = findArchivalTreeNodeByArchivalFileId(tree, pendingFileId)
-        selectedNodeId.value = created?.id ?? (selectedNodeId.value || tree.id)
-      pendingSelectFileId.value = null
-      selectedDocument.value = null
-      return
+      if (created) {
+        selectedNodeId.value = created.id
+        pendingSelectFileId.value = null
+        selectedDocument.value = null
+        return
+      }
     }
 
     if (tree && selectedNodeId.value && findArchivalTreeNode(tree, selectedNodeId.value)) {

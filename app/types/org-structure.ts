@@ -50,6 +50,11 @@ export interface OrgStaffListItem {
   user_id?: number | null
   suggested_org_office_id?: number | null
   is_active: boolean
+  trd_file?: {
+    talent_party_id: number
+    org_unit_id: number
+    archival_file_id: number | null
+  } | null
   created_at?: string
   updated_at?: string
   user?: { id: number; name: string; email: string; sucursal_id?: number | null } | null

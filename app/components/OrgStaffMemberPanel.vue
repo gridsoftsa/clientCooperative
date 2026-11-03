@@ -32,6 +32,9 @@ const router = useRouter()
 const route = useRoute()
 const { $api } = useNuxtApp()
 const orgApi = useOrgStructureApi()
+const talentApi = useTalentPartyApi()
+const createTrdFile = ref(false)
+const trdConfigReady = ref(false)
 const { hasPermission } = usePermissions()
 
 function todayISO(): string {
@@ -55,6 +58,8 @@ watch(
 
 const loading = ref(true)
 const summary = ref<OrgStaffListItem | null>(null)
+const hasTrdFile = computed(() => summary.value?.trd_file?.talent_party_id != null)
+const canEnableTrdFile = computed(() => trdConfigReady.value && !hasTrdFile.value)
 
 const datosForm = ref({
   user_id: null as number | null,
@@ -488,6 +493,21 @@ function parseActiveTemporaryChargesFromApi(raw: unknown): NonNullable<OrgStaffL
   })
 }
 
+async function loadTrdConfig() {
+  try {
+    const response = await talentApi.settings()
+    const settings = response.data
+    trdConfigReady.value = settings.employee_trd_table_id != null && settings.employee_doc_subseries_ids.length > 0
+  }
+  catch {
+    trdConfigReady.value = false
+  }
+
+  if (!trdConfigReady.value) {
+    createTrdFile.value = false
+  }
+}
+
 async function loadStaffRecord() {
   const res = await $api<{ data: Record<string, unknown> }>(
     `/organizational-structure/org-staff/${props.staffId}`,
@@ -813,7 +833,7 @@ async function loadAll() {
   loading.value = true
   try {
     if (!props.readOnly) {
-      await Promise.all([loadUsersIfAllowed(), fetchDocumentTypeOptions()])
+      await Promise.all([loadUsersIfAllowed(), fetchDocumentTypeOptions(), loadTrdConfig()])
     } else {
       await fetchDocumentTypeOptions()
     }
@@ -1030,6 +1050,7 @@ async function handleSubmitDatos() {
         document_number: datosForm.value.document_number.trim() || null,
         date_of_birth: datosForm.value.date_of_birth.trim(),
         is_active: datosForm.value.is_active,
+        create_trd_file: canEnableTrdFile.value && createTrdFile.value,
       },
     })
     toast.success('Datos actualizados')
@@ -1465,6 +1486,33 @@ watch(
                 >
                   No tiene permiso para listar usuarios; el vínculo con usuario del sistema es obligatorio para guardar.
                 </p>
+              </CardContent>
+            </Card>
+
+            <Card v-if="!hasTrdFile">
+              <CardHeader class="gap-2">
+                <CardTitle class="leading-snug">Archivo en TRD</CardTitle>
+                <CardDescription v-if="!readOnly" class="leading-relaxed">
+                  Solo se puede marcar si ya hay una configuración de archivo guardada.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div class="flex items-start gap-3">
+                  <Checkbox
+                    id="staff-edit-trd-file"
+                    :model-value="createTrdFile"
+                    :disabled="readOnly || savingDatos || !canEnableTrdFile"
+                    @update:model-value="createTrdFile = $event === true"
+                  />
+                  <Label for="staff-edit-trd-file" class="font-normal leading-snug">
+                    Crear archivo en TRD
+                    <span class="mt-1 block text-xs font-normal text-muted-foreground">
+                      {{ trdConfigReady
+                        ? 'Al guardar se crea la carpeta del funcionario con las subseries configuradas.'
+                        : 'No hay configuración de archivo. Guárdela en Funcionarios antes de habilitar esta opción.' }}
+                    </span>
+                  </Label>
+                </div>
               </CardContent>
             </Card>
 

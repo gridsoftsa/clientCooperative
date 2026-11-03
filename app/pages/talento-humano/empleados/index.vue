@@ -2,10 +2,12 @@
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'talento_ver',
+  permissions: 'estructura_org_ver',
 })
+
+await navigateTo('/settings/organizational-structure/staff', { replace: true })
 </script>
 
 <template>
-  <TalentPartyList kind="employee" />
+  <div />
 </template>

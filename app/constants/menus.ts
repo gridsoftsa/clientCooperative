@@ -193,24 +193,6 @@ export const navMenu: NavMenu[] = [
           },
         ],
       },
-      {
-        title: 'Talento humano',
-        icon: 'i-lucide-contact',
-        module: 'gestion_documental',
-        permission: 'talento_ver',
-        children: [
-          {
-            title: 'Empleados',
-            link: '/talento-humano/empleados',
-            permission: 'talento_ver',
-          },
-          {
-            title: 'Proveedores',
-            link: '/talento-humano/proveedores',
-            permission: 'talento_ver',
-          },
-        ],
-      },
     ],
   },
   {
@@ -278,6 +260,11 @@ export const navMenu: NavMenu[] = [
           {
             title: 'Funcionarios',
             link: '/settings/organizational-structure/staff',
+            permission: 'estructura_org_ver',
+          },
+          {
+            title: 'Proveedores',
+            link: '/settings/organizational-structure/suppliers',
             permission: 'estructura_org_ver',
           },
           {

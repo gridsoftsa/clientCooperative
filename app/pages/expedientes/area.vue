@@ -10,6 +10,7 @@ definePageMeta({
   permissions: 'expedientes_area_ver',
 })
 
+const route = useRoute()
 const archivalApi = useArchivalFileApi()
 const { $api } = useNuxtApp()
 const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promise<T>
@@ -46,6 +47,12 @@ const displayTree = computed(() => {
 })
 
 const selectedOrgUnitNumericId = computed(() => orgUnitId.value)
+
+const focusArchivalFileId = computed(() => {
+  const value = Number(route.query.archival_file_id)
+
+  return Number.isFinite(value) && value > 0 ? value : null
+})
 
 async function loadOrgUnits() {
   try {
@@ -185,6 +192,7 @@ onMounted(async () => {
           :org-unit-id="selectedOrgUnitNumericId ?? 0"
           :loading="loading"
           :allow-upload="archive === 'management'"
+          :focus-archival-file-id="focusArchivalFileId"
           @uploaded="loadRepository"
         />
       </CardContent>

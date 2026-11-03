@@ -2,16 +2,14 @@
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'talento_ver',
+  permissions: 'estructura_org_ver',
 })
 
 const route = useRoute()
-const partyId = computed(() => Number(route.params.id))
+
+await navigateTo(`/settings/organizational-structure/suppliers/${route.params.id}`, { replace: true })
 </script>
 
 <template>
-  <TalentPartyDetail
-    kind="supplier"
-    :party-id="partyId"
-  />
+  <div />
 </template>
