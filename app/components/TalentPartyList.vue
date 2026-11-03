@@ -262,6 +262,18 @@ function keepSubseriesScroll(event: FocusEvent): void {
   })
 }
 
+function partyFileHref(partyId: number, orgUnitId: number | null | undefined, archivalFileId: number | null | undefined): string | null {
+  if (!archivalFileId) {
+    return null
+  }
+
+  if (props.kind === 'supplier') {
+    return `/settings/organizational-structure/suppliers/${partyId}/archivo`
+  }
+
+  return areaRepositoryFolderHref(orgUnitId, archivalFileId)
+}
+
 function areaRepositoryFolderHref(orgUnitId: number | null | undefined, archivalFileId: number | null | undefined): string | null {
   if (!orgUnitId || !archivalFileId) {
     return null
@@ -328,7 +340,7 @@ async function createParty() {
     })
     toast.success(response.message || 'Carpeta creada.')
     createOpen.value = false
-    const href = areaRepositoryFolderHref(response.data.org_unit_id, response.data.archival_file_id)
+    const href = partyFileHref(response.data.id, response.data.org_unit_id, response.data.archival_file_id)
     if (href) {
       await router.push(href)
       return
@@ -620,12 +632,12 @@ onMounted(() => {
               <TableCell>{{ party.documents_count }}</TableCell>
               <TableCell class="text-right">
                 <Button
-                  v-if="areaRepositoryFolderHref(party.org_unit_id, party.archival_file_id)"
+                  v-if="partyFileHref(party.id, party.org_unit_id, party.archival_file_id)"
                   variant="outline"
                   size="sm"
                   as-child
                 >
-                  <NuxtLink :to="areaRepositoryFolderHref(party.org_unit_id, party.archival_file_id) || '/expedientes/area'">
+                  <NuxtLink :to="partyFileHref(party.id, party.org_unit_id, party.archival_file_id) || '/settings/organizational-structure/suppliers'">
                     Ver archivo
                   </NuxtLink>
                 </Button>
