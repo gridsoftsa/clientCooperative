@@ -151,9 +151,23 @@ const selectedFileId = computed(() =>
 
 const isDocumentTypeContext = computed(() => currentNode.value?.type === 'document_type')
 
+const talentPartyNode = computed(() =>
+  breadcrumb.value.find(node => node.source === 'talent_party') ?? null,
+)
+
+const activeTalentPartyId = computed(() => props.talentPartyId ?? talentPartyNode.value?.talent_party_id ?? null)
+
+const canUploadTalentFile = computed(() =>
+  props.allowUpload && (
+    canUpload.value
+    || hasPermission('estructura_org_editar')
+    || hasPermission('talento_gestionar')
+  ),
+)
+
 const talentDocumentType = computed(() => {
   const node = currentNode.value
-  if (props.talentPartyId == null || node?.type !== 'document_type' || node.doc_document_type_id == null) {
+  if (activeTalentPartyId.value == null || node?.type !== 'document_type' || node.doc_document_type_id == null) {
     return null
   }
 
@@ -166,33 +180,7 @@ const talentDocumentType = computed(() => {
   }
 })
 
-const talentPartyNode = computed(() =>
-  breadcrumb.value.find(node => node.source === 'talent_party') ?? null,
-)
-
 const insideTalentParty = computed(() => talentPartyNode.value != null)
-
-const talentPartyHref = computed(() => {
-  const node = talentPartyNode.value
-  if (!node?.talent_party_id) {
-    return null
-  }
-
-  const canOpenStructure = hasPermission('estructura_org_ver') || hasPermission('talento_ver')
-  if (!canOpenStructure) {
-    return null
-  }
-
-  if (node.talent_party_kind === 'supplier') {
-    return `/settings/organizational-structure/suppliers/${node.talent_party_id}`
-  }
-
-  if (node.org_staff_id) {
-    return `/settings/organizational-structure/staff/${node.org_staff_id}`
-  }
-
-  return null
-})
 
 const canCreateManualFolder = computed(() =>
   canUpload.value
@@ -592,20 +580,6 @@ function formatBytes(size?: number): string {
             </div>
 
             <p
-              v-if="insideTalentParty"
-              class="rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
-            >
-              Los archivos de esta carpeta se cargan en Talento humano.
-              <NuxtLink
-                v-if="talentPartyHref"
-                :to="talentPartyHref"
-                class="font-medium text-foreground underline-offset-4 hover:underline"
-              >
-                Abrir carpeta
-              </NuxtLink>
-            </p>
-
-            <p
               v-if="isDocumentTypeContext && retentionPreviewText"
               class="rounded-md bg-muted/50 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
             >
@@ -871,11 +845,11 @@ function formatBytes(size?: number): string {
           </div>
 
           <div
-            v-if="talentDocumentType && talentPartyId"
+            v-if="canUploadTalentFile && talentDocumentType && activeTalentPartyId"
             class="max-h-[40%] shrink-0 overflow-y-auto overscroll-contain border-t bg-muted/20 p-4"
           >
             <TalentPartyTypeUpload
-              :party-id="talentPartyId"
+              :party-id="activeTalentPartyId"
               :document-type="talentDocumentType"
               :show-documents="false"
               @uploaded="emit('uploaded')"

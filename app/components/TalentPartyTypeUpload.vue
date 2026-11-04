@@ -105,7 +105,7 @@ async function upload() {
       Sin archivos en esta subcarpeta.
     </p>
 
-    <PermissionGate :any-permission="['talento_gestionar', 'estructura_org_editar']">
+    <PermissionGate :any-permission="['talento_gestionar', 'estructura_org_editar', 'expedientes_editar', 'expedientes_documentos_adjuntar']">
       <div class="grid gap-3 md:grid-cols-2">
         <div class="space-y-2 md:col-span-2">
           <Label :for="inputId">Archivo</Label>
