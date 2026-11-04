@@ -235,7 +235,7 @@ onMounted(async () => {
               Colaboraciones pendientes
             </CardTitle>
             <CardDescription>
-              Lo invitaron a aportar documentos. No gestione la etapa: adjunte su archivo o abra el listado completo.
+              Lo invitaron a colaborar. No gestione la etapa: registre su aporte o abra el listado completo.
             </CardDescription>
           </div>
           <Button variant="outline" size="sm" type="button" @click="navigateTo('/workflow/colaboracion')">
@@ -259,7 +259,7 @@ onMounted(async () => {
             </p>
           </div>
           <Button size="sm" type="button" @click="navigateTo(`/workflow/colaboracion/${row.id}`)">
-            Adjuntar aporte
+            {{ row.requires_document === false ? 'Registrar aporte' : 'Adjuntar aporte' }}
           </Button>
         </div>
       </CardContent>

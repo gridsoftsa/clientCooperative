@@ -222,7 +222,9 @@ onUnmounted(() => {
           </p>
           <div class="mt-auto pt-4">
             <Button class="w-full" size="sm" type="button" @click="openCollaboration(row)">
-              {{ row.status === 'pending' ? 'Adjuntar aporte' : 'Ver aporte' }}
+              {{ row.status === 'pending'
+                ? (row.requires_document === false ? 'Registrar aporte' : 'Adjuntar aporte')
+                : 'Ver aporte' }}
             </Button>
           </div>
         </article>

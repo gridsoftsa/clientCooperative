@@ -33,6 +33,7 @@ const selectedPositionId = ref<string>('')
 const selectedStaffId = ref<string>('')
 const staffQuery = ref('')
 const requestNote = ref('')
+const requiresDocument = ref(true)
 const openingFileId = ref<number | null>(null)
 const {
   open: inlinePreviewOpen,
@@ -191,14 +192,49 @@ async function inviteCollaborator() {
       org_unit_id: selectedOrgUnitId.value ? Number(selectedOrgUnitId.value) : null,
       org_position_id: selectedPositionId.value ? Number(selectedPositionId.value) : null,
       request_note: requestNote.value.trim() || null,
+      requires_document: requiresDocument.value === true,
     })
     toast.success('Colaborador agregado. Se le notificó para que ingrese a colaborar.')
     selectedStaffId.value = ''
     requestNote.value = ''
+    requiresDocument.value = true
     await loadCollaborators()
     emit('changed')
   }
   catch (error) {
+    toast.error(extractApiErrorMessage(error))
+  }
+  finally {
+    saving.value = false
+  }
+}
+
+function collaboratorRequiresDocument(row: WorkflowTaskCollaboratorRow): boolean {
+  return row.requires_document !== false
+}
+
+async function setCollaboratorRequiresDocument(row: WorkflowTaskCollaboratorRow, value: boolean | 'indeterminate') {
+  const next = value === true
+  const previous = collaboratorRequiresDocument(row)
+
+  if (next === previous || row.status !== 'pending' || !props.taskId) {
+    return
+  }
+
+  row.requires_document = next
+  saving.value = true
+
+  try {
+    const updated = await workflowApi.updateTaskCollaborator(props.taskId, row.id, {
+      requires_document: next,
+    })
+    const index = collaborators.value.findIndex(item => item.id === row.id)
+    if (index >= 0) {
+      collaborators.value[index] = updated
+    }
+  }
+  catch (error) {
+    row.requires_document = previous
     toast.error(extractApiErrorMessage(error))
   }
   finally {
@@ -249,7 +285,7 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
       <AlertTitle>Notificación al colaborador</AlertTitle>
       <AlertDescription>
         Al agregar un colaborador se le notifica en la bandeja del sistema y, si el correo está habilitado,
-        por email. Podrá ingresar a <strong>Colaboración</strong> para adjuntar documentos y registrar su aporte.
+        por email. Podrá ingresar a <strong>Colaboración</strong> para registrar su aporte. Indique si debe adjuntar documento.
       </AlertDescription>
     </Alert>
 
@@ -320,6 +356,20 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
           />
         </div>
 
+        <div class="rounded-md border bg-background px-3 py-2.5">
+          <Checkbox
+            id="wf-invite-requires-document"
+            :checked="requiresDocument"
+            :disabled="saving"
+            @update:checked="requiresDocument = $event === true"
+          >
+            Requiere documento
+          </Checkbox>
+          <p class="mt-1 pl-6 text-xs text-muted-foreground">
+            Si no está marcado, el colaborador puede responder solo con una nota.
+          </p>
+        </div>
+
         <Button class="w-full" :disabled="saving || !selectedStaffId" @click="inviteCollaborator">
           Agregar y notificar
         </Button>
@@ -353,6 +403,19 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
               Pidió cambio de encargado{{ row.reassignment_request_note ? `: ${row.reassignment_request_note}` : '.' }}
               Reasigne o quite este colaborador y elija a la persona correcta.
             </p>
+            <div v-if="row.status === 'pending' && !readOnly" class="mt-3">
+              <Checkbox
+                :id="`wf-collaborator-requires-document-${row.id}`"
+                :checked="collaboratorRequiresDocument(row)"
+                :disabled="saving"
+                @update:checked="setCollaboratorRequiresDocument(row, $event)"
+              >
+                Requiere documento
+              </Checkbox>
+            </div>
+            <p v-else class="mt-2 text-xs text-muted-foreground">
+              {{ collaboratorRequiresDocument(row) ? 'Requiere documento' : 'Documento opcional' }}
+            </p>
             <p v-if="row.request_note" class="mt-2 whitespace-pre-wrap text-sm">
               {{ row.request_note }}
             </p>
@@ -364,6 +427,10 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
 
         <p v-if="row.response_note" class="mt-2 whitespace-pre-wrap text-muted-foreground">
           {{ row.response_note }}
+        </p>
+
+        <p v-if="row.status === 'responded' && !row.files.length" class="mt-2 text-xs text-muted-foreground">
+          No se adjuntó documento.
         </p>
 
         <ul v-if="row.files.length" class="mt-3 divide-y rounded-lg border">

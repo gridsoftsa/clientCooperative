@@ -300,6 +300,7 @@ export interface WorkflowTaskCollaboratorRow {
   workflow_task_id: number
   status: 'pending' | 'responded'
   request_note: string | null
+  requires_document: boolean
   response_note: string | null
   responded_at: string | null
   user: { id: number, name: string, email?: string | null } | null
