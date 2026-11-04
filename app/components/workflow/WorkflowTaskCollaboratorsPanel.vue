@@ -420,41 +420,30 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
         </div>
 
         <div
-          class="flex flex-col gap-3 rounded-lg border-2 p-3 sm:flex-row sm:items-center sm:justify-between"
-          :class="requiresDocument
-            ? 'border-primary bg-primary/15'
-            : 'border-muted-foreground/40 bg-background'"
+          class="flex items-start gap-3 rounded-md border px-3 py-2"
+          :class="requiresDocument ? 'border-primary/40 bg-primary/5' : ''"
         >
-          <div class="min-w-0">
-            <p class="font-medium">
-              Requiere documento
-            </p>
-            <p class="text-sm text-muted-foreground">
+          <span class="mt-0.5 inline-flex shrink-0">
+            <Checkbox
+              id="wf-invite-requires-document"
+              bare
+              :disabled="saving"
+              :model-value="requiresDocument"
+              @update:model-value="requiresDocument = $event === true"
+            />
+          </span>
+          <Label
+            for="wf-invite-requires-document"
+            class="min-w-0 flex-1 cursor-pointer font-normal"
+            @mousedown.prevent
+          >
+            <span class="block text-sm font-medium">Requiere documento</span>
+            <span class="block text-xs font-normal text-muted-foreground">
               {{ requiresDocument
-                ? 'Sí: cada colaborador debe adjuntar un archivo.'
-                : 'No: pueden responder solo con una nota.' }}
-            </p>
-          </div>
-          <div class="flex shrink-0 gap-2">
-            <Button
-              type="button"
-              size="sm"
-              :variant="requiresDocument ? 'default' : 'outline'"
-              :disabled="saving"
-              @click="requiresDocument = true"
-            >
-              Sí
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              :variant="requiresDocument ? 'outline' : 'default'"
-              :disabled="saving"
-              @click="requiresDocument = false"
-            >
-              No
-            </Button>
-          </div>
+                ? 'Cada colaborador debe adjuntar un archivo.'
+                : 'Pueden responder solo con una nota.' }}
+            </span>
+          </Label>
         </div>
 
         <Button class="w-full" :disabled="saving || selectedStaffItems.length === 0" @click="inviteCollaborator">
@@ -492,34 +481,30 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
             </p>
             <div
               v-if="row.status === 'pending' && !readOnly"
-              class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border-2 px-3 py-2"
-              :class="collaboratorRequiresDocument(row)
-                ? 'border-primary bg-primary/15'
-                : 'border-muted-foreground/40 bg-background'"
+              class="mt-3 flex items-start gap-3 rounded-md border px-3 py-2"
+              :class="collaboratorRequiresDocument(row) ? 'border-primary/40 bg-primary/5' : ''"
             >
-              <p class="text-sm font-medium">
-                {{ collaboratorRequiresDocument(row) ? 'Sí requiere documento' : 'Documento opcional' }}
-              </p>
-              <div class="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  :variant="collaboratorRequiresDocument(row) ? 'default' : 'outline'"
+              <span class="mt-0.5 inline-flex shrink-0">
+                <Checkbox
+                  :id="`wf-collab-requires-document-${row.id}`"
+                  bare
                   :disabled="saving"
-                  @click="setCollaboratorRequiresDocument(row, true)"
-                >
-                  Sí
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  :variant="collaboratorRequiresDocument(row) ? 'outline' : 'default'"
-                  :disabled="saving"
-                  @click="setCollaboratorRequiresDocument(row, false)"
-                >
-                  No
-                </Button>
-              </div>
+                  :model-value="collaboratorRequiresDocument(row)"
+                  @update:model-value="setCollaboratorRequiresDocument(row, $event === true)"
+                />
+              </span>
+              <Label
+                :for="`wf-collab-requires-document-${row.id}`"
+                class="min-w-0 flex-1 cursor-pointer font-normal"
+                @mousedown.prevent
+              >
+                <span class="block text-sm font-medium">Requiere documento</span>
+                <span class="block text-xs font-normal text-muted-foreground">
+                  {{ collaboratorRequiresDocument(row)
+                    ? 'Debe adjuntar un archivo al responder.'
+                    : 'Puede responder solo con una nota.' }}
+                </span>
+              </Label>
             </div>
             <p v-else class="mt-2 text-xs text-muted-foreground">
               {{ collaboratorRequiresDocument(row) ? 'Requiere documento' : 'Documento opcional' }}
