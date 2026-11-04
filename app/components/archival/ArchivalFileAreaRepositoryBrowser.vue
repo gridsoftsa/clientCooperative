@@ -61,6 +61,7 @@ const {
 const viewingDocumentId = ref<string | null>(null)
 
 const selectedNodeId = ref('')
+const folderHistory = ref<string[]>([])
 const selectedDocument = ref<ArchivalFileTreeNode | null>(null)
 const searchQuery = ref('')
 const classificationQuery = ref('')
@@ -244,6 +245,7 @@ watch(
     }
 
     selectedNodeId.value = tree?.id ?? ''
+    folderHistory.value = []
     selectedDocument.value = null
     folderExpansion.value = 'default'
     folderExpansionTick.value = 0
@@ -256,9 +258,35 @@ function setFolderExpansion(mode: ArchivalAreaFolderExpansion) {
   folderExpansionTick.value += 1
 }
 
-function selectFolder(node: ArchivalFileTreeNode) {
+const canGoBack = computed(() => folderHistory.value.length > 0 || breadcrumb.value.length > 1)
+
+function selectFolder(node: ArchivalFileTreeNode, options?: { recordHistory?: boolean }) {
+  const currentId = currentNode.value?.id
+  if (!currentId || node.id === currentId) {
+    return
+  }
+
+  if (options?.recordHistory !== false) {
+    folderHistory.value = [...folderHistory.value, currentId]
+  }
+
   selectedNodeId.value = node.id
   selectedDocument.value = null
+}
+
+function goBack() {
+  const previousId = folderHistory.value.at(-1)
+  if (previousId && props.tree && findArchivalTreeNode(props.tree, previousId)) {
+    folderHistory.value = folderHistory.value.slice(0, -1)
+    selectedNodeId.value = previousId
+    selectedDocument.value = null
+    return
+  }
+
+  const parent = breadcrumb.value.at(-2)
+  if (parent) {
+    selectFolder(parent, { recordHistory: false })
+  }
 }
 
 function openFolder(node: ArchivalFileTreeNode) {
@@ -507,7 +535,20 @@ function formatBytes(size?: number): string {
           :class="contained ? '' : 'min-h-[32rem]'"
         >
           <div class="shrink-0 space-y-3 border-b px-4 py-3">
-            <div class="flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+            <div class="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                class="size-8 shrink-0"
+                title="Volver a la carpeta anterior"
+                aria-label="Volver a la carpeta anterior"
+                :disabled="!canGoBack"
+                @click="goBack"
+              >
+                <Icon name="i-lucide-arrow-left" class="size-4" />
+              </Button>
+              <div class="flex min-w-0 flex-wrap items-center gap-1">
               <template v-for="(crumb, index) in breadcrumb" :key="crumb.id">
                 <button
                   type="button"
@@ -522,7 +563,8 @@ function formatBytes(size?: number): string {
                   name="i-lucide-chevron-right"
                   class="size-3.5 shrink-0"
                 />
-              </template>
+                </template>
+              </div>
             </div>
 
             <div class="flex min-w-0 items-start justify-between gap-3">
