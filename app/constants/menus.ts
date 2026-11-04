@@ -112,11 +112,6 @@ export const navMenu: NavMenu[] = [
             permission: 'ventanilla_ver',
           },
           {
-            title: 'Notificaciones enviadas',
-            link: '/notificaciones/enviadas',
-            permission: 'notificaciones_enviadas_ver',
-          },
-          {
             title: 'SLA',
             link: '/ventanilla/sla',
             permission: 'ventanilla_sla_configurar',

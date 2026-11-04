@@ -474,7 +474,7 @@ async function saveFilingMetadata(): Promise<void> {
             <AlertTitle>Usted es colaborador de esta etapa</AlertTitle>
             <AlertDescription class="space-y-3">
               <p>
-                No gestione ni avance el radicado aquí. Debe ir a <strong>Colaboración</strong> para adjuntar su documento y registrar el aporte.
+                No gestione ni avance el radicado aquí. Debe ir a <strong>Colaboración</strong> para registrar su aporte.
               </p>
               <Button size="sm" type="button" @click="navigateTo(`/workflow/colaboracion/${myPendingCollaborationId}`)">
                 Adjuntar mi aporte

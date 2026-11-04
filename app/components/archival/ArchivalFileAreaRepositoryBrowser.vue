@@ -376,7 +376,7 @@ function formatBytes(size?: number): string {
 <template>
   <div
     class="overflow-hidden rounded-xl border bg-card"
-    :class="contained ? 'flex h-full min-h-0 flex-col' : ''"
+    :class="contained ? 'flex h-full min-h-0 min-w-0 flex-1 flex-col' : ''"
   >
     <div v-if="loading" class="flex min-h-[28rem] items-center justify-center text-sm text-muted-foreground">
       Cargando repositorio...
@@ -388,8 +388,8 @@ function formatBytes(size?: number): string {
 
     <div
       v-else
-      class="flex min-h-0"
-      :class="contained ? 'h-full flex-1' : 'min-h-[32rem]'"
+      class="flex min-h-0 min-w-0"
+      :class="contained ? 'h-full min-h-0 flex-1 overflow-hidden' : 'h-[min(40rem,calc(100dvh-16rem))]'"
     >
       <aside
         v-if="navCollapsed"
@@ -416,8 +416,7 @@ function formatBytes(size?: number): string {
       <ResizablePanelGroup
         id="archival-area-repository"
         direction="horizontal"
-        class="min-h-0 min-w-0 flex-1"
-        :class="contained ? 'h-full' : 'min-h-[32rem]'"
+        class="h-full min-h-0 min-w-0 flex-1 overflow-hidden"
       >
       <ResizablePanel
         v-if="!navCollapsed"
@@ -520,7 +519,6 @@ function formatBytes(size?: number): string {
       <ResizablePanel id="archival-area-content" class="min-h-0 overflow-hidden" :default-size="navCollapsed ? 100 : 72" :min-size="45">
         <div
           class="flex h-full min-h-0 flex-col overflow-hidden"
-          :class="contained ? '' : 'min-h-[32rem]'"
         >
           <div class="shrink-0 space-y-3 border-b px-4 py-3">
             <div class="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">

@@ -180,11 +180,25 @@ export function useWorkflowApi() {
       org_unit_id?: number | null
       org_position_id?: number | null
       request_note?: string | null
+      requires_document?: boolean
     },
   ): Promise<WorkflowTaskCollaboratorRow> {
     const res = await api<{ data: WorkflowTaskCollaboratorRow, message: string }>(
       `/workflow/tasks/${taskId}/collaborators`,
       { method: 'POST', body: payload },
+    )
+
+    return res.data
+  }
+
+  async function updateTaskCollaborator(
+    taskId: number,
+    collaboratorId: number,
+    payload: { requires_document: boolean },
+  ): Promise<WorkflowTaskCollaboratorRow> {
+    const res = await api<{ data: WorkflowTaskCollaboratorRow, message: string }>(
+      `/workflow/tasks/${taskId}/collaborators/${collaboratorId}`,
+      { method: 'PATCH', body: payload },
     )
 
     return res.data
@@ -417,6 +431,7 @@ export function useWorkflowApi() {
     fetchBindingsCoverage,
     fetchTaskCollaborators,
     inviteTaskCollaborator,
+    updateTaskCollaborator,
     removeTaskCollaborator,
     fetchMyCollaborations,
     fetchMyPendingCollaborations,

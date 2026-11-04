@@ -105,8 +105,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex flex-wrap items-start justify-between gap-4">
+  <div class="flex h-[calc(100dvh-6.5rem)] min-h-0 flex-col gap-4 overflow-hidden">
+    <div class="shrink-0">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight">
           Repositorio por área
@@ -121,8 +121,8 @@ onMounted(async () => {
       </div>
     </div>
 
-    <Card>
-      <CardHeader class="pb-4">
+    <Card class="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden py-0">
+      <CardHeader class="shrink-0 px-6 pt-6 pb-4">
         <div class="flex flex-wrap items-stretch gap-3">
           <div class="flex min-w-[18rem] flex-1 flex-col justify-end gap-2 md:max-w-md">
             <Label for="area-repository-org-unit">Área productora</Label>
@@ -186,13 +186,14 @@ onMounted(async () => {
           </label>
         </div>
       </CardHeader>
-      <CardContent class="p-0 sm:p-0">
+      <CardContent class="flex min-h-0 flex-1 flex-col p-0 sm:p-0">
         <ArchivalFileAreaRepositoryBrowser
           :tree="displayTree"
           :org-unit-id="selectedOrgUnitNumericId ?? 0"
           :loading="loading"
           :allow-upload="archive === 'management'"
           :focus-archival-file-id="focusArchivalFileId"
+          contained
           @uploaded="loadRepository"
         />
       </CardContent>

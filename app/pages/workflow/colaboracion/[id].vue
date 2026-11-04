@@ -51,6 +51,7 @@ function fileCanPreview(fileName: string, mimeType?: string | null): boolean {
 }
 
 const isResponded = computed(() => collaboration.value?.status === 'responded')
+const requiresDocument = computed(() => collaboration.value?.requires_document !== false)
 const filingFileCount = computed(() => collaboration.value?.filing?.files.length ?? 0)
 const canAct = computed(() =>
   collaboration.value?.status === 'pending'
@@ -95,18 +96,26 @@ watch(collaborationId, () => {
 function buildFormData(): FormData | null {
   submitAttempted.value = true
 
-  if (!attachment.value.file) {
+  if (requiresDocument.value && !attachment.value.file) {
     toast.error('Debe adjuntar al menos un archivo.')
 
     return null
   }
 
-  const folioError = validateDocumentAttachmentFolios(attachment.value.folioStart, attachment.value.folioEnd)
-
-  if (folioError) {
-    toast.error(folioError)
+  if (!requiresDocument.value && !attachment.value.file && !responseNote.value.trim()) {
+    toast.error('Indique una nota de respuesta o adjunte un documento.')
 
     return null
+  }
+
+  if (attachment.value.file) {
+    const folioError = validateDocumentAttachmentFolios(attachment.value.folioStart, attachment.value.folioEnd)
+
+    if (folioError) {
+      toast.error(folioError)
+
+      return null
+    }
   }
 
   const fd = new FormData()
@@ -115,9 +124,11 @@ function buildFormData(): FormData | null {
     fd.append('response_note', responseNote.value.trim())
   }
 
-  fd.append('files[0][file]', attachment.value.file)
-  fd.append('files[0][title]', attachment.value.title.trim() || attachment.value.file.name)
-  appendDocumentFoliosToFormData(fd, 0, attachment.value.folioStart, attachment.value.folioEnd)
+  if (attachment.value.file) {
+    fd.append('files[0][file]', attachment.value.file)
+    fd.append('files[0][title]', attachment.value.title.trim() || attachment.value.file.name)
+    appendDocumentFoliosToFormData(fd, 0, attachment.value.folioStart, attachment.value.folioEnd)
+  }
 
   return fd
 }
@@ -293,10 +304,11 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
           Solicitado por {{ collaboration.invited_by?.name ?? '—' }}
           <span v-if="collaboration.org_unit"> · {{ collaboration.org_unit.name }}</span>
           · Pendiente de su aporte
+          · {{ requiresDocument ? 'Requiere documento' : 'Documento opcional' }}
         </p>
 
         <div class="space-y-2">
-          <Label>Nota (opcional)</Label>
+          <Label>{{ requiresDocument ? 'Nota (opcional)' : 'Nota' }}</Label>
           <Textarea v-model="responseNote" rows="3" placeholder="Comentario sobre su aporte" />
         </div>
 
@@ -305,9 +317,9 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
           v-model:folio-start="attachment.folioStart"
           v-model:folio-end="attachment.folioEnd"
           v-model:file="attachment.file"
-          title="Archivo de respuesta"
+          :title="requiresDocument ? 'Archivo de respuesta' : 'Archivo de respuesta (opcional)'"
           label="Documento"
-          :submit-attempted="submitAttempted"
+          :submit-attempted="submitAttempted && requiresDocument"
           :upload-constraints="VENTANILLA_FILING_UPLOAD_CONSTRAINTS"
         />
 
@@ -418,6 +430,9 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
       <TabsContent v-if="isResponded" value="aporte" class="mt-4 space-y-3">
         <p v-if="collaboration.response_note" class="whitespace-pre-wrap text-sm">
           {{ collaboration.response_note }}
+        </p>
+        <p v-if="!collaboration.files.length" class="text-sm text-muted-foreground">
+          No se adjuntó documento.
         </p>
         <ul v-if="collaboration.files.length" class="divide-y rounded-lg border">
           <li
