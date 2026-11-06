@@ -165,30 +165,19 @@ const canUploadTalentFile = computed(() =>
   ),
 )
 
-const talentDocumentType = computed(() => {
-  const node = currentNode.value
-  if (activeTalentPartyId.value == null || node?.type !== 'document_type' || node.doc_document_type_id == null) {
+const canCreateManualFolder = computed(() =>
+  (canUpload.value || canUploadTalentFile.value)
+  && isDocumentTypeContext.value
+  && currentNode.value?.doc_document_type_id != null,
+)
+
+const talentParentArchivalFileId = computed(() => {
+  if (activeTalentPartyId.value == null) {
     return null
   }
 
-  return {
-    id: node.doc_document_type_id,
-    code: '',
-    name: node.name,
-    archival_file_node_id: node.archival_file_node_id ?? null,
-    documents: [],
-  }
+  return currentNode.value?.archival_file_id ?? null
 })
-
-const insideTalentParty = computed(() => talentPartyNode.value != null)
-
-const canCreateManualFolder = computed(() =>
-  canUpload.value
-  && props.tree?.type === 'area'
-  && isDocumentTypeContext.value
-  && !insideTalentParty.value
-  && currentNode.value?.doc_document_type_id != null,
-)
 
 const targetUploadFileId = computed(() => {
   if (isArchivalAreaManualFolder(currentNode.value)) {
@@ -843,19 +832,7 @@ function formatBytes(size?: number): string {
           </div>
 
           <div
-            v-if="canUploadTalentFile && talentDocumentType && activeTalentPartyId"
-            class="max-h-[40%] shrink-0 overflow-y-auto overscroll-contain border-t bg-muted/20 p-4"
-          >
-            <TalentPartyTypeUpload
-              :party-id="activeTalentPartyId"
-              :document-type="talentDocumentType"
-              :show-documents="false"
-              @uploaded="emit('uploaded')"
-            />
-          </div>
-
-          <div
-            v-else-if="targetUploadFileId && canUpload"
+            v-if="targetUploadFileId && (canUpload || canUploadTalentFile) && isArchivalAreaManualFolder(currentNode)"
             class="max-h-[40%] shrink-0 overflow-y-auto overscroll-contain border-t bg-muted/20 p-4"
           >
             <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -902,6 +879,7 @@ function formatBytes(size?: number): string {
       :document-type-name="currentNode.name"
       :retention="currentNode.retention"
       :publishable-to-library="Boolean(currentNode.doc_series_publishable_to_institutional_library)"
+      :parent-archival-file-id="talentParentArchivalFileId"
       @update:open="manualFolderOpen = $event"
       @created="onManualFolderCreated"
     />

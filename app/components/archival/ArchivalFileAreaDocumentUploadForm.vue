@@ -38,7 +38,10 @@ watch(
 )
 
 const canUpload = computed(() =>
-  hasPermission('expedientes_editar') || hasPermission('expedientes_documentos_adjuntar'),
+  hasPermission('expedientes_editar')
+  || hasPermission('expedientes_documentos_adjuntar')
+  || hasPermission('talento_gestionar')
+  || hasPermission('estructura_org_editar'),
 )
 
 async function handleUpload() {

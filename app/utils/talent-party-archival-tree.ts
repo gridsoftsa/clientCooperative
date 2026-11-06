@@ -1,5 +1,22 @@
 import type { ArchivalFileTreeNode } from '~/types/archival-file'
-import type { TalentPartyDetail, TalentPartyDocument } from '~/types/talent-party'
+import type { TalentPartyDetail, TalentPartyDocument, TalentPartyManualFolder } from '~/types/talent-party'
+
+function talentManualFolderNode(
+  folder: TalentPartyManualFolder,
+  documentTypeId: number,
+  documentTypeName: string,
+): ArchivalFileTreeNode {
+  return {
+    id: `manual-${folder.archival_file_id}-type-${documentTypeId}`,
+    type: 'folder',
+    source: 'manual',
+    name: folder.title,
+    archival_file_id: folder.archival_file_id,
+    file_number: folder.file_number ?? undefined,
+    doc_document_type_id: documentTypeId,
+    children: folder.documents.map(document => documentNode(document, documentTypeId, documentTypeName)),
+  }
+}
 
 function documentNode(
   document: TalentPartyDocument,
@@ -55,11 +72,18 @@ export function talentPartyArchivalTree(party: TalentPartyDetail): ArchivalFileT
         doc_document_type_name: documentType.name,
         archival_file_node_id: documentType.archival_file_node_id ?? undefined,
         archival_file_id: party.archival_file_id ?? undefined,
-        children: documentType.documents.map(document => documentNode(
-          document,
-          documentType.id,
-          documentType.name,
-        )),
+        children: [
+          ...(documentType.manual_folders ?? []).map(manualFolder => talentManualFolderNode(
+            manualFolder,
+            documentType.id,
+            documentType.name,
+          )),
+          ...documentType.documents.map(document => documentNode(
+            document,
+            documentType.id,
+            documentType.name,
+          )),
+        ],
       })),
     })
   }
@@ -70,6 +94,8 @@ export function talentPartyArchivalTree(party: TalentPartyDetail): ArchivalFileT
   return {
     id: `talent-file-${party.id}`,
     type: 'folder',
+    source: 'talent_party',
+    talent_party_id: party.id,
     name,
     archival_file_id: party.archival_file_id ?? undefined,
     org_unit_id: party.org_unit_id,

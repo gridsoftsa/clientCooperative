@@ -31,11 +31,19 @@ export interface TalentPartyDocument {
   uploaded_at?: string | null
 }
 
+export interface TalentPartyManualFolder {
+  archival_file_id: number
+  title: string
+  file_number?: string | null
+  documents: TalentPartyDocument[]
+}
+
 export interface TalentPartyDocumentTypeFolder {
   id: number
   code: string
   name: string
   archival_file_node_id: number | null
+  manual_folders?: TalentPartyManualFolder[]
   documents: TalentPartyDocument[]
 }
 

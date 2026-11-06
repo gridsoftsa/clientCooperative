@@ -20,6 +20,7 @@ const props = defineProps<{
   documentTypeName: string
   retention?: ArchivalDocumentRetentionSummary | null
   publishableToLibrary?: boolean
+  parentArchivalFileId?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -167,6 +168,9 @@ async function submit() {
     const formData = new FormData()
     formData.append('org_unit_id', String(props.orgUnitId))
     formData.append('doc_document_type_id', String(props.docDocumentTypeId))
+    if (props.parentArchivalFileId) {
+      formData.append('parent_archival_file_id', String(props.parentArchivalFileId))
+    }
     formData.append('title', title)
     formData.append('publish_to_library', publishToLibrary.value ? '1' : '0')
     formData.append('complete_on_create', canComplete.value && completeOnCreate.value ? '1' : '0')
