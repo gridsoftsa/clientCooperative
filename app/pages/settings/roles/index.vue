@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { Role, PaginatedRoles } from '~/types/role'
+import type { Role, RoleAssignedUser, PaginatedRoles } from '~/types/role'
 import { formatPermissionDisplayName } from '~/constants/permission-labels'
 import { getRoleDisplayLabel, roleShowsSystemBadge } from '~/constants/role-labels'
 import { APPLICATION_DOMAIN_LABELS, type ProductModule } from '~/constants/application-domains'
@@ -18,8 +18,6 @@ const deleteWithReason = useApiDeleteWithReason()
 const deleteRoleDialogOpen = ref(false)
 const rolePendingDelete = ref<{ id: number; name: string } | null>(null)
 const deletingRole = ref(false)
-const usersDialogOpen = ref(false)
-const roleForUsers = ref<Role | null>(null)
 
 const roles = ref<Role[]>([])
 const loading = ref(false)
@@ -66,9 +64,23 @@ function handlePageChange(page: number) {
   fetchRoles()
 }
 
-function openUsersDialog(role: Role) {
-  roleForUsers.value = role
-  usersDialogOpen.value = true
+function openRoleUsers(role: Role) {
+  void navigateTo(`/settings/roles/${role.id}/edit?tab=usuarios`)
+}
+
+function roleUsers(role: Role): RoleAssignedUser[] {
+  return role.users ?? []
+}
+
+function userInitials(user: RoleAssignedUser): string {
+  const source = (user.full_name || user.name || '').trim()
+  const parts = source.split(/\s+/).filter(Boolean)
+
+  if (parts.length >= 2) {
+    return `${parts[0]!.charAt(0)}${parts[1]!.charAt(0)}`.toUpperCase()
+  }
+
+  return source.slice(0, 2).toUpperCase() || '?'
 }
 
 function openDeleteRoleDialog(id: number, name: string) {
@@ -172,6 +184,7 @@ watch(searchQuery, () => {
                   <TableHead>Nombre</TableHead>
                   <TableHead>Módulos</TableHead>
                   <TableHead>Permisos</TableHead>
+                  <TableHead>Usuarios</TableHead>
                   <TableHead>Fecha de Creación</TableHead>
                   <TableHead class="text-right">Acciones</TableHead>
                 </TableRow>
@@ -221,20 +234,44 @@ watch(searchQuery, () => {
                     </div>
                   </TableCell>
                   <TableCell>
+                    <button
+                      type="button"
+                      class="inline-flex max-w-full items-center gap-2 rounded-full border bg-background px-2 py-1 text-left text-sm shadow-xs transition-colors hover:bg-muted"
+                      :title="roleUsers(role).length === 0
+                        ? 'Ver usuarios de este rol'
+                        : `Ver ${roleUsers(role).length} usuario(s) con este rol`"
+                      @click="openRoleUsers(role)"
+                    >
+                      <span v-if="roleUsers(role).length" class="flex items-center -space-x-1.5">
+                        <Avatar
+                          v-for="user in roleUsers(role).slice(0, 3)"
+                          :key="user.id"
+                          class="size-6 border border-background"
+                        >
+                          <AvatarFallback class="bg-primary/10 text-[10px] font-semibold text-primary">
+                            {{ userInitials(user) }}
+                          </AvatarFallback>
+                        </Avatar>
+                      </span>
+                      <span
+                        v-else
+                        class="flex size-6 items-center justify-center rounded-full bg-muted text-muted-foreground"
+                      >
+                        <Icon name="i-lucide-users" class="size-3.5" />
+                      </span>
+                      <span class="min-w-0">
+                        <span class="font-medium">{{ roleUsers(role).length }}</span>
+                        <span class="ml-1 text-muted-foreground">
+                          {{ roleUsers(role).length === 1 ? 'usuario' : 'usuarios' }}
+                        </span>
+                      </span>
+                    </button>
+                  </TableCell>
+                  <TableCell>
                     {{ new Date(role.created_at).toLocaleDateString() }}
                   </TableCell>
                   <TableCell class="text-right">
                     <div class="flex flex-wrap justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        class="gap-1.5"
-                        @click="openUsersDialog(role)"
-                      >
-                        <Icon name="i-lucide-users" class="h-4 w-4 shrink-0" />
-                        Usuarios
-                        <span class="text-muted-foreground">({{ role.users?.length ?? 0 }})</span>
-                      </Button>
                       <PermissionGate permission="roles_editar">
                         <Button
                           variant="warning"
@@ -294,18 +331,6 @@ watch(searchQuery, () => {
       </CardContent>
     </Card>
     </div>
-
-    <Dialog v-model:open="usersDialogOpen">
-      <DialogContent class="max-h-[85vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Usuarios con este rol</DialogTitle>
-          <DialogDescription v-if="roleForUsers">
-            {{ getRoleDisplayLabel(roleForUsers.name) }}. Las cuentas inactivas siguen en la lista.
-          </DialogDescription>
-        </DialogHeader>
-        <SettingsRoleAssignedUsers :users="roleForUsers?.users" />
-      </DialogContent>
-    </Dialog>
 
     <ConfirmWithReasonDialog
       v-model:open="deleteRoleDialogOpen"

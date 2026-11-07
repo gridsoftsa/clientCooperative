@@ -10,7 +10,7 @@ import {
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'roles_editar',
+  permissions: 'roles_ver|roles_editar',
 })
 
 const { $api } = useNuxtApp()
@@ -18,8 +18,22 @@ const route = useRoute()
 const router = useRouter()
 const { goBack } = useNavigationBack('/settings/roles')
 const { refetchUserSilently } = useAuth()
+const { hasPermission } = usePermissions()
 const { manageableDomains } = useRoleAssignmentScope()
 const roleId = route.params.id as string
+const canEdit = computed(() => hasPermission('roles_editar'))
+
+const activeTab = computed({
+  get: () => (route.query.tab === 'usuarios' ? 'usuarios' : 'permisos'),
+  set: (value: string) => {
+    void router.replace({
+      query: {
+        ...route.query,
+        tab: value === 'usuarios' ? 'usuarios' : undefined,
+      },
+    })
+  },
+})
 
 const formData = ref({
   name: '',
@@ -51,7 +65,7 @@ const visiblePermissionDomains = computed(() =>
 )
 
 const debouncedPersistPermissions = useDebounceFn(async () => {
-  if (skipPermissionAutoSave.value || !role.value) {
+  if (skipPermissionAutoSave.value || !canEdit.value || !role.value) {
     return
   }
   if (!formData.value.name.trim()) {
@@ -140,6 +154,9 @@ const fetchPermissions = async () => {
 }
 
 const handleSubmit = async () => {
+  if (!canEdit.value) {
+    return
+  }
   if (!formData.value.name.trim()) {
     toast.error('El nombre del rol es requerido')
     return
@@ -168,7 +185,7 @@ const handleSubmit = async () => {
 onMounted(async () => {
   await Promise.all([fetchRole(), fetchPermissions()])
   await nextTick()
-  skipPermissionAutoSave.value = false
+  skipPermissionAutoSave.value = !canEdit.value
 })
 </script>
 
@@ -178,10 +195,10 @@ onMounted(async () => {
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-2xl font-bold tracking-tight">
-            Editar Rol
+            {{ canEdit ? 'Editar rol' : 'Rol' }}
           </h2>
           <p v-if="role" class="text-muted-foreground">
-            Modifica el rol: {{ role.name }}
+            {{ canEdit ? `Modifica el rol: ${role.name}` : `Detalle del rol: ${role.name}` }}
           </p>
         </div>
         <Button variant="outline" @click="goBack">
@@ -198,86 +215,109 @@ onMounted(async () => {
         </CardContent>
       </Card>
 
-      <form v-else-if="role" @submit.prevent="handleSubmit">
-        <div class="grid gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Información del Rol</CardTitle>
-              <CardDescription>Información básica del rol</CardDescription>
-            </CardHeader>
-            <CardContent class="space-y-4">
-              <div>
-                <Label for="name">Nombre del Rol *</Label>
-                <Input
-                  id="name"
-                  v-model="formData.name"
-                  required
-                  placeholder="Ej: moderador, editor..."
-                  :disabled="['admin', 'user'].includes(role.name)"
+      <div v-else-if="role" class="space-y-4">
+        <Tabs v-model="activeTab" class="w-full gap-4">
+          <TabsList class="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="permisos">
+              Permisos
+            </TabsTrigger>
+            <TabsTrigger value="usuarios">
+              Usuarios
+              <Badge variant="secondary" class="ml-2">
+                {{ role.users?.length ?? 0 }}
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="permisos" class="mt-4">
+            <form @submit.prevent="handleSubmit">
+              <div class="grid gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Información del rol</CardTitle>
+                    <CardDescription>Nombre técnico del rol en el sistema</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Label for="name">Nombre del rol *</Label>
+                    <Input
+                      id="name"
+                      v-model="formData.name"
+                      required
+                      placeholder="Ej: moderador, editor..."
+                      :disabled="!canEdit || ['admin', 'user'].includes(role.name)"
+                    />
+                    <p v-if="['admin', 'user'].includes(role.name)" class="mt-1 text-sm text-muted-foreground">
+                      Este es un rol del sistema y no se puede modificar su nombre
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <SettingsRoleModulesCard
+                  v-model="formData.enabledModules"
+                  :allowed-modules="allowedProductModules"
+                  :locked="modulesLocked || !canEdit"
                 />
-                <p v-if="['admin', 'user'].includes(role.name)" class="mt-1 text-sm text-muted-foreground">
-                  Este es un rol del sistema y no se puede modificar su nombre
-                </p>
-              </div>
-              <div class="space-y-2 border-t pt-4">
-                <div>
-                  <p class="text-sm font-medium">Usuarios con este rol</p>
-                  <p class="text-sm text-muted-foreground">
-                    Cuentas que tienen el rol asignado. Las inactivas siguen en la lista para ver la relación.
+
+                <Card>
+                  <CardHeader class="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+                    <div class="min-w-0 flex-1">
+                      <CardTitle>Permisos</CardTitle>
+                      <CardDescription>
+                        Agrupados por módulo. Al activar o desactivar un módulo, o al marcar permisos, el cambio se guarda solo.
+                      </CardDescription>
+                    </div>
+                    <span
+                      v-if="savingPermissions"
+                      class="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                    >
+                      <Icon name="i-lucide-loader-2" class="h-3.5 w-3.5 animate-spin" />
+                      Guardando permisos…
+                    </span>
+                  </CardHeader>
+                  <CardContent>
+                    <fieldset :disabled="!canEdit" class="min-w-0">
+                      <SettingsRolePermissionsPicker
+                        v-model="formData.permissions"
+                        :permissions="permissions"
+                        :visible-domains="visiblePermissionDomains"
+                      />
+                    </fieldset>
+                  </CardContent>
+                </Card>
+
+                <div v-if="canEdit" class="flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
+                  <p class="max-w-md text-right text-xs text-muted-foreground">
+                    Los permisos ya se sincronizan con el servidor al marcarlos. Usa el botón solo para guardar el nombre del rol.
                   </p>
+                  <div class="flex gap-4">
+                    <Button type="button" variant="outline" @click="goBack">
+                      Cancelar
+                    </Button>
+                    <Button type="submit" :disabled="saving">
+                      <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+                      {{ saving ? 'Guardando...' : 'Guardar nombre del rol' }}
+                    </Button>
+                  </div>
                 </div>
-                <SettingsRoleAssignedUsers :users="role.users" />
               </div>
-            </CardContent>
-          </Card>
+            </form>
+          </TabsContent>
 
-          <SettingsRoleModulesCard
-            v-model="formData.enabledModules"
-            :allowed-modules="allowedProductModules"
-            :locked="modulesLocked"
-          />
-
-          <Card>
-            <CardHeader class="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-              <div class="min-w-0 flex-1">
-                <CardTitle>Permisos</CardTitle>
+          <TabsContent value="usuarios" class="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Usuarios con este rol</CardTitle>
                 <CardDescription>
-                  Agrupados por módulo. Al activar o desactivar un módulo, o al marcar permisos, el cambio se guarda solo.
+                  {{ role.users?.length ?? 0 }} cuenta(s) asignada(s). Las inactivas siguen en la lista para ver la relación.
                 </CardDescription>
-              </div>
-              <span
-                v-if="savingPermissions"
-                class="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-              >
-                <Icon name="i-lucide-loader-2" class="h-3.5 w-3.5 animate-spin" />
-                Guardando permisos…
-              </span>
-            </CardHeader>
-            <CardContent>
-              <SettingsRolePermissionsPicker
-                v-model="formData.permissions"
-                :permissions="permissions"
-                :visible-domains="visiblePermissionDomains"
-              />
-            </CardContent>
-          </Card>
-
-          <div class="flex flex-col items-end gap-2 sm:flex-row sm:justify-end">
-            <p class="max-w-md text-right text-xs text-muted-foreground">
-              Los permisos ya se sincronizan con el servidor al marcarlos. Usa el botón solo para guardar el nombre del rol.
-            </p>
-            <div class="flex gap-4">
-              <Button type="button" variant="outline" @click="goBack">
-                Cancelar
-              </Button>
-              <Button type="submit" :disabled="saving">
-                <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-                {{ saving ? 'Guardando...' : 'Guardar nombre del rol' }}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </form>
+              </CardHeader>
+              <CardContent>
+                <SettingsRoleAssignedUsers :users="role.users" />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   </SettingsLayout>
 </template>
