@@ -56,6 +56,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   'settings': 'Configuración',
   'solicitantes': 'Solicitantes',
   'staff': 'Funcionarios',
+  'suppliers': 'Proveedores',
+  'archivo': 'Archivo',
   'sucursales': 'Sucursales',
   'tasks': 'Tareas',
   'tree': 'Organigrama',

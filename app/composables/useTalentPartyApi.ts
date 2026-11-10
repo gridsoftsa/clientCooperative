@@ -48,10 +48,40 @@ export function useTalentPartyApi() {
     return api<{ data: TalentTrdSeries[] }>(`/talent-parties/trd-options/${trdTableId}/subseries`)
   }
 
+  function update(id: number, body: {
+    display_name: string
+    identifier?: string
+    document_type?: string
+    email?: string
+    phone?: string
+    address?: string
+    postal_code?: string
+    is_active?: boolean
+    create_trd_file?: boolean
+  }) {
+    return api<{ data: TalentPartyDetail, message: string }>(`/talent-parties/${id}`, {
+      method: 'PUT',
+      body,
+    })
+  }
+
+  function deactivate(id: number) {
+    return api<{ data: TalentPartySummary, message: string }>(`/talent-parties/${id}/deactivate`, {
+      method: 'PATCH',
+    })
+  }
+
   function create(body: {
     kind: TalentPartyKind
     display_name: string
     identifier?: string
+    document_type?: string
+    email?: string
+    phone?: string
+    address?: string
+    postal_code?: string
+    is_active?: boolean
+    create_trd_file?: boolean
   }) {
     return api<{ data: TalentPartyDetail, message: string }>('/talent-parties', {
       method: 'POST',
@@ -74,6 +104,8 @@ export function useTalentPartyApi() {
     trdOptions,
     trdSubseries,
     create,
+    update,
+    deactivate,
     uploadDocument,
   }
 }

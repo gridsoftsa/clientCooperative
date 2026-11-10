@@ -21,6 +21,7 @@ const search = ref('')
 const createOpen = ref(false)
 const settingsOpen = ref(false)
 const saving = ref(false)
+const deactivatingId = ref<number | null>(null)
 const settingsSaving = ref(false)
 const displayName = ref('')
 const identifier = ref('')
@@ -144,9 +145,44 @@ function openCreate() {
     return
   }
 
+  if (props.kind === 'supplier') {
+    void router.push('/settings/organizational-structure/suppliers/create')
+    return
+  }
+
   displayName.value = ''
   identifier.value = ''
   createOpen.value = true
+}
+
+async function deactivateParty(party: TalentPartySummary): Promise<void> {
+  if (!canManage.value || deactivatingId.value != null) {
+    return
+  }
+
+  deactivatingId.value = party.id
+  try {
+    const response = await talentApi.deactivate(party.id)
+    toast.success(response.message || 'Proveedor inactivado.')
+    await loadParties()
+  }
+  catch (error: unknown) {
+    toast.error(apiErrorMessage(error, 'No se pudo inactivar el proveedor.'))
+  }
+  finally {
+    deactivatingId.value = null
+  }
+}
+
+function partyDocumentLabel(party: TalentPartySummary): string {
+  if (!party.identifier) {
+    return '—'
+  }
+  if (party.document_type) {
+    return `${party.document_type} ${party.identifier}`
+  }
+
+  return party.identifier
 }
 
 function isSubseriesSelected(id: number): boolean {
@@ -372,7 +408,10 @@ onMounted(() => {
           {{ title }}
         </h1>
         <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Cada {{ singular }} es una carpeta con la TRD y las subseries de la configuración. Al crearla solo se indica el nombre y la identificación.
+          Cada {{ singular }} es una carpeta con la TRD y las subseries de la configuración.
+          {{ kind === 'supplier'
+            ? 'El alta se hace en una pantalla completa con identificación y datos de contacto.'
+            : 'Al crearla solo se indica el nombre y la identificación.' }}
         </p>
       </div>
       <div v-if="canManage" class="flex flex-wrap gap-2">
@@ -386,7 +425,7 @@ onMounted(() => {
         </Button>
         <Button
           type="button"
-          :disabled="!canCreate"
+          :disabled="kind !== 'supplier' && !canCreate"
           @click="openCreate"
         >
           <Icon name="i-lucide-folder-plus" class="mr-1.5 size-4" />
@@ -612,35 +651,91 @@ onMounted(() => {
             <TableRow>
               <TableHead>Nombre</TableHead>
               <TableHead>Identificación</TableHead>
+              <TableHead v-if="kind === 'supplier'">Correo</TableHead>
+              <TableHead v-if="kind === 'supplier'">Celular</TableHead>
               <TableHead>Área de la TRD</TableHead>
               <TableHead>Subseries</TableHead>
               <TableHead>Archivos</TableHead>
-              <TableHead />
+              <TableHead v-if="kind === 'supplier'">Estado</TableHead>
+              <TableHead class="text-right">
+                Acciones
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow
               v-for="party in parties"
               :key="party.id"
+              :class="kind === 'supplier' && party.is_active === false ? 'bg-destructive/5' : undefined"
             >
               <TableCell class="font-medium">
                 {{ party.display_name }}
               </TableCell>
-              <TableCell>{{ party.identifier || '—' }}</TableCell>
+              <TableCell>{{ partyDocumentLabel(party) }}</TableCell>
+              <TableCell v-if="kind === 'supplier'">
+                {{ party.email || '—' }}
+              </TableCell>
+              <TableCell v-if="kind === 'supplier'">
+                {{ party.phone || '—' }}
+              </TableCell>
               <TableCell>{{ party.org_unit?.name || '—' }}</TableCell>
               <TableCell>{{ party.subseries_count }}</TableCell>
               <TableCell>{{ party.documents_count }}</TableCell>
-              <TableCell class="text-right">
-                <Button
-                  v-if="partyFileHref(party.id, party.org_unit_id, party.archival_file_id)"
-                  variant="outline"
-                  size="sm"
-                  as-child
-                >
-                  <NuxtLink :to="partyFileHref(party.id, party.org_unit_id, party.archival_file_id) || '/settings/organizational-structure/suppliers'">
-                    Ver archivo
-                  </NuxtLink>
-                </Button>
+              <TableCell v-if="kind === 'supplier'">
+                <Badge :variant="party.is_active === false ? 'secondary' : 'default'">
+                  {{ party.is_active === false ? 'Inactivo' : 'Activo' }}
+                </Badge>
+              </TableCell>
+              <TableCell class="whitespace-normal text-right">
+                <div class="flex flex-wrap justify-end gap-1">
+                  <Button
+                    v-if="partyFileHref(party.id, party.org_unit_id, party.archival_file_id)"
+                    variant="outline"
+                    size="sm"
+                    class="h-8 gap-1.5 px-2 text-xs"
+                    as-child
+                  >
+                    <NuxtLink :to="partyFileHref(party.id, party.org_unit_id, party.archival_file_id) || '/settings/organizational-structure/suppliers'">
+                      Ver archivo
+                    </NuxtLink>
+                  </Button>
+                  <Button
+                    v-if="kind === 'supplier'"
+                    variant="outline"
+                    size="sm"
+                    class="h-8 gap-1.5 px-2 text-xs"
+                    as-child
+                  >
+                    <NuxtLink :to="`/settings/organizational-structure/suppliers/${party.id}`">
+                      Ver
+                    </NuxtLink>
+                  </Button>
+                  <PermissionGate
+                    v-if="kind === 'supplier'"
+                    :permission="managePermission"
+                  >
+                    <Button
+                      variant="warning"
+                      size="sm"
+                      class="h-8 gap-1.5 px-2 text-xs"
+                      @click="router.push(`/settings/organizational-structure/suppliers/${party.id}/edit`)"
+                    >
+                      Editar
+                    </Button>
+                    <Button
+                      v-if="party.is_active !== false"
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      class="h-8 gap-1.5 px-2 text-xs"
+                      :disabled="deactivatingId === party.id"
+                      @click="deactivateParty(party)"
+                    >
+                      <Icon name="i-lucide-ban" class="size-4 shrink-0" />
+                      Desactivar
+                    </Button>
+                  </PermissionGate>
+                </div>
               </TableCell>
             </TableRow>
           </TableBody>

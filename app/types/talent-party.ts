@@ -12,6 +12,12 @@ export interface TalentPartySummary {
   kind_label: string
   display_name: string
   identifier: string | null
+  document_type?: string | null
+  email?: string | null
+  phone?: string | null
+  address?: string | null
+  postal_code?: string | null
+  is_active?: boolean
   trd_table_id: number
   org_unit_id: number
   org_unit: TalentPartyOrgUnit | null
