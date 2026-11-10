@@ -6,9 +6,11 @@ const props = withDefaults(defineProps<{
   kind: TalentPartyKind
   managePermission?: string
   showRegistry?: boolean
+  allowManualCreate?: boolean
 }>(), {
   managePermission: 'talento_gestionar',
   showRegistry: true,
+  allowManualCreate: true,
 })
 
 const router = useRouter()
@@ -38,8 +40,26 @@ const disabledDocumentTypeIds = ref<number[]>([])
 const expandedSubseriesIds = ref<number[]>([])
 const subseriesScroller = ref<HTMLElement | null>(null)
 
-const title = computed(() => props.kind === 'supplier' ? 'Proveedores' : 'Empleados')
-const singular = computed(() => props.kind === 'supplier' ? 'proveedor' : 'empleado')
+const title = computed(() => {
+  if (props.kind === 'supplier') {
+    return 'Proveedores'
+  }
+  if (props.kind === 'applicant') {
+    return 'Solicitantes'
+  }
+
+  return 'Empleados'
+})
+const singular = computed(() => {
+  if (props.kind === 'supplier') {
+    return 'proveedor'
+  }
+  if (props.kind === 'applicant') {
+    return 'solicitante'
+  }
+
+  return 'empleado'
+})
 const canManage = computed(() => hasPermission(props.managePermission))
 const canCreate = computed(() => savedTrdTableId.value != null && savedSubseriesCount.value > 0)
 const draftSubseriesCount = computed(() => selectedSubseries.value.length)
@@ -81,14 +101,35 @@ async function loadTrdOptions() {
   }
 }
 
+function settingsSlice(data: TalentPartySettings): {
+  configured: TalentPartySettings['employee_trd']
+  subseriesIds: number[]
+  disabledIds: number[]
+} {
+  if (props.kind === 'supplier') {
+    return {
+      configured: data.supplier_trd,
+      subseriesIds: data.supplier_doc_subseries_ids,
+      disabledIds: data.supplier_disabled_doc_document_type_ids,
+    }
+  }
+  if (props.kind === 'applicant') {
+    return {
+      configured: data.applicant_trd,
+      subseriesIds: data.applicant_doc_subseries_ids,
+      disabledIds: data.applicant_disabled_doc_document_type_ids,
+    }
+  }
+
+  return {
+    configured: data.employee_trd,
+    subseriesIds: data.employee_doc_subseries_ids,
+    disabledIds: data.employee_disabled_doc_document_type_ids,
+  }
+}
+
 async function applySettings(data: TalentPartySettings) {
-  const configured = props.kind === 'supplier' ? data.supplier_trd : data.employee_trd
-  const subseriesIds = props.kind === 'supplier'
-    ? data.supplier_doc_subseries_ids
-    : data.employee_doc_subseries_ids
-  const disabledIds = props.kind === 'supplier'
-    ? data.supplier_disabled_doc_document_type_ids
-    : data.employee_disabled_doc_document_type_ids
+  const { configured, subseriesIds, disabledIds } = settingsSlice(data)
   savedTrdTableId.value = configured?.id ?? null
   savedTrdLabel.value = configured?.label ?? ''
   savedSubseriesCount.value = subseriesIds.length
@@ -147,6 +188,10 @@ function openCreate() {
 
   if (props.kind === 'supplier') {
     void router.push('/settings/organizational-structure/suppliers/create')
+    return
+  }
+
+  if (props.kind === 'applicant') {
     return
   }
 
@@ -298,16 +343,20 @@ function keepSubseriesScroll(event: FocusEvent): void {
   })
 }
 
-function partyFileHref(partyId: number, orgUnitId: number | null | undefined, archivalFileId: number | null | undefined): string | null {
-  if (!archivalFileId) {
+function partyFileHref(party: Pick<TalentPartySummary, 'id' | 'org_unit_id' | 'archival_file_id' | 'applicant_id'>): string | null {
+  if (!party.archival_file_id) {
     return null
   }
 
   if (props.kind === 'supplier') {
-    return `/settings/organizational-structure/suppliers/${partyId}/archivo`
+    return `/settings/organizational-structure/suppliers/${party.id}/archivo`
   }
 
-  return areaRepositoryFolderHref(orgUnitId, archivalFileId)
+  if (props.kind === 'applicant' && party.applicant_id) {
+    return `/solicitantes/${party.applicant_id}/archivo`
+  }
+
+  return areaRepositoryFolderHref(party.org_unit_id, party.archival_file_id)
 }
 
 function areaRepositoryFolderHref(orgUnitId: number | null | undefined, archivalFileId: number | null | undefined): string | null {
@@ -376,7 +425,7 @@ async function createParty() {
     })
     toast.success(response.message || 'Carpeta creada.')
     createOpen.value = false
-    const href = partyFileHref(response.data.id, response.data.org_unit_id, response.data.archival_file_id)
+    const href = partyFileHref(response.data)
     if (href) {
       await router.push(href)
       return
@@ -424,6 +473,7 @@ onMounted(() => {
           Configuración de archivo
         </Button>
         <Button
+          v-if="allowManualCreate"
           type="button"
           :disabled="kind !== 'supplier' && !canCreate"
           @click="openCreate"
@@ -456,9 +506,11 @@ onMounted(() => {
             {{ showRegistry ? `Configuración de ${title.toLowerCase()}` : 'Configuración del archivo en TRD' }}
           </DialogTitle>
           <DialogDescription>
-            {{ showRegistry
-              ? `La TRD y las subseries se aplican a cada carpeta nueva. No hay que volver a elegirlas al crear un ${singular}.`
-              : 'La TRD y las subseries se usan cuando, al registrar un funcionario, se marca Crear archivo en TRD.' }}
+            {{ kind === 'applicant'
+              ? 'Si Gestión documental está activo y guarda esta TRD, la carpeta se crea sola al registrar el solicitante en el catálogo o en una radicación.'
+              : showRegistry
+                ? `La TRD y las subseries se aplican a cada carpeta nueva. No hay que volver a elegirlas al crear un ${singular}.`
+                : 'La TRD y las subseries se usan cuando, al registrar un funcionario, se marca Crear archivo en TRD.' }}
           </DialogDescription>
         </DialogHeader>
         <div class="shrink-0 space-y-2 px-6 pt-4">
@@ -689,13 +741,13 @@ onMounted(() => {
               <TableCell class="whitespace-normal text-right">
                 <div class="flex flex-wrap justify-end gap-1">
                   <Button
-                    v-if="partyFileHref(party.id, party.org_unit_id, party.archival_file_id)"
+                    v-if="partyFileHref(party)"
                     variant="outline"
                     size="sm"
                     class="h-8 gap-1.5 px-2 text-xs"
                     as-child
                   >
-                    <NuxtLink :to="partyFileHref(party.id, party.org_unit_id, party.archival_file_id) || '/settings/organizational-structure/suppliers'">
+                    <NuxtLink :to="partyFileHref(party) || '/settings/organizational-structure/suppliers'">
                       Ver archivo
                     </NuxtLink>
                   </Button>

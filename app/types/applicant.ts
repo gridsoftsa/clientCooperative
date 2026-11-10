@@ -38,6 +38,11 @@ export interface Applicant {
   last_participation_type?: 'deudor' | 'codeudor' | null
   /** Fecha de la última solicitud (como deudor o codeudor) */
   last_application_date?: string | null
+  trd_file?: {
+    talent_party_id: number
+    org_unit_id: number | null
+    archival_file_id: number | null
+  } | null
 }
 
 export interface PaginatedApplicants {

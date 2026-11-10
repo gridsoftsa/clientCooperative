@@ -12,6 +12,7 @@ definePageMeta({
 const { $api } = useNuxtApp()
 const router = useRouter()
 const { goBack } = useNavigationBack('/solicitantes')
+const { ensureArchivalFileConfiguredForCreate } = useCreditArchivalLink()
 
 const form = ref<ApplicantForm>({
   document_type: 'CC',
@@ -99,6 +100,9 @@ async function searchApplicant() {
 
 async function handleSubmit() {
   await nextTick()
+  if (!(await ensureArchivalFileConfiguredForCreate())) {
+    return
+  }
   if (!applicantFormRef.value?.validateRequiredStepOneFields()) {
     toast.error('Revise los campos obligatorios y el formato del número de documento.')
     return

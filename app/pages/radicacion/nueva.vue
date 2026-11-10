@@ -178,7 +178,10 @@ const {
   loadTrdTypesForUnit,
 } = useRadicacionTrd()
 
-const archivalApi = useArchivalFileApi()
+const {
+  loadCreditArchivalLinkForRadicacion,
+  ensureArchivalFileConfiguredForCreate,
+} = useCreditArchivalLink()
 const creditLinkGlobalEnabled = ref(false)
 const userProducerOrgUnitId = ref<number | null>(null)
 
@@ -1203,6 +1206,9 @@ async function uploadAllDocuments(
 }
 
 async function saveCodeudor() {
+  if (!(await ensureArchivalFileConfiguredForCreate())) {
+    return
+  }
   if (!form.value.numero_radicado_externo?.trim()) {
     toast.error('Ingresa el código (RAD-XXX) o radicado externo para vincular el codeudor')
     return
@@ -1370,6 +1376,9 @@ async function saveDraft() {
   if (saving.value) {
     return
   }
+  if (!(await ensureArchivalFileConfiguredForCreate())) {
+    return
+  }
   if (mode.value === 'codeudor') {
     const identityErrCo = validateApplicantMinimalIdentityForDraftSave(form.value.debtor, 'co_debtor')
     if (identityErrCo) {
@@ -1436,6 +1445,9 @@ async function saveDraft() {
 /** Guarda borrador, sube documentos y pasa la solicitud a revisión del director de agencia. */
 async function submitApplication() {
   if (saving.value) {
+    return
+  }
+  if (!(await ensureArchivalFileConfiguredForCreate())) {
     return
   }
   if (mode.value === 'codeudor') {
@@ -1621,14 +1633,15 @@ onMounted(() => {
   void fetchCatalogs()
   void loadProducerUnits()
   void fetchCreditDestinationOptions()
-  void archivalApi.fetchCreditLinkSettings()
+  void loadCreditArchivalLinkForRadicacion()
     .then((data) => {
+      if (!data) {
+        creditLinkGlobalEnabled.value = false
+        return
+      }
       creditLinkGlobalEnabled.value = data.enabled
       userProducerOrgUnitId.value = data.user_producer_org_unit?.id ?? null
       applyAutomaticCreditArchivalLink()
-    })
-    .catch(() => {
-      creditLinkGlobalEnabled.value = false
     })
 })
 </script>

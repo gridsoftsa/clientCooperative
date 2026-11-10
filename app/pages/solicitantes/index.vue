@@ -11,6 +11,9 @@ definePageMeta({
 
 const { $api } = useNuxtApp()
 const router = useRouter()
+const { hasModule, hasPermission } = usePermissions()
+const { ensureArchivalFileConfiguredForCreate } = useCreditArchivalLink()
+const showTrdSettings = computed(() => hasModule('gestion_documental'))
 const { downloadReportFile } = useReportExport()
 
 const applicants = ref<Applicant[]>([])
@@ -42,6 +45,11 @@ function formatDate(dateStr: string) {
 }
 
 async function fetchApplicants() {
+  if (!hasPermission('solicitantes_ver')) {
+    applicants.value = []
+    return
+  }
+
   loading.value = true
   try {
     const params: Record<string, string | number> = {
@@ -54,9 +62,14 @@ async function fetchApplicants() {
     const res = await $api<PaginatedApplicants>('/applicants', { query: params })
     applicants.value = res.data
     pagination.value = res.meta
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error al cargar solicitantes:', error)
-    toast.error('Error al cargar solicitantes')
+    const status = error && typeof error === 'object' && 'status' in error
+      ? Number((error as { status?: number }).status)
+      : 0
+    toast.error(status === 403
+      ? 'No tiene permiso para ver solicitantes. Cierre sesión y vuelva a entrar para refrescar permisos.'
+      : 'Error al cargar solicitantes')
   } finally {
     loading.value = false
   }
@@ -166,6 +179,9 @@ function triggerApplicantImportPick() {
 }
 
 async function applyApplicantImportFile(file: File) {
+  if (!(await ensureArchivalFileConfiguredForCreate())) {
+    return
+  }
   const name = file.name.toLowerCase()
   if (!name.endsWith('.xlsx')) {
     toast.error('Seleccione un archivo Excel (.xlsx)')
@@ -247,6 +263,13 @@ function onApplicantImportDragLeave(ev: DragEvent) {
           Deudores y Codeudores
         </h2>
         <div class="flex flex-wrap items-center gap-2">
+          <TalentPartyList
+            v-if="showTrdSettings"
+            kind="applicant"
+            manage-permission="solicitantes_editar"
+            :show-registry="false"
+            :allow-manual-create="false"
+          />
           <PermissionGate permission="solicitantes_crear">
             <Button
               variant="default"
@@ -364,6 +387,17 @@ function onApplicantImportDragLeave(ev: DragEvent) {
                     </TableCell>
                     <TableCell class="text-right">
                       <div class="flex flex-wrap justify-end gap-2">
+                        <Button
+                          v-if="showTrdSettings && a.trd_file?.archival_file_id"
+                          variant="outline"
+                          size="sm"
+                          class="gap-1.5"
+                          as-child
+                        >
+                          <NuxtLink :to="`/solicitantes/${a.id}/archivo`">
+                            Ver archivo
+                          </NuxtLink>
+                        </Button>
                         <PermissionGate permission="solicitantes_editar">
                           <Button
                             variant="warning"

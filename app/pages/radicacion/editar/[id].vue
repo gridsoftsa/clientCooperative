@@ -260,7 +260,7 @@ const {
   loadTrdTypesForUnit,
 } = useRadicacionTrd()
 
-const archivalApi = useArchivalFileApi()
+const { loadCreditArchivalLinkForRadicacion, ensureArchivalFileConfiguredForCreate } = useCreditArchivalLink()
 const creditLinkGlobalEnabled = ref(false)
 const userProducerOrgUnitId = ref<number | null>(null)
 
@@ -1650,6 +1650,9 @@ function upsertLocalApplicationDocument(doc: {
 }
 
 async function saveChanges() {
+  if (!(await ensureArchivalFileConfiguredForCreate())) {
+    return
+  }
   const identityErr = validateApplicantMinimalIdentityForDraftSave(
     addingCodeudor.value ? codeudorWizardApplicant.value : form.value.debtor,
     addingCodeudor.value ? 'co_debtor' : 'debtor',
@@ -1751,6 +1754,9 @@ async function submitToDirectorReviewBody() {
   if (!validatePrivilegedFieldsForSave()) {
     return
   }
+  if (!(await ensureArchivalFileConfiguredForCreate())) {
+    return
+  }
 
   try {
     await $csrf()
@@ -1848,14 +1854,15 @@ onMounted(() => {
   void fetchCatalogs()
   void loadProducerUnits()
   void fetchCreditDestinationOptions()
-  void archivalApi.fetchCreditLinkSettings()
+  void loadCreditArchivalLinkForRadicacion()
     .then((data) => {
+      if (!data) {
+        creditLinkGlobalEnabled.value = false
+        return
+      }
       creditLinkGlobalEnabled.value = data.enabled
       userProducerOrgUnitId.value = data.user_producer_org_unit?.id ?? null
       applyAutomaticCreditArchivalLink()
-    })
-    .catch(() => {
-      creditLinkGlobalEnabled.value = false
     })
 })
 </script>

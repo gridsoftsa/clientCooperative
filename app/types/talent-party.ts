@@ -1,4 +1,4 @@
-export type TalentPartyKind = 'employee' | 'supplier'
+export type TalentPartyKind = 'employee' | 'supplier' | 'applicant'
 
 export interface TalentPartyOrgUnit {
   id: number
@@ -10,6 +10,8 @@ export interface TalentPartySummary {
   id: number
   kind: TalentPartyKind
   kind_label: string
+  org_staff_id?: number | null
+  applicant_id?: number | null
   display_name: string
   identifier: string | null
   document_type?: string | null
@@ -68,12 +70,16 @@ export interface TalentPartyDetail extends TalentPartySummary {
 export interface TalentPartySettings {
   employee_trd_table_id: number | null
   supplier_trd_table_id: number | null
+  applicant_trd_table_id: number | null
   employee_doc_subseries_ids: number[]
   supplier_doc_subseries_ids: number[]
+  applicant_doc_subseries_ids: number[]
   employee_disabled_doc_document_type_ids: number[]
   supplier_disabled_doc_document_type_ids: number[]
+  applicant_disabled_doc_document_type_ids: number[]
   employee_trd: TalentTrdOption | null
   supplier_trd: TalentTrdOption | null
+  applicant_trd: TalentTrdOption | null
 }
 
 export interface TalentTrdOption {

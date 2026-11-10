@@ -29,7 +29,10 @@ const {
   refreshCreditArchivalLink,
 } = useCreditArchivalLink()
 
+const navHydrated = ref(false)
+
 onMounted(() => {
+  navHydrated.value = true
   void refreshCreditArchivalLink()
 })
 
@@ -108,8 +111,8 @@ function canAccessItem(item: NavLink | NavGroup): boolean {
 
 // Filtrar menú basado en permisos
 const filteredNavMenu = computed(() => {
-  // Durante SSR o sin usuario, solo mostrar items públicos
-  if (import.meta.server || !authUser.value) {
+  // SSR y primer paint del cliente coinciden (user aún no hidratado en el HTML).
+  if (import.meta.server || !navHydrated.value || !authUser.value) {
     return navMenu.map(section => ({
       ...section,
       items: section.items.filter(item => !('permission' in item && item.permission) && !('role' in item && item.role) && !('adminOnly' in item && item.adminOnly) && !('module' in item && item.module) && !('modules' in item && item.modules?.length))
