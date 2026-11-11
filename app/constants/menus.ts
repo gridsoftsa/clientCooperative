@@ -1,4 +1,5 @@
 import type { NavMenu, NavMenuItems } from '~/types/nav'
+import { showCreditLinkMenu } from '~/constants/archival-credit-storage'
 import { VENTANILLA_AUTOMATIC_CHANNELS_ENABLED } from '~/constants/ventanilla'
 
 export const navMenu: NavMenu[] = [
@@ -170,6 +171,7 @@ export const navMenu: NavMenu[] = [
             title: 'Enlace crédito',
             link: '/expedientes/enlace-credito',
             permission: 'expedientes_enlace_credito_configurar',
+            hidden: !showCreditLinkMenu,
           },
           {
             title: 'Control de acceso',

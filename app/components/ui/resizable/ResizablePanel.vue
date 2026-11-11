@@ -1,17 +1,22 @@
 <script setup lang="ts">
 import type { SplitterPanelEmits, SplitterPanelProps } from 'reka-ui'
+import type { HTMLAttributes } from 'vue'
+import { reactiveOmit } from '@vueuse/core'
 import { SplitterPanel, useForwardPropsEmits } from 'reka-ui'
+import { cn } from '@/lib/utils'
 
-const props = defineProps<SplitterPanelProps>()
+const props = defineProps<SplitterPanelProps & { class?: HTMLAttributes['class'] }>()
 const emits = defineEmits<SplitterPanelEmits>()
 
-const forwarded = useForwardPropsEmits(props, emits)
+const delegatedProps = reactiveOmit(props, 'class')
+const forwarded = useForwardPropsEmits(delegatedProps, emits)
 </script>
 
 <template>
   <SplitterPanel
     data-slot="resizable-panel"
     v-bind="forwarded"
+    :class="cn('min-h-0', props.class)"
   >
     <slot />
   </SplitterPanel>

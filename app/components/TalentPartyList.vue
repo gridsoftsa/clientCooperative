@@ -509,23 +509,25 @@ onMounted(() => {
             {{ kind === 'applicant'
               ? 'Si Gestión documental está activo y guarda esta TRD, la carpeta se crea sola al registrar el solicitante en el catálogo o en una radicación.'
               : showRegistry
-                ? `La TRD y las subseries se aplican a cada carpeta nueva. No hay que volver a elegirlas al crear un ${singular}.`
-                : 'La TRD y las subseries se usan cuando, al registrar un funcionario, se marca Crear archivo en TRD.' }}
+                ? `Si guarda esta TRD, la carpeta se crea sola al registrar un ${singular}.`
+                : 'Si guarda esta TRD, la carpeta se crea sola al registrar un funcionario.' }}
           </DialogDescription>
         </DialogHeader>
-        <div class="shrink-0 space-y-2 px-6 pt-4">
-          <Label :for="`talent-settings-trd-${kind}`">TRD del área</Label>
-          <ArchivalSingleMultiselect
-            :id="`talent-settings-trd-${kind}`"
-            v-model="settingsTrdTableId"
-            :options="trdOptions"
-            :disabled="!canManage || settingsSaving"
-            placeholder="Buscar TRD del área…"
-            no-options-text="No hay TRD"
-            no-results-text="Sin coincidencias"
-            coerce-number
-          />
-          <p class="text-xs text-muted-foreground">
+        <div class="flex shrink-0 flex-col gap-4 px-6 pt-4">
+          <div class="flex flex-col gap-2">
+            <Label :for="`talent-settings-trd-${kind}`">TRD del área</Label>
+            <ArchivalSingleMultiselect
+              :id="`talent-settings-trd-${kind}`"
+              v-model="settingsTrdTableId"
+              :options="trdOptions"
+              :disabled="!canManage || settingsSaving"
+              placeholder="Buscar TRD del área…"
+              no-options-text="No hay TRD"
+              no-results-text="Sin coincidencias"
+              coerce-number
+            />
+          </div>
+          <p class="text-xs leading-relaxed text-muted-foreground">
             {{ savedTrdLabel
               ? `En uso: ${savedTrdLabel}. ${savedSubseriesCount} subserie${savedSubseriesCount === 1 ? '' : 's'} guardada${savedSubseriesCount === 1 ? '' : 's'}.`
               : 'Aún no hay una TRD guardada.' }}

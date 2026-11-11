@@ -63,8 +63,20 @@ export interface TalentPartySubseriesFolder {
   document_types: TalentPartyDocumentTypeFolder[]
 }
 
+export interface TalentPartyOperationalFolder {
+  id: number
+  name: string
+  documents: TalentPartyDocument[]
+  children: Array<{
+    id: number
+    name: string
+    documents: TalentPartyDocument[]
+  }>
+}
+
 export interface TalentPartyDetail extends TalentPartySummary {
   folders: TalentPartySubseriesFolder[]
+  operational_folders?: TalentPartyOperationalFolder[]
 }
 
 export interface TalentPartySettings {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { showCreditLinkMenu } from '~/constants/archival-credit-storage'
 import { messageFromFetchError } from '~/utils/http-error-message'
 
 definePageMeta({
@@ -94,6 +95,9 @@ onMounted(() => {
         <p class="max-w-3xl text-sm leading-relaxed text-muted-foreground">
           Elija qué tipos de expediente usa la radicación de crédito: carpeta del titular (padre, documentos maestros)
           y carpeta de cada solicitud (hija). El asesor solo enciende el interruptor de esa radicación.
+        </p>
+        <p v-if="!showCreditLinkMenu" class="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+          Esta pantalla está oculta del menú. Los créditos nuevos se guardan en la TRD del solicitante. El interruptor de aquí sigue disponible si hay que volver al proceso anterior.
         </p>
       </div>
     </div>

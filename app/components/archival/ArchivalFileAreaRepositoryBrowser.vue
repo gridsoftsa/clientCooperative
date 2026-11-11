@@ -413,7 +413,7 @@ function formatBytes(size?: number): string {
         :default-size="28"
         :min-size="20"
         :max-size="40"
-        class="min-h-0 overflow-hidden border-r bg-muted/20"
+        class="flex h-full min-h-0 flex-col overflow-hidden border-r bg-muted/20"
       >
         <div class="flex h-full min-h-0 flex-col overflow-hidden">
           <div class="shrink-0 border-b px-3 py-3">
@@ -484,7 +484,8 @@ function formatBytes(size?: number): string {
             </div>
           </div>
 
-          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+          <div class="relative min-h-0 flex-1">
+            <div class="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain p-2">
             <ArchivalFileAreaFolderNav
               v-if="trdNavTree"
               :node="trdNavTree"
@@ -499,13 +500,14 @@ function formatBytes(size?: number): string {
             >
               No hay series, subseries o tipos documentales que coincidan.
             </p>
+            </div>
           </div>
         </div>
       </ResizablePanel>
 
       <ResizableHandle v-if="!navCollapsed" with-handle />
 
-      <ResizablePanel id="archival-area-content" class="min-h-0 overflow-hidden" :default-size="navCollapsed ? 100 : 72" :min-size="45">
+      <ResizablePanel id="archival-area-content" class="flex h-full min-h-0 flex-col overflow-hidden" :default-size="navCollapsed ? 100 : 72" :min-size="45">
         <div
           class="flex h-full min-h-0 flex-col overflow-hidden"
         >
@@ -607,7 +609,8 @@ function formatBytes(size?: number): string {
             </p>
           </div>
 
-          <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+          <div class="relative min-h-0 flex-1">
+          <div class="absolute inset-0 overflow-x-hidden overflow-y-auto overscroll-contain p-4">
             <div
               v-if="partitionedChildren.folders.length === 0
                 && partitionedChildren.documents.length === 0
@@ -829,6 +832,7 @@ function formatBytes(size?: number): string {
                 </div>
               </section>
             </div>
+          </div>
           </div>
 
           <div

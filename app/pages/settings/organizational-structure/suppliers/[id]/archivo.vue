@@ -74,7 +74,7 @@ watch(partyId, () => {
         </p>
       </div>
 
-      <Card class="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <Card class="flex min-h-0 flex-1 flex-col gap-0 overflow-hidden py-0">
         <CardContent class="flex min-h-0 flex-1 flex-col p-0 sm:p-0">
           <div
             v-if="loading"

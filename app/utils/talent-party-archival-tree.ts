@@ -1,5 +1,5 @@
 import type { ArchivalFileTreeNode } from '~/types/archival-file'
-import type { TalentPartyDetail, TalentPartyDocument, TalentPartyManualFolder } from '~/types/talent-party'
+import type { TalentPartyDetail, TalentPartyDocument, TalentPartyManualFolder, TalentPartyOperationalFolder } from '~/types/talent-party'
 
 function talentManualFolderNode(
   folder: TalentPartyManualFolder,
@@ -99,9 +99,39 @@ export function talentPartyArchivalTree(party: TalentPartyDetail): ArchivalFileT
     name,
     archival_file_id: party.archival_file_id ?? undefined,
     org_unit_id: party.org_unit_id,
-    children: seriesOrder.flatMap((seriesId) => {
-      const series = seriesById.get(seriesId)
-      return series ? [series] : []
-    }),
+    children: [
+      ...operationalFolderNodes(party),
+      ...seriesOrder.flatMap((seriesId) => {
+        const series = seriesById.get(seriesId)
+        return series ? [series] : []
+      }),
+    ],
+  }
+}
+
+function operationalFolderNodes(party: TalentPartyDetail): ArchivalFileTreeNode[] {
+  return (party.operational_folders ?? []).map(folder => operationalFolderNode(folder, party))
+}
+
+function operationalFolderNode(folder: TalentPartyOperationalFolder, party: TalentPartyDetail): ArchivalFileTreeNode {
+  const archivalFileId = party.archival_file_id ?? undefined
+
+  return {
+    id: `operational-${folder.id}`,
+    type: 'folder',
+    name: folder.name,
+    archival_file_id: archivalFileId,
+    archival_file_node_id: folder.id,
+    children: [
+      ...folder.documents.map(document => documentNode(document, 0, folder.name)),
+      ...folder.children.map(child => ({
+        id: `operational-${child.id}`,
+        type: 'folder' as const,
+        name: child.name,
+        archival_file_id: archivalFileId,
+        archival_file_node_id: child.id,
+        children: child.documents.map(document => documentNode(document, 0, child.name)),
+      })),
+    ],
   }
 }

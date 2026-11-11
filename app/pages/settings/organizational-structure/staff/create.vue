@@ -33,7 +33,6 @@ const { options: documentTypeOptions, fetchOptions: fetchDocumentTypeOptions } =
 ])
 
 const talentApi = useTalentPartyApi()
-const createTrdFile = ref(false)
 const trdConfigReady = ref(false)
 
 const form = ref({
@@ -254,7 +253,6 @@ async function handleSubmit() {
         document_number: form.value.document_number.trim() || undefined,
         date_of_birth: form.value.date_of_birth.trim(),
         is_active: form.value.is_active,
-        create_trd_file: trdConfigReady.value && createTrdFile.value,
       },
     })
     toast.success('Funcionario creado')
@@ -622,27 +620,11 @@ onMounted(async () => {
                     Archivo en TRD
                   </CardTitle>
                   <CardDescription class="leading-relaxed">
-                    Opcional. Usa la TRD y las subseries guardadas en Funcionarios.
+                    {{ trdConfigReady
+                      ? 'Al guardar se crea sola la carpeta del funcionario con la TRD y las subseries configuradas en Funcionarios.'
+                      : 'No hay configuración de archivo. Guárdela en Funcionarios para que la carpeta se cree al dar de alta.' }}
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div class="flex items-start gap-3">
-                    <Checkbox
-                      id="staff-create-trd-file"
-                      :model-value="createTrdFile"
-                      :disabled="!trdConfigReady || saving"
-                      @update:model-value="createTrdFile = $event === true"
-                    />
-                    <Label for="staff-create-trd-file" class="font-normal leading-snug">
-                      Crear archivo en TRD
-                      <span class="mt-1 block text-xs font-normal text-muted-foreground">
-                        {{ trdConfigReady
-                          ? 'Al guardar se crea la carpeta del funcionario con las subseries configuradas.'
-                          : 'No hay configuración de archivo. Esta opción permanece deshabilitada hasta guardarla en Funcionarios.' }}
-                      </span>
-                    </Label>
-                  </div>
-                </CardContent>
               </Card>
 
               <Card>

@@ -35,7 +35,6 @@ const form = ref({
 
 const saving = ref(false)
 const submitAttempted = ref(false)
-const createTrdFile = ref(false)
 const trdConfigReady = ref(false)
 
 type RequiredField = 'display_name' | 'document_type' | 'document_number' | 'email'
@@ -112,13 +111,9 @@ async function loadTrdConfig(): Promise<void> {
     const response = await talentApi.settings()
     const settings = response.data
     trdConfigReady.value = settings.supplier_trd_table_id != null && settings.supplier_doc_subseries_ids.length > 0
-    if (!trdConfigReady.value) {
-      createTrdFile.value = false
-    }
   }
   catch {
     trdConfigReady.value = false
-    createTrdFile.value = false
   }
 }
 
@@ -154,7 +149,6 @@ async function handleSubmit(): Promise<void> {
       address: form.value.address.trim() || undefined,
       postal_code: form.value.postal_code.trim() || undefined,
       is_active: form.value.is_active,
-      create_trd_file: !hasArchivalFile.value && trdConfigReady.value && createTrdFile.value,
     })
     toast.success(response.message || 'Proveedor actualizado.')
     await router.push('/settings/organizational-structure/suppliers')
@@ -354,27 +348,11 @@ onMounted(async () => {
                 Archivo en TRD
               </CardTitle>
               <CardDescription class="leading-relaxed">
-                Solo se puede marcar si ya hay una configuración de archivo guardada.
+                {{ trdConfigReady
+                  ? 'Al guardar se crea sola la carpeta del proveedor con la TRD y las subseries configuradas en Proveedores.'
+                  : 'No hay configuración de archivo. Guárdela en Proveedores para que la carpeta se cree al guardar.' }}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div class="flex items-start gap-3">
-                <Checkbox
-                  id="supplier-edit-trd-file"
-                  :model-value="createTrdFile"
-                  :disabled="!trdConfigReady || saving"
-                  @update:model-value="createTrdFile = $event === true"
-                />
-                <Label for="supplier-edit-trd-file" class="font-normal leading-snug">
-                  Crear archivo en TRD
-                  <span class="mt-1 block text-xs font-normal text-muted-foreground">
-                    {{ trdConfigReady
-                      ? 'Al guardar se crea la carpeta del proveedor con las subseries configuradas.'
-                      : 'No hay configuración de archivo. Esta opción permanece deshabilitada hasta guardarla en Proveedores.' }}
-                  </span>
-                </Label>
-              </div>
-            </CardContent>
           </Card>
 
           <Card>

@@ -19,7 +19,7 @@ withDefaults(
 <template>
   <div
     class="mx-auto w-full max-w-[1600px] px-4 pt-1 sm:px-6 lg:px-8"
-    :class="fill ? 'flex h-full min-h-0 flex-col overflow-hidden' : 'space-y-6 pb-16'"
+    :class="fill ? 'flex h-[calc(100dvh-6.5rem)] min-h-0 flex-col overflow-hidden' : 'space-y-6 pb-16'"
   >
     <template v-if="!hideIntro">
       <div class="space-y-0.5">

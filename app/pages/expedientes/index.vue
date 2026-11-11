@@ -6,6 +6,7 @@ import {
   archivalFileStatusActions,
   type ArchivalFileStatusActionOption,
 } from '~/utils/archival-file-status'
+import { showCreditLinkMenu } from '~/constants/archival-credit-storage'
 import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
 
 definePageMeta({
@@ -191,7 +192,7 @@ onMounted(async () => {
           Tipos
         </Button>
         <Button
-          v-if="hasPermission('expedientes_enlace_credito_configurar')"
+          v-if="showCreditLinkMenu && hasPermission('expedientes_enlace_credito_configurar')"
           variant="outline"
           @click="router.push('/expedientes/enlace-credito')"
         >
