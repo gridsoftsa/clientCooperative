@@ -229,6 +229,12 @@ function setActivityTypeFromSelect(v: unknown): void {
 }
 
 const { multiselectOptionsByLabel } = useMunicipalities()
+/** Municipio de expedición fuera de Colombia (cédula colombiana expedida o registrada en otro país). */
+const EXPEDITION_PLACE_NOT_APPLICABLE = 'No aplica'
+const expeditionPlaceOptions = computed(() => [
+  { value: EXPEDITION_PLACE_NOT_APPLICABLE, label: EXPEDITION_PLACE_NOT_APPLICABLE },
+  ...multiselectOptionsByLabel.value,
+])
 const { options: genderOptions, fetchOptions: fetchGenderOptions } = useGenderCatalogOptions()
 const { options: documentTypeOptions, fetchOptions: fetchDocumentTypeOptions } = useTemplateFlatCatalogOptions('tipo-documento', [
   { value: 'CC', label: 'Cédula de Ciudadanía' },
@@ -971,18 +977,21 @@ function formatFileSize(bytes: number): string {
           <Multiselect
             id="exp_place"
             :model-value="local.expedition_place ?? null"
-            :options="multiselectOptionsByLabel"
+            :options="expeditionPlaceOptions"
             :disabled="personalReadOnly"
             value-prop="value"
             label="label"
             :searchable="true"
             :strict="false"
-            placeholder="Municipio"
+            placeholder="Municipio o No aplica"
             no-options-text="No hay municipios"
-            no-results-text="No hay resultados. Escribe para filtrar."
+            no-results-text="No hay resultados. Escribe para filtrar o elige No aplica."
             :class="multiselectErrorClass('expedition_place')"
             @update:model-value="updateField('expedition_place', ($event as string) ?? '')"
           />
+          <p class="text-xs text-muted-foreground">
+            Si el municipio no es de Colombia, elija No aplica. El tipo de documento sigue siendo la cédula.
+          </p>
         </div>
       </div>
     </section>
