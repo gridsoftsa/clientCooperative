@@ -658,7 +658,10 @@ onMounted(() => {
           </div>
         </div>
 
-        <DialogFooter v-if="canManage" class="mt-auto shrink-0 border-t bg-background px-6 py-4">
+        <DialogFooter v-if="canManage" class="mt-auto shrink-0 border-t bg-background px-6 py-4 sm:justify-between">
+          <p class="mr-auto max-w-xl text-xs leading-relaxed text-muted-foreground">
+            Si corrige la TRD, al guardar se quitan las carpetas vacías que ya no correspondan en las personas ya creadas. Las que tengan documentos se conservan.
+          </p>
           <Button
             type="button"
             :disabled="settingsSaving"
