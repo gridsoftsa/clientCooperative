@@ -142,6 +142,7 @@ onUnmounted(() => {
 
 <template>
   <section class="flex w-full flex-col gap-4">
+    <DashboardGestionDocumentalShortcuts />
     <div v-if="loading" class="flex justify-center py-16">
       <Icon name="i-lucide-loader-2" class="size-9 animate-spin text-muted-foreground" />
     </div>
