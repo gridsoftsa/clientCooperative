@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { User, PaginatedUsers } from '~/types/user'
+import { getRoleDisplayLabel } from '~/constants/role-labels'
 import { accountStatusBadgeVariant, labelForAccountStatus } from '~/utils/accountStatus'
 
 definePageMeta({
@@ -196,7 +197,7 @@ watch(searchQuery, () => {
                   <TableCell>
                     <div class="flex gap-1 flex-wrap">
                       <Badge v-for="role in (user.roles || [])" :key="role" variant="secondary">
-                        {{ role }}
+                        {{ getRoleDisplayLabel(role) }}
                       </Badge>
                       <span v-if="(user.roles || []).length === 0" class="text-muted-foreground text-sm">Sin roles</span>
                     </div>

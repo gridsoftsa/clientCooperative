@@ -12,6 +12,7 @@ const ROLE_DISPLAY_LABELS: Record<string, string> = {
   director_agencia: 'Director de agencia',
   director_credito: 'Director de crédito',
   gestor_documental: 'Gestor documental',
+  director_area: 'Director de área',
   jefe_area: 'Director de área',
   gd_encargado_ventanilla: 'Encargado de ventanilla',
   gd_auxiliar_area: 'Auxiliar de área',

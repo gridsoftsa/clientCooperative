@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { getRoleDisplayLabel } from '~/constants/role-labels'
 
 const { $api, $csrf } = useNuxtApp()
 const { user, fetchUser, refetchUserSilently } = useAuth()
@@ -128,7 +129,7 @@ async function handleSave() {
                 variant="secondary"
                 class="text-xs font-normal"
               >
-                {{ r }}
+                {{ getRoleDisplayLabel(r) }}
               </Badge>
               <span v-if="!(user.roles ?? []).length" class="text-muted-foreground">—</span>
             </dd>

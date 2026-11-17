@@ -77,6 +77,7 @@ export const ROLE_APPLICATION_DOMAINS: Record<string, ApplicationDomain[]> = {
   director_credito: ['creditos'],
   revision_documentos: ['creditos'],
   gestor_documental: ['gestion_documental'],
+  director_area: ['gestion_documental'],
   jefe_area: ['gestion_documental'],
   gd_encargado_ventanilla: ['gestion_documental'],
   gd_auxiliar_area: ['gestion_documental'],
