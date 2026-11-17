@@ -419,6 +419,12 @@ html.dark .multiselect-municipality .multiselect-search,
   border-color: var(--border) !important;
 }
 
+.archival-single-multiselect.multiselect.archival-single-multiselect-danger {
+  --ms-border-color: var(--destructive);
+  --ms-border-color-active: var(--destructive);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 25%, transparent);
+}
+
 .archival-single-multiselect .multiselect-wrapper {
   align-items: center;
   box-sizing: border-box;

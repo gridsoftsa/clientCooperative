@@ -245,19 +245,25 @@ onMounted(() => {
                 <div class="flex min-w-0 flex-col gap-1.5">
                   <Label for="parent_e">Área padre</Label>
                   <ArchivalSingleMultiselect
+                    v-if="form.org_office_id != null"
                     id="parent_e"
-                    :key="`parent-e-${form.org_office_id ?? 'none'}-${parentSelectOptions.length}`"
+                    :key="`parent-e-${form.org_office_id}-${parentSelectOptions.length}`"
                     v-model="form.parent_id"
                     coerce-number
                     searchable
-                    :disabled="form.org_office_id == null"
                     :options="parentSelectOptions"
-                    placeholder="Buscar área padre (misma agencia)"
-                    no-options-text="Seleccione primero una agencia"
+                    placeholder="Opcional: área de la misma agencia"
+                    no-options-text="Esta agencia aún no tiene otras áreas"
                     no-results-text="Sin coincidencias"
                   />
+                  <div
+                    v-else
+                    class="flex h-11 items-center rounded-md border border-dashed bg-muted/20 px-3 text-sm text-muted-foreground"
+                  >
+                    Elija primero una agencia para listar las áreas padre
+                  </div>
                   <p class="text-xs leading-5 text-muted-foreground">
-                    Opcional. Solo áreas de la misma agencia.
+                    Opcional. Si no elige padre, esta dependencia queda como área raíz de la agencia.
                   </p>
                 </div>
                 <div class="flex min-w-0 flex-col gap-1.5">
