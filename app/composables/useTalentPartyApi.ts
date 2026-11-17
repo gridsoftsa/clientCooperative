@@ -40,6 +40,13 @@ export function useTalentPartyApi() {
     })
   }
 
+  function syncFolders(kind: TalentPartyKind) {
+    return api<{ data: TalentPartySettings, message: string }>('/talent-parties/settings/sync', {
+      method: 'POST',
+      body: { kind },
+    })
+  }
+
   function trdOptions() {
     return api<{ data: TalentTrdOption[] }>('/talent-parties/trd-options')
   }
@@ -101,6 +108,7 @@ export function useTalentPartyApi() {
     show,
     settings,
     updateSettings,
+    syncFolders,
     trdOptions,
     trdSubseries,
     create,

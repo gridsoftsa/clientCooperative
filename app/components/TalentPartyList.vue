@@ -25,6 +25,7 @@ const settingsOpen = ref(false)
 const saving = ref(false)
 const deactivatingId = ref<number | null>(null)
 const settingsSaving = ref(false)
+const settingsSyncing = ref(false)
 const displayName = ref('')
 const identifier = ref('')
 const settingsTrdTableId = ref<number | null>(null)
@@ -177,6 +178,25 @@ async function saveSettings() {
   }
   finally {
     settingsSaving.value = false
+  }
+}
+
+async function syncFolders() {
+  if (settingsSaving.value || settingsSyncing.value) {
+    return
+  }
+
+  settingsSyncing.value = true
+  try {
+    const response = await talentApi.syncFolders(props.kind)
+    await applySettings(response.data)
+    toast.success(response.message || 'Carpetas sincronizadas.')
+  }
+  catch (error: unknown) {
+    toast.error(apiErrorMessage(error, 'No se pudieron sincronizar las carpetas.'))
+  }
+  finally {
+    settingsSyncing.value = false
   }
 }
 
@@ -520,7 +540,7 @@ onMounted(() => {
               :id="`talent-settings-trd-${kind}`"
               v-model="settingsTrdTableId"
               :options="trdOptions"
-              :disabled="!canManage || settingsSaving"
+              :disabled="!canManage || settingsSaving || settingsSyncing"
               placeholder="Buscar TRD del área…"
               no-options-text="No hay TRD"
               no-results-text="Sin coincidencias"
@@ -577,7 +597,7 @@ onMounted(() => {
                     <Checkbox
                       :id="subseriesCheckboxId(subseries.id)"
                       bare
-                      :disabled="!canManage || settingsSaving"
+                      :disabled="!canManage || settingsSaving || settingsSyncing"
                       :model-value="isSubseriesSelected(subseries.id)"
                       @update:model-value="setSubseriesSelected(subseries.id, $event === true)"
                     />
@@ -632,7 +652,7 @@ onMounted(() => {
                       <Checkbox
                         :id="documentTypeCheckboxId(subseries.id, documentType.id)"
                         bare
-                        :disabled="!canManage || settingsSaving || !isSubseriesSelected(subseries.id)"
+                        :disabled="!canManage || settingsSaving || settingsSyncing || !isSubseriesSelected(subseries.id)"
                         :model-value="isDocumentTypeEnabled(subseries.id, documentType.id)"
                         @update:model-value="setDocumentTypeEnabled(subseries.id, documentType.id, $event === true)"
                       />
@@ -660,20 +680,35 @@ onMounted(() => {
 
         <DialogFooter v-if="canManage" class="mt-auto shrink-0 border-t bg-background px-6 py-4 sm:justify-between">
           <p class="mr-auto max-w-xl text-xs leading-relaxed text-muted-foreground">
-            Si corrige la TRD, al guardar se quitan las carpetas vacías que ya no correspondan en las personas ya creadas. Las que tengan documentos se conservan.
+            Al guardar o sincronizar se crean carpetas faltantes y se actualiza el nombre si el catálogo cambió (mismo id). Las vacías que ya no correspondan se quitan; las que tienen documentos se conservan. No se mueve el expediente a otra TRD ni se cambia la retención de documentos ya cargados.
           </p>
-          <Button
-            type="button"
-            :disabled="settingsSaving"
-            @click="saveSettings"
-          >
-            <Icon
-              v-if="settingsSaving"
-              name="i-lucide-loader-2"
-              class="mr-1.5 size-4 animate-spin"
-            />
-            Guardar configuración
-          </Button>
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              :disabled="settingsSaving || settingsSyncing"
+              @click="syncFolders"
+            >
+              <Icon
+                v-if="settingsSyncing"
+                name="i-lucide-loader-2"
+                class="mr-1.5 size-4 animate-spin"
+              />
+              Sincronizar carpetas
+            </Button>
+            <Button
+              type="button"
+              :disabled="settingsSaving || settingsSyncing"
+              @click="saveSettings"
+            >
+              <Icon
+                v-if="settingsSaving"
+                name="i-lucide-loader-2"
+                class="mr-1.5 size-4 animate-spin"
+              />
+              Guardar configuración
+            </Button>
+          </div>
         </DialogFooter>
         </div>
       </DialogContent>
