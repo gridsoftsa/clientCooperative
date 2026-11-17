@@ -7,6 +7,7 @@ import { defaultAdminApplicationDomains, requiresOrgStaffLink, type ApplicationD
 import { ACCOUNT_STATUS_FORM_OPTIONS } from '~/utils/accountStatus'
 import { generateRobustPassword, PASSWORD_REQUIREMENTS, validateRobustPassword } from '~/utils/password'
 import {
+  isOrgStaffEmailValid,
   isStaffUserCreateReturnPath,
   USER_CREATE_PREFILL_FROM_STAFF_KEY,
   type UserCreatePrefillFromStaff,
@@ -240,36 +241,22 @@ function applyReturnedRoleFromQuery() {
 }
 
 const handleSubmit = async () => {
-  if (!form.value.name.trim() || !form.value.email.trim() || !form.value.sucursal_id) {
-    toast.error('Completa todos los campos requeridos')
-    return
-  }
-
-  if (!fromStaffFlow.value && requiresOrgStaff.value && form.value.org_staff_id == null) {
-    toast.error('Debe seleccionar el funcionario organizacional para este tipo de usuario')
-    return
-  }
-
-  if (form.value.password && form.value.password !== form.value.password_confirmation) {
-    toast.error('Las contraseñas no coinciden')
-    return
-  }
-
-  if (form.value.password) {
-    const passwordError = validateRobustPassword(form.value.password)
-    if (passwordError) {
-      toast.error(passwordError)
-      return
+  submitAttempted.value = true
+  const firstMissing = firstMissingField()
+  if (firstMissing) {
+    const messages: Record<RequiredField, string> = {
+      name: 'El nombre de usuario es obligatorio',
+      email: 'Ingrese un correo electrónico válido',
+      sucursal_id: 'La sucursal es obligatoria',
+      org_staff_id: 'Debe seleccionar el funcionario organizacional para este tipo de usuario',
+      roles: 'Debes asignar al menos un rol',
+      password: validateRobustPassword(form.value.password) || 'La contraseña no cumple los requisitos',
+      password_confirmation: 'Las contraseñas no coinciden',
+      admin_application_domains: 'Selecciona al menos un módulo administrable para el rol admin',
     }
-  }
-
-  if (!form.value.roles.length) {
-    toast.error('Debes asignar al menos un rol')
-    return
-  }
-
-  if (selectedRole.value === 'admin' && form.value.admin_application_domains.length === 0) {
-    toast.error('Selecciona al menos un módulo administrable para el rol admin')
+    toast.error(messages[firstMissing])
+    await nextTick()
+    focusByElementId(requiredFieldIds[firstMissing])
     return
   }
 
@@ -321,7 +308,11 @@ const handleSubmit = async () => {
     router.push('/settings/users')
   } catch (error: any) {
     console.error('Error saving user:', error)
-    const message = error?.data?.message || error?.data?.errors?.email?.[0] || 'Error al crear el usuario'
+    const fieldErrors = error?.data?.errors as Record<string, string[]> | undefined
+    const firstFieldError = fieldErrors
+      ? Object.values(fieldErrors).flat().find(message => typeof message === 'string' && message.trim() !== '')
+      : undefined
+    const message = firstFieldError || error?.data?.message || error?.data?.errors?.email?.[0] || 'Error al crear el usuario'
     toast.error(message)
   } finally {
     saving.value = false
@@ -349,6 +340,107 @@ watch(selectedRole, (role) => {
     form.value.admin_application_domains = defaultAdminApplicationDomains(hasModule)
   }
 }, { immediate: true })
+
+type RequiredField =
+  | 'name'
+  | 'email'
+  | 'sucursal_id'
+  | 'org_staff_id'
+  | 'roles'
+  | 'password'
+  | 'password_confirmation'
+  | 'admin_application_domains'
+
+const submitAttempted = ref(false)
+
+const requiredFieldIds: Record<RequiredField, string> = {
+  name: 'name',
+  email: 'email',
+  sucursal_id: 'sucursal',
+  org_staff_id: 'org_staff',
+  roles: 'user_roles',
+  password: 'password',
+  password_confirmation: 'password_confirmation',
+  admin_application_domains: 'admin_application_domains',
+}
+
+function isFieldMissing(field: RequiredField): boolean {
+  if (field === 'name') {
+    return !form.value.name.trim()
+  }
+  if (field === 'email') {
+    return !isOrgStaffEmailValid(form.value.email)
+  }
+  if (field === 'sucursal_id') {
+    return form.value.sucursal_id == null
+  }
+  if (field === 'org_staff_id') {
+    return !fromStaffFlow.value && requiresOrgStaff.value && form.value.org_staff_id == null
+  }
+  if (field === 'roles') {
+    return !form.value.roles.length
+  }
+  if (field === 'password') {
+    return Boolean(form.value.password) && Boolean(validateRobustPassword(form.value.password))
+  }
+  if (field === 'password_confirmation') {
+    return Boolean(form.value.password) && form.value.password !== form.value.password_confirmation
+  }
+  return selectedRole.value === 'admin' && form.value.admin_application_domains.length === 0
+}
+
+function firstMissingField(): RequiredField | null {
+  const order: RequiredField[] = [
+    'name',
+    'email',
+    'sucursal_id',
+    'org_staff_id',
+    'password',
+    'password_confirmation',
+    'admin_application_domains',
+    'roles',
+  ]
+
+  return order.find(field => isFieldMissing(field)) ?? null
+}
+
+function fieldErrorClass(missing: boolean): string {
+  return missing ? 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/40' : ''
+}
+
+function formFieldErrorClass(field: 'name' | 'email' | 'password' | 'password_confirmation'): string {
+  return fieldErrorClass(submitAttempted.value && isFieldMissing(field))
+}
+
+function formMultiselectErrorClass(field: 'sucursal_id' | 'org_staff_id' | 'roles'): string {
+  return submitAttempted.value && isFieldMissing(field)
+    ? 'multiselect-roles multiselect-danger'
+    : 'multiselect-roles'
+}
+
+function focusByElementId(id: string): void {
+  const root = document.getElementById(id)
+  if (!root) {
+    return
+  }
+  if (root instanceof HTMLInputElement || root instanceof HTMLTextAreaElement || root instanceof HTMLSelectElement) {
+    root.focus()
+    root.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    return
+  }
+  const focusable = root.querySelector('input,button,[tabindex]:not([tabindex="-1"])') as HTMLElement | null
+  focusable?.focus()
+  root.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+watch([form, selectedRole], () => {
+  if (!submitAttempted.value) {
+    return
+  }
+  if (!firstMissingField()) {
+    submitAttempted.value = false
+  }
+}, { deep: true })
 </script>
 
 <template>
@@ -377,7 +469,7 @@ watch(selectedRole, (role) => {
         </Button>
       </div>
 
-      <form @submit.prevent="handleSubmit">
+      <form novalidate @submit.prevent="handleSubmit">
         <div class="grid gap-6">
           <Card>
             <CardHeader>
@@ -396,7 +488,8 @@ watch(selectedRole, (role) => {
                   <Input
                     id="name"
                     v-model="form.name"
-                    required
+                    :class="formFieldErrorClass('name')"
+                    :aria-invalid="submitAttempted && isFieldMissing('name') ? true : undefined"
                     placeholder="Identificador o alias de acceso"
                     autocomplete="username"
                   />
@@ -429,7 +522,8 @@ watch(selectedRole, (role) => {
                     id="email"
                     v-model="form.email"
                     type="email"
-                    required
+                    :class="formFieldErrorClass('email')"
+                    :aria-invalid="submitAttempted && isFieldMissing('email') ? true : undefined"
                     placeholder="usuario@ejemplo.com"
                   />
                 </div>
@@ -450,7 +544,7 @@ watch(selectedRole, (role) => {
                       placeholder="Seleccionar sucursal"
                       no-options-text="No hay sucursales configuradas"
                       no-results-text="Sin coincidencias"
-                      class="multiselect-roles"
+                      :class="formMultiselectErrorClass('sucursal_id')"
                     />
                   </div>
                 </div>
@@ -482,7 +576,7 @@ watch(selectedRole, (role) => {
                     placeholder="Seleccione funcionario…"
                     no-options-text="No hay funcionarios sin usuario — cree uno en Estructura organizacional"
                     no-results-text="Sin coincidencias"
-                    class="multiselect-roles"
+                    :class="formMultiselectErrorClass('org_staff_id')"
                   />
                 </div>
                 <p v-else class="md:col-span-2 text-sm text-muted-foreground leading-relaxed rounded-lg border border-dashed px-4 py-3">
@@ -536,6 +630,7 @@ watch(selectedRole, (role) => {
                     <PasswordInput
                       id="password"
                       v-model="form.password"
+                      :class="formFieldErrorClass('password')"
                       autocomplete="new-password"
                       placeholder="Contraseña robusta (opcional)"
                     />
@@ -545,6 +640,7 @@ watch(selectedRole, (role) => {
                     <PasswordInput
                       id="password_confirmation"
                       v-model="form.password_confirmation"
+                      :class="formFieldErrorClass('password_confirmation')"
                       autocomplete="new-password"
                       placeholder="Repite la contraseña"
                     />
@@ -587,11 +683,16 @@ watch(selectedRole, (role) => {
             </CardContent>
           </Card>
 
-          <SettingsAdminApplicationDomainsCard
+          <div
             v-if="showAdminApplicationDomains"
-            :domains="form.admin_application_domains"
-            @update:domains="form.admin_application_domains = $event"
-          />
+            id="admin_application_domains"
+            :class="submitAttempted && isFieldMissing('admin_application_domains') ? 'rounded-xl ring-2 ring-destructive/40' : undefined"
+          >
+            <SettingsAdminApplicationDomainsCard
+              :domains="form.admin_application_domains"
+              @update:domains="form.admin_application_domains = $event"
+            />
+          </div>
 
           <Card>
             <CardHeader class="gap-2">
@@ -610,6 +711,7 @@ watch(selectedRole, (role) => {
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <div class="w-full min-w-0 max-w-md">
                     <Multiselect
+                      id="user_roles"
                       v-model="selectedRole"
                       mode="single"
                       :object="false"
@@ -621,7 +723,7 @@ watch(selectedRole, (role) => {
                       placeholder="Seleccione…"
                       no-options-text="No hay roles configurados"
                       no-results-text="Sin coincidencias"
-                      class="multiselect-roles"
+                      :class="formMultiselectErrorClass('roles')"
                     />
                   </div>
                   <PermissionGate permission="roles_crear">
@@ -691,6 +793,12 @@ watch(selectedRole, (role) => {
 .multiselect-roles :deep(.multiselect-placeholder) {
   color: var(--muted-foreground) !important;
   opacity: 1 !important;
+}
+
+.multiselect-roles.multiselect-danger {
+  --ms-border-color: var(--destructive);
+  --ms-border-color-active: var(--destructive);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 25%, transparent);
 }
 
 :global(html.dark) .multiselect-roles :deep(.multiselect-search),
