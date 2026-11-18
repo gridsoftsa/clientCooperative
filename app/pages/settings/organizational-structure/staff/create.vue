@@ -59,7 +59,18 @@ type LinkableUserOption = {
   phone: string | null
 }
 
+type AlreadyLinkedUser = {
+  id: number
+  org_staff_id: number | null
+  name: string | null
+  full_name: string | null
+  email: string
+}
+
 const userOptions = ref<LinkableUserOption[]>([])
+const alreadyLinkedUsers = ref<AlreadyLinkedUser[]>([])
+const userSearchQuery = ref('')
+let userSearchTimer: ReturnType<typeof setTimeout> | null = null
 const saving = ref(false)
 const activeTab = ref<'datos' | 'ubicacion'>('datos')
 
@@ -115,21 +126,30 @@ function saveDraftAndGoCreateUser() {
   })
 }
 
-async function loadUsersIfAllowed() {
+async function loadUsersIfAllowed(search = '') {
   if (!hasPermission('usuarios_ver')) {
     userOptions.value = []
+    alreadyLinkedUsers.value = []
     return
   }
   try {
-    const res = await $api<{ data: Array<{
-      id: number
-      name: string | null
-      full_name?: string | null
-      email: string
-      phone?: string | null
-    }> }>(
+    const res = await $api<{
+      data: Array<{
+        id: number
+        name: string | null
+        full_name?: string | null
+        email: string
+        phone?: string | null
+      }>
+      already_linked?: AlreadyLinkedUser[]
+    }>(
       '/users/linkable-for-org-staff',
-      { query: { limit: 500 } },
+      {
+        query: {
+          limit: 500,
+          ...(search.trim() ? { q: search.trim() } : {}),
+        },
+      },
     )
     userOptions.value = res.data.map(u => ({
       id: u.id,
@@ -139,9 +159,21 @@ async function loadUsersIfAllowed() {
       phone: u.phone ?? null,
       label: `${personDisplayNameFromUser(u) || u.name || u.email} · ${u.email}`,
     }))
+    alreadyLinkedUsers.value = res.already_linked ?? []
   } catch {
     userOptions.value = []
+    alreadyLinkedUsers.value = []
   }
+}
+
+function onUserSearchChange(query: string): void {
+  userSearchQuery.value = query
+  if (userSearchTimer) {
+    clearTimeout(userSearchTimer)
+  }
+  userSearchTimer = setTimeout(() => {
+    void loadUsersIfAllowed(query)
+  }, 250)
 }
 
 async function ensureSelectedUserInOptions(userId: number) {
@@ -461,10 +493,11 @@ onMounted(async () => {
                             label="label"
                             :searchable="true"
                             :can-clear="false"
-                            placeholder="Seleccione usuario…"
-                            no-options-text="No hay usuarios sin funcionario vinculado"
-                            no-results-text="Sin coincidencias"
+                            placeholder="Buscar por nombre o correo…"
+                            no-options-text="No hay usuarios libres para vincular"
+                            no-results-text="Sin usuarios libres con ese texto"
                             :class="formMultiselectErrorClass('user_id')"
+                            @search-change="onUserSearchChange"
                           />
                         </div>
                         <PermissionGate permission="usuarios_crear">
@@ -485,6 +518,31 @@ onMounted(async () => {
                       >
                         Seleccione o cree un usuario del sistema.
                       </p>
+                      <div
+                        v-if="alreadyLinkedUsers.length > 0"
+                        class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed dark:border-amber-900/60 dark:bg-amber-950/40"
+                      >
+                        <p class="font-medium text-foreground">
+                          Esa cuenta ya es funcionario; no se puede volver a crear.
+                        </p>
+                        <ul class="mt-2 space-y-1">
+                          <li
+                            v-for="linked in alreadyLinkedUsers"
+                            :key="linked.id"
+                          >
+                            <span class="text-muted-foreground">
+                              {{ linked.full_name || linked.name || linked.email }} · {{ linked.email }}
+                            </span>
+                            <NuxtLink
+                              v-if="linked.org_staff_id"
+                              :to="`/settings/organizational-structure/staff/${linked.org_staff_id}/edit`"
+                              class="ml-2 font-medium text-primary underline-offset-2 hover:underline"
+                            >
+                              Abrir ficha
+                            </NuxtLink>
+                          </li>
+                        </ul>
+                      </div>
                     </div>
                   </template>
                   <p

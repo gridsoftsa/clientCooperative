@@ -18,6 +18,7 @@ import {
   readUserCreateDraft,
   saveUserCreateDraft,
 } from '~/utils/user-create-draft'
+import { firstLaravelFieldError } from '~/utils/laravel-validation-message'
 
 definePageMeta({
   layout: 'default',
@@ -81,6 +82,11 @@ const roleSelectOptions = computed(() => mapRoleSelectOptions(roles.value))
 const sucursales = ref<Array<{ id: number; name: string; code: string | null; is_main?: boolean }>>([])
 const loading = ref(false)
 const saving = ref(false)
+const emailTaken = ref(false)
+
+watch(() => form.value.email, () => {
+  emailTaken.value = false
+})
 
 const sucursalSelectOptions = computed(() =>
   sucursales.value.map(s => ({
@@ -308,11 +314,15 @@ const handleSubmit = async () => {
     router.push('/settings/users')
   } catch (error: any) {
     console.error('Error saving user:', error)
-    const fieldErrors = error?.data?.errors as Record<string, string[]> | undefined
-    const firstFieldError = fieldErrors
-      ? Object.values(fieldErrors).flat().find(message => typeof message === 'string' && message.trim() !== '')
-      : undefined
-    const message = firstFieldError || error?.data?.message || error?.data?.errors?.email?.[0] || 'Error al crear el usuario'
+    const fieldError = firstLaravelFieldError(error?.data?.errors)
+    if (fieldError?.field === 'email' || error?.data?.errors?.email) {
+      emailTaken.value = true
+      await nextTick()
+      focusByElementId('email')
+    }
+    const message = fieldError?.message
+      || error?.data?.message
+      || 'Error al crear el usuario'
     toast.error(message)
   } finally {
     saving.value = false
@@ -369,7 +379,7 @@ function isFieldMissing(field: RequiredField): boolean {
     return !form.value.name.trim()
   }
   if (field === 'email') {
-    return !isOrgStaffEmailValid(form.value.email)
+    return !isOrgStaffEmailValid(form.value.email) || emailTaken.value
   }
   if (field === 'sucursal_id') {
     return form.value.sucursal_id == null
