@@ -103,13 +103,8 @@ watch(
 </script>
 
 <template>
-  <div class="space-y-3 text-left w-full">
-    <div class="space-y-1.5 text-left">
-      <Label :for="inputId" class="text-base leading-snug">{{ label }}</Label>
-      <p v-if="helperText" class="text-sm text-muted-foreground leading-relaxed">
-        {{ helperText }}
-      </p>
-    </div>
+  <div class="flex min-w-0 w-full flex-col gap-2 text-left">
+    <Label :for="inputId" class="leading-snug">{{ label }}</Label>
     <div class="org-inst-processes-ms w-full">
       <ClientOnly>
         <Multiselect
@@ -129,15 +124,18 @@ watch(
           :no-options-text="noOptionsText"
           :no-results-text="noResultsText"
           :multiple-label="areasMultipleLabel"
-          class="multiselect-org-inst-processes org-areas-ms-tags w-full max-w-xl"
+          class="multiselect-org-inst-processes org-areas-ms-tags w-full"
         />
         <template #fallback>
-          <div class="flex h-11 w-full max-w-xl items-center rounded-md border bg-muted/30 px-3 text-sm text-muted-foreground">
+          <div class="flex h-11 w-full items-center rounded-md border bg-muted/30 px-3 text-sm text-muted-foreground">
             Cargando áreas…
           </div>
         </template>
       </ClientOnly>
     </div>
+    <p v-if="helperText" class="text-xs leading-5 text-muted-foreground">
+      {{ helperText }}
+    </p>
   </div>
 </template>
 
@@ -161,14 +159,14 @@ watch(
 .org-inst-processes-ms :deep(.multiselect-org-inst-processes) {
   --ms-font-size: 0.875rem;
   --ms-line-height: 1.25rem;
-  --ms-radius: 0.375rem;
+  --ms-radius: calc(var(--radius) - 2px);
   --ms-border-color: var(--border);
   --ms-bg: var(--background);
   --ms-py: 0.25rem;
   --ms-px: 0.75rem;
   --ms-tag-bg: var(--accent);
   --ms-tag-color: var(--accent-foreground);
-  --ms-dropdown-radius: 0.375rem;
+  --ms-dropdown-radius: calc(var(--radius) - 2px);
   --ms-max-height: 14rem;
   --ms-placeholder-color: var(--muted-foreground);
   min-height: 2.75rem;

@@ -108,7 +108,7 @@ defineExpose({ ensureManagerInList, containsStaff })
 </script>
 
 <template>
-  <div class="org-unit-manager-staff-ms w-full min-w-0 max-w-xl space-y-2">
+  <div class="org-unit-manager-staff-ms w-full min-w-0 space-y-2">
     <ArchivalSingleMultiselect
       :id="inputId"
       v-model="model"
@@ -136,17 +136,17 @@ defineExpose({ ensureManagerInList, containsStaff })
         </div>
       </template>
     </ArchivalSingleMultiselect>
-    <p v-if="helperText" class="text-sm text-muted-foreground leading-relaxed">
+    <p v-if="helperText" class="text-xs leading-5 text-muted-foreground">
       {{ helperText }}
     </p>
-    <p v-else-if="orgUnitId == null" class="text-sm text-muted-foreground leading-relaxed">
+    <p v-else-if="orgUnitId == null" class="text-xs leading-5 text-muted-foreground">
       Solo se listan funcionarios con asignación vigente en esta área.
     </p>
-    <p v-else-if="loading" class="text-xs text-muted-foreground">
+    <p v-else-if="loading" class="text-xs leading-5 text-muted-foreground">
       Cargando funcionarios del área…
     </p>
-    <p v-else class="text-xs text-muted-foreground">
-      Solo funcionarios con ubicación principal vigente en esta área. Se muestra nombre y cargo.
+    <p v-else class="text-xs leading-5 text-muted-foreground">
+      Solo funcionarios con ubicación principal vigente en esta área.
     </p>
   </div>
 </template>

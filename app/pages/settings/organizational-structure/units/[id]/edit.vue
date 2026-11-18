@@ -190,196 +190,187 @@ onMounted(() => {
 
 <template>
   <SettingsLayout :wide="true" hide-intro>
-    <div class="flex w-full flex-col gap-6">
-      <div class="space-y-1">
-        <PageBackButton to="/settings/organizational-structure/units">
+    <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="space-y-1">
+          <h2 class="text-2xl font-bold tracking-tight">
+            Editar área / dependencia
+          </h2>
+          <p class="text-muted-foreground leading-relaxed max-w-3xl">
+            Actualice la sede, la jerarquía, el responsable y las áreas con las que se relaciona.
+          </p>
+        </div>
+        <PageBackButton to="/settings/organizational-structure/units" class="shrink-0">
           Volver a áreas
         </PageBackButton>
-        <h2 class="text-2xl font-bold tracking-tight">
-          Editar área
-        </h2>
-        <p class="text-muted-foreground text-sm leading-relaxed max-w-3xl">
-          Actualice datos de la dependencia, responsable y áreas asociadas.
-        </p>
       </div>
 
-      <div v-if="loading" class="flex justify-center py-12">
+      <div v-if="loading" class="flex justify-center py-16">
         <Icon name="i-lucide-loader-2" class="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
 
-      <form v-else class="max-w-5xl" @submit.prevent="handleSubmit">
+      <form v-else class="space-y-6" novalidate @submit.prevent="handleSubmit">
         <Card>
-          <CardHeader class="gap-1.5">
-            <CardTitle>Datos del área</CardTitle>
-            <CardDescription>
-              Complete cada bloque de arriba hacia abajo. Los campos con * son obligatorios.
+          <CardHeader class="gap-2">
+            <CardTitle class="leading-snug">
+              Ubicación e identificación
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
+              Los campos con * son obligatorios. El área padre solo lista dependencias de la misma agencia.
             </CardDescription>
           </CardHeader>
-          <CardContent class="space-y-8">
-            <section class="space-y-4">
-              <div class="space-y-1">
-                <h3 class="text-sm font-semibold leading-none">
-                  Ubicación e identificación
-                </h3>
-                <p class="text-xs leading-relaxed text-muted-foreground">
-                  Agencia, jerarquía y datos con los que aparece en el organigrama y la TRD.
-                </p>
+          <CardContent class="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+            <div class="flex min-w-0 flex-col gap-2">
+              <Label for="office_e" class="leading-snug">Agencia *</Label>
+              <ArchivalSingleMultiselect
+                id="office_e"
+                v-model="form.org_office_id"
+                coerce-number
+                :can-clear="false"
+                :options="officeSelectOptions"
+                placeholder="Buscar y seleccionar agencia"
+                no-options-text="No hay agencias"
+                no-results-text="Sin coincidencias"
+              />
+              <p class="text-xs leading-5 text-muted-foreground">
+                Sede a la que pertenece esta dependencia.
+              </p>
+            </div>
+            <div class="flex min-w-0 flex-col gap-2">
+              <Label for="parent_e" class="leading-snug">Área padre</Label>
+              <ArchivalSingleMultiselect
+                v-if="form.org_office_id != null"
+                id="parent_e"
+                :key="`parent-e-${form.org_office_id}-${parentSelectOptions.length}`"
+                v-model="form.parent_id"
+                coerce-number
+                searchable
+                :options="parentSelectOptions"
+                placeholder="Opcional: área de la misma agencia"
+                no-options-text="Esta agencia aún no tiene otras áreas"
+                no-results-text="Sin coincidencias"
+              />
+              <div
+                v-else
+                class="flex h-11 items-center rounded-md border border-dashed bg-muted/20 px-3 text-sm text-muted-foreground"
+              >
+                Elija primero una agencia para listar las áreas padre
               </div>
-              <div class="grid grid-cols-1 items-start gap-x-6 gap-y-5 md:grid-cols-2">
-                <div class="flex min-w-0 flex-col gap-1.5">
-                  <Label for="office_e">Agencia *</Label>
-                  <ArchivalSingleMultiselect
-                    id="office_e"
-                    v-model="form.org_office_id"
-                    coerce-number
-                    :can-clear="false"
-                    :options="officeSelectOptions"
-                    placeholder="Buscar y seleccionar agencia"
-                    no-options-text="No hay agencias"
-                    no-results-text="Sin coincidencias"
-                  />
-                  <p class="text-xs leading-5 text-muted-foreground">
-                    Sede a la que pertenece esta dependencia.
-                  </p>
-                </div>
-                <div class="flex min-w-0 flex-col gap-1.5">
-                  <Label for="parent_e">Área padre</Label>
-                  <ArchivalSingleMultiselect
-                    v-if="form.org_office_id != null"
-                    id="parent_e"
-                    :key="`parent-e-${form.org_office_id}-${parentSelectOptions.length}`"
-                    v-model="form.parent_id"
-                    coerce-number
-                    searchable
-                    :options="parentSelectOptions"
-                    placeholder="Opcional: área de la misma agencia"
-                    no-options-text="Esta agencia aún no tiene otras áreas"
-                    no-results-text="Sin coincidencias"
-                  />
-                  <div
-                    v-else
-                    class="flex h-11 items-center rounded-md border border-dashed bg-muted/20 px-3 text-sm text-muted-foreground"
-                  >
-                    Elija primero una agencia para listar las áreas padre
-                  </div>
-                  <p class="text-xs leading-5 text-muted-foreground">
-                    Opcional. Si no elige padre, esta dependencia queda como área raíz de la agencia.
-                  </p>
-                </div>
-                <div class="flex min-w-0 flex-col gap-1.5">
-                  <Label for="name_e">Nombre *</Label>
-                  <Input id="name_e" v-model="form.name" required class="h-11" placeholder="Ej: Dirección financiera" />
-                  <p class="text-xs leading-5 text-muted-foreground">
-                    Nombre visible en organigrama y TRD.
-                  </p>
-                </div>
-                <div class="flex min-w-0 flex-col gap-1.5">
-                  <Label for="code_e">Código *</Label>
-                  <Input id="code_e" v-model="form.code" required class="h-11" maxlength="64" placeholder="Ej: 0014" />
-                  <p class="text-xs leading-5 text-muted-foreground">
-                    Clave corta, única en el catálogo.
-                  </p>
-                </div>
-                <div class="flex min-w-0 flex-col gap-1.5">
-                  <Label for="unit_type_e">Tipo</Label>
-                  <Input id="unit_type_e" v-model="form.unit_type" placeholder="Ej: Subdirección, Sección…" class="h-11" />
-                  <p class="text-xs leading-5 text-muted-foreground">
-                    Opcional. Clasificación interna de la dependencia.
-                  </p>
-                </div>
-                <OrgYesNoMultiselect
-                  class="!space-y-1.5"
-                  :model-value="form.is_document_producer ? 'yes' : 'no'"
-                  input-id="unit_edit_doc_producer_ms"
-                  label="Productora documental (TRD)"
-                  helper-text="Sí si esta dependencia clasifica expedientes conforme a TRD."
-                  @update:model-value="(v: OrgYesNoChoice) => { form.is_document_producer = v === 'yes' }"
-                />
-              </div>
-            </section>
+              <p class="text-xs leading-5 text-muted-foreground">
+                Opcional. Si no elige padre, esta dependencia queda como área raíz de la agencia.
+              </p>
+            </div>
+            <div class="flex min-w-0 flex-col gap-2">
+              <Label for="name_e" class="leading-snug">Nombre *</Label>
+              <Input id="name_e" v-model="form.name" required class="h-11" placeholder="Ej: Dirección financiera" autocomplete="off" />
+              <p class="text-xs leading-5 text-muted-foreground">
+                Nombre visible en organigrama y TRD.
+              </p>
+            </div>
+            <div class="flex min-w-0 flex-col gap-2">
+              <Label for="code_e" class="leading-snug">Código *</Label>
+              <Input id="code_e" v-model="form.code" required class="h-11" maxlength="64" placeholder="Ej: 0014" autocomplete="off" />
+              <p class="text-xs leading-5 text-muted-foreground">
+                Clave corta, única en el catálogo.
+              </p>
+            </div>
+            <div class="flex min-w-0 flex-col gap-2">
+              <Label for="unit_type_e" class="leading-snug">Tipo</Label>
+              <Input id="unit_type_e" v-model="form.unit_type" placeholder="Ej: Subdirección, Sección…" class="h-11" />
+              <p class="text-xs leading-5 text-muted-foreground">
+                Opcional. Clasificación interna de la dependencia.
+              </p>
+            </div>
+            <OrgYesNoMultiselect
+              class="!space-y-2"
+              :model-value="form.is_document_producer ? 'yes' : 'no'"
+              input-id="unit_edit_doc_producer_ms"
+              label="¿Productora documental (TRD)?"
+              helper-text="Sí si esta dependencia clasifica expedientes conforme a su tabla de retención."
+              @update:model-value="(v: OrgYesNoChoice) => { form.is_document_producer = v === 'yes' }"
+            />
+          </CardContent>
+        </Card>
 
-            <section class="space-y-4 border-t pt-6">
-              <div class="space-y-1">
-                <h3 class="text-sm font-semibold leading-none">
-                  Responsable y relaciones
-                </h3>
-                <p class="text-xs leading-relaxed text-muted-foreground">
-                  Jefe vigente del área y otras dependencias con las que se relaciona.
-                </p>
-              </div>
-              <div class="grid grid-cols-1 items-start gap-x-6 gap-y-5 md:grid-cols-2">
-                <div class="flex min-w-0 flex-col gap-1.5">
-                  <Label for="mgr_e_ms">Jefe del área</Label>
-                  <OrgUnitManagerStaffMultiselect
-                    ref="managerStaffSelectRef"
-                    v-model="form.manager_staff_id"
-                    class="!max-w-none"
-                    :org-unit-id="unitId"
-                    input-id="mgr_e_ms"
-                    helper-text="Funcionario vigente en el área, o el cargo marcado «a cargo del área»."
-                    @ready="onManagerStaffReady"
-                  />
-                </div>
-                <div class="flex min-w-0 flex-col gap-1.5">
-                  <Label for="mgr_pos_name_e">Cargo de jefe (referencia)</Label>
-                  <Input id="mgr_pos_name_e" v-model="form.manager_position_name" placeholder="Ej: Coordinador de área" class="h-11" />
-                  <p class="text-xs leading-5 text-muted-foreground">
-                    Opcional. Puede actualizarse al crear un cargo «a cargo del área».
-                  </p>
-                </div>
-                <div class="md:col-span-2">
-                  <OrgInstitutionalProcessesMultiselect
-                    v-model="form.related_org_unit_ids"
-                    :options="areaOptions"
-                    input-id="unit_edit_related_areas_ms"
-                    label="Áreas asociadas"
-                    helper-text="Opcional: otras áreas ya creadas en la estructura."
-                    placeholder="Busque y seleccione áreas creadas"
-                    no-options-text="No hay otras áreas creadas"
-                    no-results-text="Sin coincidencias"
-                  />
-                </div>
-              </div>
-            </section>
-
-            <section class="space-y-4 border-t pt-6">
-              <div class="space-y-1">
-                <h3 class="text-sm font-semibold leading-none">
-                  Vigencia y estado
-                </h3>
-                <p class="text-xs leading-relaxed text-muted-foreground">
-                  La fecha de inicio es obligatoria para conservar el histórico.
-                </p>
-              </div>
-              <div class="grid grid-cols-1 items-start gap-x-6 gap-y-5 md:grid-cols-2">
-                <OrgStructureValidityPeriodFields
-                  v-model:valid-from="form.valid_from"
-                  v-model:valid-to="form.valid_to"
-                  from-input-id="unit_edit_valid_from"
-                  to-input-id="unit_edit_valid_to"
-                />
-                <OrgStructureActiveMultiselect
-                  class="md:col-span-2"
-                  :model-value="form.is_active"
-                  gender="feminine"
-                  input-id="unit_edit_active_ms"
-                  helper-text="Las áreas inactivas no se proponen en asignaciones ni catálogos de alta por defecto."
-                  @update:model-value="onUnitActiveChange"
-                />
-              </div>
-            </section>
-
-            <div class="flex justify-end gap-2 border-t pt-6">
-              <Button type="button" variant="outline" @click="router.back()">
-                Cancelar
-              </Button>
-              <Button type="submit" :disabled="saving">
-                <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-                {{ saving ? 'Guardando...' : 'Guardar cambios' }}
-              </Button>
+        <Card>
+          <CardHeader class="gap-2">
+            <CardTitle class="leading-snug">
+              Responsable y relaciones
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
+              El jefe debe tener ubicación vigente en esta área. Las áreas asociadas son opcionales.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="grid grid-cols-1 items-start gap-6 md:grid-cols-2">
+            <div class="flex min-w-0 flex-col gap-2">
+              <Label for="mgr_e_ms" class="leading-snug">Jefe del área</Label>
+              <OrgUnitManagerStaffMultiselect
+                ref="managerStaffSelectRef"
+                v-model="form.manager_staff_id"
+                class="!max-w-none"
+                :org-unit-id="unitId"
+                input-id="mgr_e_ms"
+                helper-text="Funcionario vigente en el área, o el cargo marcado «a cargo del área»."
+                @ready="onManagerStaffReady"
+              />
+            </div>
+            <div class="flex min-w-0 flex-col gap-2">
+              <Label for="mgr_pos_name_e" class="leading-snug">Cargo de jefe (referencia)</Label>
+              <Input id="mgr_pos_name_e" v-model="form.manager_position_name" placeholder="Ej: Coordinador de área" class="h-11" />
+              <p class="text-xs leading-5 text-muted-foreground">
+                Opcional. Puede actualizarse al crear un cargo «a cargo del área».
+              </p>
+            </div>
+            <div class="md:col-span-2">
+              <OrgInstitutionalProcessesMultiselect
+                v-model="form.related_org_unit_ids"
+                :options="areaOptions"
+                input-id="unit_edit_related_areas_ms"
+                label="Áreas asociadas"
+                helper-text="Opcional: otras áreas ya creadas (colaboración, procesos compartidos)."
+                placeholder="Busque y seleccione áreas creadas"
+                no-options-text="No hay otras áreas creadas"
+                no-results-text="Sin coincidencias"
+              />
             </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader class="gap-2">
+            <CardTitle class="leading-snug">
+              Vigencia y estado
+            </CardTitle>
+            <CardDescription class="leading-relaxed">
+              La fecha de inicio es obligatoria para conservar el histórico.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-6">
+            <OrgStructureValidityPeriodFields
+              v-model:valid-from="form.valid_from"
+              v-model:valid-to="form.valid_to"
+              from-input-id="unit_edit_valid_from"
+              to-input-id="unit_edit_valid_to"
+            />
+            <OrgStructureActiveMultiselect
+              :model-value="form.is_active"
+              gender="feminine"
+              input-id="unit_edit_active_ms"
+              helper-text="Las áreas inactivas no se proponen en asignaciones ni catálogos de alta por defecto."
+              @update:model-value="onUnitActiveChange"
+            />
+          </CardContent>
+        </Card>
+
+        <div class="flex justify-end gap-3">
+          <Button type="button" variant="outline" @click="router.push('/settings/organizational-structure/units')">
+            Cancelar
+          </Button>
+          <Button type="submit" :disabled="saving">
+            <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
+            {{ saving ? 'Guardando...' : 'Guardar cambios' }}
+          </Button>
+        </div>
       </form>
     </div>
   </SettingsLayout>

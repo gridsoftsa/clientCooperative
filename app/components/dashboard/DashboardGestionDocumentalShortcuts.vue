@@ -64,8 +64,8 @@ const heroSubtitle = computed(() => {
 
   if (attentionCount.value > 0) {
     return attentionCount.value === 1
-      ? 'Tienes 1 cosa en curso. Revisa y no la dejes enfriar.'
-      : `Tienes ${badgeLabel(attentionCount.value)} cosas en curso. Revisa y ponte al día.`
+      ? 'Tienes 1 asunto pendiente. Revisa y no lo dejes enfriar.'
+      : `Tienes ${badgeLabel(attentionCount.value)} asuntos pendientes. Revisa y ponte al día.`
   }
 
   return 'Hoy no hay vencidos. Si entra algo, el punto rojo te avisa.'

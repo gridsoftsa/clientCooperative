@@ -214,7 +214,7 @@ onMounted(() => {
 
 <template>
   <SettingsLayout :wide="true" hide-intro>
-    <div class="flex w-full flex-col gap-6">
+    <div class="mx-auto flex w-full max-w-3xl flex-col gap-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="space-y-1">
           <h2 class="text-2xl font-bold tracking-tight">
@@ -229,7 +229,7 @@ onMounted(() => {
         </PageBackButton>
       </div>
 
-      <form class="max-w-5xl space-y-6" novalidate @submit.prevent="handleSubmit">
+      <form class="space-y-6" novalidate @submit.prevent="handleSubmit">
         <Card>
           <CardHeader class="gap-2">
             <CardTitle class="leading-snug">
