@@ -36,6 +36,7 @@ const AUDIENCE_MODE_OPTIONS: Array<{ value: CommunicationAudienceTypeValue, labe
 ]
 
 const communicationsApi = useCommunicationsApi()
+const { hasPermission } = usePermissions()
 const router = useRouter()
 
 const loading = ref(false)
@@ -137,6 +138,10 @@ const orgUnitOptions = computed(() =>
     .map(unit => ({ value: unit.id, label: unit.name.trim() })),
 )
 
+const emitterOrgUnitLocked = computed(() =>
+  !hasPermission('comunicados_gestionar') && orgUnitOptions.value.length <= 1,
+)
+
 const roleOptions = computed(() =>
   roles.value
     .filter(role => role.id != null && Boolean(role.name?.trim()))
@@ -201,6 +206,9 @@ async function loadOptions() {
     }
 
     orgUnits.value = options.org_units ?? []
+    if (orgUnits.value.length === 1) {
+      form.value.org_unit_id = orgUnits.value[0]?.id ?? null
+    }
     roles.value = options.roles ?? []
     users.value = options.users ?? []
 
@@ -474,7 +482,7 @@ onMounted(loadOptions)
                 </ClientOnly>
               </div>
               <div class="space-y-2">
-                <Label>Área emisora (opcional)</Label>
+                <Label>Área emisora</Label>
                 <ClientOnly>
                   <Multiselect
                     v-model="form.org_unit_id"
@@ -483,8 +491,9 @@ onMounted(loadOptions)
                     :options="orgUnitOptions"
                     value-prop="value"
                     label="label"
-                    :searchable="true"
-                    :can-clear="true"
+                    :searchable="!emitterOrgUnitLocked"
+                    :can-clear="!emitterOrgUnitLocked"
+                    :disabled="emitterOrgUnitLocked"
                     placeholder="Sin área"
                     no-options-text="Sin áreas disponibles"
                     no-results-text="Sin coincidencias"
@@ -494,6 +503,11 @@ onMounted(loadOptions)
                     <Skeleton class="h-10 w-full" />
                   </template>
                 </ClientOnly>
+                <p class="text-xs leading-5 text-muted-foreground">
+                  {{ emitterOrgUnitLocked
+                    ? 'El comunicado se emite a nombre de su área.'
+                    : 'Opcional. Quien gestiona comunicados puede elegir cualquier dependencia.' }}
+                </p>
               </div>
             </div>
 
