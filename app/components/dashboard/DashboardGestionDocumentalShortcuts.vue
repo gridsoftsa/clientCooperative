@@ -19,17 +19,61 @@ interface Shortcut {
 }
 
 const { hasModule, hasPermission, hasAnyPermission } = usePermissions()
+const { user } = useAuth()
 const { $api } = useNuxtApp()
 const communicationsApi = useCommunicationsApi()
 const workflowApi = useWorkflowApi()
 
 const badges = ref<Partial<Record<BadgeKey, number>>>({})
+const overdueFilings = ref(0)
 const badgesReady = ref(false)
+
+const greetingFirstName = computed(() => {
+  const source = (user.value?.full_name || user.value?.name || '').trim()
+  if (!source) {
+    return ''
+  }
+
+  return source.split(/\s+/)[0] ?? ''
+})
+
+const heroTitle = computed(() => {
+  const name = greetingFirstName.value
+
+  return name ? `Hola, ${name}. Ponte al día` : 'Hola. Ponte al día'
+})
+
+const attentionCount = computed(() => {
+  return (badges.value.ventanilla ?? 0)
+    + (badges.value.classification ?? 0)
+    + (badges.value.communications ?? 0)
+    + (badges.value.collaborations ?? 0)
+})
+
+const heroSubtitle = computed(() => {
+  if (!badgesReady.value) {
+    return 'Estamos revisando tu bandeja…'
+  }
+
+  if (overdueFilings.value > 0) {
+    return overdueFilings.value === 1
+      ? 'Hay 1 radicado vencido. Empieza por el punto rojo.'
+      : `Hay ${badgeLabel(overdueFilings.value)} radicados vencidos. Empieza por el punto rojo.`
+  }
+
+  if (attentionCount.value > 0) {
+    return attentionCount.value === 1
+      ? 'Tienes 1 cosa en curso. Revisa y no la dejes enfriar.'
+      : `Tienes ${badgeLabel(attentionCount.value)} cosas en curso. Revisa y ponte al día.`
+  }
+
+  return 'Hoy no hay vencidos. Si entra algo, el punto rojo te avisa.'
+})
 
 const shortcuts: Shortcut[] = [
   {
     title: 'Ventanilla única',
-    hint: 'Radicados que ya vencieron. Entra y respóndelos.',
+    hint: 'Radicados abiertos de tu bandeja. Entra y síguelos.',
     kicker: '1 · Llega',
     to: '/ventanilla',
     icon: 'i-lucide-inbox',
@@ -234,11 +278,27 @@ function statusLine(shortcut: Shortcut): string {
     return 'Revisando pendientes…'
   }
 
+  if (shortcut.badgeKey === 'ventanilla') {
+    if (overdueFilings.value > 0) {
+      return overdueFilings.value === 1
+        ? '1 vencido. Ponte al día.'
+        : `${badgeLabel(overdueFilings.value)} vencidos. Ponte al día.`
+    }
+
+    if (count > 0) {
+      return count === 1
+        ? '1 en trámite, todavía a tiempo.'
+        : `${badgeLabel(count)} en trámite, todavía a tiempo.`
+    }
+
+    return 'Nada en bandeja. Estás al día.'
+  }
+
   if (count > 0) {
     return count === 1 ? '1 pendiente de atender' : `${badgeLabel(count)} pendientes de atender`
   }
 
-  return 'Al día. Nada pendiente.'
+  return 'Nada pendiente por aquí.'
 }
 
 async function loadBadges(): Promise<void> {
@@ -247,8 +307,9 @@ async function loadBadges(): Promise<void> {
 
   if (hasPermission('ventanilla_ver') || hasPermission('ventanilla_clasificar') || hasPermission('ventanilla_dashboard_ver')) {
     jobs.push($api<{ data: VentanillaHomeDashboardData }>('/dashboard/ventanilla-summary').then((response) => {
-      next.ventanilla = response.data.sla?.red ?? 0
+      next.ventanilla = response.data.open_filings ?? 0
       next.classification = response.data.pending_classification ?? 0
+      overdueFilings.value = response.data.sla?.red ?? 0
     }).catch(() => undefined))
   }
 
@@ -287,15 +348,15 @@ onMounted(() => {
           Gestión documental
         </p>
         <h2 class="mt-1 text-balance text-xl font-semibold tracking-tight @min-[40rem]/board:text-2xl @min-[64rem]/board:text-3xl">
-          El documento entra, se ordena y se guarda
+          {{ heroTitle }}
         </h2>
         <p class="mt-1 text-sm text-pretty text-muted-foreground">
-          El círculo rojo es lo que alguien dejó pendiente. Empieza por ahí.
+          {{ heroSubtitle }}
         </p>
       </div>
       <div class="flex max-w-full items-center gap-2 rounded-full border bg-background/80 px-3 py-1.5 text-xs shadow-sm backdrop-blur">
         <span class="size-2.5 shrink-0 rounded-full bg-destructive ring-2 ring-destructive/30" />
-        <span>El punto rojo es un pendiente</span>
+        <span>El punto rojo te pide atención</span>
       </div>
     </div>
 
