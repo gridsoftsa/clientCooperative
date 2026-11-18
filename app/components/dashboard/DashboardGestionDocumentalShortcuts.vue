@@ -74,8 +74,8 @@ const heroSubtitle = computed(() => {
 const shortcuts: Shortcut[] = [
   {
     title: 'Ventanilla única',
-    hint: 'Radicados abiertos de tu bandeja. Entra y síguelos.',
-    kicker: '1 · Llega',
+    hint: 'Correspondencia y PQRS que entran a tu área. Ábrelos y dales trámite.',
+    kicker: 'Radicación',
     to: '/ventanilla',
     icon: 'i-lucide-inbox',
     gradient: 'bg-gradient-to-br from-sky-400 via-sky-500 to-blue-700',
@@ -85,8 +85,8 @@ const shortcuts: Shortcut[] = [
   },
   {
     title: 'Clasificación',
-    hint: 'Llegaron y todavía no tienen serie ni tipo.',
-    kicker: '2 · Se ordena',
+    hint: 'Radicados que aún no tienen serie, subserie ni tipo documental.',
+    kicker: 'Por clasificar',
     to: '/ventanilla/bandeja',
     icon: 'i-lucide-tags',
     gradient: 'bg-gradient-to-br from-amber-300 via-orange-500 to-orange-700',
@@ -118,8 +118,8 @@ const shortcuts: Shortcut[] = [
   },
   {
     title: 'Biblioteca',
-    hint: 'Lo que lee toda la entidad',
-    kicker: 'Institucional',
+    hint: 'Documentos de consulta para toda la entidad.',
+    kicker: 'Consulta institucional',
     to: '/biblioteca',
     icon: 'i-lucide-library',
     gradient: 'bg-gradient-to-br from-fuchsia-400 via-violet-500 to-violet-800',
@@ -128,8 +128,8 @@ const shortcuts: Shortcut[] = [
   },
   {
     title: 'Repositorio',
-    hint: 'El archivo de cada área',
-    kicker: 'Por área',
+    hint: 'El archivo de los documentos de tu dependencia.',
+    kicker: 'Archivo de área',
     to: '/expedientes/area',
     icon: 'i-lucide-building-2',
     gradient: 'bg-gradient-to-br from-emerald-400 via-emerald-500 to-teal-800',
@@ -138,8 +138,8 @@ const shortcuts: Shortcut[] = [
   },
   {
     title: 'Expedientes',
-    hint: 'Un caso, una carpeta',
-    kicker: 'Casos',
+    hint: 'La carpeta de un caso o un trámite concreto.',
+    kicker: 'Carpeta del caso',
     to: '/expedientes',
     icon: 'i-lucide-archive',
     gradient: 'bg-gradient-to-br from-blue-400 via-blue-600 to-indigo-800',
@@ -148,8 +148,8 @@ const shortcuts: Shortcut[] = [
   },
   {
     title: 'Flujo de trabajo',
-    hint: 'Tareas que te asignaron en un trámite',
-    kicker: 'Tablero',
+    hint: 'Tareas del trámite que te asignaron.',
+    kicker: 'Tareas del trámite',
     to: '/workflow',
     icon: 'i-lucide-kanban-square',
     gradient: 'bg-gradient-to-br from-orange-400 via-orange-500 to-red-700',
@@ -159,8 +159,8 @@ const shortcuts: Shortcut[] = [
   },
   {
     title: 'TRD vigente',
-    hint: 'Dónde debe ir cada documento',
-    kicker: 'Cuadro',
+    hint: 'Tabla de retenciones: serie, subserie y tiempos de guarda.',
+    kicker: 'Tabla de retenciones',
     to: '/settings/archival/trd/consult',
     icon: 'i-lucide-table-2',
     gradient: 'bg-gradient-to-br from-teal-300 via-teal-500 to-cyan-900',
@@ -490,12 +490,9 @@ onMounted(() => {
     </div>
 
     <div v-if="storeShortcuts.length" class="mt-4">
-      <div class="mb-2 flex items-center gap-2">
-        <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-background">
-          3
-        </span>
+      <div class="mb-2">
         <p class="text-sm font-medium">
-          Se guarda aquí
+          Archivo, consulta y trámites
         </p>
       </div>
       <div class="grid gap-2.5 @min-[40rem]/board:gap-3" :class="storeGridClass">
