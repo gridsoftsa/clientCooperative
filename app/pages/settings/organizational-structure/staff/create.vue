@@ -176,51 +176,16 @@ function onUserSearchChange(query: string): void {
   }, 250)
 }
 
-async function ensureSelectedUserInOptions(userId: number) {
-  if (userOptions.value.some(u => u.id === userId)) {
+function upsertUserOption(user: LinkableUserOption): void {
+  const index = userOptions.value.findIndex(item => item.id === user.id)
+  if (index >= 0) {
+    userOptions.value[index] = user
     return
   }
-  try {
-    const res = await $api<{ data: User }>(`/users/${userId}`)
-    const u = res.data
-    if (u.org_staff_id == null) {
-      userOptions.value = [
-        ...userOptions.value,
-        {
-          id: u.id,
-          name: u.name,
-          full_name: u.full_name ?? null,
-          email: u.email,
-          phone: u.phone ?? null,
-          label: `${personDisplayNameFromUser(u) || u.name || u.email} · ${u.email}`,
-        },
-      ]
-    }
-  } catch {
-    // ignore — multiselect may still show id if options load later
-  }
+  userOptions.value = [...userOptions.value, user]
 }
 
-function applyReturnedUserFromQuery() {
-  const raw = route.query.user_id
-  const userId = typeof raw === 'string' ? Number(raw) : null
-  if (userId != null && Number.isFinite(userId) && userId > 0) {
-    form.value.user_id = userId
-    void ensureSelectedUserInOptions(userId).then(() => applySelectedUserToForm(userId))
-    router.replace({ path: route.path })
-  }
-}
-
-function applySelectedUserToForm(userId: number | null): void {
-  if (userId == null) {
-    return
-  }
-
-  const selected = userOptions.value.find(user => user.id === userId)
-  if (!selected) {
-    return
-  }
-
+function applyLinkedUserFields(selected: LinkableUserOption): void {
   const displayName = personDisplayNameFromUser(selected)
   if (displayName !== '') {
     const parts = splitStaffNamePartsFromFullName(displayName)
@@ -234,13 +199,56 @@ function applySelectedUserToForm(userId: number | null): void {
     form.value.email = selected.email
   }
 
-  if (selected.phone?.trim() && !form.value.phone.trim()) {
+  if (selected.phone?.trim()) {
     form.value.phone = selected.phone.trim()
   }
 }
 
+async function hydrateFormFromLinkedUser(userId: number | null): Promise<void> {
+  if (userId == null) {
+    return
+  }
+
+  let selected = userOptions.value.find(user => user.id === userId) ?? null
+
+  if (hasPermission('usuarios_ver')) {
+    try {
+      const res = await $api<{ data: User }>(`/users/${userId}`)
+      const user = res.data
+      selected = {
+        id: user.id,
+        name: user.name,
+        full_name: user.full_name ?? null,
+        email: user.email,
+        phone: user.phone ?? null,
+        label: `${personDisplayNameFromUser(user) || user.name || user.email} · ${user.email}`,
+      }
+      if (user.org_staff_id == null) {
+        upsertUserOption(selected)
+      }
+    }
+    catch {
+      // Si falla el detalle, se usa lo que ya esté en el listado.
+    }
+  }
+
+  if (selected) {
+    applyLinkedUserFields(selected)
+  }
+}
+
+function applyReturnedUserFromQuery() {
+  const raw = route.query.user_id
+  const userId = typeof raw === 'string' ? Number(raw) : null
+  if (userId != null && Number.isFinite(userId) && userId > 0) {
+    form.value.user_id = userId
+    void hydrateFormFromLinkedUser(userId)
+    router.replace({ path: route.path })
+  }
+}
+
 watch(() => form.value.user_id, (userId) => {
-  applySelectedUserToForm(userId)
+  void hydrateFormFromLinkedUser(userId)
 })
 
 async function handleSubmit() {
@@ -427,7 +435,7 @@ onMounted(async () => {
   await Promise.all([loadUsersIfAllowed(), fetchDocumentTypeOptions(), loadTrdConfig()])
   applyReturnedUserFromQuery()
   if (form.value.user_id != null) {
-    applySelectedUserToForm(form.value.user_id)
+    void hydrateFormFromLinkedUser(form.value.user_id)
   }
 })
 </script>
