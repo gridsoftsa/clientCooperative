@@ -244,7 +244,7 @@ async function toggleUnitPositions(unitId: number) {
 }
 
 async function deactivateNestedPosition(unitId: number, positionId: number) {
-  if (!hasPermission('estructura_org_editar') || deactivatingPositionId.value != null) {
+  if (!hasPermission('estructura_org_desactivar') || deactivatingPositionId.value != null) {
     return
   }
   deactivatingPositionId.value = positionId
@@ -275,7 +275,7 @@ function managerLabel(unit: OrgUnitRow): string {
 }
 
 async function deactivateUnit(id: number) {
-  if (!hasPermission('estructura_org_editar') || deactivatingId.value != null)
+  if (!hasPermission('estructura_org_desactivar') || deactivatingId.value != null)
     return
   const confirmed = window.confirm(
     '¿Inactivar esta área? El código seguirá reservado: no podrá crear otra con el mismo código. Si más adelante la necesita, use Activar.',
@@ -295,7 +295,7 @@ async function deactivateUnit(id: number) {
 }
 
 async function activateUnit(id: number) {
-  if (!hasPermission('estructura_org_editar') || activatingId.value != null)
+  if (!hasPermission('estructura_org_desactivar') || activatingId.value != null)
     return
   activatingId.value = id
   try {
@@ -329,7 +329,7 @@ onMounted(async () => {
           </h2>
         </div>
         <div class="shrink-0">
-          <PermissionGate permission="estructura_org_editar">
+          <PermissionGate permission="estructura_org_crear">
             <Button @click="router.push('/settings/organizational-structure/units/create')">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
               Nueva área
@@ -494,6 +494,8 @@ onMounted(async () => {
                       >
                         Editar
                       </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="estructura_org_desactivar">
                       <Button
                         v-if="u.is_active"
                         type="button"
@@ -531,6 +533,7 @@ onMounted(async () => {
                   <p v-else-if="(unitPositions[u.id] ?? []).length === 0" class="text-sm text-muted-foreground">
                     Esta área no tiene cargos.
                     <button
+                      v-if="hasPermission('estructura_org_crear')"
                       type="button"
                       class="ml-1 underline underline-offset-2"
                       @click="router.push(`/settings/organizational-structure/units/${u.id}/positions`)"
@@ -576,6 +579,8 @@ onMounted(async () => {
                                 >
                                   Editar
                                 </Button>
+                              </PermissionGate>
+                              <PermissionGate permission="estructura_org_desactivar">
                                 <Button
                                   v-if="position.is_active"
                                   type="button"

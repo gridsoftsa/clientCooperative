@@ -119,7 +119,7 @@ onMounted(load)
           </p>
         </div>
         <div class="flex shrink-0 flex-wrap gap-2">
-          <PermissionGate permission="trd_catalogo_editar">
+          <PermissionGate permission="trd_catalogo_crear">
             <Button @click="router.push(catalogApi.documentTypesCreatePath(seriesId, subseriesId))">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
               Nuevo tipo documental
@@ -202,7 +202,7 @@ onMounted(load)
                           Editar
                         </Button>
                       </PermissionGate>
-                      <PermissionGate permission="trd_catalogo_editar">
+                      <PermissionGate permission="trd_catalogo_desactivar">
                         <Button
                           v-if="r.is_active"
                           type="button"

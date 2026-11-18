@@ -5,10 +5,16 @@ import { toast } from 'vue-sonner'
 const props = withDefaults(defineProps<{
   kind: TalentPartyKind
   managePermission?: string
+  createPermission?: string
+  editPermission?: string
+  deactivatePermission?: string
   showRegistry?: boolean
   allowManualCreate?: boolean
 }>(), {
   managePermission: 'talento_gestionar',
+  createPermission: 'talento_crear',
+  editPermission: 'talento_editar',
+  deactivatePermission: 'talento_desactivar',
   showRegistry: true,
   allowManualCreate: true,
 })
@@ -62,6 +68,9 @@ const singular = computed(() => {
   return 'empleado'
 })
 const canManage = computed(() => hasPermission(props.managePermission))
+const canCreateParty = computed(() => hasPermission(props.createPermission))
+const canEditParty = computed(() => hasPermission(props.editPermission))
+const canDeactivateParty = computed(() => hasPermission(props.deactivatePermission))
 const canCreate = computed(() => savedTrdTableId.value != null && savedSubseriesCount.value > 0)
 const draftSubseriesCount = computed(() => selectedSubseries.value.length)
 
@@ -221,7 +230,7 @@ function openCreate() {
 }
 
 async function deactivateParty(party: TalentPartySummary): Promise<void> {
-  if (!canManage.value || deactivatingId.value != null) {
+  if (!canDeactivateParty.value || deactivatingId.value != null) {
     return
   }
 
@@ -483,8 +492,9 @@ onMounted(() => {
             : 'Al crearla solo se indica el nombre y la identificación.' }}
         </p>
       </div>
-      <div v-if="canManage" class="flex flex-wrap gap-2">
+      <div v-if="canManage || canCreateParty" class="flex flex-wrap gap-2">
         <Button
+          v-if="canManage"
           type="button"
           variant="outline"
           @click="settingsOpen = true"
@@ -493,7 +503,7 @@ onMounted(() => {
           Configuración de archivo
         </Button>
         <Button
-          v-if="allowManualCreate"
+          v-if="allowManualCreate && canCreateParty"
           type="button"
           :disabled="kind !== 'supplier' && !canCreate"
           @click="openCreate"
@@ -804,7 +814,7 @@ onMounted(() => {
                   </Button>
                   <PermissionGate
                     v-if="kind === 'supplier'"
-                    :permission="managePermission"
+                    :permission="editPermission"
                   >
                     <Button
                       variant="warning"
@@ -814,6 +824,11 @@ onMounted(() => {
                     >
                       Editar
                     </Button>
+                  </PermissionGate>
+                  <PermissionGate
+                    v-if="kind === 'supplier'"
+                    :permission="deactivatePermission"
+                  >
                     <Button
                       v-if="party.is_active !== false"
                       type="button"

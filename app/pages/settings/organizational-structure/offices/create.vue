@@ -8,7 +8,7 @@ import { todayIsoDateString } from '~/utils/dateInputValue'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: ['estructura_org_editar', 'sucursales_crear'],
+  permissions: ['estructura_org_crear', 'sucursales_crear'],
 })
 
 const { $api } = useNuxtApp()

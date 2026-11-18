@@ -9,7 +9,7 @@ import { ORG_POSITION_REPORTS_TO_REQUIRED_MESSAGE, orgPositionReportsToIncomplet
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'estructura_org_editar',
+  permissions: 'estructura_org_crear',
 })
 
 const router = useRouter()

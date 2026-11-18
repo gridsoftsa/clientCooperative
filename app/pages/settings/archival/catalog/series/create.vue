@@ -5,7 +5,7 @@ import CatalogConfidentialityFields from '~/components/archival/CatalogConfident
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'trd_catalogo_editar',
+  permissions: 'trd_catalogo_crear',
 })
 
 interface OrgUnitOption {

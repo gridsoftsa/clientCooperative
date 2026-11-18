@@ -12,7 +12,7 @@ import type { DocDocumentTypeRow, DocSubseriesRow } from '~/types/archival-catal
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'trd_catalogo_editar',
+  permissions: 'trd_catalogo_crear',
 })
 
 const route = useRoute()

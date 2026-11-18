@@ -8,7 +8,7 @@ import type { DocSeriesRow } from '~/types/archival-catalog'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'trd_catalogo_editar',
+  permissions: 'trd_catalogo_crear',
 })
 
 const route = useRoute()

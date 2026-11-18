@@ -61,7 +61,7 @@ function changePerPage(size: number) {
 }
 
 async function deactivateOffice(id: number) {
-  if (!hasAnyPermission(['estructura_org_editar', 'sucursales_editar']) || deactivatingId.value != null)
+  if (!hasAnyPermission(['estructura_org_desactivar', 'sucursales_eliminar', 'sucursales_editar']) || deactivatingId.value != null)
     return
   deactivatingId.value = id
   try {
@@ -93,7 +93,7 @@ onMounted(() => {
           </h2>
         </div>
         <div class="shrink-0">
-          <PermissionGate :any-permission="['estructura_org_editar', 'sucursales_crear']">
+          <PermissionGate :any-permission="['estructura_org_crear', 'sucursales_crear']">
             <Button @click="router.push('/settings/organizational-structure/offices/create')">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
               Nueva agencia
@@ -156,6 +156,8 @@ onMounted(() => {
                         >
                           Editar
                         </Button>
+                      </PermissionGate>
+                      <PermissionGate :any-permission="['estructura_org_desactivar', 'sucursales_eliminar', 'sucursales_editar']">
                         <Button
                           v-if="o.is_active"
                           type="button"

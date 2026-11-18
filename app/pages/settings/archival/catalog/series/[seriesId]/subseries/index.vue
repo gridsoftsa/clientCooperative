@@ -128,7 +128,7 @@ function confirmCascadeDeactivate() {
           <Button variant="outline" @click="router.push('/settings/archival')">
             Resumen TRD
           </Button>
-          <PermissionGate permission="trd_catalogo_editar">
+          <PermissionGate permission="trd_catalogo_crear">
             <Button @click="router.push(catalogApi.subseriesCreatePath(seriesId))">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
               Nueva subserie
@@ -208,7 +208,7 @@ function confirmCascadeDeactivate() {
                           Editar
                         </Button>
                       </PermissionGate>
-                      <PermissionGate permission="trd_catalogo_editar">
+                      <PermissionGate permission="trd_catalogo_desactivar">
                         <Button
                           v-if="r.is_active"
                           type="button"

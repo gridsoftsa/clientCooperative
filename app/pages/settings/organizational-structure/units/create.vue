@@ -8,7 +8,7 @@ import { todayIsoDateString } from '~/utils/dateInputValue'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'estructura_org_editar',
+  permissions: 'estructura_org_crear',
 })
 
 const router = useRouter()

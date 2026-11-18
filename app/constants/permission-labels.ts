@@ -257,7 +257,7 @@ const PERMISSION_PREFIX_LABELS: Record<string, string> = {
   suplencias_delegaciones: 'delegaciones de backup',
 }
 
-const CRUD_ACTION_SUFFIX = /^(ver|crear|editar|eliminar)$/
+const CRUD_ACTION_SUFFIX = /^(ver|crear|editar|eliminar|desactivar)$/
 
 /** Etiquetas fijas cuando el nombre en varias partes no basta (ej. enviar a análisis) */
 const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
@@ -351,6 +351,15 @@ const PERMISSION_LABEL_OVERRIDES: Record<string, string> = {
   trd_auditoria_ver: 'Consultar auditoría catálogo y TRD',
   estructura_org_importar_ver: 'Ver importación de estructura organizacional',
   estructura_org_importar_ejecutar: 'Ejecutar importación de estructura organizacional',
+  estructura_org_crear: 'Crear sedes, áreas, cargos o funcionarios',
+  estructura_org_desactivar: 'Desactivar o reactivar sedes, áreas, cargos o funcionarios',
+  trd_catalogo_crear: 'Crear series, subseries y tipos documentales',
+  trd_catalogo_desactivar: 'Inactivar o reactivar series, subseries y tipos documentales',
+  talento_crear: 'Crear empleados y proveedores',
+  talento_editar: 'Editar empleados y proveedores',
+  talento_desactivar: 'Desactivar empleados y proveedores',
+  comunicados_editar: 'Editar comunicados internos',
+  comunicados_eliminar: 'Eliminar comunicados internos',
 }
 
 export function getPermissionLabel(name: string): string {

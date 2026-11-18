@@ -78,7 +78,7 @@ function changePerPage(size: number) {
 }
 
 async function deactivatePosition(id: number) {
-  if (!hasPermission('estructura_org_editar') || deactivatingId.value != null)
+  if (!hasPermission('estructura_org_desactivar') || deactivatingId.value != null)
     return
   deactivatingId.value = id
   try {
@@ -111,7 +111,7 @@ onMounted(async () => {
           </h2>
         </div>
         <div class="shrink-0">
-          <PermissionGate permission="estructura_org_editar">
+          <PermissionGate permission="estructura_org_crear">
             <Button @click="router.push('/settings/organizational-structure/positions/create')">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
               Nuevo cargo
@@ -201,6 +201,8 @@ onMounted(async () => {
                       >
                         Editar
                       </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="estructura_org_desactivar">
                       <Button
                         v-if="p.is_active"
                         type="button"

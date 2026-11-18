@@ -6,7 +6,7 @@ import { isOrgStaffEmailValid } from '~/utils/staff-user-create-bridge'
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'estructura_org_editar',
+  permissions: 'estructura_org_crear',
 })
 
 const router = useRouter()

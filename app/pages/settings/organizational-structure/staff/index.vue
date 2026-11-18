@@ -93,7 +93,7 @@ function changePerPage(size: number) {
 }
 
 async function deactivateStaff(id: number) {
-  if (!hasPermission('estructura_org_editar') || deactivatingId.value != null)
+  if (!hasPermission('estructura_org_desactivar') || deactivatingId.value != null)
     return
   deactivatingId.value = id
   try {
@@ -128,9 +128,11 @@ onMounted(() => {
           <TalentPartyList
             kind="employee"
             manage-permission="estructura_org_editar"
+            create-permission="estructura_org_crear"
+            deactivate-permission="estructura_org_desactivar"
             :show-registry="false"
           />
-          <PermissionGate permission="estructura_org_editar">
+          <PermissionGate permission="estructura_org_crear">
             <Button @click="router.push('/settings/organizational-structure/staff/create')">
               <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
               Registrar funcionario
@@ -240,6 +242,8 @@ onMounted(() => {
                       >
                         Editar
                       </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="estructura_org_desactivar">
                       <Button
                         v-if="s.is_active"
                         type="button"

@@ -11,6 +11,9 @@ definePageMeta({
     <TalentPartyList
       kind="supplier"
       manage-permission="estructura_org_editar"
+      create-permission="estructura_org_crear"
+      edit-permission="estructura_org_editar"
+      deactivate-permission="estructura_org_desactivar"
     />
   </SettingsLayout>
 </template>

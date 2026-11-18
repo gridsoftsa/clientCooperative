@@ -132,7 +132,7 @@ onMounted(async () => {
           </p>
         </div>
         <div class="flex shrink-0 flex-wrap gap-2">
-          <PermissionGate permission="trd_catalogo_editar">
+          <PermissionGate permission="trd_catalogo_crear">
             <Button
               :disabled="selectedOrgUnitId == null"
               @click="router.push(createSeriesPath)"
@@ -199,7 +199,7 @@ onMounted(async () => {
               No hay series para
               <strong v-if="selectedUnit">{{ selectedUnit.name }}</strong>.
             </p>
-            <PermissionGate permission="trd_catalogo_editar">
+            <PermissionGate permission="trd_catalogo_crear">
               <Button @click="router.push(createSeriesPath)">
                 <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
                 Crear primera serie
