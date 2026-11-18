@@ -46,6 +46,7 @@ const view = ref<'list' | 'form'>('list')
 const editingIndex = ref<number | null>(null)
 const draft = ref<ArchivalFileTypeProducerAreaDraft>(emptyRow(0))
 const pendingDeleteIndex = ref<number | null>(null)
+const deleteDialogOpen = ref(false)
 
 const rows = computed(() => mapProducerAreaDrafts(props.fileType.producer_areas))
 
@@ -150,7 +151,7 @@ function backToList() {
   }
 }
 
-async function persist(nextRows: ArchivalFileTypeProducerAreaDraft[], successMessage: string) {
+async function persist(nextRows: ArchivalFileTypeProducerAreaDraft[], successMessage: string): Promise<boolean> {
   saving.value = true
 
   try {
@@ -162,11 +163,15 @@ async function persist(nextRows: ArchivalFileTypeProducerAreaDraft[], successMes
     toast.success(successMessage)
     emit('updated', res.data)
     backToList()
+
+    return true
   }
   catch (error: unknown) {
     const err = error as { data?: { message?: string, errors?: Record<string, string[]> } }
     const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
     toast.error(first ?? err.data?.message ?? 'No se pudo guardar el área.')
+
+    return false
   }
   finally {
     saving.value = false
@@ -194,16 +199,44 @@ async function saveDraft() {
   )
 }
 
-async function confirmDelete() {
-  const index = pendingDeleteIndex.value
-  pendingDeleteIndex.value = null
+function requestDelete(index: number): void {
+  pendingDeleteIndex.value = index
+  deleteDialogOpen.value = true
+}
 
+function closeDeleteDialog(): void {
+  if (saving.value) {
+    return
+  }
+
+  deleteDialogOpen.value = false
+  pendingDeleteIndex.value = null
+}
+
+function onDeleteDialogOpenChange(open: boolean): void {
+  if (open) {
+    deleteDialogOpen.value = true
+
+    return
+  }
+
+  closeDeleteDialog()
+}
+
+async function confirmDelete(): Promise<void> {
+  const index = pendingDeleteIndex.value
   if (index == null) {
     return
   }
 
   const nextRows = rows.value.filter((_, rowIndex) => rowIndex !== index)
-  await persist(nextRows, 'Área productora eliminada.')
+  const saved = await persist(nextRows, 'Área productora eliminada.')
+  if (!saved) {
+    return
+  }
+
+  deleteDialogOpen.value = false
+  pendingDeleteIndex.value = null
 }
 
 async function loadCatalogs() {
@@ -327,7 +360,7 @@ defineExpose({
                     size="icon"
                     class="size-8"
                     :disabled="saving"
-                    @click="pendingDeleteIndex = index"
+                    @click="requestDelete(index)"
                   >
                     <Icon name="i-lucide-trash-2" class="size-4 text-destructive" />
                   </Button>
@@ -403,7 +436,7 @@ defineExpose({
       </div>
     </div>
 
-    <AlertDialog :open="pendingDeleteIndex != null" @update:open="pendingDeleteIndex = $event ? pendingDeleteIndex : null">
+    <AlertDialog :open="deleteDialogOpen" @update:open="onDeleteDialogOpenChange">
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Quitar área productora</AlertDialogTitle>
@@ -412,10 +445,10 @@ defineExpose({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel :disabled="saving">
+          <AlertDialogCancel :disabled="saving" @click="closeDeleteDialog">
             Cancelar
           </AlertDialogCancel>
-          <AlertDialogAction :disabled="saving" @click="confirmDelete">
+          <AlertDialogAction :disabled="saving" @click.prevent="confirmDelete">
             Quitar área
           </AlertDialogAction>
         </AlertDialogFooter>
