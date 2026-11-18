@@ -57,7 +57,7 @@ const typeTabs: Array<{ value: string, label: string }> = [
   { value: 'circular', label: 'Circulares' },
   { value: 'event', label: 'Eventos' },
   { value: 'birthday', label: 'Cumpleaños' },
-  { value: 'announcement', label: 'Comunicados' },
+  { value: 'announcement', label: 'Comunicado' },
 ]
 
 function typeBadgeClass(type: CommunicationTypeValue) {
@@ -227,6 +227,14 @@ function showUnreadOnly() {
   setListMode('unread')
 }
 
+const selectedTypeLabel = computed(() =>
+  typeTabs.find(tab => tab.value === selectedType.value)?.label ?? '',
+)
+
+function clearTypeFilter() {
+  selectType('')
+}
+
 onMounted(() => {
   if (route.query.unread === '1') {
     sort.value = 'unread'
@@ -370,8 +378,26 @@ watch(() => route.query.unread, (value) => {
         <div v-if="loading" class="py-16 text-center text-muted-foreground">
           Cargando feed...
         </div>
-        <div v-else-if="feed.length === 0" class="rounded-xl border border-dashed py-16 text-center text-muted-foreground">
-          No hay comunicados para mostrar.
+        <div v-else-if="feed.length === 0" class="rounded-xl border border-dashed px-6 py-16 text-center text-muted-foreground">
+          <p>
+            <template v-if="selectedType">
+              No hay publicaciones de tipo «{{ selectedTypeLabel }}».
+              El aviso puede estar en <strong>Todos</strong> u otra pestaña.
+            </template>
+            <template v-else>
+              No hay comunicados para mostrar.
+            </template>
+          </p>
+          <Button
+            v-if="selectedType"
+            class="mt-4"
+            type="button"
+            variant="outline"
+            size="sm"
+            @click="clearTypeFilter"
+          >
+            Ver todos
+          </Button>
         </div>
         <div v-else class="space-y-4">
           <Card
@@ -585,16 +611,6 @@ watch(() => route.query.unread, (value) => {
       </div>
     </div>
 
-    <Button
-      v-if="canCreate"
-      as-child
-      class="fixed right-6 bottom-6 z-40 hidden size-14 rounded-full shadow-lg md:inline-flex"
-      size="icon"
-    >
-      <NuxtLink to="/comunicados/nuevo" title="Publicar">
-        <Icon name="i-lucide-megaphone" class="size-5" />
-      </NuxtLink>
-    </Button>
     <DocumentInlinePreviewDialog
       v-model:open="inlinePreviewOpen"
       :title="inlinePreviewTitle"

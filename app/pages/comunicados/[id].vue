@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { CommunicationItem } from '~/types/communications'
+import type { CommunicationEngagementAudienceMember, CommunicationItem } from '~/types/communications'
 import { canPreviewDocumentInline } from '~/utils/document-preview'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
@@ -27,6 +27,8 @@ const {
 } = useInlineFilePreview()
 
 const id = computed(() => Number(route.params.id))
+const engagementQuery = ref('')
+const engagementStatusFilter = ref<'all' | 'pending' | 'read' | 'confirmed'>('all')
 
 async function load() {
   loading.value = true
@@ -108,7 +110,33 @@ function typeBadgeClass(type?: string) {
   }
 }
 
-function engagementStatusLabel(member: NonNullable<CommunicationItem['engagement']>['audience'][number]) {
+const audienceMembers = computed(() => item.value?.engagement?.audience ?? [])
+
+const filteredAudience = computed(() => {
+  const query = engagementQuery.value.trim().toLowerCase()
+
+  return audienceMembers.value.filter((member) => {
+    if (engagementStatusFilter.value === 'pending' && (member.has_read || member.has_confirmed)) {
+      return false
+    }
+    if (engagementStatusFilter.value === 'read' && !member.has_read) {
+      return false
+    }
+    if (engagementStatusFilter.value === 'confirmed' && !member.has_confirmed) {
+      return false
+    }
+    if (!query) {
+      return true
+    }
+
+    const name = member.name.toLowerCase()
+    const email = (member.email ?? '').toLowerCase()
+
+    return name.includes(query) || email.includes(query)
+  })
+})
+
+function engagementStatusLabel(member: CommunicationEngagementAudienceMember) {
   if (member.has_confirmed) {
     return 'Confirmó lectura'
   }
@@ -118,7 +146,7 @@ function engagementStatusLabel(member: NonNullable<CommunicationItem['engagement
   return 'Pendiente'
 }
 
-function engagementStatusClass(member: NonNullable<CommunicationItem['engagement']>['audience'][number]) {
+function engagementStatusClass(member: CommunicationEngagementAudienceMember) {
   if (member.has_confirmed) {
     return 'border-emerald-300 bg-emerald-100 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100'
   }
@@ -357,53 +385,96 @@ onMounted(load)
             </div>
           </div>
 
-          <div class="overflow-x-auto rounded-lg border">
-            <table class="w-full min-w-[720px] text-sm">
-              <thead class="border-b bg-muted/40 text-left">
-                <tr>
-                  <th class="px-3 py-2 font-medium">
-                    Destinatario
-                  </th>
-                  <th class="px-3 py-2 font-medium">
-                    Estado
-                  </th>
-                  <th class="px-3 py-2 font-medium">
-                    Leído
-                  </th>
-                  <th v-if="item.requires_read_confirmation" class="px-3 py-2 font-medium">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div class="relative min-w-0 flex-1">
+              <Icon name="i-lucide-search" class="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                v-model="engagementQuery"
+                placeholder="Buscar por nombre o correo…"
+                class="pl-9"
+              />
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                :variant="engagementStatusFilter === 'all' ? 'default' : 'outline'"
+                @click="engagementStatusFilter = 'all'"
+              >
+                Todos
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                :variant="engagementStatusFilter === 'pending' ? 'default' : 'outline'"
+                @click="engagementStatusFilter = 'pending'"
+              >
+                Pendientes
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                :variant="engagementStatusFilter === 'read' ? 'default' : 'outline'"
+                @click="engagementStatusFilter = 'read'"
+              >
+                Leídos
+              </Button>
+              <Button
+                v-if="item.requires_read_confirmation"
+                type="button"
+                size="sm"
+                :variant="engagementStatusFilter === 'confirmed' ? 'default' : 'outline'"
+                @click="engagementStatusFilter = 'confirmed'"
+              >
+                Confirmados
+              </Button>
+            </div>
+          </div>
+          <p class="text-xs text-muted-foreground">
+            Mostrando {{ filteredAudience.length }} de {{ audienceMembers.length }} destinatarios.
+          </p>
+
+          <div class="max-h-[min(32rem,65vh)] overflow-auto rounded-lg border">
+            <Table>
+              <TableHeader class="sticky top-0 z-10 bg-muted/95 backdrop-blur">
+                <TableRow>
+                  <TableHead>Destinatario</TableHead>
+                  <TableHead>Estado</TableHead>
+                  <TableHead>Leído</TableHead>
+                  <TableHead v-if="item.requires_read_confirmation">
                     Confirmado
-                  </th>
-                  <th class="px-3 py-2 font-medium">
-                    Recordatorios
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="member in item.engagement.audience"
+                  </TableHead>
+                  <TableHead>Recordatorios</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow
+                  v-for="member in filteredAudience"
                   :key="member.user_id"
-                  class="border-b last:border-b-0"
                 >
-                  <td class="px-3 py-2">
+                  <TableCell>
                     <div class="font-medium">
                       {{ member.name }}
                     </div>
                     <div v-if="member.email" class="text-xs text-muted-foreground">
                       {{ member.email }}
                     </div>
-                  </td>
-                  <td class="px-3 py-2">
+                  </TableCell>
+                  <TableCell>
                     <Badge variant="outline" :class="engagementStatusClass(member)">
                       {{ engagementStatusLabel(member) }}
                     </Badge>
-                  </td>
-                  <td class="px-3 py-2 text-muted-foreground">
+                  </TableCell>
+                  <TableCell class="whitespace-nowrap text-muted-foreground">
                     {{ formatDate(member.read_at) }}
-                  </td>
-                  <td v-if="item.requires_read_confirmation" class="px-3 py-2 text-muted-foreground">
+                  </TableCell>
+                  <TableCell
+                    v-if="item.requires_read_confirmation"
+                    class="whitespace-nowrap text-muted-foreground"
+                  >
                     {{ formatDate(member.confirmed_at) }}
-                  </td>
-                  <td class="px-3 py-2">
+                  </TableCell>
+                  <TableCell>
                     <div class="font-medium">
                       {{ member.reminders_sent_count }}
                     </div>
@@ -414,15 +485,20 @@ onMounted(load)
                     >
                       #{{ reminder.reminder_number }} · {{ formatDate(reminder.sent_at) }}
                     </div>
-                  </td>
-                </tr>
-                <tr v-if="item.engagement.audience.length === 0">
-                  <td :colspan="item.requires_read_confirmation ? 5 : 4" class="px-3 py-6 text-center text-muted-foreground">
-                    No hay destinatarios resueltos para este comunicado.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  </TableCell>
+                </TableRow>
+                <TableRow v-if="filteredAudience.length === 0">
+                  <TableCell
+                    :colspan="item.requires_read_confirmation ? 5 : 4"
+                    class="py-8 text-center text-muted-foreground"
+                  >
+                    {{ audienceMembers.length === 0
+                      ? 'No hay destinatarios resueltos para este comunicado.'
+                      : 'Ningún destinatario coincide con la búsqueda o el filtro.' }}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>

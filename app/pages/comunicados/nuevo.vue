@@ -77,7 +77,7 @@ function extractApiErrorMessage(error: unknown, fallback: string): string {
 }
 
 const form = ref({
-  type: 'notice' as CommunicationTypeValue,
+  type: 'announcement' as CommunicationTypeValue,
   title: '',
   summary: '',
   body: '',
@@ -252,7 +252,7 @@ async function loadOptions() {
   }
   finally {
     if (!typeOptions.value.some(type => type.value === form.value.type)) {
-      form.value.type = typeOptions.value[0]?.value ?? 'notice'
+      form.value.type = typeOptions.value[0]?.value ?? 'announcement'
     }
     optionsReady.value = true
   }
