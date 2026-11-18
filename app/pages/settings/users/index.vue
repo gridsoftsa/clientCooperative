@@ -171,8 +171,6 @@ watch(searchQuery, () => {
                   <TableHead>ID</TableHead>
                   <TableHead>Nombre de usuario</TableHead>
                   <TableHead>Nombre completo</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Teléfono</TableHead>
                   <TableHead>Sucursal</TableHead>
                   <TableHead>Roles</TableHead>
                   <TableHead>Estado</TableHead>
@@ -186,10 +184,6 @@ watch(searchQuery, () => {
                   <TableCell>{{ user.name }}</TableCell>
                   <TableCell>
                     <span class="text-muted-foreground text-sm">{{ user.full_name?.trim() || '—' }}</span>
-                  </TableCell>
-                  <TableCell>{{ user.email }}</TableCell>
-                  <TableCell>
-                    <span class="text-muted-foreground text-sm font-mono">{{ user.phone?.trim() || '—' }}</span>
                   </TableCell>
                   <TableCell>
                     <span class="text-muted-foreground text-sm">{{ user.sucursal?.name ?? '—' }}</span>
