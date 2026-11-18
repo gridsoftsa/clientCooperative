@@ -191,6 +191,27 @@ const arriveShortcut = computed(() => visibleShortcuts.value.find(shortcut => sh
 const orderShortcut = computed(() => visibleShortcuts.value.find(shortcut => shortcut.role === 'order'))
 const noticeShortcuts = computed(() => visibleShortcuts.value.filter(shortcut => shortcut.role === 'notice'))
 const storeShortcuts = computed(() => visibleShortcuts.value.filter(shortcut => shortcut.role === 'store'))
+const storeGridClass = computed(() => {
+  const count = storeShortcuts.value.length
+
+  if (count <= 2) {
+    return 'grid-cols-2'
+  }
+
+  if (count === 3) {
+    return 'grid-cols-2 @min-[40rem]/board:grid-cols-3'
+  }
+
+  if (count === 4) {
+    return 'grid-cols-2 @min-[40rem]/board:grid-cols-4'
+  }
+
+  if (count === 5) {
+    return 'grid-cols-2 @min-[40rem]/board:grid-cols-3 @min-[64rem]/board:grid-cols-5'
+  }
+
+  return 'grid-cols-2 @min-[40rem]/board:grid-cols-3 @min-[64rem]/board:grid-cols-4 @min-[80rem]/board:grid-cols-6'
+})
 const showActionLane = computed(() => Boolean(arriveShortcut.value || orderShortcut.value || noticeShortcuts.value.length))
 const heroCount = computed(() => Number(Boolean(arriveShortcut.value)) + Number(Boolean(orderShortcut.value)))
 const hasNotices = computed(() => noticeShortcuts.value.length > 0)
@@ -213,7 +234,7 @@ const arriveSpanClass = computed(() => {
   }
 
   if (hasNotices.value) {
-    return '@min-[30rem]/board:col-span-2 @min-[64rem]/board:col-span-8'
+    return '@min-[30rem]/board:col-span-2 @min-[64rem]/board:col-span-7'
   }
 
   return ''
@@ -237,7 +258,7 @@ const noticeWrapClass = computed(() => {
   }
 
   if (heroCount.value === 1) {
-    return '@min-[30rem]/board:col-span-2 @min-[64rem]/board:col-span-4'
+    return '@min-[30rem]/board:col-span-2 @min-[64rem]/board:col-span-5'
   }
 
   return '@min-[30rem]/board:col-span-2'
@@ -477,7 +498,7 @@ onMounted(() => {
           Se guarda aquí
         </p>
       </div>
-      <div class="grid grid-cols-2 gap-2.5 @min-[40rem]/board:grid-cols-3 @min-[40rem]/board:gap-3 @min-[64rem]/board:grid-cols-4 @min-[80rem]/board:grid-cols-5">
+      <div class="grid gap-2.5 @min-[40rem]/board:gap-3" :class="storeGridClass">
         <NuxtLink
           v-for="shortcut in storeShortcuts"
           :key="shortcut.to"
