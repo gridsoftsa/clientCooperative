@@ -95,17 +95,6 @@ const shortcuts: Shortcut[] = [
     badgeKey: 'classification',
   },
   {
-    title: 'Flujo de trabajo',
-    hint: 'Tareas que te asignaron. Entra y avánzalas.',
-    kicker: 'Tus tareas',
-    to: '/workflow',
-    icon: 'i-lucide-kanban-square',
-    gradient: 'bg-gradient-to-br from-orange-400 via-orange-500 to-red-700',
-    role: 'notice',
-    permission: 'workflow_ver',
-    badgeKey: 'workflow',
-  },
-  {
     title: 'Comunicados',
     hint: 'Avisos que aún no abriste.',
     kicker: 'Sin leer',
@@ -158,6 +147,17 @@ const shortcuts: Shortcut[] = [
     permission: 'expedientes_ver',
   },
   {
+    title: 'Flujo de trabajo',
+    hint: 'Tareas que te asignaron en un trámite',
+    kicker: 'Tablero',
+    to: '/workflow',
+    icon: 'i-lucide-kanban-square',
+    gradient: 'bg-gradient-to-br from-orange-400 via-orange-500 to-red-700',
+    role: 'store',
+    permission: 'workflow_ver',
+    badgeKey: 'workflow',
+  },
+  {
     title: 'TRD vigente',
     hint: 'Dónde debe ir cada documento',
     kicker: 'Cuadro',
@@ -188,20 +188,8 @@ const visibleShortcuts = computed(() => {
 })
 
 const arriveShortcut = computed(() => visibleShortcuts.value.find(shortcut => shortcut.role === 'arrive'))
-const classificationShortcut = computed(() => visibleShortcuts.value.find(shortcut => shortcut.role === 'order'))
-const workflowNoticeShortcut = computed(() => visibleShortcuts.value.find(shortcut => shortcut.badgeKey === 'workflow'))
-const orderShortcut = computed(() => classificationShortcut.value ?? workflowNoticeShortcut.value)
-const noticeShortcuts = computed(() => visibleShortcuts.value.filter((shortcut) => {
-  if (shortcut.role !== 'notice') {
-    return false
-  }
-
-  if (shortcut.badgeKey === 'workflow' && orderShortcut.value?.badgeKey === 'workflow') {
-    return false
-  }
-
-  return true
-}))
+const orderShortcut = computed(() => visibleShortcuts.value.find(shortcut => shortcut.role === 'order'))
+const noticeShortcuts = computed(() => visibleShortcuts.value.filter(shortcut => shortcut.role === 'notice'))
 const storeShortcuts = computed(() => visibleShortcuts.value.filter(shortcut => shortcut.role === 'store'))
 const showActionLane = computed(() => Boolean(arriveShortcut.value || orderShortcut.value || noticeShortcuts.value.length))
 const heroCount = computed(() => Number(Boolean(arriveShortcut.value)) + Number(Boolean(orderShortcut.value)))
@@ -296,14 +284,6 @@ function statusLine(shortcut: Shortcut): string {
     }
 
     return 'Nada en bandeja. Estás al día.'
-  }
-
-  if (shortcut.badgeKey === 'workflow') {
-    if (count > 0) {
-      return count === 1 ? '1 tarea tuya, sin terminar.' : `${badgeLabel(count)} tareas tuyas, sin terminar.`
-    }
-
-    return 'Nada asignado por ahora.'
   }
 
   if (count > 0) {
@@ -497,7 +477,7 @@ onMounted(() => {
           Se guarda aquí
         </p>
       </div>
-      <div class="grid grid-cols-2 gap-2.5 @min-[40rem]/board:grid-cols-3 @min-[40rem]/board:gap-3 @min-[64rem]/board:grid-cols-4">
+      <div class="grid grid-cols-2 gap-2.5 @min-[40rem]/board:grid-cols-3 @min-[40rem]/board:gap-3 @min-[64rem]/board:grid-cols-4 @min-[80rem]/board:grid-cols-5">
         <NuxtLink
           v-for="shortcut in storeShortcuts"
           :key="shortcut.to"
@@ -506,7 +486,16 @@ onMounted(() => {
           :class="shortcut.gradient"
         >
           <span class="pointer-events-none absolute -right-4 -bottom-6 size-16 rounded-full bg-white/15 @min-[40rem]/board:size-20" />
-          <Icon :name="shortcut.icon" class="size-7 text-white drop-shadow-sm transition duration-300 @min-[40rem]/board:size-8 group-hover:scale-110" />
+          <div class="relative z-10 flex items-start justify-between gap-2">
+            <Icon :name="shortcut.icon" class="size-7 text-white drop-shadow-sm transition duration-300 @min-[40rem]/board:size-8 group-hover:scale-110" />
+            <span
+              v-if="badgeCount(shortcut.badgeKey) > 0"
+              class="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-destructive px-1.5 text-[11px] font-semibold text-white ring-2 ring-white"
+              :aria-label="`${badgeCount(shortcut.badgeKey)} pendientes`"
+            >
+              {{ badgeLabel(badgeCount(shortcut.badgeKey)) }}
+            </span>
+          </div>
           <span class="min-w-0">
             <span class="block text-[11px] font-medium tracking-wide text-white/75">
               {{ shortcut.kicker }}
