@@ -28,9 +28,9 @@ const summary = ref({ total: 0, pending: 0, all_responded: true, can_manage: tru
 const orgUnits = ref<OrgUnitRow[]>([])
 const positions = ref<OrgPositionRow[]>([])
 const staffResults = ref<OrgStaffListItem[]>([])
-const selectedOrgUnitIds = ref<number[]>([])
-const selectedPositionIds = ref<number[]>([])
-const selectedStaffIds = ref<number[]>([])
+const selectedOrgUnitId = ref<number | null>(null)
+const selectedPositionId = ref<number | null>(null)
+const selectedStaffId = ref<number | null>(null)
 const requestNote = ref('')
 const requiresDocument = ref(true)
 const openingFileId = ref<number | null>(null)
@@ -63,10 +63,7 @@ const orgUnitOptions = computed(() =>
 
 const positionOptions = computed(() =>
   positions.value.map((position) => {
-    const unitName = position.org_unit?.name
-    const label = unitName && selectedOrgUnitIds.value.length > 1
-      ? `${position.name} · ${unitName}`
-      : position.name
+    const label = position.name
 
     return { value: position.id, label }
   }),
@@ -79,11 +76,15 @@ const staffOptions = computed(() =>
   })),
 )
 
-const selectedStaffItems = computed(() =>
-  selectedStaffIds.value
-    .map(id => staffResults.value.find(item => item.id === id))
-    .filter((item): item is OrgStaffListItem => Boolean(item?.user_id)),
-)
+const selectedStaffItem = computed(() => {
+  if (selectedStaffId.value == null) {
+    return null
+  }
+
+  const item = staffResults.value.find(staff => staff.id === selectedStaffId.value)
+
+  return item?.user_id ? item : null
+})
 
 async function loadCollaborators() {
   if (props.rows) {
@@ -128,56 +129,52 @@ async function loadOrgUnits() {
 }
 
 async function loadPositions() {
-  if (selectedOrgUnitIds.value.length === 0) {
+  if (selectedOrgUnitId.value == null) {
     positions.value = []
-    selectedPositionIds.value = []
+    selectedPositionId.value = null
     return
   }
 
-  const lists = await Promise.all(
-    selectedOrgUnitIds.value.map(orgUnitId => orgApi.fetchPositions({
-      activeOnly: true,
-      orgUnitId,
-    })),
-  )
+  positions.value = await orgApi.fetchPositions({
+    activeOnly: true,
+    orgUnitId: selectedOrgUnitId.value,
+  })
 
-  const byId = new Map<number, OrgPositionRow>()
-  for (const position of lists.flat()) {
-    byId.set(position.id, position)
+  if (selectedPositionId.value != null && !positions.value.some(position => position.id === selectedPositionId.value)) {
+    selectedPositionId.value = null
   }
-
-  positions.value = [...byId.values()]
-  selectedPositionIds.value = selectedPositionIds.value.filter(id => byId.has(id))
 }
 
 async function searchStaff() {
-  if (selectedOrgUnitIds.value.length === 0) {
+  if (selectedOrgUnitId.value == null) {
     staffResults.value = []
-    selectedStaffIds.value = []
+    selectedStaffId.value = null
     return
   }
 
   const rows = await orgApi.fetchStaff({
     activeOnly: true,
-    orgUnitIds: selectedOrgUnitIds.value,
-    orgPositionIds: selectedPositionIds.value.length ? selectedPositionIds.value : undefined,
+    orgUnitIds: [selectedOrgUnitId.value],
+    orgPositionIds: selectedPositionId.value != null ? [selectedPositionId.value] : undefined,
   })
 
   staffResults.value = rows.filter(item => item.user_id != null)
-  const allowed = new Set(staffResults.value.map(item => item.id))
-  selectedStaffIds.value = selectedStaffIds.value.filter(id => allowed.has(id))
+
+  if (selectedStaffId.value != null && !staffResults.value.some(item => item.id === selectedStaffId.value)) {
+    selectedStaffId.value = null
+  }
 }
 
 watch(() => [props.taskId, props.rows] as const, () => {
   void loadCollaborators()
 }, { immediate: true, deep: true })
 
-watch(selectedOrgUnitIds, async () => {
+watch(selectedOrgUnitId, async () => {
   await loadPositions()
   await searchStaff()
 })
 
-watch(selectedPositionIds, async () => {
+watch(selectedPositionId, async () => {
   await searchStaff()
 })
 
@@ -209,77 +206,44 @@ async function viewFile(row: WorkflowTaskCollaboratorRow, file: WorkflowTaskColl
 }
 
 async function inviteCollaborator() {
-  const staffItems = selectedStaffItems.value
+  const staff = selectedStaffItem.value
 
   if (!props.taskId) {
     return
   }
 
-  if (staffItems.length === 0) {
-    toast.error('Seleccione uno o más colaboradores con usuario vinculado.')
+  if (!staff?.user_id) {
+    toast.error('Seleccione un colaborador con usuario vinculado.')
+
+    return
+  }
+
+  const alreadyInvited = collaborators.value.some(row => row.user?.id === staff.user_id)
+  if (alreadyInvited) {
+    toast.error('Ese colaborador ya está en la tarea.')
 
     return
   }
 
   saving.value = true
 
-  const invitedUserIds = new Set(
-    collaborators.value
-      .map(row => row.user?.id)
-      .filter((id): id is number => typeof id === 'number'),
-  )
-
-  let added = 0
-  let skipped = 0
-  const errors: string[] = []
-
   try {
-    for (const staff of staffItems) {
-      const userId = staff.user_id
-      if (!userId) {
-        skipped += 1
-        continue
-      }
-
-      if (invitedUserIds.has(userId)) {
-        skipped += 1
-        continue
-      }
-
-      try {
-        await workflowApi.inviteTaskCollaborator(props.taskId, {
-          user_id: userId,
-          org_unit_id: staff.current_assignment?.org_unit?.id ?? selectedOrgUnitIds.value[0] ?? null,
-          org_position_id: staff.current_assignment?.org_position?.id ?? selectedPositionIds.value[0] ?? null,
-          request_note: requestNote.value.trim() || null,
-          requires_document: requiresDocument.value === true,
-        })
-        invitedUserIds.add(userId)
-        added += 1
-      }
-      catch (error) {
-        errors.push(`${staffLabel(staff)}: ${extractApiErrorMessage(error)}`)
-      }
-    }
-
-    if (added > 0) {
-      toast.success(added === 1
-        ? 'Colaborador agregado. Se le notificó para que ingrese a colaborar.'
-        : `${added} colaboradores agregados y notificados.`)
-      selectedStaffIds.value = []
-      requestNote.value = ''
-      requiresDocument.value = true
-      await loadCollaborators()
-      emit('changed')
-    }
-
-    if (skipped > 0 && added === 0 && errors.length === 0) {
-      toast.error('Esos colaboradores ya están en la tarea.')
-    }
-
-    if (errors.length) {
-      toast.error(errors[0] ?? 'No se pudieron agregar algunos colaboradores.')
-    }
+    await workflowApi.inviteTaskCollaborator(props.taskId, {
+      user_id: staff.user_id,
+      org_unit_id: staff.current_assignment?.org_unit?.id ?? selectedOrgUnitId.value,
+      org_position_id: staff.current_assignment?.org_position?.id ?? selectedPositionId.value,
+      request_note: requestNote.value.trim() || null,
+      requires_document: requiresDocument.value === true,
+    })
+    toast.success('Colaborador agregado. Se le notificó para que ingrese a colaborar.')
+    selectedStaffId.value = null
+    requestNote.value = ''
+    requiresDocument.value = true
+    await loadCollaborators()
+    emit('changed')
+  }
+  catch (error) {
+    toast.error(extractApiErrorMessage(error))
   }
   finally {
     saving.value = false
@@ -368,30 +332,32 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
 
     <div v-if="!readOnly" class="space-y-3 rounded-lg border bg-muted/20 p-4">
       <p class="text-sm font-medium">
-        Agregar colaboradores
+        Agregar colaborador
       </p>
 
       <div class="grid gap-3">
         <div class="space-y-2">
-          <Label for="wf-invite-org-units">Área</Label>
-          <ArchivalMultiMultiselect
-            id="wf-invite-org-units"
-            v-model="selectedOrgUnitIds"
+          <Label for="wf-invite-org-unit">Área</Label>
+          <ArchivalSingleMultiselect
+            id="wf-invite-org-unit"
+            v-model="selectedOrgUnitId"
+            coerce-number
             :options="orgUnitOptions"
-            placeholder="Seleccione una o más áreas"
+            placeholder="Seleccione un área"
             no-options-text="No hay áreas activas"
             no-results-text="Sin coincidencias"
           />
         </div>
 
         <div class="space-y-2">
-          <Label for="wf-invite-positions">Cargo (opcional)</Label>
-          <ArchivalMultiMultiselect
-            id="wf-invite-positions"
-            v-model="selectedPositionIds"
-            :disabled="selectedOrgUnitIds.length === 0"
+          <Label for="wf-invite-position">Cargo (opcional)</Label>
+          <ArchivalSingleMultiselect
+            id="wf-invite-position"
+            v-model="selectedPositionId"
+            coerce-number
+            :disabled="selectedOrgUnitId == null"
             :options="positionOptions"
-            placeholder="Todos los cargos de las áreas elegidas"
+            placeholder="Todos los cargos del área"
             no-options-text="Elija un área para ver cargos"
             no-results-text="Sin coincidencias"
           />
@@ -399,12 +365,13 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
 
         <div class="space-y-2">
           <Label for="wf-invite-staff">Colaborador</Label>
-          <ArchivalMultiMultiselect
+          <ArchivalSingleMultiselect
             id="wf-invite-staff"
-            v-model="selectedStaffIds"
-            :disabled="selectedOrgUnitIds.length === 0 || staffResults.length === 0"
+            v-model="selectedStaffId"
+            coerce-number
+            :disabled="selectedOrgUnitId == null || staffResults.length === 0"
             :options="staffOptions"
-            placeholder="Seleccione uno o más colaboradores"
+            placeholder="Seleccione un colaborador"
             no-options-text="Elija un área para listar personas"
             no-results-text="Sin coincidencias"
           />
@@ -415,7 +382,7 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
           <Textarea
             v-model="requestNote"
             rows="3"
-            placeholder="Indique a los colaboradores qué documento o concepto deben aportar."
+            placeholder="Indique al colaborador qué documento o concepto debe aportar."
           />
         </div>
 
@@ -440,14 +407,14 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
             <span class="block text-sm font-medium">Requiere documento</span>
             <span class="block text-xs font-normal text-muted-foreground">
               {{ requiresDocument
-                ? 'Cada colaborador debe adjuntar un archivo.'
-                : 'Pueden responder solo con una nota.' }}
+                ? 'El colaborador debe adjuntar un archivo.'
+                : 'Puede responder solo con una nota.' }}
             </span>
           </Label>
         </div>
 
-        <Button class="w-full" :disabled="saving || selectedStaffItems.length === 0" @click="inviteCollaborator">
-          {{ selectedStaffItems.length > 1 ? `Agregar y notificar (${selectedStaffItems.length})` : 'Agregar y notificar' }}
+        <Button class="w-full" :disabled="saving || !selectedStaffItem" @click="inviteCollaborator">
+          Agregar y notificar
         </Button>
       </div>
     </div>
