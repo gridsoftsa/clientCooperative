@@ -2,7 +2,7 @@
 import type { CommunicationDashboard } from '~/types/communications'
 import type { VentanillaHomeDashboardData } from '~/types/ventanilla'
 
-type BadgeKey = 'ventanilla' | 'classification' | 'communications' | 'collaborations'
+type BadgeKey = 'ventanilla' | 'classification' | 'communications' | 'collaborations' | 'workflow'
 type ShortcutRole = 'arrive' | 'order' | 'notice' | 'store'
 
 interface Shortcut {
@@ -48,6 +48,7 @@ const attentionCount = computed(() => {
     + (badges.value.classification ?? 0)
     + (badges.value.communications ?? 0)
     + (badges.value.collaborations ?? 0)
+    + (badges.value.workflow ?? 0)
 })
 
 const heroSubtitle = computed(() => {
@@ -92,6 +93,17 @@ const shortcuts: Shortcut[] = [
     role: 'order',
     permission: 'ventanilla_clasificar',
     badgeKey: 'classification',
+  },
+  {
+    title: 'Flujo de trabajo',
+    hint: 'Tareas que te asignaron. Entra y avánzalas.',
+    kicker: 'Tus tareas',
+    to: '/workflow',
+    icon: 'i-lucide-kanban-square',
+    gradient: 'bg-gradient-to-br from-orange-400 via-orange-500 to-red-700',
+    role: 'notice',
+    permission: 'workflow_ver',
+    badgeKey: 'workflow',
   },
   {
     title: 'Comunicados',
@@ -146,16 +158,6 @@ const shortcuts: Shortcut[] = [
     permission: 'expedientes_ver',
   },
   {
-    title: 'Flujo de trabajo',
-    hint: 'Tareas que te asignaron en un trámite',
-    kicker: 'Tablero',
-    to: '/workflow',
-    icon: 'i-lucide-kanban-square',
-    gradient: 'bg-gradient-to-br from-orange-400 via-orange-500 to-red-700',
-    role: 'store',
-    permission: 'workflow_ver',
-  },
-  {
     title: 'TRD vigente',
     hint: 'Dónde debe ir cada documento',
     kicker: 'Cuadro',
@@ -164,16 +166,6 @@ const shortcuts: Shortcut[] = [
     gradient: 'bg-gradient-to-br from-teal-300 via-teal-500 to-cyan-900',
     role: 'store',
     permission: 'trd_tablas_ver',
-  },
-  {
-    title: 'Maestros',
-    hint: 'Documentos del titular',
-    kicker: 'Asociado',
-    to: '/expedientes/maestros',
-    icon: 'i-lucide-files',
-    gradient: 'bg-gradient-to-br from-cyan-300 via-cyan-500 to-sky-800',
-    role: 'store',
-    permission: 'expedientes_ver',
   },
 ]
 
@@ -196,8 +188,20 @@ const visibleShortcuts = computed(() => {
 })
 
 const arriveShortcut = computed(() => visibleShortcuts.value.find(shortcut => shortcut.role === 'arrive'))
-const orderShortcut = computed(() => visibleShortcuts.value.find(shortcut => shortcut.role === 'order'))
-const noticeShortcuts = computed(() => visibleShortcuts.value.filter(shortcut => shortcut.role === 'notice'))
+const classificationShortcut = computed(() => visibleShortcuts.value.find(shortcut => shortcut.role === 'order'))
+const workflowNoticeShortcut = computed(() => visibleShortcuts.value.find(shortcut => shortcut.badgeKey === 'workflow'))
+const orderShortcut = computed(() => classificationShortcut.value ?? workflowNoticeShortcut.value)
+const noticeShortcuts = computed(() => visibleShortcuts.value.filter((shortcut) => {
+  if (shortcut.role !== 'notice') {
+    return false
+  }
+
+  if (shortcut.badgeKey === 'workflow' && orderShortcut.value?.badgeKey === 'workflow') {
+    return false
+  }
+
+  return true
+}))
 const storeShortcuts = computed(() => visibleShortcuts.value.filter(shortcut => shortcut.role === 'store'))
 const showActionLane = computed(() => Boolean(arriveShortcut.value || orderShortcut.value || noticeShortcuts.value.length))
 const heroCount = computed(() => Number(Boolean(arriveShortcut.value)) + Number(Boolean(orderShortcut.value)))
@@ -294,6 +298,14 @@ function statusLine(shortcut: Shortcut): string {
     return 'Nada en bandeja. Estás al día.'
   }
 
+  if (shortcut.badgeKey === 'workflow') {
+    if (count > 0) {
+      return count === 1 ? '1 tarea tuya, sin terminar.' : `${badgeLabel(count)} tareas tuyas, sin terminar.`
+    }
+
+    return 'Nada asignado por ahora.'
+  }
+
   if (count > 0) {
     return count === 1 ? '1 pendiente de atender' : `${badgeLabel(count)} pendientes de atender`
   }
@@ -316,6 +328,12 @@ async function loadBadges(): Promise<void> {
   if (hasPermission('comunicados_ver')) {
     jobs.push(communicationsApi.fetchDashboard().then((dashboard: CommunicationDashboard) => {
       next.communications = dashboard.stats.unread ?? 0
+    }).catch(() => undefined))
+  }
+
+  if (hasPermission('workflow_ver')) {
+    jobs.push(workflowApi.fetchTasks({ scope: 'mine', status: 'open', per_page: 5 }).then((response) => {
+      next.workflow = response.meta?.total ?? 0
     }).catch(() => undefined))
   }
 
@@ -479,7 +497,7 @@ onMounted(() => {
           Se guarda aquí
         </p>
       </div>
-      <div class="grid grid-cols-2 gap-2.5 @min-[40rem]/board:grid-cols-3 @min-[40rem]/board:gap-3 @min-[64rem]/board:grid-cols-4 @min-[80rem]/board:grid-cols-6">
+      <div class="grid grid-cols-2 gap-2.5 @min-[40rem]/board:grid-cols-3 @min-[40rem]/board:gap-3 @min-[64rem]/board:grid-cols-4">
         <NuxtLink
           v-for="shortcut in storeShortcuts"
           :key="shortcut.to"
