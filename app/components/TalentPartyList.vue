@@ -382,7 +382,7 @@ function partyFileHref(party: Pick<TalentPartySummary, 'id' | 'org_unit_id' | 'a
   }
 
   if (props.kind === 'applicant' && party.applicant_id) {
-    return `/solicitantes/${party.applicant_id}/archivo`
+    return `/asociados/${party.applicant_id}/archivo`
   }
 
   return areaRepositoryFolderHref(party.org_unit_id, party.archival_file_id)

@@ -10,7 +10,7 @@ export const CREDIT_ARCHIVAL_LINK_READ_PERMISSIONS = [
   'radicacion_crear',
   'radicacion_editar',
   'documentacion_ver',
-  'solicitantes_ver',
+  'asociados_ver',
   'expedientes_tipos_configurar',
   'expedientes_enlace_credito_configurar',
 ] as const

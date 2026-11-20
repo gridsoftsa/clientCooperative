@@ -192,7 +192,7 @@ watch(
 )
 
 async function fetchApplicantsCount() {
-  if (!hasPermission('solicitantes_ver')) {
+  if (!hasPermission('asociados_ver')) {
     return
   }
   try {

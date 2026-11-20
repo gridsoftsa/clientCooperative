@@ -29,7 +29,7 @@ export const APPLICATION_DOMAIN_ORDER: ApplicationDomain[] = [
  */
 export const PERMISSION_CATEGORY_APPLICATION_DOMAIN: Record<string, ApplicationDomain> = {
   radicacion: 'creditos',
-  solicitantes: 'creditos',
+  asociados: 'creditos',
   plantillas: 'creditos',
   plantilla: 'creditos',
   reportes: 'creditos',

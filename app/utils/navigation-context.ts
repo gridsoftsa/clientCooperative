@@ -40,8 +40,8 @@ export function moduleFallbackFromPath(path: string): string {
   if (p.startsWith('/documentacion')) {
     return '/documentacion'
   }
-  if (p.startsWith('/solicitantes')) {
-    return '/solicitantes'
+  if (p.startsWith('/asociados') || p.startsWith('/solicitantes')) {
+    return '/asociados'
   }
   if (p.startsWith('/reportes')) {
     return '/reportes'

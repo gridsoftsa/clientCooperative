@@ -224,8 +224,8 @@ export const navMenu: NavMenu[] = [
       {
         title: 'Asociados',
         icon: 'i-lucide-user-check',
-        link: '/solicitantes',
-        permission: 'solicitantes_ver',
+        link: '/asociados',
+        permission: 'asociados_ver',
         module: 'creditos',
       },
     ],
