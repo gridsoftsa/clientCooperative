@@ -17,8 +17,13 @@ const props = withDefaults(
      * Solo debe usarse desde `/radicacion/analisis-score`.
      */
     analysisAdjusted?: boolean
+    /**
+     * Datos de la entrevista (módulo financiero) cuando la tarjeta muestra cifras ajustadas.
+     * De aquí salen ingresos totales, descripción de ingresos y nombres de activos.
+     */
+    interviewFinancialInfo?: unknown
   }>(),
-  { summaryScopeLabel: 'del deudor', analysisAdjusted: false },
+  { summaryScopeLabel: 'del deudor', analysisAdjusted: false, interviewFinancialInfo: undefined },
 )
 
 const { formatPesosConSimbolo } = usePesosFormat()
@@ -43,6 +48,7 @@ function parseFinancialInfo(val: unknown): Record<string, any> | null {
 }
 
 const fi = computed(() => parseFinancialInfo(props.financialInfo))
+const interviewFi = computed(() => parseFinancialInfo(props.interviewFinancialInfo) ?? fi.value)
 
 const solvenciaPercentage = computed(() => {
   const f = fi.value
@@ -77,10 +83,55 @@ function solvenciaColorClass(pct: number | null): string {
   return 'bg-destructive/20 text-destructive border-destructive/40'
 }
 
+function finiteAmount(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) ? n : 0
+}
+
 const incomeDescription = computed(() => {
-  const raw = fi.value?.income?.description
+  const raw = interviewFi.value?.income?.description
   return typeof raw === 'string' && raw.trim() !== '' ? raw : ''
 })
+
+/** Total de la entrevista: salario + pensión + negocio + arriendos + otros. */
+const incomeTotal = computed(() => {
+  const inc = interviewFi.value?.income
+  if (!inc || typeof inc !== 'object') {
+    return 0
+  }
+  const row = inc as Record<string, unknown>
+  return finiteAmount(row.salary)
+    + finiteAmount(row.pension)
+    + finiteAmount(row.business ?? row.crops)
+    + finiteAmount(row.rental)
+    + finiteAmount(row.other)
+})
+
+/** Nombres que el asesor escribe en datos financieros, módulo de activos reportados. */
+const reportedAssets = computed(() => {
+  const assets = interviewFi.value?.assets
+  if (!Array.isArray(assets)) {
+    return []
+  }
+  return assets.flatMap((row) => {
+    if (!row || typeof row !== 'object') {
+      return []
+    }
+    const item = row as { name?: unknown, description?: unknown, value?: unknown }
+    const name = typeof item.name === 'string' && item.name.trim() !== ''
+      ? item.name.trim()
+      : (typeof item.description === 'string' ? item.description.trim() : '')
+    const value = finiteAmount(item.value)
+    if (name === '' && value <= 0) {
+      return []
+    }
+    return [{ name: name || 'Sin nombre', value }]
+  })
+})
+
+const showIncomeDetails = computed(
+  () => incomeDescription.value !== '' || incomeTotal.value > 0 || reportedAssets.value.length > 0,
+)
 
 const expensesDescription = computed(() => {
   const raw = fi.value?.expenses?.description
@@ -181,11 +232,11 @@ const montoActivos = computed(() => {
       </div>
     </div>
     <div
-      v-if="incomeDescription || expensesDescription"
+      v-if="showIncomeDetails || expensesDescription"
       class="mt-4 grid gap-3"
-      :class="incomeDescription && expensesDescription ? 'sm:grid-cols-2' : ''"
+      :class="showIncomeDetails && expensesDescription ? 'sm:grid-cols-2' : ''"
     >
-      <div v-if="incomeDescription" class="space-y-1">
+      <div v-if="showIncomeDetails" class="space-y-1">
         <div class="flex items-center justify-between gap-2">
           <p class="text-sm font-bold uppercase">
             Descripción ingresos
@@ -201,12 +252,45 @@ const montoActivos = computed(() => {
             {{ incomeExpanded ? 'Ocultar' : 'Ver más' }}
           </Button>
         </div>
-        <p
+        <div
           v-if="incomeExpanded"
-          class="whitespace-pre-wrap rounded-md border bg-muted/50 px-3 py-2 text-sm"
+          class="space-y-3 rounded-md border bg-muted/50 px-3 py-2 text-sm"
         >
-          {{ incomeDescription }}
-        </p>
+          <div class="space-y-0.5">
+            <p class="text-xs font-semibold uppercase text-muted-foreground">
+              Ingresos totales
+            </p>
+            <p class="font-semibold">
+              {{ formatPesosConSimbolo(incomeTotal) }}
+            </p>
+          </div>
+          <div class="space-y-0.5">
+            <p class="text-xs font-semibold uppercase text-muted-foreground">
+              Descripción de ingresos
+            </p>
+            <p class="whitespace-pre-wrap">
+              {{ incomeDescription || '—' }}
+            </p>
+          </div>
+          <div class="space-y-1">
+            <p class="text-xs font-semibold uppercase text-muted-foreground">
+              Activos reportados
+            </p>
+            <ul v-if="reportedAssets.length" class="space-y-1">
+              <li
+                v-for="(asset, index) in reportedAssets"
+                :key="`${asset.name}-${index}`"
+                class="flex items-start justify-between gap-3"
+              >
+                <span class="min-w-0 whitespace-pre-wrap">{{ asset.name }}</span>
+                <span class="shrink-0 font-medium">{{ formatPesosConSimbolo(asset.value) }}</span>
+              </li>
+            </ul>
+            <p v-else>
+              —
+            </p>
+          </div>
+        </div>
       </div>
       <div v-if="expensesDescription" class="space-y-1">
         <div class="flex items-center justify-between gap-2">

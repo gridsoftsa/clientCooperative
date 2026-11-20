@@ -69,11 +69,13 @@ function verRadicacionListPrefersDocumentActionsIcon(app: { status?: string, doc
   return false
 }
 const isAnalista = computed(() => hasRole('analista'))
+const isGerencia = computed(() => hasRole('gerencia') || hasPermission('radicacion_gerencia_decidir'))
 const statusDatePermissions = [
   'radicacion_analisis_ver',
   'radicacion_analisis_guardar',
   'radicacion_documentos_decidir',
   'radicacion_director_credito_decidir',
+  'radicacion_gerencia_decidir',
 ]
 const showStatusEntryDates = computed(() =>
   hasAnyRole(['super_admin', 'admin', 'auxiliar_credito', 'revision_documentos', 'analista', 'director_credito'])
@@ -90,6 +92,11 @@ function applyRoleDefaultSort(): void {
   }
   if (hasRole('director_credito') || hasPermission('radicacion_director_credito_decidir')) {
     sortKey.value = 'Credit_Director_Review'
+    sortDir.value = 'asc'
+    return
+  }
+  if (hasRole('gerencia') || hasPermission('radicacion_gerencia_decidir')) {
+    sortKey.value = 'Management_Review'
     sortDir.value = 'asc'
     return
   }
@@ -709,6 +716,20 @@ watch(transferDialogOpen, (v) => {
                       >
                         <Icon name="i-lucide-clipboard-check" class="h-4 w-4 shrink-0" aria-hidden="true" />
                         <span>Revisión director</span>
+                      </Button>
+                    </PermissionGate>
+                    <PermissionGate permission="radicacion_gerencia_decidir">
+                      <Button
+                        v-if="isGerencia && app.status === 'Management_Review'"
+                        variant="outline"
+                        size="sm"
+                        class="h-8 gap-1.5 px-2 text-xs font-semibold text-primary"
+                        title="Aprobar como gerencia"
+                        aria-label="Revisar como gerencia"
+                        @click="router.push(`/radicacion/${app.id}`)"
+                      >
+                        <Icon name="i-lucide-badge-check" class="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>Gerencia</span>
                       </Button>
                     </PermissionGate>
                     <PermissionGate permission="radicacion_director_credito_decidir">
