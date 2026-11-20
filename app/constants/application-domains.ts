@@ -11,7 +11,7 @@ export const APPLICATION_DOMAIN_LABELS: Record<ApplicationDomain, string> = {
 }
 
 export const APPLICATION_DOMAIN_DESCRIPTIONS: Record<ApplicationDomain, string> = {
-  creditos: 'Radicación, solicitantes, plantillas y reportes de crédito.',
+  creditos: 'Radicación, asociados, plantillas y reportes de crédito.',
   gestion_documental: 'Ventanilla única, workflow, expedientes, comunicados, TRD y estructura organizacional.',
   sistema: 'Usuarios, roles, sucursales, empresa y ajustes generales de la plataforma.',
 }

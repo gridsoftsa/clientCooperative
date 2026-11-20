@@ -116,7 +116,7 @@ async function fetchApplicant() {
     form.value = applicantToForm(res.data)
   } catch (error) {
     console.error('Error al cargar solicitante:', error)
-    toast.error('Error al cargar el solicitante')
+    toast.error('Error al cargar el asociado')
     await router.push('/solicitantes')
   } finally {
     loading.value = false
@@ -136,7 +136,7 @@ async function handleSubmit() {
       method: 'PUT',
       body: formToPayload(),
     })
-    toast.success('Solicitante actualizado correctamente')
+    toast.success('Asociado actualizado correctamente')
     await fetchApplicant()
   } catch (error: any) {
     console.error('Error al guardar:', error)
@@ -156,7 +156,7 @@ onMounted(() => {
   <div class="mx-auto flex w-full max-w-6xl flex-col gap-4 px-0">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-2xl font-bold tracking-tight">
-          Editar Solicitante
+          Editar asociado
         </h2>
         <Button variant="outline" @click="goBack">
           <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
@@ -172,7 +172,7 @@ onMounted(() => {
         <CardHeader>
           <CardTitle>{{ applicant.full_name }}</CardTitle>
           <CardDescription>
-            {{ applicant.document_type }} {{ applicant.document_number }} · Actualiza los datos del solicitante
+            {{ applicant.document_type }} {{ applicant.document_number }} · Actualiza los datos del asociado
           </CardDescription>
         </CardHeader>
         <CardContent>

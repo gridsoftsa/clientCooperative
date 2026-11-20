@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<{
 const moduleOptions: Array<{ key: ProductModule, description: string }> = [
   {
     key: 'creditos',
-    description: 'Radicación, documentación, solicitantes, plantillas y reportes de crédito.',
+    description: 'Radicación, documentación, asociados, plantillas y reportes de crédito.',
   },
   {
     key: 'gestion_documental',

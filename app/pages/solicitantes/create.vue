@@ -89,7 +89,7 @@ async function searchApplicant() {
       await router.push(`/solicitantes/${res.data.id}/edit`)
       return
     }
-    toast.info('No encontrado. Complete el formulario para crear el solicitante.')
+    toast.info('No encontrado. Complete el formulario para crear el asociado.')
   } catch (e) {
     console.error(e)
     toast.error('Error al buscar')
@@ -113,7 +113,7 @@ async function handleSubmit() {
       method: 'POST',
       body: formToPayload(),
     })
-    toast.success(res.message ?? 'Solicitante creado')
+    toast.success(res.message ?? 'Asociado creado')
     await router.push(`/solicitantes/${res.data.id}/edit`)
   } catch (error: unknown) {
     console.error(error)
@@ -121,7 +121,7 @@ async function handleSubmit() {
     const msg = err?.data?.errors
       ? Object.values(err.data.errors).flat().join(', ')
       : err?.data?.message
-    toast.error(msg ?? 'No se pudo crear el solicitante')
+    toast.error(msg ?? 'No se pudo crear el asociado')
   } finally {
     saving.value = false
   }
@@ -132,7 +132,7 @@ async function handleSubmit() {
   <div class="mx-auto flex w-full max-w-6xl flex-col gap-4 px-0">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <h2 class="text-2xl font-bold tracking-tight">
-        Nuevo solicitante
+        Nuevo asociado
       </h2>
       <Button variant="outline" @click="goBack">
         <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
@@ -142,7 +142,7 @@ async function handleSubmit() {
 
     <Card>
       <CardHeader>
-        <CardTitle>Datos del solicitante</CardTitle>
+        <CardTitle>Datos del asociado</CardTitle>
         <CardDescription>
           Mismo formulario que el paso 1 de radicación (identificación y datos personales). Busque por documento para evitar duplicados.
         </CardDescription>
@@ -165,7 +165,7 @@ async function handleSubmit() {
             </Button>
             <Button type="submit" :disabled="saving">
               <Icon v-if="saving" name="i-lucide-loader-2" class="mr-2 h-4 w-4 animate-spin" />
-              Guardar solicitante
+              Guardar asociado
             </Button>
           </div>
         </form>

@@ -58,7 +58,7 @@ onUnmounted(() => {
           Explorador de documentos
         </h1>
         <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
-          Carpetas por solicitante: documentos maestros del asociado y, por cada radicación, las mismas carpetas de gestión documental (auxiliares, FNG, asegurabilidad y demás). El listado por radicación sigue en
+          Carpetas por asociado: documentos maestros y, por cada radicación, las mismas carpetas de gestión documental (auxiliares, FNG, asegurabilidad y demás). El listado por radicación sigue en
           <NuxtLink to="/documentacion" class="underline underline-offset-2">
             Documentación
           </NuxtLink>.
@@ -97,7 +97,7 @@ onUnmounted(() => {
           :org-unit-id="0"
           :loading="loading"
           :allow-upload="false"
-          nav-title="Solicitantes"
+          nav-title="Asociados"
           empty-tree-message="No hay expedientes de crédito enlazados para su usuario."
         />
       </CardContent>

@@ -33,7 +33,7 @@ const heading = computed(() => {
     return party.value.display_name
   }
 
-  return loading.value ? 'Cargando archivo...' : 'Archivo del solicitante'
+  return loading.value ? 'Cargando archivo...' : 'Archivo del asociado'
 })
 
 async function load(): Promise<void> {
@@ -52,7 +52,7 @@ async function load(): Promise<void> {
     party.value = response.data
   }
   catch {
-    toast.error('No se pudo cargar el archivo del solicitante.')
+    toast.error('No se pudo cargar el archivo del asociado.')
     party.value = null
   }
   finally {
@@ -70,13 +70,13 @@ watch(applicantId, () => {
     <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
       <div class="shrink-0 space-y-1">
         <PageBackButton to="/solicitantes">
-          Solicitantes
+          Asociados
         </PageBackButton>
         <h2 class="text-2xl font-bold tracking-tight">
           {{ heading }}
         </h2>
         <p class="max-w-3xl text-sm text-muted-foreground">
-          Series, subseries y tipos documentales de este solicitante.
+          Series, subseries y tipos documentales de este asociado.
           <span v-if="party?.identifier"> Identificación {{ party.identifier }}.</span>
           <span v-if="party?.org_unit"> Área {{ party.org_unit.name }}.</span>
         </p>
@@ -94,7 +94,7 @@ watch(applicantId, () => {
             v-else-if="missingFile || !tree"
             class="px-6 py-10 text-sm text-muted-foreground"
           >
-            Este solicitante no tiene archivo en la TRD. Guarde la configuración de archivo en Solicitantes.
+            Este asociado no tiene archivo en la TRD. Guarde la configuración de archivo en Asociados.
           </div>
           <ArchivalFileAreaRepositoryBrowser
             v-else

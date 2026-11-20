@@ -222,7 +222,7 @@ export const navMenu: NavMenu[] = [
         modules: ['creditos', 'gestion_documental'],
       },
       {
-        title: 'Solicitantes',
+        title: 'Asociados',
         icon: 'i-lucide-user-check',
         link: '/solicitantes',
         permission: 'solicitantes_ver',

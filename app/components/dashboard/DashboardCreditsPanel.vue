@@ -274,13 +274,13 @@ onUnmounted(() => {
             <Card v-if="applicantsTotal !== null" class="shadow-xs">
               <CardHeader class="space-y-1 px-4 py-4">
                 <CardDescription class="text-sm leading-tight">
-                  Solicitantes
+                  Asociados
                 </CardDescription>
                 <CardTitle class="text-3xl font-semibold tabular-nums leading-none @lg/main:text-4xl">
                   {{ applicantsTotal }}
                 </CardTitle>
                 <p class="text-xs leading-snug text-muted-foreground">
-                  Total en el catálogo de solicitantes.
+                  Total en el catálogo de asociados.
                 </p>
               </CardHeader>
             </Card>

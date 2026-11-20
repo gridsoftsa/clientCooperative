@@ -26,8 +26,8 @@ export const PERMISSION_CATEGORY_LABELS: Record<string, string> = {
   seguridad: 'Seguridad',
   plantillas: 'Plantillas',
   plantilla: 'Plantilla SCORE',
-  /** Corto: se usa en chips/listados («Ver Radicación», «Ver Solicitantes»). */
-  solicitantes: 'Solicitantes',
+  /** Corto: se usa en chips/listados («Ver Radicación», «Ver Asociados»). */
+  solicitantes: 'Asociados',
   radicacion: 'Radicación',
   ventanilla: 'Ventanilla única',
   workflow: 'Workflow',
@@ -51,7 +51,7 @@ export const PERMISSION_CATEGORY_SECTION_TITLES: Record<string, string> = {
   expedientes: 'Expedientes electrónicos y gestión documental',
   talento: 'Talento humano (empleados y proveedores)',
   comunicados: 'Comunicados internos',
-  solicitantes: 'Solicitantes (Deudores/Codeudores)',
+  solicitantes: 'Asociados (deudores y codeudores)',
   estructura: 'Estructura organizacional',
   grupos: 'Grupos de trabajo',
   suplencias: 'Backup',

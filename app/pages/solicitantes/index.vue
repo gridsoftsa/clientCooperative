@@ -68,8 +68,8 @@ async function fetchApplicants() {
       ? Number((error as { status?: number }).status)
       : 0
     toast.error(status === 403
-      ? 'No tiene permiso para ver solicitantes. Cierre sesión y vuelva a entrar para refrescar permisos.'
-      : 'Error al cargar solicitantes')
+      ? 'No tiene permiso para ver asociados. Cierre sesión y vuelva a entrar para refrescar permisos.'
+      : 'Error al cargar asociados')
   } finally {
     loading.value = false
   }
@@ -100,14 +100,14 @@ async function onDeleteApplicantConfirm(reason: string) {
     await deleteWithReason(`/applicants/${id}`, reason)
     deleteApplicantDialogOpen.value = false
     applicantIdPendingDelete.value = null
-    toast.success('Solicitante desactivado correctamente')
+    toast.success('Asociado desactivado correctamente')
     await fetchApplicants()
   } catch (error: unknown) {
     console.error('Error al desactivar solicitante:', error)
     const message = error && typeof error === 'object' && 'data' in error
       ? (error as { data?: { message?: string } }).data?.message
       : undefined
-    toast.error(message ?? 'No se pudo desactivar el solicitante')
+    toast.error(message ?? 'No se pudo desactivar el asociado')
   } finally {
     deletingApplicant.value = false
   }
@@ -260,7 +260,7 @@ function onApplicantImportDragLeave(ev: DragEvent) {
   <div class="w-full flex flex-col gap-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-2xl font-bold tracking-tight">
-          Deudores y Codeudores
+          Asociados
         </h2>
         <div class="flex flex-wrap items-center gap-2">
           <TalentPartyList
@@ -278,7 +278,7 @@ function onApplicantImportDragLeave(ev: DragEvent) {
               @click="router.push('/solicitantes/create')"
             >
               <Icon name="i-lucide-user-plus" class="h-3.5 w-3.5 shrink-0" />
-              Nuevo solicitante
+              Nuevo asociado
             </Button>
           </PermissionGate>
           <PermissionGate permission="solicitantes_importar">
@@ -316,7 +316,7 @@ function onApplicantImportDragLeave(ev: DragEvent) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Lista de Solicitantes</CardTitle>
+          <CardTitle>Lista de asociados</CardTitle>
           <CardDescription>
             La importación masiva incluye identificación, nombres, celular (obligatorio en plantilla), dirección y correo opcionales; complete el resto en la ficha o en radicación.
           </CardDescription>
@@ -339,7 +339,7 @@ function onApplicantImportDragLeave(ev: DragEvent) {
             </div>
 
             <div v-else-if="applicants.length === 0" class="py-8 text-center text-muted-foreground">
-              No hay solicitantes registrados
+              No hay asociados registrados
             </div>
 
             <div v-else class="overflow-hidden rounded-lg border">
@@ -437,7 +437,7 @@ function onApplicantImportDragLeave(ev: DragEvent) {
               <div class="text-sm text-muted-foreground">
                 Mostrando {{ ((pagination.current_page - 1) * pagination.per_page) + 1 }} a
                 {{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }} de
-                {{ pagination.total }} solicitantes
+                {{ pagination.total }} asociados
               </div>
               <div class="flex gap-2">
                 <Button
@@ -464,8 +464,8 @@ function onApplicantImportDragLeave(ev: DragEvent) {
 
     <ConfirmWithReasonDialog
       v-model:open="deleteApplicantDialogOpen"
-      title="Desactivar solicitante"
-      description="El registro se ocultará del catálogo pero se conservará en base de datos. No aplica si el solicitante participa en una radicación activa. Indica el motivo."
+      title="Desactivar asociado"
+      description="El registro se ocultará del catálogo pero se conservará en base de datos. No aplica si el asociado participa en una radicación activa. Indica el motivo."
       confirm-text="Aceptar"
       cancel-text="Cancelar"
       :loading="deletingApplicant"
@@ -487,7 +487,7 @@ function onApplicantImportDragLeave(ev: DragEvent) {
             <div class="min-w-0 space-y-2">
               <DialogHeader class="space-y-2 text-left sm:pr-2">
                 <DialogTitle class="text-xl font-semibold tracking-tight">
-                  Importar solicitantes desde Excel
+                  Importar asociados desde Excel
                 </DialogTitle>
                 <DialogDescription class="text-sm leading-relaxed text-muted-foreground">
                   Use la plantilla oficial, complete las columnas marcadas como obligatorias y cargue el archivo aquí. Los registros existentes se actualizan por tipo y número de documento.
@@ -599,7 +599,7 @@ function onApplicantImportDragLeave(ev: DragEvent) {
 
         <DialogFooter class="gap-2 border-t border-border/80 bg-muted/25 px-6 py-4 sm:justify-between">
           <p class="hidden text-xs text-muted-foreground sm:block sm:max-w-[55%] sm:self-center">
-            Tras importar, puede completar el resto de datos en la ficha del solicitante o en radicación.
+            Tras importar, puede completar el resto de datos en la ficha del asociado o en radicación.
           </p>
           <Button
             variant="outline"

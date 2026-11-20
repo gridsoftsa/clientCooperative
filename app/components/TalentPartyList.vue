@@ -52,7 +52,7 @@ const title = computed(() => {
     return 'Proveedores'
   }
   if (props.kind === 'applicant') {
-    return 'Solicitantes'
+    return 'Asociados'
   }
 
   return 'Empleados'
@@ -62,7 +62,7 @@ const singular = computed(() => {
     return 'proveedor'
   }
   if (props.kind === 'applicant') {
-    return 'solicitante'
+    return 'asociado'
   }
 
   return 'empleado'
@@ -537,7 +537,7 @@ onMounted(() => {
           </DialogTitle>
           <DialogDescription>
             {{ kind === 'applicant'
-              ? 'Si Gestión documental está activo y guarda esta TRD, la carpeta se crea sola al registrar el solicitante en el catálogo o en una radicación.'
+              ? 'Si Gestión documental está activo y guarda esta TRD, la carpeta se crea sola al registrar el asociado en el catálogo o en una radicación.'
               : showRegistry
                 ? `Si guarda esta TRD, la carpeta se crea sola al registrar un ${singular}.`
                 : 'Si guarda esta TRD, la carpeta se crea sola al registrar un funcionario.' }}

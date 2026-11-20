@@ -2,7 +2,7 @@ import type { ArchivalCreditLinkSettings } from '~/types/archival-file'
 import { toast } from 'vue-sonner'
 
 export const CREDIT_ARCHIVAL_FILE_NOT_CONFIGURED_MESSAGE
-  = 'Antes de crear un solicitante o una radicación debe configurar el archivo en Enlace crédito: active el enlace y elija el tipo de expediente del titular y el de la solicitud.'
+  = 'Antes de crear un asociado o una radicación debe configurar el archivo en Enlace crédito: active el enlace y elija el tipo de expediente del titular y el de la solicitud.'
 
 /** Permisos que el GET de enlace crédito/expediente acepta. */
 export const CREDIT_ARCHIVAL_LINK_READ_PERMISSIONS = [

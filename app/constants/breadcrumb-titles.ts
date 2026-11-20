@@ -6,7 +6,7 @@
 const SEGMENT_LABELS: Record<string, string> = {
   'admin': 'Administración',
   'analisis-score': 'Análisis Score',
-  'applicants': 'Solicitantes',
+  'applicants': 'Asociados',
   'account': 'Cuenta',
   'appearance': 'Apariencia',
   'archival': 'TRD y archivo',
@@ -54,7 +54,7 @@ const SEGMENT_LABELS: Record<string, string> = {
   'register': 'Registro',
   'roles': 'Roles',
   'settings': 'Configuración',
-  'solicitantes': 'Solicitantes',
+  'solicitantes': 'Asociados',
   'staff': 'Funcionarios',
   'suppliers': 'Proveedores',
   'archivo': 'Archivo',

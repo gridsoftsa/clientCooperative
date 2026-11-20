@@ -86,7 +86,7 @@ export function archivalAreaNodeTypeLabel(node: ArchivalFileTreeNode): string {
     case 'filing':
       return node.id.startsWith('credit-') ? 'Crédito' : 'Radicado'
     case 'applicant':
-      return 'Solicitante'
+      return 'Asociado'
     case 'folder':
       if (node.source === 'talent_party') {
         return node.talent_party_kind === 'supplier' ? 'Proveedor' : 'Empleado'
