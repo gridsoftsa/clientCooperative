@@ -3,7 +3,7 @@
  * Migrates legacy keys (`items_by_activity`, `obligatorio`) to English (`itemsByActivity`, `required`).
  */
 export function migrateAuxiliaryDocumentsFlatConfig(d: Record<string, unknown>): void {
-  type Row = { key?: unknown, label?: unknown, required?: unknown, obligatorio?: unknown }
+  type Row = { key?: unknown, label?: unknown, required?: unknown, obligatorio?: unknown, master?: unknown }
 
   const migrateRows = (rows: unknown): Record<string, unknown>[] => {
     if (!Array.isArray(rows)) return []
@@ -17,6 +17,7 @@ export function migrateAuxiliaryDocumentsFlatConfig(d: Record<string, unknown>):
         key: r.key,
         label: r.label,
         required,
+        master: Boolean(r.master),
       }
     })
   }

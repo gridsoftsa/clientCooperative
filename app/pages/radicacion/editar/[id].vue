@@ -271,6 +271,8 @@ watch(
   },
 )
 
+const documentsOnlyEditMode = computed(() => false)
+
 function applyAutomaticCreditArchivalLink(): void {
   if (documentsOnlyEditMode.value) {
     return
@@ -463,6 +465,7 @@ function apiApplicantToForm(api: any, docs: any[]): ApplicantForm {
     time_in_job: api?.time_in_job,
     financial_info: fi,
     references: parseReferences(api?.references),
+    master_documents: Array.isArray(api?.master_documents) ? api.master_documents : [],
     documents: filterFreeAttachmentDocuments(docs, fi).map((d) => ({
       id: d.id,
       title: d.title || d.original_name || 'Documento',
@@ -1262,6 +1265,10 @@ async function uploadAllDocuments(
         fd.append('title', uploadTitle)
         appendFileToFormData(fd, file, 'auxiliar')
         fd.append('auxiliary_checklist', '1')
+        fd.append('checklist_key', key)
+        if (debtorApplicantId) {
+          fd.append('applicant_id', String(debtorApplicantId))
+        }
         const res = await runDocumentUpload(
           `Deudor — documento auxiliar: ${label}`,
           file,
@@ -1423,6 +1430,7 @@ async function uploadAllDocuments(
         fdAux.append('title', uploadTitleCo)
         appendFileToFormData(fdAux, file, 'auxiliar-codeudor')
         fdAux.append('auxiliary_checklist', '1')
+        fdAux.append('checklist_key', key)
         fdAux.append('applicant_id', String(applicantId))
         const resCo = await runDocumentUpload(
           `Codeudor ${i + 1} — documento auxiliar: ${labelCo}`,

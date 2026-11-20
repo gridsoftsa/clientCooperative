@@ -12,6 +12,8 @@ export interface AuxiliaryChecklistItem {
   /** Display text (Spanish in production). */
   label: string
   required: boolean
+  /** Reused on later credit filings (credits-only master vault). */
+  master?: boolean
 }
 
 /** Opciones del catálogo `actividad-economica` (mismo `value` que las claves de `itemsByActivity` en parametrización). */

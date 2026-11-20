@@ -72,6 +72,7 @@ const {
   previewKind: inlinePreviewKind,
   previewLocalFile,
   previewApplicationDocument,
+  previewMasterDocument,
 } = useDocumentInlinePreview()
 
 const loadingConfig = ref(false)
@@ -198,6 +199,11 @@ const uploadBlocked = computed(
   () => props.disabled || props.interactionMode === 'viewOnly',
 )
 
+function masterDocForKey(key: string) {
+  const list = props.applicant.master_documents ?? []
+  return list.find(d => d.checklist_item_key === key) ?? null
+}
+
 function hasSatisfiedUploadForKey(key: string): boolean {
   // Archivo local pendiente siempre cuenta (se sube al guardar); debe ir antes del
   // chequeo de ID para no ignorarlo cuando el mapa apunta a un documento huérfano.
@@ -206,7 +212,10 @@ function hasSatisfiedUploadForKey(key: string): boolean {
     return true
   }
   // docMetaForKey ya recupera por título si el ID del mapa está huérfano o ausente.
-  return Boolean(docMetaForKey(key))
+  if (docMetaForKey(key)) {
+    return true
+  }
+  return Boolean(masterDocForKey(key))
 }
 
 /** En revisión documental con subida: solo reemplazar; no cargar el primer archivo en una fila vacía. */
@@ -355,7 +364,7 @@ function safeInputId(key: string, index: number): string {
 }
 
 function canPreviewAuxiliaryDocument(key: string): boolean {
-  return Boolean(pendingFileFor(key) || docMetaForKey(key))
+  return Boolean(pendingFileFor(key) || docMetaForKey(key) || masterDocForKey(key))
 }
 
 async function openAuxiliaryDocumentInlinePreview(key: string): Promise<void> {
@@ -367,12 +376,19 @@ async function openAuxiliaryDocumentInlinePreview(key: string): Promise<void> {
 
   const meta = docMetaForKey(key)
   const appId = props.creditApplicationId
-  if (!meta?.id || !appId) {
-    toast.error('No hay documento para previsualizar.')
+  if (meta?.id && appId) {
+    await previewApplicationDocument(appId, meta.id, meta.original_name)
     return
   }
 
-  await previewApplicationDocument(appId, meta.id, meta.original_name)
+  const master = masterDocForKey(key)
+  const applicantId = applicantIdForDocs()
+  if (master?.id && applicantId) {
+    await previewMasterDocument(applicantId, master.id, master.original_name)
+    return
+  }
+
+  toast.error('No hay documento para previsualizar.')
 }
 
 function triggerAuxiliaryFileInput(key: string, idx: number): void {
@@ -485,6 +501,10 @@ function displayFileNameForKey(key: string): string | null {
   const meta = docMetaForKey(key)
   if (meta?.original_name) {
     return meta.original_name
+  }
+  const master = masterDocForKey(key)
+  if (master?.original_name) {
+    return master.original_name
   }
   return null
 }
@@ -607,6 +627,13 @@ defineExpose({
                     >
                       {{ row.required ? 'Obligatorio' : 'Opcional' }}
                     </Badge>
+                    <Badge
+                      v-if="row.master"
+                      variant="outline"
+                      class="h-5 px-1.5 text-[10px] font-semibold uppercase border-sky-600/40 text-sky-900 dark:text-sky-100"
+                    >
+                      Maestro
+                    </Badge>
                   </div>
                   <p
                     class="text-sm font-medium leading-snug text-foreground line-clamp-2"
@@ -626,6 +653,12 @@ defineExpose({
                     </span>
                     <span v-if="pendingFileFor(row.key)" class="text-amber-700 dark:text-amber-400">
                       · pendiente de guardar
+                    </span>
+                    <span
+                      v-else-if="row.master && masterDocForKey(row.key) && !docMetaForKey(row.key)"
+                      class="text-sky-800 dark:text-sky-300"
+                    >
+                      · se reutilizará al guardar
                     </span>
                   </p>
                   <p

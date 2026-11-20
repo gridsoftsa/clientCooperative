@@ -1029,6 +1029,10 @@ async function uploadAllDocuments(
         fd.append('title', uploadTitle)
         appendFileToFormData(fd, file, 'auxiliar')
         fd.append('auxiliary_checklist', '1')
+        fd.append('checklist_key', key)
+        if (debtorApplicantId) {
+          fd.append('applicant_id', String(debtorApplicantId))
+        }
         const res = await runDocumentUpload(
           `Deudor — documento auxiliar: ${label}`,
           file,
@@ -1173,6 +1177,7 @@ async function uploadAllDocuments(
         fdAux.append('title', uploadTitleCo)
         appendFileToFormData(fdAux, file, 'auxiliar-codeudor')
         fdAux.append('auxiliary_checklist', '1')
+        fdAux.append('checklist_key', key)
         fdAux.append('applicant_id', String(applicantId))
         const resCo = await runDocumentUpload(
           `Codeudor ${i + 1} — documento auxiliar: ${labelCo}`,
@@ -1327,6 +1332,7 @@ async function saveCodeudor() {
           fdAux.append('title', titleForAuxiliaryDocumentUpload(lbl))
           appendFileToFormData(fdAux, file, 'auxiliar-codeudor')
           fdAux.append('auxiliary_checklist', '1')
+          fdAux.append('checklist_key', key)
           fdAux.append('applicant_id', String(createdCoDebtor.applicant_id))
           const resS = await runDocumentUpload(
             `Codeudor nuevo — documento auxiliar: ${lbl}`,

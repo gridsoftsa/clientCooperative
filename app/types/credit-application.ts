@@ -107,9 +107,19 @@ export interface ApplicantDocumentForm {
   } | null
 }
 
+export interface ApplicantMasterDocumentSummary {
+  id: number
+  checklist_item_key: string
+  title?: string
+  original_name?: string
+  download_url?: string
+}
+
 export interface ApplicantForm {
   /** ID del registro en `applicants` cuando ya existe en servidor */
   id?: number
+  /** Vault of reusable auxiliary documents (credits-only master folder). */
+  master_documents?: ApplicantMasterDocumentSummary[]
   document_type: string
   document_number: string
   expedition_date?: string

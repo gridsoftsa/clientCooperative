@@ -95,6 +95,57 @@ export function useDocumentDownload() {
     return { blob, dispositionFilename }
   }
 
+  async function fetchMasterDocument(
+    applicantId: string | number,
+    documentId: number,
+  ): Promise<{ blob: Blob, dispositionFilename: string | null }> {
+    const docId = Number(documentId)
+    const aid = Number(applicantId)
+    if (!Number.isFinite(docId) || docId < 1 || !Number.isFinite(aid) || aid < 1) {
+      throw new Error('Identificador de documento no válido.')
+    }
+    const xsrf = await ensureCsrfCookie()
+    const url = `${apiBase}/api/credit-applications/applicants/${aid}/master-documents/${docId}/download`
+
+    const res = await fetch(url, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+        Accept: '*/*',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}),
+      },
+    })
+
+    if (!res.ok) {
+      let msg = `Error ${res.status}: No se pudo obtener el documento maestro`
+      try {
+        const ct = res.headers.get('Content-Type') ?? ''
+        if (ct.includes('application/json')) {
+          const body = await res.json() as { message?: string }
+          if (body?.message) {
+            msg = body.message
+          }
+        }
+      } catch {
+        // keep default
+      }
+      throw new Error(msg)
+    }
+
+    const disposition = res.headers.get('Content-Disposition')
+    let dispositionFilename: string | null = null
+    if (disposition) {
+      const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+      if (match) {
+        dispositionFilename = match[1]!.replace(/['"]/g, '').trim()
+      }
+    }
+
+    const blob = await res.blob()
+    return { blob, dispositionFilename }
+  }
+
   async function downloadDocument(
     applicationId: string | number,
     documentId: number,
@@ -223,5 +274,5 @@ export function useDocumentDownload() {
     openPdfBlobInNewTab(blob)
   }
 
-  return { downloadDocument, viewDocumentInNewTab, fetchApplicationDocument, downloadApplicationPdf, downloadAnalisisScorePdf }
+  return { downloadDocument, viewDocumentInNewTab, fetchApplicationDocument, fetchMasterDocument, downloadApplicationPdf, downloadAnalisisScorePdf }
 }

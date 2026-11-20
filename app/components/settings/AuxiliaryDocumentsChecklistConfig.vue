@@ -141,6 +141,7 @@ function addRow(activity: string): void {
       key: generateAuxiliaryChecklistItemKey(),
       label: 'Nuevo documento',
       required: false,
+      master: false,
     },
   ]
   patchItems(activity, rows)
@@ -158,7 +159,8 @@ function removeRow(activity: string, index: number): void {
     <p class="text-sm text-muted-foreground">
       Lista de documentos del módulo auxiliar por cada tipo de actividad económica (secciones y `value` alineados con
       «Tipo de actividad económica» en parametrización). Al guardar ese catálogo, las secciones aquí se crean o eliminan
-      en el servidor para coincidir con los tipos definidos. Marque obligatorio según política interna.
+      en el servidor para coincidir con los tipos definidos. Marque obligatorio según política interna. La columna Maestro
+      indica documentos que se guardan en la carpeta «Documentos maestros» del asociado y se reutilizan en radicaciones de crédito posteriores.
     </p>
 
     <p
@@ -209,7 +211,7 @@ function removeRow(activity: string, index: number): void {
 
       <CollapsibleContent>
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[28rem] table-fixed border-collapse text-sm">
+          <table class="w-full min-w-[34rem] table-fixed border-collapse text-sm">
             <thead>
               <tr class="border-b border-border bg-muted/20">
                 <th class="px-3 py-2 text-left font-medium text-muted-foreground">
@@ -217,6 +219,9 @@ function removeRow(activity: string, index: number): void {
                 </th>
                 <th class="w-28 px-2 py-2 text-center font-medium text-muted-foreground">
                   Obligatorio
+                </th>
+                <th class="w-28 px-2 py-2 text-center font-medium text-muted-foreground">
+                  Maestro
                 </th>
                 <th v-if="editing && canEdit" class="w-24 px-2 py-2 text-center font-medium text-muted-foreground">
                   Acciones
@@ -245,6 +250,14 @@ function removeRow(activity: string, index: number): void {
                     @update:model-value="updateRow(activity, idx, { required: Boolean($event) })"
                   />
                 </td>
+                <td class="px-2 py-2 text-center align-middle">
+                  <Checkbox
+                    :model-value="Boolean(row.master)"
+                    :disabled="!editing || !canEdit"
+                    class="mx-auto"
+                    @update:model-value="updateRow(activity, idx, { master: Boolean($event) })"
+                  />
+                </td>
                 <td v-if="editing && canEdit" class="px-2 py-2 text-center align-middle">
                   <Button
                     type="button"
@@ -259,7 +272,7 @@ function removeRow(activity: string, index: number): void {
                 </td>
               </tr>
               <tr v-if="rowsFor(activity).length === 0">
-                <td :colspan="editing && canEdit ? 3 : 2" class="px-3 py-6 text-center text-sm text-muted-foreground">
+                <td :colspan="editing && canEdit ? 4 : 3" class="px-3 py-6 text-center text-sm text-muted-foreground">
                   Sin documentos definidos para esta actividad.
                 </td>
               </tr>
