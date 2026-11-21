@@ -65,6 +65,7 @@ export interface DocDocumentTypeContentMetadataField {
   is_reportable?: boolean
   is_ocr_extractable?: boolean
   is_reusable?: boolean
+  options?: Array<{ value: string, label: string }> | null
 }
 
 export interface DocDocumentTypeContentMetadata {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
+import { preventArchivalMultiselectDialogDismiss } from '~/composables/useArchivalMultiselect'
 import {
   WORKFLOW_ASSIGNEE_TYPE_OPTIONS,
   WORKFLOW_STAGE_TYPE_OPTIONS,
@@ -15,7 +16,7 @@ const props = defineProps<{
   stage?: WorkflowStage | null
   nextSortOrder: number
   locked?: boolean
-  users: Array<{ id: number, name: string }>
+  users: Array<{ id: number, name: string, email?: string | null }>
   orgUnits: OrgUnitRow[]
   positions: OrgPositionRow[]
 }>()
@@ -35,9 +36,9 @@ const form = reactive({
   sort_order: 1,
   stage_type: 'manual',
   assignee_type: 'org_unit_manager',
-  assignee_user_id: '' as string,
-  assignee_org_unit_id: '' as string,
-  assignee_position_id: '' as string,
+  assignee_user_id: null as number | null,
+  assignee_org_unit_id: null as number | null,
+  assignee_position_id: null as number | null,
   sla_business_days: null as number | null,
   allows_advance: true,
   allows_return: false,
@@ -55,9 +56,9 @@ watch(() => props.open, (isOpen) => {
     form.sort_order = props.stage.sort_order
     form.stage_type = props.stage.stage_type
     form.assignee_type = props.stage.assignee_type
-    form.assignee_user_id = props.stage.assignee_user_id ? String(props.stage.assignee_user_id) : ''
-    form.assignee_org_unit_id = props.stage.assignee_org_unit_id ? String(props.stage.assignee_org_unit_id) : ''
-    form.assignee_position_id = props.stage.assignee_position_id ? String(props.stage.assignee_position_id) : ''
+    form.assignee_user_id = props.stage.assignee_user_id ?? null
+    form.assignee_org_unit_id = props.stage.assignee_org_unit_id ?? null
+    form.assignee_position_id = props.stage.assignee_position_id ?? null
     form.sla_business_days = props.stage.sla_business_days
     form.allows_advance = props.stage.allows_advance
     form.allows_return = props.stage.allows_return
@@ -70,9 +71,9 @@ watch(() => props.open, (isOpen) => {
     form.sort_order = props.nextSortOrder
     form.stage_type = 'manual'
     form.assignee_type = 'org_unit_manager'
-    form.assignee_user_id = ''
-    form.assignee_org_unit_id = ''
-    form.assignee_position_id = ''
+    form.assignee_user_id = null
+    form.assignee_org_unit_id = null
+    form.assignee_position_id = null
     form.sla_business_days = null
     form.allows_advance = true
     form.allows_return = false
@@ -81,6 +82,38 @@ watch(() => props.open, (isOpen) => {
     form.ventanilla_role = 'none'
   }
 })
+
+watch(() => form.assignee_type, (type) => {
+  if (type !== 'specific_user')
+    form.assignee_user_id = null
+  if (type !== 'org_unit')
+    form.assignee_org_unit_id = null
+  if (type !== 'position')
+    form.assignee_position_id = null
+})
+
+const userOptions = computed(() =>
+  props.users.map(user => ({
+    value: user.id,
+    label: user.email ? `${user.name} · ${user.email}` : user.name,
+  })),
+)
+
+const orgUnitOptions = computed(() =>
+  props.orgUnits.map(unit => ({
+    value: unit.id,
+    label: `${unit.name} (${unit.code})`,
+  })),
+)
+
+const positionOptions = computed(() =>
+  props.positions.map(position => ({
+    value: position.id,
+    label: position.org_unit?.name
+      ? `${position.name} — ${position.org_unit.name}`
+      : position.name,
+  })),
+)
 
 function buildPayload(): WorkflowStagePayload {
   const payload: WorkflowStagePayload = {
@@ -104,11 +137,11 @@ function buildPayload(): WorkflowStagePayload {
   }
 
   if (form.assignee_type === 'specific_user' && form.assignee_user_id)
-    payload.assignee_user_id = Number(form.assignee_user_id)
+    payload.assignee_user_id = form.assignee_user_id
   if (form.assignee_type === 'org_unit' && form.assignee_org_unit_id)
-    payload.assignee_org_unit_id = Number(form.assignee_org_unit_id)
+    payload.assignee_org_unit_id = form.assignee_org_unit_id
   if (form.assignee_type === 'position' && form.assignee_position_id)
-    payload.assignee_position_id = Number(form.assignee_position_id)
+    payload.assignee_position_id = form.assignee_position_id
 
   return payload
 }
@@ -121,6 +154,19 @@ async function save() {
 
   if (!form.name.trim()) {
     toast.error('Indique el nombre de la etapa.')
+    return
+  }
+
+  if (form.assignee_type === 'specific_user' && !form.assignee_user_id) {
+    toast.error('Seleccione el usuario responsable.')
+    return
+  }
+  if (form.assignee_type === 'org_unit' && !form.assignee_org_unit_id) {
+    toast.error('Seleccione el área responsable.')
+    return
+  }
+  if (form.assignee_type === 'position' && !form.assignee_position_id) {
+    toast.error('Seleccione el cargo responsable.')
     return
   }
 
@@ -153,7 +199,12 @@ async function save() {
 
 <template>
   <Dialog :open="open" @update:open="emit('update:open', $event)">
-    <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-[600px]">
+    <DialogContent
+      class="max-h-[90vh] overflow-y-auto sm:max-w-[600px]"
+      @pointer-down-outside="preventArchivalMultiselectDialogDismiss"
+      @focus-outside="preventArchivalMultiselectDialogDismiss"
+      @interact-outside="preventArchivalMultiselectDialogDismiss"
+    >
       <DialogHeader>
         <DialogTitle>{{ isEdit ? 'Editar etapa' : 'Nueva etapa' }}</DialogTitle>
         <DialogDescription>
@@ -224,56 +275,44 @@ async function save() {
 
         <div v-if="form.assignee_type === 'specific_user'" class="grid gap-2">
           <Label>Usuario</Label>
-          <Select v-model="form.assignee_user_id" :disabled="locked">
-            <SelectTrigger>
-              <SelectValue placeholder="Seleccione usuario" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                v-for="user in users"
-                :key="user.id"
-                :value="String(user.id)"
-              >
-                {{ user.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <ArchivalSingleMultiselect
+            v-model="form.assignee_user_id"
+            coerce-number
+            :options="userOptions"
+            :disabled="locked"
+            placeholder="Buscar usuario"
+            no-options-text="No hay usuarios asignables"
+            no-results-text="Sin coincidencias"
+          />
+          <p v-if="userOptions.length === 0" class="text-xs text-muted-foreground">
+            No hay usuarios con permiso de workflow para asignar.
+          </p>
         </div>
 
         <div v-if="form.assignee_type === 'org_unit'" class="grid gap-2">
           <Label>Área</Label>
-          <Select v-model="form.assignee_org_unit_id" :disabled="locked">
-            <SelectTrigger>
-              <SelectValue placeholder="Seleccione área" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                v-for="unit in orgUnits"
-                :key="unit.id"
-                :value="String(unit.id)"
-              >
-                {{ unit.name }} ({{ unit.code }})
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <ArchivalSingleMultiselect
+            v-model="form.assignee_org_unit_id"
+            coerce-number
+            :options="orgUnitOptions"
+            :disabled="locked"
+            placeholder="Buscar área"
+            no-options-text="No hay áreas"
+            no-results-text="Sin coincidencias"
+          />
         </div>
 
         <div v-if="form.assignee_type === 'position'" class="grid gap-2">
           <Label>Cargo</Label>
-          <Select v-model="form.assignee_position_id" :disabled="locked">
-            <SelectTrigger>
-              <SelectValue placeholder="Seleccione cargo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                v-for="pos in positions"
-                :key="pos.id"
-                :value="String(pos.id)"
-              >
-                {{ pos.name }} — {{ pos.org_unit?.name ?? '' }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+          <ArchivalSingleMultiselect
+            v-model="form.assignee_position_id"
+            coerce-number
+            :options="positionOptions"
+            :disabled="locked"
+            placeholder="Buscar cargo"
+            no-options-text="No hay cargos"
+            no-results-text="Sin coincidencias"
+          />
         </div>
 
         <div class="grid gap-2">

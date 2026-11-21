@@ -32,6 +32,11 @@ const emit = defineEmits<{
 
 const { $api } = useNuxtApp()
 
+interface DraftFieldOption {
+  value: string
+  label: string
+}
+
 interface DraftField {
   name: string
   data_type: string
@@ -40,6 +45,7 @@ interface DraftField {
   is_reportable: boolean
   is_ocr_extractable: boolean
   is_reusable: boolean
+  options: DraftFieldOption[]
 }
 
 const enabled = ref(false)
@@ -48,6 +54,7 @@ const saving = ref(false)
 const warningNameIndexes = ref<number[]>([])
 const editingIndexes = ref<number[]>([])
 const fieldSnapshots = ref<Record<number, DraftField>>({})
+const optionDraftByIndex = ref<Record<number, string>>({})
 
 const examplePresets: Array<{ label: string, field: DraftField }> = [
   {
@@ -60,6 +67,7 @@ const examplePresets: Array<{ label: string, field: DraftField }> = [
       is_reportable: true,
       is_ocr_extractable: true,
       is_reusable: true,
+      options: [],
     },
   },
   {
@@ -72,6 +80,7 @@ const examplePresets: Array<{ label: string, field: DraftField }> = [
       is_reportable: true,
       is_ocr_extractable: true,
       is_reusable: false,
+      options: [],
     },
   },
   {
@@ -84,6 +93,7 @@ const examplePresets: Array<{ label: string, field: DraftField }> = [
       is_reportable: true,
       is_ocr_extractable: false,
       is_reusable: false,
+      options: [],
     },
   },
 ]
@@ -97,7 +107,46 @@ function emptyField(): DraftField {
     is_reportable: false,
     is_ocr_extractable: false,
     is_reusable: false,
+    options: [],
   }
+}
+
+function cloneField(field: DraftField): DraftField {
+  return {
+    ...field,
+    options: field.options.map(option => ({ ...option })),
+  }
+}
+
+function normalizeOptions(raw: unknown): DraftFieldOption[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== 'object') {
+      return []
+    }
+    const row = item as { value?: unknown, label?: unknown }
+    const label = String(row.label ?? '').trim()
+    const value = String(row.value ?? '').trim()
+    if (!label && !value) {
+      return []
+    }
+
+    return [{ value: value || slugOptionValue(label), label: label || value }]
+  })
+}
+
+function slugOptionValue(label: string): string {
+  const ascii = label
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  const slug = ascii.replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
+
+  return slug || 'opcion'
 }
 
 function hydrateFromProps(): void {
@@ -116,10 +165,12 @@ function hydrateFromProps(): void {
     is_reportable: Boolean(field.is_reportable),
     is_ocr_extractable: Boolean(field.is_ocr_extractable),
     is_reusable: Boolean(field.is_reusable),
+    options: normalizeOptions(field.options),
   }))
   warningNameIndexes.value = []
   editingIndexes.value = []
   fieldSnapshots.value = {}
+  optionDraftByIndex.value = {}
 }
 
 watch(() => props.contentMetadata, hydrateFromProps, { immediate: true })
@@ -163,12 +214,10 @@ function setEnabled(value: boolean | 'indeterminate'): void {
 
 function addField(preset?: DraftField): void {
   enabled.value = true
-  fields.value = [...fields.value, preset ? { ...preset } : emptyField()]
+  fields.value = [...fields.value, preset ? cloneField(preset) : emptyField()]
   const index = fields.value.length - 1
-  if (!fields.value[index]?.name.trim()) {
-    editingIndexes.value = [...editingIndexes.value, index]
-    void nextTick(() => focusArchivalFieldById(fieldNameId(index)))
-  }
+  editingIndexes.value = [...editingIndexes.value, index]
+  void nextTick(() => focusArchivalFieldById(fieldNameId(index)))
 }
 
 function editField(index: number): void {
@@ -179,7 +228,7 @@ function editField(index: number): void {
 
   fieldSnapshots.value = {
     ...fieldSnapshots.value,
-    [index]: { ...field },
+    [index]: cloneField(field),
   }
   if (!editingIndexes.value.includes(index)) {
     editingIndexes.value = [...editingIndexes.value, index]
@@ -190,7 +239,7 @@ function editField(index: number): void {
 function cancelEdit(index: number): void {
   const snapshot = fieldSnapshots.value[index]
   if (snapshot) {
-    fields.value[index] = { ...snapshot }
+    fields.value[index] = cloneField(snapshot)
     const nextSnapshots = { ...fieldSnapshots.value }
     delete nextSnapshots[index]
     fieldSnapshots.value = nextSnapshots
@@ -239,7 +288,84 @@ function removeField(index: number): void {
     warningNameIndexes.value = []
     editingIndexes.value = []
     fieldSnapshots.value = {}
+    optionDraftByIndex.value = {}
   }
+}
+
+function confirmField(index: number): void {
+  const field = fields.value[index]
+  if (!field) {
+    return
+  }
+
+  if (!field.name.trim()) {
+    void highlightAndFocusFields([index])
+    toast.error('Escriba el nombre del campo.')
+    return
+  }
+
+  if (field.data_type === 'select' && field.options.length === 0) {
+    toast.error('Añada al menos una opción para la lista de valores.')
+    return
+  }
+
+  const nextSnapshots = { ...fieldSnapshots.value }
+  delete nextSnapshots[index]
+  fieldSnapshots.value = nextSnapshots
+  editingIndexes.value = editingIndexes.value.filter(current => current !== index)
+  clearNameWarning(index)
+}
+
+function setFieldDataType(index: number, value: string | number | null): void {
+  const field = fields.value[index]
+  if (!field) {
+    return
+  }
+
+  const next = String(value ?? 'text')
+  field.data_type = next
+  if (next !== 'select') {
+    field.options = []
+  }
+}
+
+function setOptionDraft(index: number, value: string | number): void {
+  optionDraftByIndex.value = {
+    ...optionDraftByIndex.value,
+    [index]: String(value ?? ''),
+  }
+}
+
+function addListOption(index: number): void {
+  const field = fields.value[index]
+  if (!field) {
+    return
+  }
+
+  const label = (optionDraftByIndex.value[index] ?? '').trim()
+  if (!label) {
+    return
+  }
+
+  const used = new Set(field.options.map(option => option.value.toLowerCase()))
+  let value = slugOptionValue(label)
+  let suffix = 2
+  while (used.has(value.toLowerCase())) {
+    value = `${slugOptionValue(label)}_${suffix}`
+    suffix += 1
+  }
+
+  field.options = [...field.options, { value, label }]
+  optionDraftByIndex.value = { ...optionDraftByIndex.value, [index]: '' }
+}
+
+function removeListOption(index: number, optionIndex: number): void {
+  const field = fields.value[index]
+  if (!field) {
+    return
+  }
+
+  field.options = field.options.filter((_, current) => current !== optionIndex)
 }
 
 function updateFieldName(index: number, value: string | number): void {
@@ -269,6 +395,17 @@ async function ensureDraftValid(): Promise<boolean> {
   const missingNames = emptyNameIndexes()
   if (missingNames.length > 0) {
     await highlightAndFocusFields(missingNames)
+
+    return false
+  }
+
+  const missingOptions = fields.value.flatMap((field, index) => (
+    field.data_type === 'select' && field.options.length === 0 ? [index] : []
+  ))
+  if (missingOptions.length > 0) {
+    editingIndexes.value = [...new Set([...editingIndexes.value, ...missingOptions])]
+    toast.error('Los campos de lista de valores necesitan al menos una opción.')
+    await nextTick()
 
     return false
   }
@@ -307,6 +444,7 @@ async function persist(activate: boolean, documentTypeId = props.documentTypeId)
                 is_reportable: field.is_reportable,
                 is_ocr_extractable: field.is_ocr_extractable,
                 is_reusable: field.is_reusable,
+                options: field.data_type === 'select' ? field.options : null,
               }))
             : [],
         },
@@ -316,6 +454,7 @@ async function persist(activate: boolean, documentTypeId = props.documentTypeId)
     warningNameIndexes.value = []
     editingIndexes.value = []
     fieldSnapshots.value = {}
+    optionDraftByIndex.value = {}
     if (!props.persistWithParent) {
       toast.success(res.message ?? 'Metadatos de contenido actualizados')
     }
@@ -376,6 +515,18 @@ function dataTypeLabel(value: string): string {
   return ARCHIVAL_METADATA_FIELD_DATA_TYPE_LABELS[value] ?? value
 }
 
+function listedFieldSummary(field: DraftField): string {
+  const parts = [dataTypeLabel(field.data_type)]
+  if (field.data_type === 'select' && field.options.length > 0) {
+    parts.push(`${field.options.length} valor${field.options.length === 1 ? '' : 'es'}`)
+  }
+  if (fieldFlagLabels(field).length) {
+    parts.push(fieldFlagLabels(field).join(' · '))
+  }
+
+  return parts.join(' · ')
+}
+
 function fieldFlagLabels(field: DraftField): string[] {
   const labels: string[] = []
   if (field.is_required) {
@@ -430,32 +581,62 @@ function isNewField(index: number): boolean {
       </Checkbox>
 
       <template v-if="enabled">
-        <div v-if="namedFields.length" class="space-y-2">
-          <p class="text-sm font-medium">
-            Campos listados
-          </p>
-          <ul class="divide-y rounded-md border bg-background">
-            <li
-              v-for="(field, index) in fields"
-              v-show="!isNewField(index)"
-              :key="`listed-${index}`"
-              class="flex flex-wrap items-start justify-between gap-2 px-3 py-2"
+        <p class="text-sm text-muted-foreground">
+          Estos datos se piden al adjuntar un archivo de este tipo. Pulse <span class="font-medium text-foreground">Añadir campo</span>, complete el formulario y pulse <span class="font-medium text-foreground">Listo</span>.
+        </p>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            :disabled="disabled || saving"
+            @click="addField()"
+          >
+            <Icon name="i-lucide-plus" class="mr-1 h-4 w-4" />
+            Añadir campo
+          </Button>
+          <span class="text-xs text-muted-foreground">Atajos:</span>
+          <Button
+            v-for="preset in examplePresets"
+            :key="preset.label"
+            type="button"
+            variant="outline"
+            size="sm"
+            class="h-8 text-xs"
+            :disabled="disabled || saving"
+            @click="addField(preset.field)"
+          >
+            {{ preset.label }}
+          </Button>
+        </div>
+
+        <div v-if="fields.length === 0" class="rounded-md border border-dashed px-3 py-4 text-sm text-muted-foreground">
+          Aún no hay campos. Añada uno para definir qué se captura al adjuntar.
+        </div>
+
+        <div class="space-y-2">
+          <div
+            v-for="(field, index) in fields"
+            :key="`field-${index}`"
+            class="rounded-md border bg-background p-3"
+            :class="isNameWarning(index) ? 'border-amber-500 ring-2 ring-amber-500/30' : ''"
+          >
+            <div
+              v-if="!isNewField(index)"
+              class="flex flex-wrap items-start justify-between gap-2"
             >
               <div class="min-w-0 space-y-1">
                 <p class="font-medium leading-none">
                   {{ field.name }}
                 </p>
                 <p class="text-xs text-muted-foreground">
-                  {{ dataTypeLabel(field.data_type) }}
-                  <template v-if="fieldFlagLabels(field).length">
-                    · {{ fieldFlagLabels(field).join(' · ') }}
-                  </template>
+                  {{ listedFieldSummary(field) }}
                 </p>
               </div>
               <div class="flex flex-wrap items-center gap-1">
                 <Button
                   type="button"
-                  variant="warning"
+                  variant="outline"
                   size="sm"
                   class="h-8 gap-1.5 px-2 text-xs"
                   :disabled="disabled || saving"
@@ -474,114 +655,141 @@ function isNewField(index: number): boolean {
                   Eliminar
                 </Button>
               </div>
-            </li>
-          </ul>
-        </div>
-
-        <div class="flex flex-wrap gap-1">
-          <span class="self-center text-xs text-muted-foreground">Añadir:</span>
-          <Button
-            v-for="preset in examplePresets"
-            :key="preset.label"
-            type="button"
-            variant="outline"
-            size="sm"
-            class="h-7 text-xs"
-            :disabled="disabled || saving"
-            @click="addField(preset.field)"
-          >
-            + {{ preset.label }}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            class="h-7 text-xs"
-            :disabled="disabled || saving"
-            @click="addField()"
-          >
-            Añadir campo
-          </Button>
-        </div>
-
-        <div
-          v-for="(field, index) in fields"
-          v-show="isNewField(index)"
-          :key="`edit-${index}`"
-          class="space-y-2 rounded-md border p-3"
-          :class="isNameWarning(index) ? 'border-amber-500 ring-2 ring-amber-500/30' : ''"
-        >
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div class="space-y-1">
-              <Label :for="fieldNameId(index)">Nombre del campo *</Label>
-              <Input
-                :id="fieldNameId(index)"
-                :model-value="field.name"
-                :disabled="disabled || saving"
-                placeholder="Ej. Número de factura"
-                :class="archivalInputWarningClass(isNameWarning(index))"
-                @update:model-value="updateFieldName(index, $event)"
-              />
-              <p v-if="isNameWarning(index)" class="text-xs text-amber-700 dark:text-amber-400">
-                Este campo es obligatorio. Escriba el nombre.
-              </p>
             </div>
-            <div class="space-y-1">
-              <Label>Tipo de dato</Label>
-              <Select v-model="field.data_type" :disabled="disabled || saving">
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem
-                    v-for="option in ARCHIVAL_METADATA_FIELD_DATA_TYPE_OPTIONS"
-                    :key="option.value"
-                    :value="option.value"
+
+            <div v-else class="space-y-3">
+              <div class="grid gap-3 sm:grid-cols-2">
+                <div class="space-y-1">
+                  <Label :for="fieldNameId(index)">Nombre del campo *</Label>
+                  <Input
+                    :id="fieldNameId(index)"
+                    :model-value="field.name"
+                    :disabled="disabled || saving"
+                    placeholder="Ej. Número de factura"
+                    :class="archivalInputWarningClass(isNameWarning(index))"
+                    @update:model-value="updateFieldName(index, $event)"
+                  />
+                  <p v-if="isNameWarning(index)" class="text-xs text-amber-700 dark:text-amber-400">
+                    Este campo es obligatorio. Escriba el nombre.
+                  </p>
+                </div>
+                <div class="space-y-1">
+                  <Label>Tipo de dato</Label>
+                  <ArchivalSingleMultiselect
+                    :model-value="field.data_type"
+                    :options="[...ARCHIVAL_METADATA_FIELD_DATA_TYPE_OPTIONS]"
+                    :can-clear="false"
+                    :disabled="disabled || saving"
+                    placeholder="Tipo de dato"
+                    no-options-text="Sin tipos"
+                    @update:model-value="setFieldDataType(index, $event)"
+                  />
+                </div>
+              </div>
+
+              <div
+                v-if="field.data_type === 'select'"
+                class="space-y-2 rounded-md border border-dashed bg-muted/30 p-3"
+              >
+                <p class="text-sm font-medium">
+                  Valores de la lista
+                </p>
+                <p class="text-xs text-muted-foreground">
+                  Al adjuntar el archivo, se elige una de estas opciones (no se escribe texto libre).
+                </p>
+                <ul v-if="field.options.length" class="divide-y rounded-md border bg-background">
+                  <li
+                    v-for="(option, optionIndex) in field.options"
+                    :key="`${option.value}-${optionIndex}`"
+                    class="flex items-center justify-between gap-2 px-3 py-2 text-sm"
                   >
-                    {{ option.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+                    <span>{{ option.label }}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      class="h-7 px-2 text-xs text-destructive"
+                      :disabled="disabled || saving"
+                      @click="removeListOption(index, optionIndex)"
+                    >
+                      Quitar
+                    </Button>
+                  </li>
+                </ul>
+                <p v-else class="text-xs text-amber-700 dark:text-amber-400">
+                  Añada al menos un valor.
+                </p>
+                <div class="flex flex-wrap gap-2">
+                  <Input
+                    :model-value="optionDraftByIndex[index] ?? ''"
+                    class="h-9 min-w-[12rem] flex-1"
+                    :disabled="disabled || saving"
+                    placeholder="Ej. Activo"
+                    @update:model-value="setOptionDraft(index, $event)"
+                    @keydown.enter.prevent="addListOption(index)"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    class="h-9"
+                    :disabled="disabled || saving || !(optionDraftByIndex[index] ?? '').trim()"
+                    @click="addListOption(index)"
+                  >
+                    Agregar valor
+                  </Button>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap gap-4 text-xs">
+                <Checkbox v-model="field.is_required" :disabled="disabled || saving">
+                  Obligatorio
+                </Checkbox>
+                <Checkbox v-model="field.is_searchable" :disabled="disabled || saving">
+                  Búsqueda
+                </Checkbox>
+                <Checkbox v-model="field.is_reportable" :disabled="disabled || saving">
+                  Reportes
+                </Checkbox>
+                <Checkbox v-model="field.is_ocr_extractable" :disabled="disabled || saving">
+                  Sugerir con OCR
+                </Checkbox>
+                <Checkbox v-model="field.is_reusable" :disabled="disabled || saving">
+                  Reutilizar en el siguiente
+                </Checkbox>
+              </div>
+              <div class="flex flex-wrap gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  class="h-8 gap-1.5 px-2 text-xs"
+                  :disabled="disabled || saving"
+                  @click="confirmField(index)"
+                >
+                  Listo
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  class="h-8 gap-1.5 px-2 text-xs"
+                  :disabled="disabled || saving"
+                  @click="cancelEdit(index)"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  class="h-8 gap-1.5 px-2 text-xs"
+                  :disabled="disabled || saving"
+                  @click="removeField(index)"
+                >
+                  Eliminar
+                </Button>
+              </div>
             </div>
-          </div>
-          <div class="flex flex-wrap gap-4 text-xs">
-            <Checkbox v-model="field.is_required" :disabled="disabled || saving">
-              Obligatorio
-            </Checkbox>
-            <Checkbox v-model="field.is_searchable" :disabled="disabled || saving">
-              Búsqueda
-            </Checkbox>
-            <Checkbox v-model="field.is_reportable" :disabled="disabled || saving">
-              Reportes
-            </Checkbox>
-            <Checkbox v-model="field.is_ocr_extractable" :disabled="disabled || saving">
-              Sugerir con OCR
-            </Checkbox>
-            <Checkbox v-model="field.is_reusable" :disabled="disabled || saving">
-              Reutilizar en el siguiente
-            </Checkbox>
-          </div>
-          <div class="flex flex-wrap gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              class="h-8 gap-1.5 px-2 text-xs"
-              :disabled="disabled || saving"
-              @click="cancelEdit(index)"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              class="h-8 gap-1.5 px-2 text-xs"
-              :disabled="disabled || saving"
-              @click="removeField(index)"
-            >
-              Eliminar
-            </Button>
           </div>
         </div>
       </template>
