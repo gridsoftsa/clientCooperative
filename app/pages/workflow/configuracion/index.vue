@@ -36,7 +36,7 @@ function canToggleActive(def: WorkflowDefinition) {
 }
 
 function isStructureLocked(def: WorkflowDefinition) {
-  return def.is_locked || (def.instances_count ?? 0) > 0
+  return (def.active_instances_count ?? 0) > 0
 }
 
 function stageCount(def: WorkflowDefinition) {

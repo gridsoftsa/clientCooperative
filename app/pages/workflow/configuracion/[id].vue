@@ -49,7 +49,7 @@ const isStructureLocked = computed(() => {
   if (!definition.value)
     return false
 
-  return definition.value.is_locked || (definition.value.instances_count ?? 0) > 0
+  return (definition.value.active_instances_count ?? 0) > 0
 })
 
 const hasActiveProcesses = computed(() => (definition.value?.active_instances_count ?? 0) > 0)
@@ -282,8 +282,8 @@ watch(deleteStageDialogOpen, (open) => {
       <Icon name="lucide:lock" class="size-4" />
       <AlertTitle>Flujo en uso</AlertTitle>
       <AlertDescription>
-        Este flujo ya tiene radicados asociados: no puede cambiar etapas ni el nombre.
-        Puede desactivarlo si no hay procesos en curso; los tipos funcionales dejarán de usarlo para nuevas radicaciones.
+        Hay radicados con este flujo en curso: no puede cambiar etapas ni el nombre.
+        Anule o cierre esos radicados para volver a editar. Si no hay procesos activos, el flujo queda editable.
       </AlertDescription>
     </Alert>
 
