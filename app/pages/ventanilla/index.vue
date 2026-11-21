@@ -3,7 +3,8 @@ import {
   VENTANILLA_FILING_STATUS_LABELS,
   VENTANILLA_FILING_TYPE_LABELS,
   VENTANILLA_TRAFFIC_LIGHT_LABELS,
-  ventanillaTrafficLightRowClass,
+  ventanillaFilingRowClass,
+  ventanillaFilingStatusBadgeVariant,
 } from '~/constants/ventanilla'
 import type {
   VentanillaCatalogData,
@@ -234,20 +235,20 @@ function workflowStageLabel(row: VentanillaFilingSummary): string {
     return '—'
   }
 
-  if (workflow.open_task?.stage_name) {
-    return workflow.open_task.stage_name
-  }
-
-  if (workflow.current_stage_name) {
-    return workflow.current_stage_name
+  if (row.status === 'voided' || workflow.instance_status === 'cancelled') {
+    return 'Proceso anulado'
   }
 
   if (workflow.instance_status === 'completed') {
     return 'Proceso completado'
   }
 
-  if (workflow.instance_status === 'cancelled') {
-    return 'Proceso cancelado'
+  if (workflow.open_task?.stage_name) {
+    return workflow.open_task.stage_name
+  }
+
+  if (workflow.current_stage_name) {
+    return workflow.current_stage_name
   }
 
   return '—'
@@ -647,7 +648,7 @@ function statusLabel(status: string): string {
               v-for="row in filings"
               :key="row.id"
               class="cursor-pointer"
-              :class="ventanillaTrafficLightRowClass(row.traffic_light_status, row.requires_response)"
+              :class="ventanillaFilingRowClass(row.status, row.traffic_light_status, row.requires_response)"
               @click="router.push(`/ventanilla/${row.id}`)"
             >
               <TableCell class="font-mono text-xs">
@@ -669,13 +670,16 @@ function statusLabel(status: string): string {
                 {{ row.filed_at ? new Date(row.filed_at).toLocaleString('es-CO') : '—' }}
               </TableCell>
               <TableCell>
-                <Badge variant="outline">
+                <Badge :variant="ventanillaFilingStatusBadgeVariant(row.status)">
                   {{ statusLabel(row.status) }}
                 </Badge>
               </TableCell>
               <TableCell class="min-w-[9.5rem] py-3 align-middle">
+                <span v-if="row.status === 'voided'" class="text-xs text-muted-foreground">
+                  SLA anulado
+                </span>
                 <VentanillaSlaProgressBar
-                  v-if="row.requires_response && row.sla_business_days"
+                  v-else-if="row.requires_response && row.sla_business_days"
                   dense
                   :sla-business-days="row.sla_business_days"
                   :elapsed-business-days="row.sla_elapsed_business_days"
@@ -690,8 +694,11 @@ function statusLabel(status: string): string {
                 {{ workflowStageLabel(row) }}
               </TableCell>
               <TableCell>
+                <span v-if="row.status === 'voided'" class="text-xs text-muted-foreground">
+                  —
+                </span>
                 <VentanillaTrafficLightBadge
-                  v-if="row.workflow?.open_task?.traffic_light_status"
+                  v-else-if="row.workflow?.open_task?.traffic_light_status"
                   :status="row.workflow.open_task.traffic_light_status"
                 />
                 <span v-else class="text-muted-foreground text-xs">—</span>

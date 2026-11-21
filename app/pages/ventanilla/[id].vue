@@ -576,6 +576,7 @@ async function viewSticker() {
 
       <div class="flex flex-wrap items-center gap-2">
         <VentanillaTrafficLightBadge
+          v-if="filing.status !== 'voided'"
           :status="filing.traffic_light_status"
           :requires-response="filing.requires_response"
           scope-label="SLA radicado"
@@ -586,14 +587,17 @@ async function viewSticker() {
         >
           Informativo
         </Badge>
-        <Badge variant="outline">
+        <Badge :variant="filing.status === 'voided' ? 'secondary' : 'outline'">
           {{ statusLabel(filing.status) }}
         </Badge>
-        <Badge v-if="filing.workflow?.current_stage_name" variant="secondary">
+        <Badge v-if="filing.status === 'voided'" variant="secondary">
+          Proceso anulado
+        </Badge>
+        <Badge v-else-if="filing.workflow?.current_stage_name" variant="secondary">
           {{ filing.workflow.current_stage_name }}
         </Badge>
         <VentanillaTrafficLightBadge
-          v-if="workflowOpenTask?.traffic_light_status"
+          v-if="filing.status !== 'voided' && workflowOpenTask?.traffic_light_status"
           :status="workflowOpenTask.traffic_light_status"
           scope-label="SLA etapa"
         />
@@ -627,8 +631,11 @@ async function viewSticker() {
           </Button>
         </div>
       </div>
+      <p v-if="filing.status === 'voided'" class="text-sm text-muted-foreground">
+        El radicado está anulado: el SLA dejó de contar el día de la anulación.
+      </p>
       <VentanillaSlaProgressBar
-        v-if="filing.requires_response && filing.sla_business_days"
+        v-else-if="filing.requires_response && filing.sla_business_days"
         :sla-business-days="filing.sla_business_days"
         :elapsed-business-days="filing.sla_elapsed_business_days"
         :deadline="filing.response_deadline_at"

@@ -116,6 +116,32 @@ export function ventanillaTrafficLightBadgeClass(
   return ''
 }
 
+export function ventanillaFilingStatusBadgeVariant(
+  status: VentanillaFilingStatusValue | string | null | undefined,
+): 'default' | 'secondary' | 'destructive' | 'outline' | 'warning' | 'success' {
+  if (status === 'voided') {
+    return 'secondary'
+  }
+
+  if (status === 'closed') {
+    return 'outline'
+  }
+
+  return 'outline'
+}
+
+export function ventanillaFilingRowClass(
+  status: VentanillaFilingStatusValue | string | null | undefined,
+  trafficLight?: VentanillaTrafficLightValue | null,
+  requiresResponse?: boolean,
+): string {
+  if (status === 'voided') {
+    return 'border-l-4 border-l-muted-foreground/50 bg-muted/50 text-muted-foreground hover:bg-muted/70'
+  }
+
+  return ventanillaTrafficLightRowClass(trafficLight, requiresResponse)
+}
+
 /** Fondo de fila de listados según semáforo SLA (no solo la columna). */
 export function ventanillaTrafficLightRowClass(
   status: VentanillaTrafficLightValue | null | undefined,
