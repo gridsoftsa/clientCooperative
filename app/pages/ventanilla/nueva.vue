@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import {
   VENTANILLA_FILING_TYPE_LABELS,
+  allowedVentanillaFilingTypes,
+  canCreateVentanillaFilingType,
   VENTANILLA_INFORMATIVE_FUNCTIONAL_TYPE_KEY,
   VENTANILLA_INFORMATIVE_TYPE_HINT,
   VENTANILLA_OTHER_FUNCTIONAL_TYPE_KEY,
@@ -50,7 +52,7 @@ interface VentanillaOrgUnitOption {
 definePageMeta({
   layout: 'default',
   middleware: 'permission',
-  permissions: 'ventanilla_crear',
+  permissions: 'ventanilla_crear|ventanilla_crear_entrada|ventanilla_crear_salida|ventanilla_crear_interna',
 })
 
 const router = useRouter()
@@ -69,7 +71,18 @@ const saving = ref(false)
 const errorMessage = ref('')
 const submitAttempted = ref(false)
 
-const filingType = ref<VentanillaFilingTypeValue>('incoming')
+const allowedFilingTypes = computed(() => allowedVentanillaFilingTypes(hasPermission))
+const filingType = ref<VentanillaFilingTypeValue>(allowedFilingTypes.value[0] ?? 'incoming')
+
+watch(allowedFilingTypes, (types) => {
+  if (types.length === 0) {
+    return
+  }
+
+  if (!types.includes(filingType.value)) {
+    filingType.value = types[0] ?? 'incoming'
+  }
+}, { immediate: true })
 const functionalTypeKey = ref('')
 const requiresResponseOverride = ref<boolean | null>(null)
 const slaBusinessDaysInput = ref('')
@@ -195,7 +208,7 @@ const recipientStaffChoices = computed(() => {
 })
 
 const responsibleOrgUnitId = computed(() => {
-  if (filingType.value === 'incoming') {
+  if (filingType.value === 'incoming' || filingType.value === 'internal') {
     return recipientOrgUnitId.value
   }
 
@@ -203,7 +216,7 @@ const responsibleOrgUnitId = computed(() => {
 })
 
 const trdOrgUnitRoleLabel = computed(() => {
-  if (filingType.value === 'incoming') {
+  if (filingType.value === 'incoming' || filingType.value === 'internal') {
     return 'el área destinataria'
   }
 
@@ -239,14 +252,15 @@ const recipientOrgUnitOptions = computed(() =>
 )
 
 const producerOrgUnitOptions = computed(() => {
+  if (filingType.value === 'internal') {
+    return withPinnedOrgUnit(producerAreaOptions.value, internalSenderOrgUnitId.value)
+  }
+
   const options = configuredProducerAreas.value.length > 0
     ? filterOrgUnitsByFunctionalTypeAreas(orgUnits.value, configuredProducerAreas.value)
     : producerAreaOptions.value
 
-  return withPinnedOrgUnit(
-    options,
-    filingType.value === 'internal' ? internalSenderOrgUnitId.value : null,
-  )
+  return withPinnedOrgUnit(options, null)
 })
 
 function clearInvalidOrgUnitSelections(): void {
@@ -707,7 +721,7 @@ watch(filingType, (nextType) => {
 })
 
 watch(producerOrgUnitId, () => {
-  if (filingType.value !== 'incoming') {
+  if (filingType.value === 'outgoing') {
     docDocumentTypeId.value = null
   }
 
@@ -720,7 +734,7 @@ watch(producerOrgUnitId, () => {
 }, { flush: 'sync' })
 
 watch(recipientOrgUnitId, () => {
-  if (filingType.value === 'incoming') {
+  if (filingType.value === 'incoming' || filingType.value === 'internal') {
     docDocumentTypeId.value = null
   }
 
@@ -819,7 +833,12 @@ function removeFileRow(index: number) {
 }
 
 function setFilingType(key: string) {
-  filingType.value = key as VentanillaFilingTypeValue
+  const nextType = key as VentanillaFilingTypeValue
+  if (!canCreateVentanillaFilingType(hasPermission, nextType)) {
+    return
+  }
+
+  filingType.value = nextType
 }
 
 function parsedSlaBusinessDays(): number | null {
@@ -1021,7 +1040,7 @@ async function submit() {
         aria-label="Tipo de radicación"
       >
         <button
-          v-for="(label, key) in VENTANILLA_FILING_TYPE_LABELS"
+          v-for="key in allowedFilingTypes"
           :key="key"
           type="button"
           class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
@@ -1030,7 +1049,7 @@ async function submit() {
             : 'text-muted-foreground hover:text-foreground'"
           @click="setFilingType(key)"
         >
-          {{ label }}
+          {{ VENTANILLA_FILING_TYPE_LABELS[key] }}
         </button>
       </div>
     </div>
@@ -1404,50 +1423,11 @@ async function submit() {
               </CardTitle>
               <CardDescription>
                 Seleccione primero el área correspondiente. La TRD se carga según el tipo de expediente vinculado al tipo funcional.
-                En interna se muestra la clasificación del remitente (registro) y del destinatario (referencia).
+                En radicación interna solo se clasifica el área destinataria, que es donde queda el expediente.
               </CardDescription>
             </CardHeader>
             <CardContent class="min-w-0">
-              <template v-if="filingType === 'internal'">
-                <div class="space-y-6">
-                  <div class="space-y-3">
-                    <div>
-                      <p class="text-sm font-medium">
-                        Área remitente (productora)
-                      </p>
-                      <p class="text-xs text-muted-foreground">
-                        Clasificación archivística que se registrará en el radicado.
-                      </p>
-                    </div>
-                    <VentanillaTrdPicker
-                      ref="trdPickerRef"
-                      :org-unit-id="producerOrgUnitId"
-                      :functional-type-key="functionalTypeKey"
-                      org-unit-role-label="el área remitente"
-                      :submit-attempted="submitAttempted"
-                      v-model:doc-document-type-id="docDocumentTypeId"
-                    />
-                  </div>
-                  <div class="space-y-3 border-t pt-6">
-                    <div>
-                      <p class="text-sm font-medium">
-                        Área destinataria
-                      </p>
-                      <p class="text-xs text-muted-foreground">
-                        TRD configurada para el área de destino.
-                      </p>
-                    </div>
-                    <VentanillaTrdPicker
-                      :org-unit-id="recipientOrgUnitId"
-                      :functional-type-key="functionalTypeKey"
-                      org-unit-role-label="el área destinataria"
-                      readonly
-                    />
-                  </div>
-                </div>
-              </template>
               <VentanillaTrdPicker
-                v-else
                 ref="trdPickerRef"
                 :org-unit-id="responsibleOrgUnitId"
                 :functional-type-key="functionalTypeKey"

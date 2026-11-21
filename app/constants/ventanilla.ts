@@ -10,6 +10,38 @@ export const VENTANILLA_FILING_TYPE_LABELS: Record<VentanillaFilingTypeValue, st
   internal: 'Interna',
 }
 
+export const VENTANILLA_FILING_CREATE_PERMISSIONS: Record<VentanillaFilingTypeValue, string> = {
+  incoming: 'ventanilla_crear_entrada',
+  outgoing: 'ventanilla_crear_salida',
+  internal: 'ventanilla_crear_interna',
+}
+
+export const VENTANILLA_ANY_CREATE_PERMISSIONS = [
+  'ventanilla_crear',
+  ...Object.values(VENTANILLA_FILING_CREATE_PERMISSIONS),
+] as const
+
+export function canCreateVentanillaFilingType(
+  hasPermission: (name: string) => boolean,
+  filingType: VentanillaFilingTypeValue,
+): boolean {
+  if (hasPermission(VENTANILLA_FILING_CREATE_PERMISSIONS[filingType])) {
+    return true
+  }
+
+  const hasAnyTypePermission = Object.values(VENTANILLA_FILING_CREATE_PERMISSIONS)
+    .some(permission => hasPermission(permission))
+
+  return hasPermission('ventanilla_crear') && !hasAnyTypePermission
+}
+
+export function allowedVentanillaFilingTypes(
+  hasPermission: (name: string) => boolean,
+): VentanillaFilingTypeValue[] {
+  return (Object.keys(VENTANILLA_FILING_TYPE_LABELS) as VentanillaFilingTypeValue[])
+    .filter(type => canCreateVentanillaFilingType(hasPermission, type))
+}
+
 export const VENTANILLA_FILING_STATUS_LABELS: Record<VentanillaFilingStatusValue, string> = {
   registered: 'Registrado',
   in_progress: 'En gestión',

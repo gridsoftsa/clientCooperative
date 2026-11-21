@@ -483,12 +483,15 @@ function removeRow(activity: string, index: number): void {
             class="grid items-center gap-x-2 border-b border-border bg-muted/20 px-3 py-2 text-sm font-medium text-muted-foreground"
             :class="documentGridClass"
           >
-            <span v-if="canBulkAssignTrd" class="flex justify-center">
-              <Checkbox
-                :checked="activitySelectionState(activity)"
-                aria-label="Seleccionar todos los documentos de esta actividad"
-                @update:checked="setActivitySelected(activity, $event === true)"
-              />
+            <span v-if="canBulkAssignTrd" class="flex h-9 items-center justify-center">
+              <label class="flex h-9 items-center justify-center">
+                <Checkbox
+                  bare
+                  :model-value="activitySelectionState(activity)"
+                  aria-label="Seleccionar todos los documentos de esta actividad"
+                  @update:model-value="setActivitySelected(activity, $event === true)"
+                />
+              </label>
             </span>
             <span>Documento</span>
             <span class="text-center">Obligatorio</span>
@@ -506,11 +509,14 @@ function removeRow(activity: string, index: number): void {
               :class="documentGridClass"
             >
               <div v-if="canBulkAssignTrd" class="flex h-9 items-center justify-center">
-                <Checkbox
-                  :checked="isRowSelected(activity, row, idx)"
-                  :aria-label="`Seleccionar ${row.label}`"
-                  @update:checked="setRowSelected(activity, row, idx, $event === true)"
-                />
+                <label class="flex h-9 items-center justify-center">
+                  <Checkbox
+                    bare
+                    :model-value="isRowSelected(activity, row, idx)"
+                    :aria-label="`Seleccionar ${row.label}`"
+                    @update:model-value="setRowSelected(activity, row, idx, $event === true)"
+                  />
+                </label>
               </div>
               <Input
                 :model-value="row.label"
@@ -519,18 +525,24 @@ function removeRow(activity: string, index: number): void {
                 @update:model-value="updateRow(activity, idx, { label: String($event ?? '') })"
               />
               <div class="flex h-9 items-center justify-center">
-                <Checkbox
-                  :model-value="Boolean(row.required)"
-                  :disabled="!editing || !canEdit"
-                  @update:model-value="updateRow(activity, idx, { required: Boolean($event) })"
-                />
+                <label class="flex h-9 items-center justify-center">
+                  <Checkbox
+                    bare
+                    :model-value="Boolean(row.required)"
+                    :disabled="!editing || !canEdit"
+                    @update:model-value="updateRow(activity, idx, { required: Boolean($event) })"
+                  />
+                </label>
               </div>
               <div class="flex h-9 items-center justify-center">
-                <Checkbox
-                  :model-value="Boolean(row.master)"
-                  :disabled="!editing || !canEdit"
-                  @update:model-value="updateRow(activity, idx, { master: Boolean($event) })"
-                />
+                <label class="flex h-9 items-center justify-center">
+                  <Checkbox
+                    bare
+                    :model-value="Boolean(row.master)"
+                    :disabled="!editing || !canEdit"
+                    @update:model-value="updateRow(activity, idx, { master: Boolean($event) })"
+                  />
+                </label>
               </div>
               <div v-if="editing && canEdit" class="flex h-9 items-center justify-center">
                 <Button

@@ -44,9 +44,11 @@ const isChecked = computed((): boolean => coerceBoolean(resolvedValue.value))
 
 const isIndeterminate = computed((): boolean => resolvedValue.value === 'indeterminate')
 
+const boxFilled = computed(() => isChecked.value || isIndeterminate.value)
+
 const boxClass = computed(() => cn(
   'pointer-events-none flex size-4 shrink-0 items-center justify-center rounded-[4px] border shadow-xs transition-colors',
-  isChecked.value
+  boxFilled.value
     ? 'border-primary bg-primary text-primary-foreground'
     : 'border-input bg-background',
   props.disabled && 'opacity-50',
@@ -78,21 +80,26 @@ function onChange(event: Event): void {
 <template>
   <label
     v-if="!bare"
-    :for="inputId"
     class="inline-flex cursor-pointer items-center gap-2"
     :class="{ 'cursor-not-allowed opacity-50': disabled }"
   >
-    <input
-      :id="inputId"
-      ref="inputRef"
-      type="checkbox"
-      class="sr-only"
-      :checked="isChecked"
-      :disabled="disabled"
-      @change="onChange"
-    >
-    <span :class="boxClass" aria-hidden="true">
-      <Check v-if="isChecked" class="size-3.5" :stroke-width="3" />
+    <span class="relative inline-flex size-4 shrink-0">
+      <input
+        :id="inputId"
+        ref="inputRef"
+        type="checkbox"
+        class="absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0"
+        :checked="isChecked"
+        :disabled="disabled"
+        @change="onChange"
+      >
+      <span :class="boxClass" aria-hidden="true">
+        <Check v-if="isChecked" class="size-3.5" :stroke-width="3" />
+        <span
+          v-else-if="isIndeterminate"
+          class="block h-0.5 w-2.5 rounded-full bg-primary-foreground"
+        />
+      </span>
     </span>
     <span v-if="$slots.default" class="text-sm leading-none">
       <slot />
@@ -113,6 +120,10 @@ function onChange(event: Event): void {
     >
     <span :class="boxClass" aria-hidden="true">
       <Check v-if="isChecked" class="size-3.5" :stroke-width="3" />
+      <span
+        v-else-if="isIndeterminate"
+        class="block h-0.5 w-2.5 rounded-full bg-primary-foreground"
+      />
     </span>
   </span>
 </template>

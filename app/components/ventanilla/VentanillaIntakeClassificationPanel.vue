@@ -69,7 +69,15 @@ const discardReason = ref('')
 const discardDialogOpen = ref(false)
 
 const producerOrgUnits = computed(() => props.orgUnits.filter(item => item.is_document_producer))
-const responsibleOrgUnitId = computed(() => filingType.value === 'incoming' ? recipientOrgUnitId.value : producerOrgUnitId.value)
+const responsibleOrgUnitId = computed(() =>
+  filingType.value === 'incoming' || filingType.value === 'internal'
+    ? recipientOrgUnitId.value
+    : producerOrgUnitId.value,
+)
+
+const trdOrgUnitRoleLabel = computed(() =>
+  filingType.value === 'outgoing' ? 'el área productora' : 'el área destinataria',
+)
 
 const selectableFunctionalTypes = computed(() =>
   (props.catalog?.functional_types ?? []).filter(
@@ -132,6 +140,10 @@ const recipientOrgUnitOptions = computed(() =>
 )
 
 const producerOrgUnitOptions = computed(() => {
+  if (filingType.value === 'internal') {
+    return withPublicAreaOption(producerOrgUnits.value)
+  }
+
   const options = configuredProducerAreas.value.length > 0
     ? filterOrgUnitsByFunctionalTypeAreas(props.orgUnits, configuredProducerAreas.value)
     : producerOrgUnits.value
@@ -538,37 +550,11 @@ async function discardIntake(): Promise<void> {
         </template>
       </div>
 
-      <template v-if="filingType === 'internal'">
-        <div class="space-y-6">
-          <div class="space-y-3">
-            <p class="text-sm font-medium">
-              TRD — área remitente (productora)
-            </p>
-            <VentanillaTrdPicker
-              :org-unit-id="producerOrgUnitId"
-              :functional-type-key="functionalTypeKey"
-              org-unit-role-label="el área remitente"
-              :submit-attempted="submitAttempted"
-              v-model:doc-document-type-id="docDocumentTypeId"
-            />
-          </div>
-          <div class="space-y-3 border-t pt-4">
-            <p class="text-sm font-medium">
-              TRD — área destinataria
-            </p>
-            <VentanillaTrdPicker
-              :org-unit-id="recipientOrgUnitId"
-              :functional-type-key="functionalTypeKey"
-              org-unit-role-label="el área destinataria"
-              readonly
-            />
-          </div>
-        </div>
-      </template>
       <VentanillaTrdPicker
-        v-else
         :org-unit-id="responsibleOrgUnitId"
         :functional-type-key="functionalTypeKey"
+        :org-unit-role-label="trdOrgUnitRoleLabel"
+        :submit-attempted="submitAttempted"
         v-model:doc-document-type-id="docDocumentTypeId"
       />
 

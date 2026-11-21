@@ -60,7 +60,12 @@ const searchableMetadataFields = computed(
   () => catalog.value?.searchable_metadata_fields ?? [],
 )
 
-const canCreate = computed(() => hasPermission('ventanilla_crear'))
+const canCreate = computed(() =>
+  hasPermission('ventanilla_crear')
+  || hasPermission('ventanilla_crear_entrada')
+  || hasPermission('ventanilla_crear_salida')
+  || hasPermission('ventanilla_crear_interna'),
+)
 const canClassify = computed(() => hasPermission('ventanilla_clasificar'))
 const hasActiveFilters = computed(() =>
   search.value.trim()

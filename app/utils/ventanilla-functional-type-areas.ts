@@ -91,7 +91,7 @@ export function clearInvalidOrgUnitSelectionsForFunctionalType(
   let recipient = recipientOrgUnitId
 
   if (allowedIds !== null) {
-    if (producer != null && !allowedIds.has(producer)) {
+    if (filingType !== 'internal' && producer != null && !allowedIds.has(producer)) {
       producer = null
     }
 
