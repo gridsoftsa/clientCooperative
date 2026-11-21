@@ -14,6 +14,11 @@ export interface AuxiliaryChecklistItem {
   required: boolean
   /** Reused on later credit filings (credits-only master vault). */
   master?: boolean
+  /** TRD document type from the asociado’s configured table (GD linked). */
+  docDocumentTypeId?: number | null
+  /** UI cascade only; persisted type is `docDocumentTypeId`. */
+  docSeriesId?: number | null
+  docSubseriesId?: number | null
 }
 
 /** Opciones del catálogo `actividad-economica` (mismo `value` que las claves de `itemsByActivity` en parametrización). */

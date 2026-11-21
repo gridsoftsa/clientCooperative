@@ -38,12 +38,16 @@ function syncArchivalDropdownWidth(multiselectEl: HTMLElement): void {
   const triggerWidth = Math.max(
     multiselectEl.getBoundingClientRect().width,
     multiselectEl.offsetWidth,
-    280,
   )
+  const minWidth = Math.max(triggerWidth, 22 * 16)
 
-  dropdown.style.setProperty('min-width', `${triggerWidth}px`, 'important')
-  dropdown.style.setProperty('width', `${triggerWidth}px`, 'important')
+  dropdown.style.setProperty('min-width', `${minWidth}px`, 'important')
+  dropdown.style.setProperty('width', `${minWidth}px`, 'important')
   dropdown.style.setProperty('max-width', 'min(36rem, calc(100vw - 1.5rem))', 'important')
+  dropdown.style.setProperty('z-index', '20000', 'important')
+  dropdown.style.setProperty('overflow-x', 'hidden', 'important')
+  dropdown.style.setProperty('overflow-y', 'auto', 'important')
+  dropdown.style.setProperty('background', 'var(--popover, #fff)', 'important')
 }
 
 function scheduleArchivalDropdownSync(

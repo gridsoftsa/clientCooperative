@@ -18,6 +18,7 @@ const sectors = sectorsForParametrizacionRadicacion()
     page-description="Catálogos del formulario: solicitante (género, documento, vivienda, actividad, estado civil, ocupación, cargo, documentos auxiliares, asegurabilidad en revisión documental, documentos FNG cuando la solicitud tiene garantía FNG, estado de asegurabilidad cuando aplica), destino del crédito, aprobadores (niveles parametrizables), excepciones (motivos cuando la operación es excepción — director de crédito) y Análisis y Score (bancos, ING)."
     breadcrumb-label="Radicación"
     :show-categories-tab="false"
+    nav-placement="top"
     :sister-link="{ to: '/parametrizacion/plantillas', label: 'Plantillas' }"
     back-to="/parametrizacion/plantillas"
   />

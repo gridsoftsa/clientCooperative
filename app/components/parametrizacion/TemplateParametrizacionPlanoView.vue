@@ -22,6 +22,8 @@ const props = withDefaults(
     sisterLink?: { to: string, label: string } | null
     /** Destino del botón Volver si no hay historial de la app. */
     backTo?: string
+    /** Menú de plantillas: lateral (agro) o superior (catálogos de radicación). */
+    navPlacement?: 'side' | 'top'
     /** Permisos adicionales para guardar configuración plana (además de `plantillas_editar`). */
     configEditPermissions?: string[]
   }>(),
@@ -29,6 +31,7 @@ const props = withDefaults(
     showCategoriesTab: true,
     sisterLink: null,
     backTo: '/parametrizacion/plantillas',
+    navPlacement: 'side',
     configEditPermissions: () => [],
   },
 )
@@ -113,6 +116,33 @@ const templateLabels: Record<string, string> = {
 
 function getTemplateLabel(key: string): string {
   return templateLabels[key] ?? key
+}
+
+function getSectorIcon(sectorValue: string): string {
+  const icons: Record<string, string> = {
+    radicacion: 'i-lucide-user-round',
+    'radicacion-aprobadores': 'i-lucide-badge-check',
+    'radicacion-excepciones': 'i-lucide-circle-alert',
+    'radicacion-analisis-score': 'i-lucide-chart-column',
+  }
+  return icons[sectorValue] ?? 'i-lucide-folder'
+}
+
+const selectedSector = computed(() => {
+  return props.sectors.find(s =>
+    s.templates.some(t => t.value === selectedTemplateKey.value),
+  ) ?? props.sectors[0] ?? null
+})
+
+function selectSector(sectorValue: string) {
+  const sector = props.sectors.find(s => s.value === sectorValue)
+  if (!sector || sector.templates.length === 0) {
+    return
+  }
+  const staysInSector = sector.templates.some(t => t.value === selectedTemplateKey.value)
+  if (!staysInSector) {
+    selectedTemplateKey.value = sector.templates[0]!.value
+  }
 }
 
 function getProductLabel(key: string | null): string {
@@ -325,7 +355,10 @@ watch(deleteCategoryDialogOpen, (v) => {
 </script>
 
 <template>
-  <div class="mx-auto w-full max-w-6xl px-4 pb-10 pt-4 md:px-6">
+  <div
+    class="mx-auto w-full px-4 pb-10 pt-4 md:px-6"
+    :class="navPlacement === 'top' ? 'max-w-7xl' : 'max-w-6xl'"
+  >
     <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div class="space-y-1">
         <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -389,8 +422,60 @@ watch(deleteCategoryDialogOpen, (v) => {
             <Icon name="i-lucide-loader-2" class="h-10 w-10 animate-spin text-muted-foreground" />
           </div>
 
-          <div v-else class="flex flex-col gap-4 lg:flex-row lg:gap-6">
-            <nav class="shrink-0 lg:w-64 xl:w-72 lg:sticky lg:top-4 lg:self-start">
+          <div
+            v-else
+            :class="navPlacement === 'top'
+              ? 'flex flex-col gap-4'
+              : 'flex flex-col gap-4 lg:flex-row lg:gap-6'"
+          >
+            <nav
+              v-if="navPlacement === 'top'"
+              class="sticky top-2 z-10 rounded-xl border bg-card/95 shadow-sm backdrop-blur-sm"
+              aria-label="Catálogos de radicación"
+            >
+              <div class="flex flex-wrap gap-1 border-b bg-muted/40 px-2 py-1.5">
+                <button
+                  v-for="sector in sectors"
+                  :key="sector.value"
+                  type="button"
+                  class="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors"
+                  :class="selectedSector?.value === sector.value
+                    ? 'border-primary/40 bg-background font-medium text-foreground shadow-sm'
+                    : 'border-transparent text-muted-foreground hover:bg-background/70 hover:text-foreground'"
+                  @click="selectSector(sector.value)"
+                >
+                  <Icon :name="getSectorIcon(sector.value)" class="h-3.5 w-3.5 shrink-0" />
+                  <span>{{ sector.label }}</span>
+                  <span
+                    class="rounded-full px-1 py-px text-[10px] font-semibold tabular-nums"
+                    :class="selectedSector?.value === sector.value
+                      ? 'bg-primary/15 text-primary'
+                      : 'bg-muted text-muted-foreground'"
+                  >
+                    {{ sector.templates.length }}
+                  </span>
+                </button>
+              </div>
+              <div class="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-1 p-2">
+                <button
+                  v-for="t in (selectedSector?.templates ?? [])"
+                  :key="t.value"
+                  type="button"
+                  class="flex min-h-8 min-w-0 items-center justify-center rounded-md border px-2 py-1 text-center text-xs leading-snug transition-colors"
+                  :class="selectedTemplateKey === t.value
+                    ? 'border-primary bg-primary font-medium text-primary-foreground shadow-sm'
+                    : 'border-border bg-background text-foreground hover:border-primary/40 hover:bg-muted/60'"
+                  @click="selectedTemplateKey = t.value"
+                >
+                  <span class="text-pretty">{{ t.label }}</span>
+                </button>
+              </div>
+            </nav>
+
+            <nav
+              v-else
+              class="shrink-0 lg:w-64 xl:w-72 lg:sticky lg:top-4 lg:self-start"
+            >
               <div class="rounded-lg border bg-muted/30 p-2">
                 <p class="mb-2 px-2 text-xs font-medium text-muted-foreground">
                   Seleccionar plantilla
@@ -503,7 +588,7 @@ watch(deleteCategoryDialogOpen, (v) => {
                 </div>
               </template>
               <p v-else class="py-8 text-center text-sm text-muted-foreground">
-                Selecciona una plantilla en el panel
+                Selecciona un catálogo
               </p>
             </div>
           </div>

@@ -207,7 +207,7 @@ watch(() => props.producerAreas, () => {
         </div>
 
         <div v-else class="rounded-lg border bg-card">
-          <div class="overflow-x-auto">
+          <div class="overflow-visible">
             <div class="required-doc-table min-w-[42rem]">
               <div
                 class="required-doc-header-grid hidden border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground xl:grid"
