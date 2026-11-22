@@ -89,7 +89,7 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <div id="workflow-filing-close" class="space-y-4 border-t pt-4">
+  <div id="workflow-filing-close" class="space-y-4">
     <div>
       <p class="text-sm font-medium">
         Cerrar radicado — {{ stageName ?? 'Responder / cerrar' }}

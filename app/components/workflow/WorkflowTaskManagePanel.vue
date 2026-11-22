@@ -137,6 +137,20 @@ const showAdvanceButton = computed(() =>
   && !advanceGuidance.value
   && !needsFilingMetadata.value,
 )
+const showReturnAction = computed(() =>
+  canManage.value
+  && Boolean(stageRules.value?.allows_return)
+  && returnableStages.value.length > 0,
+)
+const showReassignAction = computed(() =>
+  canReassign.value && Boolean(stageRules.value?.allows_reassign),
+)
+const showMoreActionsTab = computed(() =>
+  showReturnAction.value || showReassignAction.value || canManage.value,
+)
+const showPrimaryStageAction = computed(() =>
+  showAdvanceButton.value || showFilingAssignment.value || canCloseFilingFromWorkflow.value,
+)
 
 watch(() => props.context?.filing?.id, () => {
   metadataValues.value = { ...(props.context?.filing?.metadata_values ?? {}) }
@@ -208,10 +222,6 @@ async function attachPendingFilesIfNeeded(): Promise<boolean> {
   }
 
   return attachmentsPanelRef.value.attachPendingFiles()
-}
-
-function scrollToFilingClose(): void {
-  document.getElementById('workflow-filing-close')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 function goToFilingGestion(): void {
@@ -367,199 +377,189 @@ async function saveFilingMetadata(): Promise<void> {
       <TabsTrigger v-if="showArchivalTab" value="archival" class="flex-1 sm:flex-none">
         Expediente
       </TabsTrigger>
+      <TabsTrigger v-if="showMoreActionsTab" value="more" class="flex-1 sm:flex-none">
+        Más acciones
+      </TabsTrigger>
       <TabsTrigger value="history" class="flex-1 sm:flex-none">
         Historial
       </TabsTrigger>
     </TabsList>
 
-    <TabsContent value="actions" class="mt-6 space-y-6">
-      <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div class="space-y-5">
-          <div v-if="task" class="space-y-1.5 rounded-lg border bg-muted/30 p-4 text-sm">
-            <p><span class="text-muted-foreground">Responsable:</span> {{ task.assignee?.name ?? 'Sin asignar' }}</p>
-            <p v-if="task.due_at">
-              <span class="text-muted-foreground">Vence:</span>
-              {{ new Date(task.due_at).toLocaleString('es-CO') }}
-            </p>
-            <p v-if="task.days_overdue" class="text-destructive">
-              {{ task.days_overdue }} días de retraso
-            </p>
-            <p v-if="context?.workflow?.name">
-              <span class="text-muted-foreground">Flujo:</span> {{ context.workflow.name }}
-            </p>
-          </div>
-
-          <div v-if="actionWarnings.length" class="space-y-2">
-            <Alert
-              v-for="warning in actionWarnings"
-              :key="warning.code"
-              variant="secondary"
-            >
-              <Icon name="i-lucide-triangle-alert" class="size-4" />
-              <AlertDescription>{{ warning.message }}</AlertDescription>
-            </Alert>
-          </div>
-
-          <div class="grid gap-2.5">
-            <Label>Nota (opcional)</Label>
-            <Textarea v-model="note" rows="3" placeholder="Motivo o comentario de la acción" />
-          </div>
-
-          <Alert v-if="showFilingAssignment" class="border-primary/40 bg-primary/5">
-            <Icon name="i-lucide-user-check" class="size-4" />
-            <AlertTitle>Etapa de asignación</AlertTitle>
-            <AlertDescription>
-              Complete la asignación del responsable al final de esta pantalla.
-              Esa acción cierra la etapa «{{ context?.open_task?.stage?.name ?? 'Asignación' }}» y avanza el flujo.
-            </AlertDescription>
-          </Alert>
-
-          <Alert v-if="advanceGuidance" class="border-primary/40 bg-primary/5">
-            <Icon name="i-lucide-info" class="size-4" />
-            <AlertTitle>Cerrar el radicado</AlertTitle>
-            <AlertDescription class="space-y-3">
-              <p>
-                {{ canCloseFilingFromWorkflow
-                  ? 'Esta etapa no usa «Avanzar etapa». Adjunte documentos si aplica y complete el cierre al final de esta pantalla.'
-                  : advanceGuidance }}
-              </p>
-              <Button
-                v-if="canCloseFilingFromWorkflow"
-                size="sm"
-                type="button"
-                variant="outline"
-                @click="scrollToFilingClose"
-              >
-                Ir al cierre
-              </Button>
-              <Button
-                v-else-if="hasPermission('ventanilla_ver') && context?.filing?.id"
-                size="sm"
-                type="button"
-                @click="goToFilingGestion"
-              >
-                Ir a Gestión del radicado
-              </Button>
-            </AlertDescription>
-          </Alert>
-
-          <Alert v-else-if="showInactiveTaskAlert" variant="secondary">
-            <Icon name="i-lucide-circle-check" class="size-4" />
-            <AlertTitle>Esta etapa ya se completó</AlertTitle>
-            <AlertDescription class="space-y-3">
-              <p v-if="context?.open_task?.stage?.name">
-                La etapa activa ahora es «{{ context.open_task.stage.name }}».
-              </p>
-              <p v-else>
-                Esta tarea ya no está abierta. El proceso puede haber avanzado o cerrado.
-              </p>
-              <Button
-                v-if="context?.open_task?.id"
-                size="sm"
-                type="button"
-                @click="goToCurrentOpenTask"
-              >
-                Ir a la etapa activa
-              </Button>
-            </AlertDescription>
-          </Alert>
-
-          <Alert v-else-if="needsFilingMetadata" class="border-primary/40 bg-primary/5">
-            <Icon name="i-lucide-tags" class="size-4" />
-            <AlertTitle>Metadatos pendientes</AlertTitle>
-            <AlertDescription class="space-y-3">
-              <p>
-                Complete los metadatos obligatorios en la pestaña Metadatos para poder avanzar esta etapa.
-              </p>
-              <Button size="sm" type="button" variant="outline" @click="activeTab = 'metadata'">
-                Ir a metadatos
-              </Button>
-            </AlertDescription>
-          </Alert>
-
-          <Alert v-if="myPendingCollaborationId" class="border-primary/40 bg-primary/5">
-            <Icon name="i-lucide-paperclip" class="size-4" />
-            <AlertTitle>Usted es colaborador de esta etapa</AlertTitle>
-            <AlertDescription class="space-y-3">
-              <p>
-                No gestione ni avance el radicado aquí. Debe ir a <strong>Colaboración</strong> para registrar su aporte.
-              </p>
-              <Button size="sm" type="button" @click="navigateTo(`/workflow/colaboracion/${myPendingCollaborationId}`)">
-                Adjuntar mi aporte
-              </Button>
-            </AlertDescription>
-          </Alert>
-
-          <Alert v-else-if="collaboratorsPending > 0" variant="destructive">
-            <Icon name="i-lucide-users" class="size-4" />
-            <AlertTitle>Colaboradores pendientes</AlertTitle>
-            <AlertDescription>
-              Hay {{ collaboratorsPending }} colaborador(es) sin respuesta. Revise la pestaña Colaboradores antes de avanzar.
-            </AlertDescription>
-          </Alert>
-
-          <Alert v-else-if="collaboratorsCompleted" class="border-primary/40 bg-primary/5">
-            <Icon name="i-lucide-circle-check" class="size-4" />
-            <AlertTitle>Colaboración completada</AlertTitle>
-            <AlertDescription class="space-y-3">
-              <p>
-                Lo solicitado a los colaboradores ya fue respondido. Revise los documentos en la pestaña Colaboradores
-                {{ canCloseFilingFromWorkflow || advanceGuidance ? ' y luego cierre el radicado.' : ' y avance la etapa.' }}
-              </p>
-              <Button size="sm" type="button" variant="outline" @click="activeTab = 'collaborators'">
-                Ver aportes
-              </Button>
-            </AlertDescription>
-          </Alert>
-        </div>
-
-        <div class="space-y-5">
-          <div v-if="canManage && stageRules?.allows_return && returnableStages.length" class="space-y-2.5 rounded-lg border bg-muted/20 p-4">
-            <Label>Devolver a etapa</Label>
-            <Select v-model="returnStageId">
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione etapa anterior" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="stage in returnableStages"
-                  :key="stage.id"
-                  :value="String(stage.id)"
-                >
-                  {{ stage.sort_order }}. {{ stage.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" class="h-10 w-full" :disabled="saving || !returnStageId" @click="returnTask">
-              Devolver
-            </Button>
-          </div>
-
-          <div v-if="canReassign && stageRules?.allows_reassign" class="space-y-2.5 rounded-lg border bg-muted/20 p-4">
-            <Label>Reasignar a</Label>
-            <ArchivalSingleMultiselect
-              v-model="reassignUserId"
-              coerce-number
-              :options="reassignUserOptions"
-              :disabled="saving"
-              placeholder="Buscar usuario"
-              no-options-text="Sin usuarios"
-              no-results-text="Sin coincidencias"
-            />
-            <Button variant="outline" class="h-10 w-full" :disabled="saving || !reassignUserId" @click="reassign">
-              Reasignar
-            </Button>
-          </div>
-
-          <div v-if="canManage" class="space-y-2.5 rounded-lg border bg-muted/20 p-4">
-            <Label>Comentario al historial</Label>
-            <Textarea v-model="comment" rows="3" placeholder="Agregar comentario al historial" />
-            <Button variant="secondary" class="h-10 w-full" :disabled="saving || !comment.trim()" @click="runCommentAction">
-              Registrar comentario
-            </Button>
-          </div>
-        </div>
+    <TabsContent value="actions" class="mt-6 space-y-5">
+      <div v-if="task" class="flex flex-wrap gap-x-6 gap-y-2 rounded-lg border bg-muted/30 px-4 py-3 text-sm">
+        <p><span class="text-muted-foreground">Responsable:</span> {{ task.assignee?.name ?? 'Sin asignar' }}</p>
+        <p v-if="task.due_at">
+          <span class="text-muted-foreground">Vence:</span>
+          {{ new Date(task.due_at).toLocaleString('es-CO') }}
+        </p>
+        <p v-if="task.days_overdue" class="text-destructive">
+          {{ task.days_overdue }} días de retraso
+        </p>
+        <p v-if="context?.workflow?.name">
+          <span class="text-muted-foreground">Flujo:</span> {{ context.workflow.name }}
+        </p>
       </div>
+
+      <div v-if="actionWarnings.length" class="space-y-2">
+        <Alert
+          v-for="warning in actionWarnings"
+          :key="warning.code"
+          variant="secondary"
+        >
+          <Icon name="i-lucide-triangle-alert" class="size-4" />
+          <AlertDescription>{{ warning.message }}</AlertDescription>
+        </Alert>
+      </div>
+
+      <Alert v-if="showFilingAssignment" class="border-primary/40 bg-primary/5">
+        <Icon name="i-lucide-user-check" class="size-4" />
+        <AlertTitle>Etapa de asignación</AlertTitle>
+        <AlertDescription>
+          Asignar al responsable es la acción de esta etapa: cierra «{{ context?.open_task?.stage?.name ?? 'Asignación' }}» y avanza el flujo.
+        </AlertDescription>
+      </Alert>
+
+      <Alert v-if="advanceGuidance && !canCloseFilingFromWorkflow" class="border-primary/40 bg-primary/5">
+        <Icon name="i-lucide-info" class="size-4" />
+        <AlertTitle>Cerrar el radicado</AlertTitle>
+        <AlertDescription class="space-y-3">
+          <p>{{ advanceGuidance }}</p>
+          <Button
+            v-if="hasPermission('ventanilla_ver') && context?.filing?.id"
+            size="sm"
+            type="button"
+            @click="goToFilingGestion"
+          >
+            Ir a Gestión del radicado
+          </Button>
+        </AlertDescription>
+      </Alert>
+
+      <Alert v-else-if="showInactiveTaskAlert" variant="secondary">
+        <Icon name="i-lucide-circle-check" class="size-4" />
+        <AlertTitle>Esta etapa ya se completó</AlertTitle>
+        <AlertDescription class="space-y-3">
+          <p v-if="context?.open_task?.stage?.name">
+            La etapa activa ahora es «{{ context.open_task.stage.name }}».
+          </p>
+          <p v-else>
+            Esta tarea ya no está abierta. El proceso puede haber avanzado o cerrado.
+          </p>
+          <Button
+            v-if="context?.open_task?.id"
+            size="sm"
+            type="button"
+            @click="goToCurrentOpenTask"
+          >
+            Ir a la etapa activa
+          </Button>
+        </AlertDescription>
+      </Alert>
+
+      <Alert v-else-if="needsFilingMetadata" class="border-primary/40 bg-primary/5">
+        <Icon name="i-lucide-tags" class="size-4" />
+        <AlertTitle>Metadatos pendientes</AlertTitle>
+        <AlertDescription class="space-y-3">
+          <p>
+            Complete los metadatos obligatorios en la pestaña Metadatos para poder avanzar esta etapa.
+          </p>
+          <Button size="sm" type="button" variant="outline" @click="activeTab = 'metadata'">
+            Ir a metadatos
+          </Button>
+        </AlertDescription>
+      </Alert>
+
+      <Alert v-if="myPendingCollaborationId" class="border-primary/40 bg-primary/5">
+        <Icon name="i-lucide-paperclip" class="size-4" />
+        <AlertTitle>Usted es colaborador de esta etapa</AlertTitle>
+        <AlertDescription class="space-y-3">
+          <p>
+            No gestione ni avance el radicado aquí. Debe ir a <strong>Colaboración</strong> para registrar su aporte.
+          </p>
+          <Button size="sm" type="button" @click="navigateTo(`/workflow/colaboracion/${myPendingCollaborationId}`)">
+            Adjuntar mi aporte
+          </Button>
+        </AlertDescription>
+      </Alert>
+
+      <Alert v-else-if="collaboratorsPending > 0" variant="destructive">
+        <Icon name="i-lucide-users" class="size-4" />
+        <AlertTitle>Colaboradores pendientes</AlertTitle>
+        <AlertDescription>
+          Hay {{ collaboratorsPending }} colaborador(es) sin respuesta. Revise la pestaña Colaboradores antes de avanzar.
+        </AlertDescription>
+      </Alert>
+
+      <Alert v-else-if="collaboratorsCompleted" class="border-primary/40 bg-primary/5">
+        <Icon name="i-lucide-circle-check" class="size-4" />
+        <AlertTitle>Colaboración completada</AlertTitle>
+        <AlertDescription class="space-y-3">
+          <p>
+            Lo solicitado a los colaboradores ya fue respondido. Revise los documentos en la pestaña Colaboradores
+            {{ canCloseFilingFromWorkflow || advanceGuidance ? ' y luego cierre el radicado.' : ' y avance la etapa.' }}
+          </p>
+          <Button size="sm" type="button" variant="outline" @click="activeTab = 'collaborators'">
+            Ver aportes
+          </Button>
+        </AlertDescription>
+      </Alert>
+
+      <section
+        v-if="showPrimaryStageAction"
+        class="space-y-4 rounded-xl border-2 border-primary/30 bg-primary/5 p-4 sm:p-5"
+      >
+        <div class="space-y-1">
+          <p class="text-base font-semibold tracking-tight">
+            Acción de esta etapa
+          </p>
+          <p class="text-sm text-muted-foreground">
+            <template v-if="showFilingAssignment">
+              Asigne el responsable para completar la etapa.
+            </template>
+            <template v-else-if="canCloseFilingFromWorkflow">
+              Cierre el radicado aquí. Si necesita documentos, adjúntelos debajo: se envían al confirmar.
+            </template>
+            <template v-else>
+              Esta es la acción principal. Devolver, reasignar o comentar están en Más acciones.
+            </template>
+          </p>
+        </div>
+
+        <WorkflowTaskFilingAssignPanel
+          v-if="showFilingAssignment && context?.filing"
+          :filing-id="context.filing.id"
+          :org-unit-id="context.filing.org_unit_responsible?.id"
+          :org-unit-name="context.filing.org_unit_responsible?.name"
+          :initial-assigned-user-id="context.filing.assigned_user?.id"
+          :stage-name="context.open_task?.stage?.name"
+          @assigned="refreshContext"
+        />
+
+        <WorkflowTaskFilingClosePanel
+          v-if="canCloseFilingFromWorkflow && context?.filing"
+          :filing-id="context.filing.id"
+          :requires-response="filingRequiresResponse"
+          :stage-name="context.open_task?.stage?.name"
+          :initial-copy-emails="context.filing.response_copy_emails ?? []"
+          :before-submit="attachPendingFilesIfNeeded"
+          @closed="onFilingClosed"
+        />
+
+        <template v-if="showAdvanceButton">
+          <div class="grid gap-2.5">
+            <Label>Nota al avanzar (opcional)</Label>
+            <Textarea v-model="note" rows="2" placeholder="Motivo o comentario de la acción" />
+          </div>
+          <Button
+            class="h-12 w-full text-base"
+            size="lg"
+            :disabled="saving || collaboratorsPending > 0"
+            @click="advance"
+          >
+            {{ saving ? 'Procesando…' : 'Avanzar etapa' }}
+          </Button>
+        </template>
+      </section>
 
       <WorkflowTaskFilingAttachmentsPanel
         v-if="canAttachFilingFiles && context?.filing?.id"
@@ -569,34 +569,68 @@ async function saveFilingMetadata(): Promise<void> {
         @attached="refreshContext"
       />
 
-      <Button
-        v-if="showAdvanceButton"
-        class="h-11 w-full"
-        :disabled="saving || collaboratorsPending > 0"
-        @click="advance"
-      >
-        {{ saving ? 'Procesando…' : 'Avanzar etapa' }}
-      </Button>
+      <p v-if="showMoreActionsTab" class="text-xs text-muted-foreground">
+        Para devolver a una etapa anterior, reasignar o dejar un comentario en el historial, use
+        <button type="button" class="font-medium text-foreground underline-offset-2 hover:underline" @click="activeTab = 'more'">
+          Más acciones
+        </button>.
+      </p>
+    </TabsContent>
 
-      <WorkflowTaskFilingAssignPanel
-        v-if="showFilingAssignment && context?.filing"
-        :filing-id="context.filing.id"
-        :org-unit-id="context.filing.org_unit_responsible?.id"
-        :org-unit-name="context.filing.org_unit_responsible?.name"
-        :initial-assigned-user-id="context.filing.assigned_user?.id"
-        :stage-name="context.open_task?.stage?.name"
-        @assigned="refreshContext"
-      />
+    <TabsContent v-if="showMoreActionsTab" value="more" class="mt-6 space-y-5">
+      <p class="text-sm text-muted-foreground">
+        Operaciones poco frecuentes. No sustituyen la acción de la etapa (avanzar, asignar o cerrar).
+      </p>
 
-      <WorkflowTaskFilingClosePanel
-        v-if="canCloseFilingFromWorkflow && context?.filing"
-        :filing-id="context.filing.id"
-        :requires-response="filingRequiresResponse"
-        :stage-name="context.open_task?.stage?.name"
-        :initial-copy-emails="context.filing.response_copy_emails ?? []"
-        :before-submit="attachPendingFilesIfNeeded"
-        @closed="onFilingClosed"
-      />
+      <div class="grid gap-2.5">
+        <Label>Nota (opcional)</Label>
+        <Textarea v-model="note" rows="2" placeholder="Motivo al devolver o reasignar" />
+      </div>
+
+      <div v-if="showReturnAction" class="space-y-2.5 rounded-lg border bg-muted/20 p-4">
+        <Label>Devolver a etapa</Label>
+        <Select v-model="returnStageId">
+          <SelectTrigger>
+            <SelectValue placeholder="Seleccione etapa anterior" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem
+              v-for="stage in returnableStages"
+              :key="stage.id"
+              :value="String(stage.id)"
+            >
+              {{ stage.sort_order }}. {{ stage.name }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <Button variant="outline" class="h-10 w-full" :disabled="saving || !returnStageId" @click="returnTask">
+          Devolver
+        </Button>
+      </div>
+
+      <div v-if="showReassignAction" class="space-y-2.5 rounded-lg border bg-muted/20 p-4">
+        <Label>Reasignar a</Label>
+        <ArchivalSingleMultiselect
+          v-model="reassignUserId"
+          coerce-number
+          :options="reassignUserOptions"
+          :disabled="saving"
+          placeholder="Buscar usuario"
+          no-options-text="Sin usuarios"
+          no-results-text="Sin coincidencias"
+        />
+        <Button variant="outline" class="h-10 w-full" :disabled="saving || !reassignUserId" @click="reassign">
+          Reasignar
+        </Button>
+      </div>
+
+      <div v-if="canManage" class="space-y-2.5 rounded-lg border bg-muted/20 p-4">
+        <Label>Comentario al historial</Label>
+        <Textarea v-model="comment" rows="3" placeholder="Agregar comentario al historial" />
+        <Button variant="secondary" class="h-10 w-full" :disabled="saving || !comment.trim()" @click="runCommentAction">
+          Registrar comentario
+        </Button>
+      </div>
     </TabsContent>
 
     <TabsContent v-if="showFilingTab && context?.filing" value="filing" class="mt-6">

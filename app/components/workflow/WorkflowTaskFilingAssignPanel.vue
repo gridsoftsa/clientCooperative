@@ -69,7 +69,7 @@ async function assignResponsible(): Promise<void> {
 </script>
 
 <template>
-  <div class="space-y-4 border-t pt-4">
+  <div class="space-y-4">
     <div>
       <p class="text-sm font-medium">
         Asignar responsable — {{ stageName ?? 'Asignación' }}
