@@ -50,7 +50,7 @@ const boxClass = computed(() => cn(
   'pointer-events-none flex size-4 shrink-0 items-center justify-center rounded-[4px] border shadow-xs transition-colors',
   boxFilled.value
     ? 'border-primary bg-primary text-primary-foreground'
-    : 'border-input bg-background',
+    : 'border-muted-foreground/70 bg-background',
   props.disabled && 'opacity-50',
   props.class,
 ))
@@ -88,7 +88,7 @@ function onChange(event: Event): void {
         :id="inputId"
         ref="inputRef"
         type="checkbox"
-        class="absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0"
+        class="absolute inset-0 z-10 m-0 h-full w-full cursor-pointer appearance-none opacity-0"
         :checked="isChecked"
         :disabled="disabled"
         @change="onChange"
@@ -113,7 +113,7 @@ function onChange(event: Event): void {
       :id="inputId"
       ref="inputRef"
       type="checkbox"
-      class="absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0"
+      class="absolute inset-0 z-10 m-0 h-full w-full cursor-pointer appearance-none opacity-0"
       :checked="isChecked"
       :disabled="disabled"
       @change="onChange"

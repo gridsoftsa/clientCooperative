@@ -427,14 +427,41 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
         </div>
       </TabsContent>
 
-      <TabsContent v-if="isResponded" value="aporte" class="mt-4 space-y-3">
-        <p v-if="collaboration.response_note" class="whitespace-pre-wrap text-sm">
-          {{ collaboration.response_note }}
-        </p>
-        <p v-if="!collaboration.files.length" class="text-sm text-muted-foreground">
-          No se adjuntó documento.
-        </p>
-        <ul v-if="collaboration.files.length" class="divide-y rounded-lg border">
+      <TabsContent v-if="isResponded" value="aporte" class="mt-4 space-y-4">
+        <section v-if="collaboration.request_note" class="space-y-1.5">
+          <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Solicitud
+          </p>
+          <div class="rounded-lg border bg-muted/25 px-3 py-2.5 text-sm">
+            <p class="whitespace-pre-wrap leading-relaxed">
+              {{ collaboration.request_note }}
+            </p>
+          </div>
+        </section>
+        <section class="space-y-1.5">
+          <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            Respuesta
+          </p>
+          <div class="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm">
+            <p
+              v-if="collaboration.response_note"
+              class="whitespace-pre-wrap leading-relaxed"
+            >
+              {{ collaboration.response_note }}
+            </p>
+            <p v-else class="italic text-muted-foreground">
+              Respondió sin nota.
+            </p>
+          </div>
+        </section>
+        <div
+          v-if="!collaboration.files.length"
+          class="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground"
+        >
+          <Icon name="i-lucide-file-x" class="size-4 shrink-0" />
+          <span>{{ requiresDocument ? 'No se adjuntó el documento solicitado.' : 'Documento opcional: no se adjuntó archivo.' }}</span>
+        </div>
+        <ul v-if="collaboration.files.length" class="divide-y overflow-hidden rounded-lg border">
           <li
             v-for="file in collaboration.files"
             :key="file.id"

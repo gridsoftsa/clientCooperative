@@ -190,6 +190,18 @@ function statusLabel(status: WorkflowTaskCollaboratorRow['status']): string {
   return status === 'responded' ? 'Respondió' : 'Pendiente'
 }
 
+function collaboratorDisplayName(row: WorkflowTaskCollaboratorRow): string {
+  return row.user?.name?.trim() || 'Usuario'
+}
+
+function collaboratorInitials(row: WorkflowTaskCollaboratorRow): string {
+  const name = collaboratorDisplayName(row)
+  const parts = name.split(/[\s@._-]+/).filter(Boolean)
+  const letters = parts.slice(0, 2).map(part => part[0]?.toUpperCase() ?? '').join('')
+
+  return letters || '?'
+}
+
 async function viewFile(row: WorkflowTaskCollaboratorRow, file: WorkflowTaskCollaboratorRow['files'][number]) {
   openingFileId.value = file.id
 
@@ -424,17 +436,23 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
     </div>
 
     <div v-else-if="collaborators.length" class="space-y-3">
-      <div
+      <article
         v-for="row in collaborators"
         :key="row.id"
-        class="rounded-lg border bg-card p-4 text-sm"
+        class="overflow-hidden rounded-xl border bg-card text-sm shadow-sm"
       >
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <p class="font-medium">
-              {{ row.user?.name ?? 'Usuario' }}
+        <div class="flex items-start gap-3 border-b bg-muted/30 px-4 py-3">
+          <div
+            class="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary"
+            aria-hidden="true"
+          >
+            {{ collaboratorInitials(row) }}
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="truncate font-medium leading-5">
+              {{ collaboratorDisplayName(row) }}
             </p>
-            <p v-if="row.org_unit || row.org_position" class="text-xs text-muted-foreground">
+            <p v-if="row.org_unit || row.org_position" class="mt-0.5 truncate text-xs text-muted-foreground">
               <span v-if="row.org_unit">{{ row.org_unit.name }}</span>
               <span v-if="row.org_position"> · {{ row.org_position.name }}</span>
             </p>
@@ -442,100 +460,143 @@ async function removeCollaborator(row: WorkflowTaskCollaboratorRow) {
               Invitado por {{ row.invited_by?.name ?? '—' }}
               <span v-if="row.task?.stage"> · {{ row.task.stage.name }}</span>
             </p>
-            <p v-if="row.reassignment_requested_at" class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-              Pidió cambio de encargado{{ row.reassignment_request_note ? `: ${row.reassignment_request_note}` : '.' }}
-              Reasigne o quite este colaborador y elija a la persona correcta.
-            </p>
-            <div
-              v-if="row.status === 'pending' && !readOnly"
-              class="mt-3 flex items-start gap-3 rounded-md border px-3 py-2"
-              :class="collaboratorRequiresDocument(row) ? 'border-primary/40 bg-primary/5' : ''"
-            >
-              <span class="mt-0.5 inline-flex shrink-0">
-                <Checkbox
-                  :id="`wf-collab-requires-document-${row.id}`"
-                  bare
-                  :disabled="saving"
-                  :model-value="collaboratorRequiresDocument(row)"
-                  @update:model-value="setCollaboratorRequiresDocument(row, $event === true)"
-                />
-              </span>
-              <Label
-                :for="`wf-collab-requires-document-${row.id}`"
-                class="min-w-0 flex-1 cursor-pointer font-normal"
-                @mousedown.prevent
-              >
-                <span class="block text-sm font-medium">Requiere documento</span>
-                <span class="block text-xs font-normal text-muted-foreground">
-                  {{ collaboratorRequiresDocument(row)
-                    ? 'Debe adjuntar un archivo al responder.'
-                    : 'Puede responder solo con una nota.' }}
-                </span>
-              </Label>
-            </div>
-            <p v-else class="mt-2 text-xs text-muted-foreground">
-              {{ collaboratorRequiresDocument(row) ? 'Requiere documento' : 'Documento opcional' }}
-            </p>
-            <p v-if="row.request_note" class="mt-2 whitespace-pre-wrap text-sm">
-              {{ row.request_note }}
-            </p>
           </div>
-          <Badge :variant="row.status === 'responded' ? 'secondary' : 'outline'">
+          <Badge
+            class="shrink-0"
+            :variant="row.status === 'responded' ? 'default' : 'outline'"
+          >
             {{ statusLabel(row.status) }}
           </Badge>
         </div>
 
-        <p v-if="row.response_note" class="mt-2 whitespace-pre-wrap text-muted-foreground">
-          {{ row.response_note }}
-        </p>
-
-        <p v-if="row.status === 'responded' && !row.files.length" class="mt-2 text-xs text-muted-foreground">
-          No se adjuntó documento.
-        </p>
-
-        <ul v-if="row.files.length" class="mt-3 divide-y rounded-lg border">
-          <li
-            v-for="file in row.files"
-            :key="file.id"
-            class="flex items-start justify-between gap-3 px-3 py-2"
+        <div class="space-y-3 p-4">
+          <p
+            v-if="row.reassignment_requested_at"
+            class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
           >
-            <div class="min-w-0">
-              <p class="font-medium">
-                {{ file.title }}
-              </p>
-              <p class="text-xs text-muted-foreground">
-                {{ file.original_name }}
-                <span v-if="file.folio_start && file.folio_end"> · folios {{ file.folio_start }}–{{ file.folio_end }}</span>
+            Pidió cambio de encargado{{ row.reassignment_request_note ? `: ${row.reassignment_request_note}` : '.' }}
+            Reasigne o quite este colaborador y elija a la persona correcta.
+          </p>
+
+          <div
+            v-if="row.status === 'pending' && !readOnly"
+            class="flex items-start gap-3 rounded-md border px-3 py-2"
+            :class="collaboratorRequiresDocument(row) ? 'border-primary/40 bg-primary/5' : ''"
+          >
+            <span class="mt-0.5 inline-flex shrink-0">
+              <Checkbox
+                :id="`wf-collab-requires-document-${row.id}`"
+                bare
+                :disabled="saving"
+                :model-value="collaboratorRequiresDocument(row)"
+                @update:model-value="setCollaboratorRequiresDocument(row, $event === true)"
+              />
+            </span>
+            <Label
+              :for="`wf-collab-requires-document-${row.id}`"
+              class="min-w-0 flex-1 cursor-pointer font-normal"
+              @mousedown.prevent
+            >
+              <span class="block text-sm font-medium">Requiere documento</span>
+              <span class="block text-xs font-normal text-muted-foreground">
+                {{ collaboratorRequiresDocument(row)
+                  ? 'Debe adjuntar un archivo al responder.'
+                  : 'Puede responder solo con una nota.' }}
+              </span>
+            </Label>
+          </div>
+
+          <section v-if="row.request_note" class="space-y-1.5">
+            <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Solicitud
+            </p>
+            <div class="rounded-lg border bg-muted/25 px-3 py-2.5">
+              <p class="whitespace-pre-wrap leading-relaxed">
+                {{ row.request_note }}
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              class="shrink-0"
-              :disabled="openingFileId === file.id"
-              @click="viewFile(row, file)"
-            >
-              <Icon
-                :name="openingFileId === file.id ? 'i-lucide-loader-2' : (fileCanPreview(file.original_name, file.mime_type) ? 'i-lucide-eye' : 'i-lucide-download')"
-                class="mr-1 size-4"
-                :class="{ 'animate-spin': openingFileId === file.id }"
-              />
-              {{ fileCanPreview(file.original_name, file.mime_type) ? 'Ver' : 'Descargar' }}
-            </Button>
-          </li>
-        </ul>
+          </section>
 
-        <Button
-          v-if="row.status === 'pending' && !readOnly"
-          variant="ghost"
-          size="sm"
-          class="mt-3 text-destructive hover:text-destructive"
-          :disabled="saving"
-          @click="removeCollaborator(row)"
-        >
-          Quitar
-        </Button>
-      </div>
+          <section v-if="row.status === 'responded'" class="space-y-1.5">
+            <p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Respuesta
+            </p>
+            <div
+              class="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5"
+            >
+              <p
+                v-if="row.response_note"
+                class="whitespace-pre-wrap leading-relaxed text-foreground"
+              >
+                {{ row.response_note }}
+              </p>
+              <p v-else class="text-sm italic text-muted-foreground">
+                Respondió sin nota.
+              </p>
+            </div>
+          </section>
+
+          <div
+            v-if="row.status === 'responded' && !row.files.length"
+            class="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground"
+          >
+            <Icon name="i-lucide-file-x" class="size-3.5 shrink-0" />
+            <span>{{ collaboratorRequiresDocument(row) ? 'No se adjuntó el documento solicitado.' : 'Documento opcional: no se adjuntó archivo.' }}</span>
+          </div>
+          <p
+            v-else-if="row.status !== 'responded' && readOnly"
+            class="text-xs text-muted-foreground"
+          >
+            {{ collaboratorRequiresDocument(row) ? 'Requiere documento' : 'Documento opcional' }}
+          </p>
+
+          <ul v-if="row.files.length" class="divide-y overflow-hidden rounded-lg border">
+            <li
+              v-for="file in row.files"
+              :key="file.id"
+              class="flex items-start justify-between gap-3 bg-background px-3 py-2"
+            >
+              <div class="flex min-w-0 items-start gap-2">
+                <Icon name="i-lucide-paperclip" class="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div class="min-w-0">
+                  <p class="font-medium">
+                    {{ file.title }}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {{ file.original_name }}
+                    <span v-if="file.folio_start && file.folio_end"> · folios {{ file.folio_start }}–{{ file.folio_end }}</span>
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                class="shrink-0"
+                :disabled="openingFileId === file.id"
+                @click="viewFile(row, file)"
+              >
+                <Icon
+                  :name="openingFileId === file.id ? 'i-lucide-loader-2' : (fileCanPreview(file.original_name, file.mime_type) ? 'i-lucide-eye' : 'i-lucide-download')"
+                  class="mr-1 size-4"
+                  :class="{ 'animate-spin': openingFileId === file.id }"
+                />
+                {{ fileCanPreview(file.original_name, file.mime_type) ? 'Ver' : 'Descargar' }}
+              </Button>
+            </li>
+          </ul>
+
+          <Button
+            v-if="row.status === 'pending' && !readOnly"
+            variant="ghost"
+            size="sm"
+            class="text-destructive hover:text-destructive"
+            :disabled="saving"
+            @click="removeCollaborator(row)"
+          >
+            Quitar
+          </Button>
+        </div>
+      </article>
     </div>
 
     <p v-else class="text-sm text-muted-foreground">

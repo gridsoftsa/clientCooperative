@@ -208,8 +208,7 @@ defineExpose({
       >
         <label
           v-if="field.data_type === 'boolean'"
-          :for="fieldId(field, idx)"
-          class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border bg-background px-3 py-2.5"
+          class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border bg-card px-3 py-2.5"
           :class="[
             metadataFieldErrorClass(field),
             disabled ? 'cursor-not-allowed opacity-60' : 'hover:bg-muted/40',
@@ -218,9 +217,9 @@ defineExpose({
           <Checkbox
             bare
             :id="fieldId(field, idx)"
-            :checked="booleanValue(field)"
+            :model-value="booleanValue(field)"
             :disabled="disabled"
-            @update:checked="updateField(field.code, $event === true)"
+            @update:model-value="updateField(field.code, $event === true)"
           />
           <span class="text-sm leading-snug">
             {{ field.name }}
