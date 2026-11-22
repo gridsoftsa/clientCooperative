@@ -32,7 +32,7 @@ const activeTab = ref('actions')
 const note = ref('')
 const comment = ref('')
 const returnStageId = ref<string>('')
-const reassignUserId = ref<string>('')
+const reassignUserId = ref<number | null>(null)
 const saving = ref(false)
 const attachmentsPanelRef = ref<InstanceType<typeof WorkflowTaskFilingAttachmentsPanel> | null>(null)
 const metadataFieldsRef = ref<{
@@ -53,6 +53,12 @@ const canAttachFilingFiles = computed(() =>
 )
 const canManage = computed(() => hasPermission('workflow_gestionar'))
 const canReassign = computed(() => hasPermission('workflow_reasignar'))
+const reassignUserOptions = computed(() =>
+  props.users.map(user => ({
+    value: user.id,
+    label: user.name,
+  })),
+)
 const canAssignFiling = computed(() => hasPermission('ventanilla_asignar'))
 const showFilingTab = computed(() => Boolean(props.context?.filing?.id))
 const collaboratorsPending = computed(() => props.context?.collaborators?.pending ?? 0)
@@ -141,7 +147,7 @@ watch(() => props.task.id, () => {
   note.value = ''
   comment.value = ''
   returnStageId.value = ''
-  reassignUserId.value = ''
+  reassignUserId.value = null
   activeTab.value = 'actions'
 })
 
@@ -287,12 +293,14 @@ function returnTask() {
 }
 
 function reassign() {
-  if (!reassignUserId.value) {
+  if (reassignUserId.value == null) {
     return
   }
 
+  const userId = reassignUserId.value
+
   runWorkflowAction(
-    () => workflowApi.reassignTask(props.task.id, Number(reassignUserId.value), note.value || undefined),
+    () => workflowApi.reassignTask(props.task.id, userId, note.value || undefined),
     'Tarea reasignada.',
   )
 }
@@ -529,16 +537,15 @@ async function saveFilingMetadata(): Promise<void> {
 
           <div v-if="canReassign && stageRules?.allows_reassign" class="space-y-2.5 rounded-lg border bg-muted/20 p-4">
             <Label>Reasignar a</Label>
-            <Select v-model="reassignUserId">
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccione usuario" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="user in users" :key="user.id" :value="String(user.id)">
-                  {{ user.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <ArchivalSingleMultiselect
+              v-model="reassignUserId"
+              coerce-number
+              :options="reassignUserOptions"
+              :disabled="saving"
+              placeholder="Buscar usuario"
+              no-options-text="Sin usuarios"
+              no-results-text="Sin coincidencias"
+            />
             <Button variant="outline" class="h-10 w-full" :disabled="saving || !reassignUserId" @click="reassign">
               Reasignar
             </Button>
@@ -597,21 +604,21 @@ async function saveFilingMetadata(): Promise<void> {
     </TabsContent>
 
     <TabsContent v-if="showFilingMetadataCapture && context?.filing" value="metadata" class="mt-6">
-      <div class="space-y-4">
+      <div class="space-y-5 rounded-lg border bg-card p-4 sm:p-5">
         <div class="space-y-1">
           <p class="text-sm font-medium">
             Metadatos del radicado
           </p>
-          <p class="text-muted-foreground text-sm">
+          <p class="text-sm text-muted-foreground">
             <template v-if="needsFilingMetadata">
-              Obligatorio en esta etapa de gestión. Debe completarlos para avanzar.
+              Completar estos datos es obligatorio para avanzar la etapa.
             </template>
             <template v-else-if="filingMetadataFieldCount > 0">
-              Metadatos archivísticos del radicado.
+              Datos archivísticos del tipo documental del radicado.
             </template>
             <template v-else>
               Este radicado no tiene esquema de metadatos archivísticos para el tipo funcional ni el tipo documental.
-              Los campos de un documento (por ejemplo «Prueba») se capturan en la pestaña Expediente al adjuntarlo.
+              Los campos de un documento se capturan en la pestaña Expediente al adjuntarlo.
             </template>
           </p>
         </div>
@@ -624,15 +631,16 @@ async function saveFilingMetadata(): Promise<void> {
           :functional-type-key="context.filing.functional_type_key"
           :submit-attempted="metadataSubmitAttempted"
         />
-        <Button
-          v-if="filingMetadataFieldCount > 0"
-          type="button"
-          class="h-10"
-          :disabled="savingMetadata"
-          @click="saveFilingMetadata"
-        >
-          {{ savingMetadata ? 'Guardando…' : 'Guardar metadatos' }}
-        </Button>
+        <div v-if="filingMetadataFieldCount > 0" class="flex justify-end">
+          <Button
+            type="button"
+            class="h-10"
+            :disabled="savingMetadata"
+            @click="saveFilingMetadata"
+          >
+            {{ savingMetadata ? 'Guardando…' : 'Guardar metadatos' }}
+          </Button>
+        </div>
       </div>
     </TabsContent>
 

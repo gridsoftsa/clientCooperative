@@ -25,6 +25,13 @@ const selectedUserId = ref<number | null>(null)
 const assignmentNote = ref('')
 const saving = ref(false)
 
+const responsibleUserOptions = computed(() =>
+  responsibleUsers.value.map(user => ({
+    value: user.id,
+    label: user.email ? `${user.name} · ${user.email}` : user.name,
+  })),
+)
+
 watch(
   () => [props.filingId, props.orgUnitId, props.initialAssignedUserId] as const,
   async ([, orgUnitId, initialAssignedUserId]) => {
@@ -76,24 +83,15 @@ async function assignResponsible(): Promise<void> {
     <div class="grid gap-4 md:grid-cols-2">
       <div class="space-y-2">
         <Label>Responsable del radicado *</Label>
-        <Select
-          :model-value="selectedUserId != null ? String(selectedUserId) : undefined"
+        <ArchivalSingleMultiselect
+          v-model="selectedUserId"
+          coerce-number
+          :options="responsibleUserOptions"
           :disabled="loadingResponsibleUsers || !responsibleUsers.length || saving"
-          @update:model-value="selectedUserId = $event ? Number($event) : null"
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Seleccione responsable" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem
-              v-for="user in responsibleUsers"
-              :key="user.id"
-              :value="String(user.id)"
-            >
-              {{ user.name }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
+          placeholder="Buscar responsable"
+          no-options-text="Sin usuarios en el área"
+          no-results-text="Sin coincidencias"
+        />
       </div>
 
       <div class="space-y-2">

@@ -812,7 +812,7 @@ function isNewField(index: number): boolean {
           {{
             (props.contentMetadata?.status === 'active')
               ? 'Activar cambios'
-              : 'Activar para usar al adjuntar'
+              : 'Activar para usar en radicados y al adjuntar'
           }}
         </Button>
       </div>

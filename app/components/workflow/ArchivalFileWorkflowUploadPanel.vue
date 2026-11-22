@@ -76,6 +76,10 @@ watch(() => props.archivalContext.id, () => load())
         <p v-if="archivalContext.stage_folder_name" class="text-xs text-muted-foreground">
           Carpeta de etapa: {{ archivalContext.stage_folder_name }}
         </p>
+        <p class="max-w-xl text-xs text-muted-foreground">
+          Aquí se adjuntan al expediente los archivos de esta etapa (concepto, soportes, respuesta).
+          El tipo documental ya quedó definido al radicar; no se cambia en la tarea.
+        </p>
       </div>
       <NuxtLink
         :to="`/expedientes/${archivalContext.id}`"
@@ -173,6 +177,7 @@ watch(() => props.archivalContext.id, () => load())
         :preset-node-id="archivalContext.archival_file_node_id"
         :preset-doc-type-id="archivalContext.default_doc_document_type_id"
         lock-folder
+        lock-doc-type
         @uploaded="onUploaded"
       />
 

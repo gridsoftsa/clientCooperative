@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { onDigitsOnlyInput } from '~/utils/digits-only-input'
-import { ventanillaInputErrorClass } from '~/utils/ventanilla-form-field-focus'
+import { ventanillaInputErrorClass, ventanillaMultiselectErrorClass } from '~/utils/ventanilla-form-field-focus'
 import type { ArchivalMetadataFieldRow } from '~/composables/useArchivalMetadataApi'
 
-const { formatPesosConSimbolo: formatCurrency, parsePesosInput: parseCurrency } = usePesosFormat()
+const { parsePesosInput: parseCurrency } = usePesosFormat()
 
 const props = defineProps<{
   docDocumentTypeId: number | null | undefined
@@ -83,19 +83,6 @@ function updateField(code: string, raw: unknown) {
   values.value = { ...values.value, [code]: raw }
 }
 
-function currencyDisplay(code: string): string {
-  const raw = values.value[code]
-  if (raw === null || raw === undefined || raw === '') {
-    return ''
-  }
-  const num = typeof raw === 'number' ? raw : parseCurrency(String(raw))
-  return num != null ? formatCurrency(num) : String(raw)
-}
-
-function updateCurrencyField(code: string, input: string | number) {
-  updateField(code, parseCurrency(String(input)) ?? input)
-}
-
 function updateDigitsField(code: string, input: string) {
   updateField(code, input.replace(/\D+/g, ''))
 }
@@ -115,6 +102,44 @@ function isRequiredFieldMissing(field: ArchivalMetadataFieldRow): boolean {
 
 function metadataFieldErrorClass(field: ArchivalMetadataFieldRow): string {
   return ventanillaInputErrorClass(Boolean(props.submitAttempted && isRequiredFieldMissing(field)))
+}
+
+function metadataMultiselectErrorClass(field: ArchivalMetadataFieldRow): string {
+  return ventanillaMultiselectErrorClass(Boolean(props.submitAttempted && isRequiredFieldMissing(field)))
+}
+
+function fieldCellClass(field: ArchivalMetadataFieldRow): string {
+  return field.data_type === 'textarea' ? 'space-y-1.5 md:col-span-2' : 'space-y-1.5'
+}
+
+function selectOptions(field: ArchivalMetadataFieldRow): Array<{ value: string, label: string }> {
+  return (field.options ?? []).map(option => ({
+    value: String(option.value),
+    label: option.label,
+  }))
+}
+
+function selectValue(field: ArchivalMetadataFieldRow): string | null {
+  const raw = values.value[field.code]
+
+  if (raw === null || raw === undefined || raw === '') {
+    return null
+  }
+
+  return String(raw)
+}
+
+function booleanValue(field: ArchivalMetadataFieldRow): boolean {
+  return Boolean(values.value[field.code])
+}
+
+function currencyValue(field: ArchivalMetadataFieldRow): number | null {
+  const raw = values.value[field.code]
+  if (typeof raw === 'number') {
+    return raw
+  }
+
+  return parseCurrency(String(raw ?? '')) ?? null
 }
 
 function findFirstMissingRequiredField(): {
@@ -168,108 +193,115 @@ defineExpose({
 </script>
 
 <template>
-  <div v-if="loading" class="text-muted-foreground py-1 text-xs">
+  <div v-if="loading" class="text-sm text-muted-foreground">
     Cargando metadatos…
   </div>
-  <div v-else-if="activeFields.length" class="space-y-3 rounded-lg border border-dashed border-primary/30 bg-muted/15 p-3">
-    <p class="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
-      Metadatos archivísticos
-      <span v-if="resolvedSchema" class="font-normal normal-case">({{ resolvedSchema.name }})</span>
+  <div v-else-if="activeFields.length" class="space-y-4">
+    <p v-if="resolvedSchema?.name" class="text-xs text-muted-foreground">
+      Esquema: {{ resolvedSchema.name }}
     </p>
-    <div
-      v-for="(field, idx) in activeFields"
-      :key="field.code"
-      class="space-y-1"
-    >
-      <Label :for="fieldId(field, idx)" class="text-xs">
-        {{ field.name }}
-        <span v-if="field.is_required" class="text-destructive">*</span>
-      </Label>
-      <Textarea
-        v-if="field.data_type === 'textarea'"
-        :id="fieldId(field, idx)"
-        :model-value="String(values[field.code] ?? '')"
-        :disabled="disabled"
-        rows="2"
-        :class="metadataFieldErrorClass(field)"
-        @update:model-value="updateField(field.code, $event)"
-      />
-      <Input
-        v-else-if="field.data_type === 'text' || field.data_type === 'number'"
-        :id="fieldId(field, idx)"
-        :type="field.data_type === 'number' ? 'number' : 'text'"
-        :model-value="values[field.code] != null ? String(values[field.code]) : ''"
-        :disabled="disabled"
-        :class="metadataFieldErrorClass(field)"
-        @update:model-value="updateField(field.code, field.data_type === 'number' ? Number($event) : $event)"
-      />
-      <Input
-        v-else-if="field.data_type === 'date'"
-        :id="fieldId(field, idx)"
-        type="date"
-        :model-value="String(values[field.code] ?? '')"
-        :disabled="disabled"
-        :class="metadataFieldErrorClass(field)"
-        @update:model-value="updateField(field.code, $event)"
-      />
-      <div v-else-if="field.data_type === 'boolean'" class="flex items-center gap-2">
-        <Checkbox
-          :id="fieldId(field, idx)"
-          :model-value="Boolean(values[field.code])"
-          :disabled="disabled"
-          @update:model-value="updateField(field.code, $event)"
-        />
-        <span class="text-muted-foreground text-xs">Sí</span>
-      </div>
-      <Input
-        v-else-if="field.data_type === 'email'"
-        :id="fieldId(field, idx)"
-        type="email"
-        :model-value="String(values[field.code] ?? '')"
-        :disabled="disabled"
-        placeholder="correo@ejemplo.com"
-        :class="metadataFieldErrorClass(field)"
-        @update:model-value="updateField(field.code, $event)"
-      />
-      <Input
-        v-else-if="field.data_type === 'currency'"
-        :id="fieldId(field, idx)"
-        inputmode="decimal"
-        :model-value="currencyDisplay(field.code)"
-        :disabled="disabled"
-        placeholder="$ 0"
-        :class="metadataFieldErrorClass(field)"
-        @update:model-value="updateCurrencyField(field.code, $event)"
-      />
-      <Input
-        v-else-if="field.data_type === 'nit' || field.data_type === 'identifier'"
-        :id="fieldId(field, idx)"
-        inputmode="numeric"
-        :model-value="String(values[field.code] ?? '')"
-        :disabled="disabled"
-        :placeholder="field.data_type === 'nit' ? 'Solo números (NIT)' : 'Solo números'"
-        :class="metadataFieldErrorClass(field)"
-        @input="onDigitsOnlyInput($event, v => updateDigitsField(field.code, v))"
-      />
-      <Select
-        v-else-if="field.data_type === 'select'"
-        :model-value="values[field.code] != null ? String(values[field.code]) : undefined"
-        :disabled="disabled"
-        @update:model-value="updateField(field.code, $event)"
+    <div class="grid gap-4 md:grid-cols-2">
+      <div
+        v-for="(field, idx) in activeFields"
+        :key="field.code"
+        :class="fieldCellClass(field)"
       >
-        <SelectTrigger :id="fieldId(field, idx)" :class="metadataFieldErrorClass(field)">
-          <SelectValue placeholder="Seleccione…" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem
-            v-for="opt in field.options ?? []"
-            :key="opt.value"
-            :value="opt.value"
-          >
-            {{ opt.label }}
-          </SelectItem>
-        </SelectContent>
-      </Select>
+        <label
+          v-if="field.data_type === 'boolean'"
+          :for="fieldId(field, idx)"
+          class="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border bg-background px-3 py-2.5"
+          :class="[
+            metadataFieldErrorClass(field),
+            disabled ? 'cursor-not-allowed opacity-60' : 'hover:bg-muted/40',
+          ]"
+        >
+          <Checkbox
+            bare
+            :id="fieldId(field, idx)"
+            :checked="booleanValue(field)"
+            :disabled="disabled"
+            @update:checked="updateField(field.code, $event === true)"
+          />
+          <span class="text-sm leading-snug">
+            {{ field.name }}
+            <span v-if="field.is_required" class="text-destructive">*</span>
+          </span>
+        </label>
+
+        <template v-else>
+          <Label :for="fieldId(field, idx)">
+            {{ field.name }}
+            <span v-if="field.is_required" class="text-destructive">*</span>
+          </Label>
+          <Textarea
+            v-if="field.data_type === 'textarea'"
+            :id="fieldId(field, idx)"
+            :model-value="String(values[field.code] ?? '')"
+            :disabled="disabled"
+            rows="3"
+            :class="metadataFieldErrorClass(field)"
+            @update:model-value="updateField(field.code, $event)"
+          />
+          <Input
+            v-else-if="field.data_type === 'text' || field.data_type === 'number'"
+            :id="fieldId(field, idx)"
+            :type="field.data_type === 'number' ? 'number' : 'text'"
+            :model-value="values[field.code] != null ? String(values[field.code]) : ''"
+            :disabled="disabled"
+            :class="metadataFieldErrorClass(field)"
+            @update:model-value="updateField(field.code, field.data_type === 'number' ? Number($event) : $event)"
+          />
+          <Input
+            v-else-if="field.data_type === 'date'"
+            :id="fieldId(field, idx)"
+            type="date"
+            :model-value="String(values[field.code] ?? '')"
+            :disabled="disabled"
+            :class="metadataFieldErrorClass(field)"
+            @update:model-value="updateField(field.code, $event)"
+          />
+          <Input
+            v-else-if="field.data_type === 'email'"
+            :id="fieldId(field, idx)"
+            type="email"
+            :model-value="String(values[field.code] ?? '')"
+            :disabled="disabled"
+            placeholder="correo@ejemplo.com"
+            :class="metadataFieldErrorClass(field)"
+            @update:model-value="updateField(field.code, $event)"
+          />
+          <CreditsBaseMoneyInput
+            v-else-if="field.data_type === 'currency'"
+            :input-id="fieldId(field, idx)"
+            :model-value="currencyValue(field)"
+            :disabled="disabled"
+            :invalid="Boolean(submitAttempted && isRequiredFieldMissing(field))"
+            @update:model-value="updateField(field.code, $event)"
+          />
+          <Input
+            v-else-if="field.data_type === 'nit' || field.data_type === 'identifier'"
+            :id="fieldId(field, idx)"
+            inputmode="numeric"
+            :model-value="String(values[field.code] ?? '')"
+            :disabled="disabled"
+            :placeholder="field.data_type === 'nit' ? 'Solo números (NIT)' : 'Solo números'"
+            :class="metadataFieldErrorClass(field)"
+            @input="onDigitsOnlyInput($event, v => updateDigitsField(field.code, v))"
+          />
+          <ArchivalSingleMultiselect
+            v-else-if="field.data_type === 'select'"
+            :id="fieldId(field, idx)"
+            :model-value="selectValue(field)"
+            :options="selectOptions(field)"
+            :disabled="disabled"
+            :class="metadataMultiselectErrorClass(field)"
+            placeholder="Buscar o seleccionar"
+            no-options-text="Sin opciones"
+            no-results-text="Sin coincidencias"
+            @update:model-value="updateField(field.code, $event ?? '')"
+          />
+        </template>
+      </div>
     </div>
   </div>
 </template>

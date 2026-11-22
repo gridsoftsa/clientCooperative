@@ -43,6 +43,8 @@ const props = defineProps<{
   presetNodeId?: number | null
   presetDocTypeId?: number | null
   lockFolder?: boolean
+  /** En tarea de workflow: el tipo documental es el del radicado, no se reclasifica. */
+  lockDocType?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -63,7 +65,7 @@ const selectedFile = ref<File | null>(null)
 const title = ref('')
 const folioStart = ref('')
 const folioEnd = ref('')
-const docDocumentTypeId = ref<number | null>(null)
+const docDocumentTypeId = ref<number | null>(props.presetDocTypeId ?? null)
 const archivalFileNodeId = ref<number | null>(null)
 const isMasterDocument = ref(false)
 const uploadSource = ref<ArchivalManualUploadSource>('manual')
@@ -161,6 +163,10 @@ const missingRequiredChoices = computed((): MissingRequiredUploadChoice[] => {
 })
 
 const showRequiredDocumentPicker = computed(() => missingRequiredChoices.value.length > 0 && !attachNonRequired.value)
+
+const lockDocumentType = computed(() =>
+  Boolean(props.lockDocType) && !showRequiredDocumentPicker.value,
+)
 
 const selectedRequiredChoice = computed(() =>
   missingRequiredChoices.value.find(choice => choice.docDocumentTypeId === docDocumentTypeId.value) ?? null,
@@ -658,11 +664,11 @@ onMounted(() => {
 
 <template>
   <form class="space-y-4" @submit.prevent="handleSubmit">
-    <div class="space-y-2">
+    <div v-if="!workflowTaskId" class="space-y-2">
       <Label for="archival_upload_source">Origen del documento</Label>
       <Select
         :model-value="uploadSource"
-        :disabled="uploading || !!workflowTaskId"
+        :disabled="uploading"
         @update:model-value="setUploadSource"
       >
         <SelectTrigger id="archival_upload_source">
@@ -741,7 +747,7 @@ onMounted(() => {
 
     <div v-else class="space-y-2">
       <div v-if="missingRequiredChoices.length" class="flex flex-wrap items-center justify-between gap-2">
-        <Label v-if="catalogTree.length === 0" for="archival_upload_doc_type">Tipo documental</Label>
+        <Label v-if="catalogTree.length === 0 && !lockDocumentType" for="archival_upload_doc_type">Tipo documental</Label>
         <Button
           type="button"
           variant="link"
@@ -752,8 +758,21 @@ onMounted(() => {
           Volver a obligatorios pendientes
         </Button>
       </div>
-      <Label v-else-if="catalogTree.length === 0" for="archival_upload_doc_type">Tipo documental</Label>
+      <Label v-else-if="catalogTree.length === 0 && !lockDocumentType" for="archival_upload_doc_type">Tipo documental</Label>
       <div
+        v-if="lockDocumentType"
+        class="space-y-1"
+      >
+        <Label>Tipo documental</Label>
+        <p class="rounded-md border bg-muted/30 px-3 py-2 text-sm">
+          {{ selectedDocTypeLabel || 'Tipo documental del radicado' }}
+        </p>
+        <p class="text-xs text-muted-foreground">
+          Queda fijado con la TRD del radicado. En la tarea solo se adjunta el archivo; no se reclasifica el expediente.
+        </p>
+      </div>
+      <div
+        v-else
         id="archival_upload_doc_type"
         class="space-y-2"
         :class="archivalMultiselectWarningClass(submitAttempted && !docDocumentTypeId, 'rounded-md')"
@@ -804,7 +823,7 @@ onMounted(() => {
     </div>
 
     <div v-if="folderOptions.length" class="space-y-2">
-      <Label for="archival_upload_folder">Carpeta (opcional)</Label>
+      <Label for="archival_upload_folder">{{ lockFolder ? 'Carpeta de la etapa' : 'Carpeta (opcional)' }}</Label>
       <Select
         :model-value="archivalFileNodeId != null ? String(archivalFileNodeId) : undefined"
         :disabled="uploading || lockFolder"
