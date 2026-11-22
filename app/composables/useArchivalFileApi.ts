@@ -258,6 +258,14 @@ export function useArchivalFileApi() {
     return res.data
   }
 
+  async function fetchAreaRepositoryOrgUnits() {
+    const res = await api<{ data: Array<{ id: number, name: string, code?: string | null }> }>(
+      '/archival-files/area/org-units',
+    )
+
+    return res.data ?? []
+  }
+
   async function fetchCreditDocumentExplorer(search?: string) {
     const query: Record<string, string> = {}
     const trimmed = search?.trim()
@@ -559,6 +567,7 @@ export function useArchivalFileApi() {
     deleteFileType,
     syncRequiredDocuments,
     fetchAreaRepository,
+    fetchAreaRepositoryOrgUnits,
     fetchCreditDocumentExplorer,
     fetchConsolidationMeta,
     fetchEvents,

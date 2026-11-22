@@ -31,6 +31,7 @@ const props = withDefaults(defineProps<{
   allowUpload?: boolean
   navTitle?: string
   emptyTreeMessage?: string
+  emptyIsRestricted?: boolean
   focusArchivalFileId?: number | null
   talentPartyId?: number | null
   contained?: boolean
@@ -39,6 +40,7 @@ const props = withDefaults(defineProps<{
   allowUpload: true,
   navTitle: 'Carpetas TRD',
   emptyTreeMessage: 'Seleccione un área para consultar su documentación.',
+  emptyIsRestricted: false,
   focusArchivalFileId: null,
   talentPartyId: null,
   contained: false,
@@ -371,8 +373,20 @@ function formatBytes(size?: number): string {
       Cargando repositorio...
     </div>
 
-    <div v-else-if="!tree" class="flex min-h-[28rem] items-center justify-center text-sm text-muted-foreground">
-      {{ emptyTreeMessage }}
+    <div
+      v-else-if="!tree"
+      class="flex min-h-[28rem] flex-col items-center justify-center gap-3 px-8 text-center"
+    >
+      <Icon
+        :name="emptyIsRestricted ? 'i-lucide-lock' : 'i-lucide-folder-search'"
+        class="size-8 text-muted-foreground"
+      />
+      <p
+        class="max-w-lg text-sm"
+        :class="emptyIsRestricted ? 'text-foreground' : 'text-muted-foreground'"
+      >
+        {{ emptyTreeMessage }}
+      </p>
     </div>
 
     <div

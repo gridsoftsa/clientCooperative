@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import type { ArchivalFileTreeNode, ArchivalPhaseTarget } from '~/types/archival-file'
 import { ARCHIVAL_PHASE_TARGET_LABELS } from '~/types/archival-file'
 import { filterArchivalAreaTreeToFoldersWithDocuments } from '~/utils/archival-area-repository'
+import { messageFromFetchError } from '~/utils/http-error-message'
 
 definePageMeta({
   layout: 'default',
@@ -12,12 +13,12 @@ definePageMeta({
 
 const route = useRoute()
 const archivalApi = useArchivalFileApi()
-const { $api } = useNuxtApp()
-const api = $api as <T>(url: string, options?: Record<string, unknown>) => Promise<T>
 const orgUnits = ref<Array<{ id: number, name: string }>>([])
 const orgUnitId = ref<number | null>(null)
 const loading = ref(false)
 const tree = ref<ArchivalFileTreeNode | null>(null)
+const repositoryError = ref('')
+const accessDenied = ref(false)
 const showAllTrdFolders = ref(true)
 const archive = ref<Extract<ArchivalPhaseTarget, 'management' | 'central' | 'historical'>>('management')
 
@@ -33,6 +34,18 @@ const orgUnitSelectOptions = computed(() =>
     label: unit.name,
   })),
 )
+
+const emptyTreeMessage = computed(() => {
+  if (repositoryError.value) {
+    return repositoryError.value
+  }
+
+  if (orgUnits.value.length === 0) {
+    return 'No hay áreas asignadas para consultar el repositorio. La TRD de otras áreas está restringida a su personal.'
+  }
+
+  return 'Seleccione un área para consultar su documentación.'
+})
 
 const displayTree = computed(() => {
   if (!tree.value) {
@@ -54,10 +67,26 @@ const focusArchivalFileId = computed(() => {
   return Number.isFinite(value) && value > 0 ? value : null
 })
 
+function fetchErrorStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') {
+    return null
+  }
+
+  const e = error as Record<string, unknown>
+  if (typeof e.statusCode === 'number') {
+    return e.statusCode
+  }
+
+  if (typeof e.status === 'number') {
+    return e.status
+  }
+
+  return null
+}
+
 async function loadOrgUnits() {
   try {
-    const res = await api<{ data: Array<{ id: number, name: string }> }>('/organizational-structure/org-units')
-    orgUnits.value = res.data ?? []
+    orgUnits.value = await archivalApi.fetchAreaRepositoryOrgUnits()
   }
   catch {
     orgUnits.value = []
@@ -67,17 +96,29 @@ async function loadOrgUnits() {
 async function loadRepository() {
   if (selectedOrgUnitNumericId.value == null) {
     tree.value = null
+    repositoryError.value = ''
+    accessDenied.value = false
     return
   }
 
   loading.value = true
+  repositoryError.value = ''
+  accessDenied.value = false
 
   try {
     tree.value = await archivalApi.fetchAreaRepository(selectedOrgUnitNumericId.value, archive.value)
   }
-  catch {
-    toast.error('No se pudo cargar el repositorio del área.')
+  catch (error) {
     tree.value = null
+    const status = fetchErrorStatus(error)
+    accessDenied.value = status === 403
+    repositoryError.value = messageFromFetchError(
+      error,
+      accessDenied.value
+        ? 'No tiene permiso para consultar el repositorio de otra área. La TRD y el archivo de gestión están restringidos al área a la que pertenece.'
+        : 'No se pudo cargar el repositorio del área.',
+    )
+    toast.error(repositoryError.value)
   }
   finally {
     loading.value = false
@@ -97,9 +138,14 @@ watch(orgUnitId, () => {
 
 onMounted(async () => {
   await loadOrgUnits()
-  const fromQuery = Number(useRoute().query.org_unit_id)
-  if (Number.isFinite(fromQuery) && orgUnits.value.some(unit => unit.id === fromQuery)) {
+  const fromQuery = Number(route.query.org_unit_id)
+  if (Number.isFinite(fromQuery) && fromQuery > 0) {
     orgUnitId.value = fromQuery
+    return
+  }
+
+  if (orgUnits.value.length === 1) {
+    orgUnitId.value = orgUnits.value[0].id
   }
 })
 </script>
@@ -132,8 +178,8 @@ onMounted(async () => {
               coerce-number
               :options="orgUnitSelectOptions"
               placeholder="Buscar y seleccionar un área…"
-              no-options-text="No hay áreas"
-              no-results-text="Sin coincidencias"
+              no-options-text="No hay áreas asignadas"
+              no-results-text="Sin coincidencias. Solo aparecen las áreas a las que tiene acceso."
             />
           </div>
           <div class="flex flex-col justify-end gap-2">
@@ -191,8 +237,10 @@ onMounted(async () => {
           :tree="displayTree"
           :org-unit-id="selectedOrgUnitNumericId ?? 0"
           :loading="loading"
-          :allow-upload="archive === 'management'"
+          :allow-upload="archive === 'management' && !accessDenied"
           :focus-archival-file-id="focusArchivalFileId"
+          :empty-tree-message="emptyTreeMessage"
+          :empty-is-restricted="accessDenied"
           contained
           @uploaded="loadRepository"
         />
