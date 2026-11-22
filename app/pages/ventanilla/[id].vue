@@ -703,7 +703,12 @@ async function viewSticker() {
             <CardHeader class="pb-3">
               <CardTitle>Resumen</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent class="space-y-4">
+              <VentanillaOfficialResponse
+                v-if="filing.response_text"
+                :response-text="filing.response_text"
+                :closed-at="filing.closed_at"
+              />
               <dl class="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
             <div class="sm:col-span-2">
               <dt class="text-muted-foreground text-xs">
@@ -834,14 +839,6 @@ async function viewSticker() {
               </dt>
               <dd class="mt-1 font-medium whitespace-pre-wrap">
                 {{ filing.notes }}
-              </dd>
-            </div>
-            <div v-if="filing.response_text" class="sm:col-span-2">
-              <dt class="text-muted-foreground text-xs">
-                Respuesta
-              </dt>
-              <dd class="mt-1 font-medium whitespace-pre-wrap">
-                {{ filing.response_text }}
               </dd>
             </div>
             <div v-if="responseCopyRows.length" class="sm:col-span-2">

@@ -55,6 +55,8 @@ const filterMetadataFieldCode = ref('none')
 const filterMetadataValue = ref('')
 const pagination = ref({ current_page: 1, last_page: 1, per_page: DEFAULT_LIST_PAGE_SIZE, total: 0 })
 const exportingMetadata = ref(false)
+const responseDialogOpen = ref(false)
+const responseDialogFiling = ref<VentanillaFilingSummary | null>(null)
 let dateFilterDebounce: ReturnType<typeof setTimeout> | null = null
 
 const searchableMetadataFields = computed(
@@ -318,6 +320,15 @@ function trafficLightLabel(status: string): string {
 
 function statusLabel(status: string): string {
   return VENTANILLA_FILING_STATUS_LABELS[status as keyof typeof VENTANILLA_FILING_STATUS_LABELS] ?? status
+}
+
+function hasOfficialResponse(row: VentanillaFilingSummary): boolean {
+  return row.status === 'closed' && Boolean(row.response_text?.trim())
+}
+
+function openResponseDialog(row: VentanillaFilingSummary): void {
+  responseDialogFiling.value = row
+  responseDialogOpen.value = true
 }
 </script>
 
@@ -704,9 +715,19 @@ function statusLabel(status: string): string {
                 <span v-else class="text-muted-foreground text-xs">—</span>
               </TableCell>
               <TableCell>
-                <Button variant="ghost" size="sm" @click.stop="router.push(`/ventanilla/${row.id}`)">
-                  Ver
-                </Button>
+                <div class="flex flex-wrap items-center justify-end gap-1" @click.stop>
+                  <Button
+                    v-if="hasOfficialResponse(row)"
+                    variant="outline"
+                    size="sm"
+                    @click="openResponseDialog(row)"
+                  >
+                    Ver respuesta
+                  </Button>
+                  <Button variant="ghost" size="sm" @click="router.push(`/ventanilla/${row.id}`)">
+                    Ver
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           </TableBody>
@@ -728,5 +749,35 @@ function statusLabel(status: string): string {
         />
       </CardContent>
     </Card>
+
+    <Dialog v-model:open="responseDialogOpen">
+      <DialogContent class="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Respuesta del radicado</DialogTitle>
+          <DialogDescription>
+            {{ responseDialogFiling?.filing_number }}
+            <template v-if="responseDialogFiling?.subject">
+              · {{ responseDialogFiling.subject }}
+            </template>
+          </DialogDescription>
+        </DialogHeader>
+        <VentanillaOfficialResponse
+          v-if="responseDialogFiling?.response_text"
+          :response-text="responseDialogFiling.response_text"
+          :closed-at="responseDialogFiling.closed_at"
+        />
+        <DialogFooter>
+          <Button variant="outline" @click="responseDialogOpen = false">
+            Cerrar
+          </Button>
+          <Button
+            v-if="responseDialogFiling"
+            @click="router.push(`/ventanilla/${responseDialogFiling.id}`)"
+          >
+            Abrir radicado
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

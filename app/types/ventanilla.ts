@@ -341,6 +341,8 @@ export interface VentanillaFilingSummary {
   subject: string
   filed_at: string
   requires_response: boolean
+  response_text?: string | null
+  closed_at?: string | null
   response_deadline_at: string | null
   sla_business_days: number | null
   sla_elapsed_business_days: number | null
