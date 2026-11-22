@@ -193,8 +193,12 @@ export function useOrgStructureApi() {
     return await res.blob()
   }
 
+  async function fetchDelegationReceiptBlob(delegationId: number): Promise<Blob> {
+    return fetchAuthenticatedBlob(delegationReceiptUrl(delegationId))
+  }
+
   async function viewDelegationReceiptInNewTab(delegationId: number): Promise<void> {
-    const blob = await fetchAuthenticatedBlob(delegationReceiptUrl(delegationId))
+    const blob = await fetchDelegationReceiptBlob(delegationId)
     openBlobInNewTab(blob, 'application/pdf')
   }
 
@@ -205,6 +209,7 @@ export function useOrgStructureApi() {
     fetchStaff,
     fetchInstitutionalProcesses,
     delegationReceiptUrl,
+    fetchDelegationReceiptBlob,
     viewDelegationReceiptInNewTab,
   }
 }

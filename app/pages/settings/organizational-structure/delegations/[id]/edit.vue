@@ -13,10 +13,10 @@ const route = useRoute()
 const id = computed(() => Number(route.params.id))
 const autoOpenReceipt = computed(() => route.query.receipt === '1')
 const { $api } = useNuxtApp()
-const orgApi = useOrgStructureApi()
 
 const loading = ref(true)
 const openingReceipt = ref(false)
+const receiptPanel = ref<{ viewReceipt: () => Promise<void> } | null>(null)
 const delegation = ref<OrgDelegationDetail | null>(null)
 const form = ref({
   starts_on: '',
@@ -33,7 +33,7 @@ async function viewReceipt() {
   }
   openingReceipt.value = true
   try {
-    await orgApi.viewDelegationReceiptInNewTab(id.value)
+    await receiptPanel.value?.viewReceipt()
   }
   catch (e: unknown) {
     const err = e as { message?: string }
@@ -126,6 +126,7 @@ onMounted(() => {
       </div>
 
       <OrgStructureDelegationReceiptPanel
+        ref="receiptPanel"
         :delegation-id="id"
         :delegation="delegation"
         :auto-open="autoOpenReceipt"

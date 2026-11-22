@@ -108,13 +108,13 @@ const filteredStaff = computed(() => {
   )
 })
 
-/** Un solo funcionario (o ninguno): no hay Backup interno posible. */
+/** Solo si el área completa tiene un funcionario no hay Backup interno. El filtro de cargo no obliga a otra área. */
 const mustUseOtherAreas = computed(() => {
   if (selectedOrgUnitId.value == null || loadingStaff.value) {
     return false
   }
 
-  return filteredStaff.value.length <= 1
+  return staffInUnit.value.length <= 1
 })
 
 const usingOtherAreas = computed(() => mustUseOtherAreas.value || loadOtherAreas.value)
@@ -127,7 +127,7 @@ const assignorSelectOptions = computed(() =>
 )
 
 const sameAreaDelegateOptions = computed(() =>
-  filteredStaff.value
+  staffInUnit.value
     .filter(staff => staff.id !== form.value.assignor_staff_id)
     .map(staff => ({
       value: staff.id,
@@ -411,13 +411,10 @@ async function handleSubmit() {
       },
     })
     toast.success('Backup creado')
-    try {
-      await orgApi.viewDelegationReceiptInNewTab(res.data.id)
-    }
-    catch {
-      toast.error('Backup guardado, pero no se pudo abrir el comprobante PDF')
-    }
-    await router.push(`/settings/organizational-structure/delegations/${res.data.id}/edit`)
+    await router.push({
+      path: `/settings/organizational-structure/delegations/${res.data.id}/edit`,
+      query: { receipt: '1' },
+    })
   }
   catch (e: unknown) {
     const err = e as { data?: { message?: string } }
@@ -438,8 +435,8 @@ async function handleSubmit() {
             Nuevo Backup
           </h2>
           <p class="text-sm text-muted-foreground leading-relaxed">
-            Elija el área y, si lo desea, limite por cargo; luego seleccione titular y Backup.
-            Si el área tiene un solo cargo o funcionario, el Backup se elige de otra área.
+            Elija el área y, si lo desea, filtre el titular por cargo. El Backup puede ser
+            otro funcionario de la misma área (aunque tenga otro cargo) o de un área distinta.
           </p>
         </div>
         <Button
@@ -459,7 +456,7 @@ async function handleSubmit() {
               Contexto organizacional
             </CardTitle>
             <CardDescription class="leading-relaxed">
-              Área obligatoria; el filtro por cargo reduce la lista de funcionarios y muestra cuántos hay por cargo.
+              Área obligatoria. El cargo solo acota quién aparece como titular; el Backup se elige entre el resto del área o, si lo marca, de otra área.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -557,7 +554,7 @@ async function handleSubmit() {
                   ¿Desea cargar otras áreas y funcionarios?
                 </Checkbox>
                 <p class="mt-2 text-sm text-muted-foreground leading-relaxed">
-                  Marque esta opción si el Backup no pertenece al área del titular.
+                  Por defecto el Backup es alguien de esta misma área. Márquela solo si debe ser de otra área.
                 </p>
               </div>
 
@@ -565,7 +562,7 @@ async function handleSubmit() {
                 v-if="selectedOrgUnitId != null && !loadingStaff && mustUseOtherAreas"
                 class="text-sm text-muted-foreground leading-relaxed rounded-lg border border-dashed p-3 md:col-span-2"
               >
-                Este área (o filtro de cargo) tiene un solo funcionario. Seleccione otra área para el Backup.
+                Este área tiene un solo funcionario vigente. El Backup debe elegirse de otra área.
               </p>
 
               <div v-if="usingOtherAreas" id="del_delegate_unit" class="space-y-2 md:col-span-2 md:max-w-xl">
@@ -590,6 +587,12 @@ async function handleSubmit() {
 
               <div id="del_delegate" class="space-y-2 md:col-span-2 md:max-w-xl">
                 <Label for="del_delegate_ms">Backup *</Label>
+                <p
+                  v-if="!usingOtherAreas && selectedOrgUnitId != null && sameAreaDelegateOptions.length > 0"
+                  class="text-xs text-muted-foreground"
+                >
+                  Puede elegir a cualquier otro funcionario vigente de esta área, no hace falta el mismo cargo.
+                </p>
                 <p v-if="selectedOrgUnitId == null" class="text-sm text-muted-foreground py-1">
                   Seleccione un área primero.
                 </p>

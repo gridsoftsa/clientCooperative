@@ -330,10 +330,33 @@ function openResponseDialog(row: VentanillaFilingSummary): void {
   responseDialogFiling.value = row
   responseDialogOpen.value = true
 }
+
+function formatListDate(value?: string | null): string {
+  if (!value) {
+    return '—'
+  }
+
+  return new Date(value).toLocaleDateString('es-CO', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  })
+}
+
+function formatListTime(value?: string | null): string {
+  if (!value) {
+    return ''
+  }
+
+  return new Date(value).toLocaleTimeString('es-CO', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
 </script>
 
 <template>
-  <div class="space-y-6 p-4 md:p-6">
+  <div class="min-w-0 space-y-6 p-4 md:p-6">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold tracking-tight">
@@ -367,9 +390,9 @@ function openResponseDialog(row: VentanillaFilingSummary): void {
       </div>
     </div>
 
-    <Card>
+    <Card class="min-w-0 overflow-hidden">
       <CardHeader class="pb-3">
-        <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 xl:flex-row xl:flex-nowrap xl:items-end">
+        <div class="flex flex-col gap-3 rounded-lg border bg-muted/30 p-4 xl:flex-row xl:flex-wrap xl:items-end">
           <div class="min-w-0 space-y-1 xl:flex-1">
             <Label for="ventanilla-filter-search" class="text-xs text-muted-foreground">
               Buscar
@@ -634,24 +657,35 @@ function openResponseDialog(row: VentanillaFilingSummary): void {
           {{ errorMessage }}
         </p>
       </CardHeader>
-      <CardContent>
+      <CardContent class="min-w-0 overflow-hidden">
         <div v-if="loading" class="py-8 text-center text-muted-foreground text-sm">
           Cargando…
         </div>
-        <Table v-else-if="filings.length">
+        <div v-else-if="filings.length" class="min-w-0 overflow-x-hidden">
+        <Table class="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead>Número</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Tipo funcional</TableHead>
-              <TableHead>Asunto</TableHead>
-              <TableHead>Área responsable</TableHead>
-              <TableHead>Fecha</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead class="min-w-[9.5rem]">SLA radicado</TableHead>
-              <TableHead>Etapa workflow</TableHead>
-              <TableHead>SLA etapa</TableHead>
-              <TableHead />
+              <TableHead class="w-[8.5rem]">
+                Radicado
+              </TableHead>
+              <TableHead>
+                Asunto
+              </TableHead>
+              <TableHead class="w-[12rem]">
+                Área
+              </TableHead>
+              <TableHead class="w-[7.5rem]">
+                Estado
+              </TableHead>
+              <TableHead class="w-[8.5rem]">
+                SLA
+              </TableHead>
+              <TableHead class="w-[9.5rem]">
+                Workflow
+              </TableHead>
+              <TableHead class="w-[5.75rem] text-right">
+                <span class="sr-only">Acciones</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -662,30 +696,46 @@ function openResponseDialog(row: VentanillaFilingSummary): void {
               :class="ventanillaFilingRowClass(row.status, row.traffic_light_status, row.requires_response)"
               @click="router.push(`/ventanilla/${row.id}`)"
             >
-              <TableCell class="font-mono text-xs">
-                {{ row.filing_number }}
+              <TableCell class="align-top whitespace-normal">
+                <div class="min-w-0 space-y-1">
+                  <p class="truncate font-mono text-xs font-medium">
+                    {{ row.filing_number }}
+                  </p>
+                  <p class="text-xs text-muted-foreground">
+                    {{ VENTANILLA_FILING_TYPE_LABELS[row.filing_type] }}
+                  </p>
+                </div>
               </TableCell>
-              <TableCell>
-                {{ VENTANILLA_FILING_TYPE_LABELS[row.filing_type] }}
+              <TableCell class="align-top whitespace-normal">
+                <div class="min-w-0 space-y-1">
+                  <p class="truncate text-xs text-muted-foreground">
+                    {{ functionalLabel(row) }}
+                  </p>
+                  <p class="truncate font-medium" :title="row.subject">
+                    {{ row.subject }}
+                  </p>
+                </div>
               </TableCell>
-              <TableCell>
-                {{ functionalLabel(row) }}
+              <TableCell class="align-top whitespace-normal">
+                <p
+                  class="truncate text-xs text-muted-foreground"
+                  :title="`${row.org_unit_responsible?.code ?? ''} — ${row.org_unit_responsible?.name ?? ''}`"
+                >
+                  {{ row.org_unit_responsible?.code }} — {{ row.org_unit_responsible?.name }}
+                </p>
               </TableCell>
-              <TableCell class="max-w-[240px] truncate">
-                {{ row.subject }}
+              <TableCell class="align-top whitespace-normal">
+                <div class="space-y-1">
+                  <Badge :variant="ventanillaFilingStatusBadgeVariant(row.status)">
+                    {{ statusLabel(row.status) }}
+                  </Badge>
+                  <p class="text-xs leading-tight text-muted-foreground">
+                    {{ formatListDate(row.filed_at) }}
+                    <span class="block">{{ formatListTime(row.filed_at) }}</span>
+                  </p>
+                </div>
               </TableCell>
-              <TableCell class="max-w-[180px] truncate text-xs text-muted-foreground">
-                {{ row.org_unit_responsible?.code }} — {{ row.org_unit_responsible?.name }}
-              </TableCell>
-              <TableCell class="text-xs text-muted-foreground">
-                {{ row.filed_at ? new Date(row.filed_at).toLocaleString('es-CO') : '—' }}
-              </TableCell>
-              <TableCell>
-                <Badge :variant="ventanillaFilingStatusBadgeVariant(row.status)">
-                  {{ statusLabel(row.status) }}
-                </Badge>
-              </TableCell>
-              <TableCell class="min-w-[9.5rem] py-3 align-middle">
+              <TableCell class="align-middle whitespace-normal py-3">
                 <span v-if="row.status === 'voided'" class="text-xs text-muted-foreground">
                   SLA anulado
                 </span>
@@ -701,37 +751,50 @@ function openResponseDialog(row: VentanillaFilingSummary): void {
                   :requires-response="row.requires_response"
                 />
               </TableCell>
-              <TableCell class="max-w-[140px] truncate text-xs">
-                {{ workflowStageLabel(row) }}
+              <TableCell class="align-top whitespace-normal">
+                <div class="min-w-0 space-y-1">
+                  <p class="truncate text-xs" :title="workflowStageLabel(row)">
+                    {{ workflowStageLabel(row) }}
+                  </p>
+                  <span v-if="row.status === 'voided'" class="text-xs text-muted-foreground">
+                    —
+                  </span>
+                  <VentanillaTrafficLightBadge
+                    v-else-if="row.workflow?.open_task?.traffic_light_status"
+                    :status="row.workflow.open_task.traffic_light_status"
+                  />
+                  <span v-else class="text-muted-foreground text-xs">—</span>
+                </div>
               </TableCell>
-              <TableCell>
-                <span v-if="row.status === 'voided'" class="text-xs text-muted-foreground">
-                  —
-                </span>
-                <VentanillaTrafficLightBadge
-                  v-else-if="row.workflow?.open_task?.traffic_light_status"
-                  :status="row.workflow.open_task.traffic_light_status"
-                />
-                <span v-else class="text-muted-foreground text-xs">—</span>
-              </TableCell>
-              <TableCell>
-                <div class="flex flex-wrap items-center justify-end gap-1" @click.stop>
+              <TableCell class="whitespace-normal text-right">
+                <div class="flex items-center justify-end gap-0.5" @click.stop>
                   <Button
                     v-if="hasOfficialResponse(row)"
                     variant="outline"
-                    size="sm"
+                    size="icon"
+                    class="size-8"
+                    title="Ver respuesta"
                     @click="openResponseDialog(row)"
                   >
-                    Ver respuesta
+                    <Icon name="i-lucide-message-square-reply" class="size-4" />
+                    <span class="sr-only">Ver respuesta</span>
                   </Button>
-                  <Button variant="ghost" size="sm" @click="router.push(`/ventanilla/${row.id}`)">
-                    Ver
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="size-8"
+                    title="Ver radicado"
+                    @click="router.push(`/ventanilla/${row.id}`)"
+                  >
+                    <Icon name="i-lucide-eye" class="size-4" />
+                    <span class="sr-only">Ver</span>
                   </Button>
                 </div>
               </TableCell>
             </TableRow>
           </TableBody>
         </Table>
+        </div>
         <p v-else class="py-8 text-center text-muted-foreground text-sm">
           No hay radicados registrados.
         </p>

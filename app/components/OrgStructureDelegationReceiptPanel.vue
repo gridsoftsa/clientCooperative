@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { OrgDelegationDetail } from '~/types/org-structure'
+import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
 const props = defineProps<{
   delegationId: number
@@ -11,6 +12,13 @@ const orgApi = useOrgStructureApi()
 const openingReceipt = ref(false)
 const errorMessage = ref('')
 const didAutoOpen = ref(false)
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
 
 function staffName(staff: OrgDelegationDetail['assignor_staff']): string {
   if (!staff) {
@@ -57,13 +65,21 @@ async function viewReceipt() {
   openingReceipt.value = true
   errorMessage.value = ''
   try {
-    await orgApi.viewDelegationReceiptInNewTab(props.delegationId)
+    const blob = await orgApi.fetchDelegationReceiptBlob(props.delegationId)
+    const receiptName = props.delegation?.receipt_number
+      ? `${props.delegation.receipt_number}.pdf`
+      : `comprobante-backup-${props.delegationId}.pdf`
+    presentBlob(blob, receiptName, 'application/pdf')
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : 'No se pudo abrir el comprobante'
   } finally {
     openingReceipt.value = false
   }
 }
+
+defineExpose({
+  viewReceipt,
+})
 
 watch(
   () => [props.autoOpen, props.delegationId, props.delegation] as const,
@@ -175,5 +191,12 @@ watch(
         {{ errorMessage }}
       </p>
     </CardContent>
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :loading="openingReceipt && !inlinePreviewUrl"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </Card>
 </template>
