@@ -103,7 +103,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-3xl space-y-6">
+  <div class="mx-auto max-w-4xl space-y-6">
     <div>
       <PageBackButton :to="backTo">
         Volver al flujo

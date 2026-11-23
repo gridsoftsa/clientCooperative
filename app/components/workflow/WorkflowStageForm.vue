@@ -29,8 +29,11 @@ const emit = defineEmits<{
   saved: []
 }>()
 
+type StageConfigTab = 'general' | 'assignee' | 'ventanilla' | 'transition'
+
 const workflowApi = useWorkflowApi()
 const saving = ref(false)
+const activeTab = ref<StageConfigTab>('general')
 const isEdit = computed(() => !!props.stage?.id)
 const suggestedStageKey = computed(() => suggestWorkflowStageKey(form.name))
 
@@ -204,28 +207,30 @@ function buildPayload(): WorkflowStagePayload {
   return payload
 }
 
-async function save() {
+function failValidation(tab: StageConfigTab, message: string): boolean {
+  activeTab.value = tab
+  toast.error(message)
+
+  return false
+}
+
+function validateForm(): boolean {
   if (props.locked) {
-    toast.error('El flujo está en uso y no se puede modificar.')
-    return
+    return failValidation('general', 'El flujo está en uso y no se puede modificar.')
   }
 
   if (!form.name.trim()) {
-    toast.error('Indique el nombre de la etapa.')
-    return
+    return failValidation('general', 'Indique el nombre de la etapa.')
   }
 
   if (form.assignee_type === 'specific_user' && !form.assignee_user_id) {
-    toast.error('Seleccione el usuario responsable.')
-    return
+    return failValidation('assignee', 'Seleccione el usuario responsable.')
   }
   if (form.assignee_type === 'org_unit' && !form.assignee_org_unit_id) {
-    toast.error('Seleccione el área responsable.')
-    return
+    return failValidation('assignee', 'Seleccione el área responsable.')
   }
   if (form.assignee_type === 'position' && !form.assignee_position_id) {
-    toast.error('Seleccione el cargo responsable.')
-    return
+    return failValidation('assignee', 'Seleccione el cargo responsable.')
   }
 
   const sla = typeof form.sla_business_days === 'number' && form.sla_business_days >= 1
@@ -233,14 +238,20 @@ async function save() {
     : null
 
   if (slaMode.value === 'limited' && sla != null && sla > (props.maxSlaDays ?? 0)) {
-    toast.error(`Esta etapa puede usar hasta ${props.maxSlaDays ?? 0} días del SLA del tipo funcional.`)
-    return
+    return failValidation('general', `Esta etapa puede usar hasta ${props.maxSlaDays ?? 0} días del SLA del tipo funcional.`)
   }
 
   if (slaMode.value !== 'limited' && sla != null) {
-    toast.error(slaMode.value === 'none'
+    return failValidation('general', slaMode.value === 'none'
       ? 'Este tipo funcional no tiene SLA. Deje el campo vacío.'
       : 'Asocie un tipo funcional antes de indicar días de SLA.')
+  }
+
+  return true
+}
+
+async function save() {
+  if (!validateForm()) {
     return
   }
 
@@ -275,216 +286,241 @@ async function save() {
     <CardHeader>
       <CardTitle>{{ isEdit ? 'Editar etapa' : 'Nueva etapa' }}</CardTitle>
       <CardDescription>
-        Configure nombre, orden, responsable, SLA y reglas de transición.
+        Use las pestañas para configurar la etapa. Guardar aplica todos los datos, no solo la pestaña activa.
       </CardDescription>
     </CardHeader>
-    <CardContent class="grid gap-5">
-      <div v-if="!isEdit" class="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-        La <span class="font-medium text-foreground">clave técnica</span> se asignará al crear
-        (ej.
-        <span class="font-mono text-xs">{{ suggestedStageKey || 'asignar_responsable' }}</span>).
-        No se puede cambiar después.
-      </div>
+    <CardContent>
+      <Tabs v-model="activeTab" class="gap-4">
+        <TabsList class="flex h-auto w-full flex-wrap">
+          <TabsTrigger value="general" class="flex-1">
+            General
+          </TabsTrigger>
+          <TabsTrigger value="assignee" class="flex-1">
+            Responsable
+          </TabsTrigger>
+          <TabsTrigger value="ventanilla" class="flex-1">
+            Ventanilla
+          </TabsTrigger>
+          <TabsTrigger value="transition" class="flex-1">
+            Transición
+          </TabsTrigger>
+        </TabsList>
 
-      <div class="grid gap-2">
-        <Label for="stage-name">Nombre</Label>
-        <Input id="stage-name" v-model="form.name" placeholder="Asignar responsable" :disabled="locked" />
-      </div>
+        <TabsContent value="general" class="grid gap-5">
+          <div v-if="!isEdit" class="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+            La <span class="font-medium text-foreground">clave técnica</span> se asignará al crear
+            (ej.
+            <span class="font-mono text-xs">{{ suggestedStageKey || 'asignar_responsable' }}</span>).
+            No se puede cambiar después.
+          </div>
 
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div class="grid gap-2">
-          <Label for="stage-order">Orden</Label>
-          <Input
-            id="stage-order"
-            v-model.number="form.sort_order"
-            type="number"
-            min="1"
-            :disabled="locked"
-          />
-        </div>
-        <div class="grid gap-2">
-          <Label>Tipo de etapa</Label>
-          <Select v-model="form.stage_type" :disabled="locked">
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem
-                v-for="opt in WORKFLOW_STAGE_TYPE_OPTIONS"
-                :key="opt.value"
-                :value="opt.value"
-              >
-                {{ opt.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+          <div class="grid gap-2">
+            <Label for="stage-name">Nombre</Label>
+            <Input id="stage-name" v-model="form.name" placeholder="Asignar responsable" :disabled="locked" />
+          </div>
 
-      <div class="grid gap-2">
-        <Label>Responsable</Label>
-        <p v-if="isManagementRole" class="text-xs text-muted-foreground">
-          Este responsable aplica únicamente a esta etapa de gestión.
-        </p>
-        <Select v-model="form.assignee_type" :disabled="locked">
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem
-              v-for="opt in WORKFLOW_ASSIGNEE_TYPE_OPTIONS"
-              :key="opt.value"
-              :value="opt.value"
-            >
-              {{ opt.label }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="grid gap-2">
+              <Label for="stage-order">Orden</Label>
+              <Input
+                id="stage-order"
+                v-model.number="form.sort_order"
+                type="number"
+                min="1"
+                :disabled="locked"
+              />
+            </div>
+            <div class="grid gap-2">
+              <Label>Tipo de etapa</Label>
+              <Select v-model="form.stage_type" :disabled="locked">
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="opt in WORKFLOW_STAGE_TYPE_OPTIONS"
+                    :key="opt.value"
+                    :value="opt.value"
+                  >
+                    {{ opt.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-      <div v-if="form.assignee_type === 'specific_user'" class="grid gap-2">
-        <Label>Usuario</Label>
-        <ArchivalSingleMultiselect
-          v-model="form.assignee_user_id"
-          coerce-number
-          :options="userOptions"
-          :disabled="locked"
-          placeholder="Buscar usuario"
-          no-options-text="No hay usuarios asignables"
-          no-results-text="Sin coincidencias"
-        />
-        <p v-if="userOptions.length === 0" class="text-xs text-muted-foreground">
-          No hay usuarios con permiso de workflow para asignar.
-        </p>
-      </div>
+          <div class="grid gap-2">
+            <Label for="stage-sla">SLA (días hábiles de esta etapa)</Label>
+            <Input
+              id="stage-sla"
+              v-model.number="form.sla_business_days"
+              type="number"
+              min="1"
+              :max="slaMode === 'limited' ? (maxSlaDays ?? 1) : undefined"
+              placeholder="Vacío si esta etapa no consume días"
+              :disabled="slaInputDisabled"
+            />
+            <p class="text-xs text-muted-foreground">
+              {{ slaHelper }}
+            </p>
+          </div>
+        </TabsContent>
 
-      <div v-if="form.assignee_type === 'org_unit'" class="grid gap-2">
-        <Label>Área</Label>
-        <ArchivalSingleMultiselect
-          v-model="form.assignee_org_unit_id"
-          coerce-number
-          :options="orgUnitOptions"
-          :disabled="locked"
-          placeholder="Buscar área"
-          no-options-text="No hay áreas"
-          no-results-text="Sin coincidencias"
-        />
-      </div>
+        <TabsContent value="assignee" class="grid gap-5">
+          <div class="grid gap-2">
+            <Label>Responsable</Label>
+            <p v-if="isManagementRole" class="text-xs text-muted-foreground">
+              Este responsable aplica únicamente a esta etapa de gestión.
+            </p>
+            <Select v-model="form.assignee_type" :disabled="locked">
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="opt in WORKFLOW_ASSIGNEE_TYPE_OPTIONS"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-      <div v-if="form.assignee_type === 'position'" class="grid gap-2">
-        <Label>Cargo</Label>
-        <ArchivalSingleMultiselect
-          v-model="form.assignee_position_id"
-          coerce-number
-          :options="positionOptions"
-          :disabled="locked"
-          placeholder="Buscar cargo"
-          no-options-text="No hay cargos"
-          no-results-text="Sin coincidencias"
-        />
-      </div>
+          <div v-if="form.assignee_type === 'specific_user'" class="grid gap-2">
+            <Label>Usuario</Label>
+            <ArchivalSingleMultiselect
+              v-model="form.assignee_user_id"
+              coerce-number
+              :options="userOptions"
+              :disabled="locked"
+              placeholder="Buscar usuario"
+              no-options-text="No hay usuarios asignables"
+              no-results-text="Sin coincidencias"
+            />
+            <p v-if="userOptions.length === 0" class="text-xs text-muted-foreground">
+              No hay usuarios con permiso de workflow para asignar.
+            </p>
+          </div>
 
-      <div class="grid gap-2">
-        <Label>Integración con ventanilla</Label>
-        <Select v-model="form.ventanilla_role" :disabled="locked">
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem
-              v-for="opt in WORKFLOW_VENTANILLA_ROLE_OPTIONS"
-              :key="opt.value"
-              :value="opt.value"
-            >
-              {{ opt.label }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <p class="text-xs text-muted-foreground">
-          Vincula esta etapa con acciones del radicado (asignar, iniciar gestión, cerrar).
-          Puede haber varias etapas de gestión. Asignación y cierre siguen siendo una sola etapa por flujo.
-        </p>
-      </div>
+          <div v-if="form.assignee_type === 'org_unit'" class="grid gap-2">
+            <Label>Área</Label>
+            <ArchivalSingleMultiselect
+              v-model="form.assignee_org_unit_id"
+              coerce-number
+              :options="orgUnitOptions"
+              :disabled="locked"
+              placeholder="Buscar área"
+              no-options-text="No hay áreas"
+              no-results-text="Sin coincidencias"
+            />
+          </div>
 
-      <div v-if="isManagementRole" class="space-y-3 rounded-lg border p-4">
-        <p class="text-sm font-medium">
-          Parámetros de esta etapa de gestión
-        </p>
-        <p class="text-xs text-muted-foreground">
-          El responsable, los metadatos y los colaboradores se configuran solo para esta etapa.
-        </p>
-        <label class="flex items-center gap-2 text-sm">
-          <Checkbox v-model="form.captures_metadata" :disabled="locked" />
-          Capturar metadatos en esta etapa
-        </label>
-        <div v-if="form.captures_metadata" class="grid gap-2">
-          <Label>Esquema de metadatos</Label>
-          <Select v-model="form.metadata_schema_choice" :disabled="locked">
-            <SelectTrigger>
-              <SelectValue placeholder="Esquema del radicado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="filing">
-                Esquema del radicado
-              </SelectItem>
-              <SelectItem
-                v-for="schema in metadataSchemas"
-                :key="schema.id"
-                :value="String(schema.id)"
-              >
-                {{ schema.name }} · v{{ schema.version_number }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <p class="text-xs text-muted-foreground">
-            «Esquema del radicado» usa el tipo documental o el tipo funcional. Un esquema propio guarda los valores solo en esta etapa.
-          </p>
-        </div>
-        <label class="flex items-center gap-2 text-sm">
-          <Checkbox v-model="form.allows_collaborators" :disabled="locked" />
-          Permitir colaboradores en esta etapa
-        </label>
-      </div>
+          <div v-if="form.assignee_type === 'position'" class="grid gap-2">
+            <Label>Cargo</Label>
+            <ArchivalSingleMultiselect
+              v-model="form.assignee_position_id"
+              coerce-number
+              :options="positionOptions"
+              :disabled="locked"
+              placeholder="Buscar cargo"
+              no-options-text="No hay cargos"
+              no-results-text="Sin coincidencias"
+            />
+          </div>
+        </TabsContent>
 
-      <div class="grid gap-2">
-        <Label for="stage-sla">SLA (días hábiles de esta etapa)</Label>
-        <Input
-          id="stage-sla"
-          v-model.number="form.sla_business_days"
-          type="number"
-          min="1"
-          :max="slaMode === 'limited' ? (maxSlaDays ?? 1) : undefined"
-          placeholder="Vacío si esta etapa no consume días"
-          :disabled="slaInputDisabled"
-        />
-        <p class="text-xs text-muted-foreground">
-          {{ slaHelper }}
-        </p>
-      </div>
+        <TabsContent value="ventanilla" class="grid gap-5">
+          <div class="grid gap-2">
+            <Label>Integración con ventanilla</Label>
+            <Select v-model="form.ventanilla_role" :disabled="locked">
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="opt in WORKFLOW_VENTANILLA_ROLE_OPTIONS"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p class="text-xs text-muted-foreground">
+              Vincula esta etapa con acciones del radicado (asignar, iniciar gestión, cerrar).
+              Puede haber varias etapas de gestión. Asignación y cierre siguen siendo una sola etapa por flujo.
+            </p>
+          </div>
 
-      <div class="space-y-3 rounded-lg border p-4">
-        <p class="text-sm font-medium">
-          Reglas de transición
-        </p>
-        <div class="flex flex-wrap gap-4">
-          <label class="flex items-center gap-2 text-sm">
-            <Checkbox v-model="form.allows_advance" :disabled="locked" />
-            Permitir avanzar
-          </label>
-          <label class="flex items-center gap-2 text-sm">
-            <Checkbox v-model="form.allows_return" :disabled="locked" />
-            Permitir devolver
-          </label>
-          <label class="flex items-center gap-2 text-sm">
-            <Checkbox v-model="form.allows_reassign" :disabled="locked" />
-            Permitir reasignar
-          </label>
-          <label class="flex items-center gap-2 text-sm">
-            <Checkbox v-model="form.is_terminal" :disabled="locked" />
-            Etapa de cierre
-          </label>
-        </div>
-      </div>
+          <div v-if="isManagementRole" class="space-y-3 rounded-lg border p-4">
+            <p class="text-sm font-medium">
+              Parámetros de esta etapa de gestión
+            </p>
+            <p class="text-xs text-muted-foreground">
+              El responsable, los metadatos y los colaboradores se configuran solo para esta etapa.
+            </p>
+            <label class="flex items-center gap-2 text-sm">
+              <Checkbox v-model="form.captures_metadata" :disabled="locked" />
+              Capturar metadatos en esta etapa
+            </label>
+            <div v-if="form.captures_metadata" class="grid gap-2">
+              <Label>Esquema de metadatos</Label>
+              <Select v-model="form.metadata_schema_choice" :disabled="locked">
+                <SelectTrigger>
+                  <SelectValue placeholder="Esquema del radicado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="filing">
+                    Esquema del radicado
+                  </SelectItem>
+                  <SelectItem
+                    v-for="schema in metadataSchemas"
+                    :key="schema.id"
+                    :value="String(schema.id)"
+                  >
+                    {{ schema.name }} · v{{ schema.version_number }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="text-xs text-muted-foreground">
+                «Esquema del radicado» usa el tipo documental o el tipo funcional. Un esquema propio guarda los valores solo en esta etapa.
+              </p>
+            </div>
+            <label class="flex items-center gap-2 text-sm">
+              <Checkbox v-model="form.allows_collaborators" :disabled="locked" />
+              Permitir colaboradores en esta etapa
+            </label>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="transition">
+          <div class="space-y-3 rounded-lg border p-4">
+            <p class="text-sm font-medium">
+              Reglas de transición
+            </p>
+            <div class="flex flex-wrap gap-4">
+              <label class="flex items-center gap-2 text-sm">
+                <Checkbox v-model="form.allows_advance" :disabled="locked" />
+                Permitir avanzar
+              </label>
+              <label class="flex items-center gap-2 text-sm">
+                <Checkbox v-model="form.allows_return" :disabled="locked" />
+                Permitir devolver
+              </label>
+              <label class="flex items-center gap-2 text-sm">
+                <Checkbox v-model="form.allows_reassign" :disabled="locked" />
+                Permitir reasignar
+              </label>
+              <label class="flex items-center gap-2 text-sm">
+                <Checkbox v-model="form.is_terminal" :disabled="locked" />
+                Etapa de cierre
+              </label>
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </CardContent>
     <CardFooter class="justify-end gap-2">
       <Button variant="outline" @click="emit('cancel')">
