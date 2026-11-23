@@ -122,6 +122,7 @@ export interface OrgDelegationDetail {
   starts_on: string
   ends_on: string
   reason?: string | null
+  deactivation_reason?: string | null
   is_active: boolean
   assignor_staff?: {
     first_name?: string | null

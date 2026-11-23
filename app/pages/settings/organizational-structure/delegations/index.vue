@@ -27,6 +27,8 @@ const rows = ref<DelegationRow[]>([])
 const loading = ref(true)
 const openingReceiptId = ref<number | null>(null)
 const deactivatingId = ref<number | null>(null)
+const deactivateDialogOpen = ref(false)
+const pendingDeactivateId = ref<number | null>(null)
 const pagination = ref({
   current_page: 1,
   last_page: 1,
@@ -85,7 +87,7 @@ function changePerPage(size: number) {
   void load()
 }
 
-async function deactivateRow(id: number) {
+function openDeactivateDialog(id: number) {
   if (!hasAnyPermission(['suplencias_delegaciones_editar', 'estructura_org_editar'])) {
     toast.error('Sin permiso')
     return
@@ -93,26 +95,44 @@ async function deactivateRow(id: number) {
   if (deactivatingId.value != null) {
     return
   }
-  if (!confirm('¿Desactivar este Backup? El registro se conserva. Se corta el encargo y el trabajo pendiente vuelve al titular si sigue en el Backup.')) {
+  pendingDeactivateId.value = id
+  deactivateDialogOpen.value = true
+}
+
+async function onDeactivateConfirm(reason: string) {
+  const id = pendingDeactivateId.value
+  if (id == null || deactivatingId.value != null) {
     return
   }
   deactivatingId.value = id
   try {
     await $api(`/organizational-structure/org-delegations/${id}`, {
       method: 'PUT',
-      body: { is_active: false },
+      body: {
+        is_active: false,
+        deactivation_reason: reason,
+      },
     })
+    deactivateDialogOpen.value = false
+    pendingDeactivateId.value = null
     toast.success('Backup desactivado. El registro permanece en el listado.')
     await load()
   }
   catch (e: unknown) {
-    const err = e as { data?: { message?: string } }
-    toast.error(err?.data?.message || 'No se pudo desactivar')
+    const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    toast.error(first ?? err.data?.message ?? 'No se pudo desactivar')
   }
   finally {
     deactivatingId.value = null
   }
 }
+
+watch(deactivateDialogOpen, (open) => {
+  if (!open && deactivatingId.value == null) {
+    pendingDeactivateId.value = null
+  }
+})
 
 onMounted(() => {
   load()
@@ -224,7 +244,7 @@ onMounted(() => {
                           size="sm"
                           class="h-8 gap-1.5 px-2 text-xs"
                           :disabled="deactivatingId === d.id"
-                          @click="deactivateRow(d.id)"
+                          @click="openDeactivateDialog(d.id)"
                         >
                           <Icon
                             :name="deactivatingId === d.id ? 'i-lucide-loader-2' : 'i-lucide-ban'"
@@ -254,5 +274,15 @@ onMounted(() => {
         </CardContent>
       </Card>
     </div>
+
+    <ConfirmWithReasonDialog
+      v-model:open="deactivateDialogOpen"
+      title="Desactivar Backup"
+      description="El registro se conserva. Se corta el encargo y el trabajo pendiente vuelve al titular si sigue en el Backup. Indique el motivo de la desactivación."
+      confirm-text="Aceptar"
+      cancel-text="Cancelar"
+      :loading="deactivatingId !== null"
+      @confirm="onDeactivateConfirm"
+    />
   </SettingsLayout>
 </template>

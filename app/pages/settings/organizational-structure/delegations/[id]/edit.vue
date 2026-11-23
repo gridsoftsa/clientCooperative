@@ -26,6 +26,7 @@ const form = ref({
 })
 
 const saving = ref(false)
+const deactivateDialogOpen = ref(false)
 
 async function viewReceipt() {
   if (openingReceipt.value || !Number.isFinite(id.value) || id.value <= 0) {
@@ -63,26 +64,55 @@ async function load() {
   }
 }
 
-async function handleSubmit() {
+async function persist(deactivationReason?: string) {
   saving.value = true
   try {
+    const body: {
+      starts_on: string
+      ends_on: string
+      reason: string | null
+      is_active: boolean
+      deactivation_reason?: string
+    } = {
+      starts_on: form.value.starts_on,
+      ends_on: form.value.ends_on,
+      reason: form.value.reason.trim() || null,
+      is_active: form.value.is_active,
+    }
+
+    if (deactivationReason) {
+      body.deactivation_reason = deactivationReason
+    }
+
     const res = await $api<{ data: OrgDelegationDetail }>(`/organizational-structure/org-delegations/${id.value}`, {
       method: 'PUT',
-      body: {
-        starts_on: form.value.starts_on,
-        ends_on: form.value.ends_on,
-        reason: form.value.reason.trim() || null,
-        is_active: form.value.is_active,
-      },
+      body,
     })
     delegation.value = res.data
+    deactivateDialogOpen.value = false
     toast.success('Backup actualizado. Puede generar el comprobante actualizado.')
-  } catch (e: unknown) {
-    const err = e as { data?: { message?: string } }
-    toast.error(err?.data?.message || 'Error al guardar')
-  } finally {
+  }
+  catch (e: unknown) {
+    const err = e as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    toast.error(first ?? err.data?.message ?? 'Error al guardar')
+  }
+  finally {
     saving.value = false
   }
+}
+
+function handleSubmit() {
+  if (delegation.value?.is_active && !form.value.is_active) {
+    deactivateDialogOpen.value = true
+    return
+  }
+
+  void persist()
+}
+
+function onDeactivateConfirm(reason: string) {
+  void persist(reason)
 }
 
 onMounted(() => {
@@ -177,6 +207,16 @@ onMounted(() => {
           </Button>
         </div>
       </form>
+
+      <ConfirmWithReasonDialog
+        v-model:open="deactivateDialogOpen"
+        title="Desactivar Backup"
+        description="El registro se conserva. Se corta el encargo y el trabajo pendiente vuelve al titular si sigue en el Backup. Indique el motivo de la desactivación."
+        confirm-text="Aceptar"
+        cancel-text="Cancelar"
+        :loading="saving"
+        @confirm="onDeactivateConfirm"
+      />
     </div>
   </SettingsLayout>
 </template>
