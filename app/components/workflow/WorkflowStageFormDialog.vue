@@ -126,7 +126,7 @@ const slaMode = computed(() => props.slaMode ?? 'unbound')
 const slaInputDisabled = computed(() => props.locked || slaMode.value !== 'limited')
 const slaHelper = computed(() => {
   if (slaMode.value === 'unbound') {
-    return 'Asocie un tipo funcional en la pestaña Tipos funcionales. El SLA de la etapa sale de los días de ese tipo.'
+    return 'Asocie un tipo funcional en Etapas. El SLA de la etapa sale de los días de ese tipo.'
   }
 
   if (slaMode.value === 'none') {

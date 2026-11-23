@@ -36,7 +36,7 @@ const positions = ref<OrgPositionRow[]>([])
 const functionalTypes = ref<WorkflowFunctionalTypeOption[]>([])
 const otherDefinitions = ref<WorkflowDefinition[]>([])
 const bindingSaving = ref(false)
-const selectedFunctionalTypeKey = ref('')
+const selectedFunctionalTypeKey = ref<string | null>(null)
 const importDialogOpen = ref(false)
 const importSourceId = ref<string>('')
 const importingStages = ref(false)
@@ -166,7 +166,7 @@ async function loadDefinition() {
     generalForm.is_active = definition.value.is_active
     const activeBinding = (definition.value.functional_bindings ?? definition.value.functionalBindings ?? [])
       .find(binding => binding.is_active)
-    selectedFunctionalTypeKey.value = activeBinding?.functional_type_key ?? selectedFunctionalTypeKey.value
+    selectedFunctionalTypeKey.value = activeBinding?.functional_type_key ?? null
   }
   catch {
     toast.error('No se pudo cargar el flujo.')
@@ -281,6 +281,21 @@ function functionalTypeOptionLabel(type: WorkflowFunctionalTypeOption) {
   return `${type.label} · ${sla}`
 }
 
+const functionalTypeOptions = computed(() =>
+  functionalTypes.value.map(type => ({
+    value: type.key,
+    label: functionalTypeOptionLabel(type),
+  })),
+)
+
+const selectedFunctionalType = computed(() =>
+  functionalTypes.value.find(type => type.key === selectedFunctionalTypeKey.value) ?? null,
+)
+
+const functionalTypeDirty = computed(() =>
+  (selectedFunctionalTypeKey.value ?? '') !== (boundFunctionalType.value?.key ?? ''),
+)
+
 async function importStages() {
   if (!definition.value || !importSourceId.value)
     return
@@ -386,9 +401,6 @@ watch(deleteStageDialogOpen, (open) => {
         <TabsTrigger value="stages">
           Etapas
         </TabsTrigger>
-        <TabsTrigger value="bindings">
-          Tipos funcionales
-        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="general" class="mt-4">
@@ -426,6 +438,94 @@ watch(deleteStageDialogOpen, (open) => {
 
       <TabsContent value="stages" class="mt-4 space-y-4">
         <Card>
+          <CardHeader class="pb-3">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="space-y-1">
+                <CardTitle class="text-base">
+                  Tipo funcional
+                </CardTitle>
+                <CardDescription>
+                  Un flujo corresponde a un solo tipo. El SLA de las etapas se reparte dentro de sus días hábiles.
+                </CardDescription>
+              </div>
+              <PermissionGate
+                :any-permission="['workflow_tipos_funcionales_parametrizar', 'ventanilla_configurar', 'plantillas_ver']"
+              >
+                <Button variant="outline" size="sm" as-child>
+                  <NuxtLink :to="functionalTypesParametrizationPath">
+                    <Icon name="lucide:plus" class="mr-1 size-4" />
+                    Crear tipo
+                  </NuxtLink>
+                </Button>
+              </PermissionGate>
+            </div>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div
+              v-if="functionalTypes.length === 0"
+              class="rounded-lg border border-dashed p-6 text-center space-y-3"
+            >
+              <p class="text-sm text-muted-foreground">
+                No hay tipos funcionales en ventanilla. Créelos en parametrización y asócielos a este flujo.
+              </p>
+              <PermissionGate
+                :any-permission="['workflow_tipos_funcionales_parametrizar', 'ventanilla_configurar', 'plantillas_ver']"
+                :fallback="true"
+              >
+                <Button as-child size="sm">
+                  <NuxtLink :to="functionalTypesParametrizationPath">
+                    Ir a crear tipo funcional
+                  </NuxtLink>
+                </Button>
+                <template #fallback>
+                  <p class="text-xs text-amber-700 dark:text-amber-400">
+                    Necesita permiso de parametrización de tipos funcionales o de ventanilla.
+                  </p>
+                </template>
+              </PermissionGate>
+            </div>
+            <div v-else class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+              <div class="grid gap-2">
+                <Label>Tipo de este flujo</Label>
+                <ArchivalSingleMultiselect
+                  v-model="selectedFunctionalTypeKey"
+                  :options="functionalTypeOptions"
+                  :can-clear="false"
+                  :disabled="bindingSaving"
+                  placeholder="Buscar tipo funcional"
+                  no-options-text="Sin tipos"
+                  no-results-text="Sin coincidencias"
+                />
+              </div>
+              <Button
+                :disabled="bindingSaving || !selectedFunctionalTypeKey || !functionalTypeDirty"
+                @click="bindFunctionalType"
+              >
+                {{ bindingSaving ? 'Guardando…' : 'Guardar tipo' }}
+              </Button>
+            </div>
+            <Alert v-if="bindingsForDefinition.length > 1" variant="destructive">
+              <AlertTitle>Este flujo tiene varios tipos</AlertTitle>
+              <AlertDescription>
+                Elija uno y guarde. Los demás quedan sin este flujo.
+              </AlertDescription>
+            </Alert>
+            <p v-else-if="boundFunctionalType" class="text-xs text-muted-foreground">
+              Asociado ahora: {{ boundFunctionalType.label }}
+              <template v-if="boundFunctionalType.sla_business_days != null">
+                · {{ boundFunctionalType.sla_business_days }} días hábiles
+              </template>
+              <template v-else>
+                · sin SLA
+              </template>
+            </p>
+            <p v-else-if="selectedFunctionalType" class="text-xs text-muted-foreground">
+              Guarde para asociar «{{ selectedFunctionalType.label }}» a este flujo.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardContent class="p-4">
             <WorkflowDefinitionPreview :stages="stages" :example="stages.length === 0" />
           </CardContent>
@@ -435,7 +535,7 @@ watch(deleteStageDialogOpen, (open) => {
           <Icon name="lucide:timer" class="size-4" />
           <AlertTitle>Falta el tipo funcional</AlertTitle>
           <AlertDescription>
-            Asocie un solo tipo funcional para tomar su SLA. Hasta entonces las etapas no pueden consumir días.
+            Asocie un tipo arriba para tomar su SLA. Hasta entonces las etapas no pueden consumir días.
           </AlertDescription>
         </Alert>
 
@@ -539,95 +639,6 @@ watch(deleteStageDialogOpen, (open) => {
         </div>
       </TabsContent>
 
-      <TabsContent value="bindings" class="mt-4">
-        <Card>
-          <CardHeader class="gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div class="space-y-1">
-              <CardTitle>Tipo funcional de este flujo</CardTitle>
-              <CardDescription>
-                Un flujo corresponde a un solo tipo. El SLA de las etapas se reparte dentro de los días hábiles de ese tipo. Si el tipo ya está en otro flujo, al guardarlo pasa a este.
-              </CardDescription>
-            </div>
-            <PermissionGate
-              :any-permission="['workflow_tipos_funcionales_parametrizar', 'ventanilla_configurar', 'plantillas_ver']"
-            >
-              <Button variant="outline" size="sm" as-child>
-                <NuxtLink :to="functionalTypesParametrizationPath">
-                  <Icon name="lucide:plus" class="mr-1 size-4" />
-                  Crear tipo funcional
-                </NuxtLink>
-              </Button>
-            </PermissionGate>
-          </CardHeader>
-          <CardContent>
-            <div
-              v-if="functionalTypes.length === 0"
-              class="rounded-lg border border-dashed p-8 text-center space-y-4"
-            >
-              <p class="text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto">
-                No hay tipos funcionales configurados en ventanilla. Créelos en parametrización y regrese aquí para asociarlos a este flujo.
-              </p>
-              <PermissionGate
-                :any-permission="['workflow_tipos_funcionales_parametrizar', 'ventanilla_configurar', 'plantillas_ver']"
-                :fallback="true"
-              >
-                <Button as-child>
-                  <NuxtLink :to="functionalTypesParametrizationPath">
-                    <Icon name="lucide:plus" class="mr-2 size-4" />
-                    Ir a crear tipo funcional
-                  </NuxtLink>
-                </Button>
-                <template #fallback>
-                  <p class="text-xs text-amber-700 dark:text-amber-400">
-                    Necesita el permiso «Parametrizar tipos funcionales desde workflow» o configuración de ventanilla para crearlos desde aquí.
-                  </p>
-                </template>
-              </PermissionGate>
-            </div>
-            <div v-else class="grid max-w-xl gap-4">
-              <Alert v-if="bindingsForDefinition.length > 1" variant="destructive">
-                <AlertTitle>Este flujo tiene varios tipos</AlertTitle>
-                <AlertDescription>
-                  Elija uno y guarde. Los demás quedan sin este flujo.
-                </AlertDescription>
-              </Alert>
-              <div class="grid gap-2">
-                <Label>Tipo funcional</Label>
-                <Select v-model="selectedFunctionalTypeKey">
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccione un tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem
-                      v-for="ft in functionalTypes"
-                      :key="ft.key"
-                      :value="ft.key"
-                    >
-                      {{ functionalTypeOptionLabel(ft) }}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <p v-if="boundFunctionalType" class="text-xs text-muted-foreground">
-                  Asociado ahora: {{ boundFunctionalType.label }}
-                  <template v-if="boundFunctionalType.sla_business_days != null">
-                    · {{ boundFunctionalType.sla_business_days }} días hábiles
-                  </template>
-                  <template v-else>
-                    · sin SLA
-                  </template>
-                </p>
-              </div>
-              <Button
-                class="w-fit"
-                :disabled="bindingSaving || !selectedFunctionalTypeKey"
-                @click="bindFunctionalType"
-              >
-                {{ bindingSaving ? 'Guardando…' : 'Guardar tipo funcional' }}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </TabsContent>
     </Tabs>
 
     <WorkflowStageFormDialog
