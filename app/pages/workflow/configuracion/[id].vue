@@ -6,7 +6,7 @@ import {
   labelForWorkflowVentanillaRole,
 } from '~/constants/workflow'
 import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureApi'
-import type { WorkflowDefinition, WorkflowStage } from '~/types/workflow'
+import type { WorkflowDefinition, WorkflowFunctionalTypeOption, WorkflowStage } from '~/types/workflow'
 
 definePageMeta({
   layout: 'default',
@@ -33,8 +33,13 @@ const activeTab = ref('stages')
 const users = ref<Array<{ id: number, name: string }>>([])
 const orgUnits = ref<OrgUnitRow[]>([])
 const positions = ref<OrgPositionRow[]>([])
-const functionalTypes = ref<Array<{ key: string, label: string }>>([])
-const bindingSavingKey = ref<string | null>(null)
+const functionalTypes = ref<WorkflowFunctionalTypeOption[]>([])
+const otherDefinitions = ref<WorkflowDefinition[]>([])
+const bindingSaving = ref(false)
+const selectedFunctionalTypeKey = ref('')
+const importDialogOpen = ref(false)
+const importSourceId = ref<string>('')
+const importingStages = ref(false)
 
 const stageDialogOpen = ref(false)
 const editingStage = ref<WorkflowStage | null>(null)
@@ -83,6 +88,47 @@ const bindingsForDefinition = computed(() => {
   return bindings.filter(b => b.is_active)
 })
 
+const boundFunctionalType = computed(() =>
+  functionalTypes.value.find(type => type.key === bindingsForDefinition.value[0]?.functional_type_key) ?? null,
+)
+
+const slaConsumed = computed(() =>
+  stages.value.reduce((sum, stage) => sum + (stage.sla_business_days ?? 0), 0),
+)
+
+const slaBudget = computed(() => boundFunctionalType.value?.sla_business_days ?? null)
+
+const slaRemaining = computed(() => {
+  if (slaBudget.value == null)
+    return null
+
+  return slaBudget.value - slaConsumed.value
+})
+
+const slaMode = computed<'unbound' | 'none' | 'limited'>(() => {
+  if (!boundFunctionalType.value)
+    return 'unbound'
+
+  return slaBudget.value == null ? 'none' : 'limited'
+})
+
+const consumedByOtherStages = computed(() => {
+  const current = editingStage.value?.sla_business_days ?? 0
+
+  return Math.max(0, slaConsumed.value - current)
+})
+
+const maxSlaDays = computed(() => {
+  if (slaMode.value !== 'limited' || slaBudget.value == null)
+    return null
+
+  return Math.max(0, slaBudget.value - consumedByOtherStages.value)
+})
+
+const importCandidates = computed(() =>
+  otherDefinitions.value.filter(item => item.id !== definitionId.value && (item.stages?.length ?? 0) > 0),
+)
+
 function assigneeDetail(stage: WorkflowStage) {
   if (stage.assignee_user)
     return stage.assignee_user.name
@@ -95,17 +141,19 @@ function assigneeDetail(stage: WorkflowStage) {
 }
 
 async function loadCatalogs() {
-  const [types, units, posList, userList] = await Promise.all([
+  const [types, units, posList, userList, definitions] = await Promise.all([
     workflowApi.fetchFunctionalTypes(),
     orgApi.fetchUnits({ activeOnly: true }),
     orgApi.fetchPositions({ activeOnly: true }),
     workflowApi.fetchAssignableUsers(),
+    workflowApi.fetchDefinitions(),
   ])
 
   functionalTypes.value = types
   orgUnits.value = units
   positions.value = posList
   users.value = userList
+  otherDefinitions.value = definitions
 }
 
 async function loadDefinition() {
@@ -116,6 +164,9 @@ async function loadDefinition() {
     generalForm.name = definition.value.name
     generalForm.description = definition.value.description ?? ''
     generalForm.is_active = definition.value.is_active
+    const activeBinding = (definition.value.functional_bindings ?? definition.value.functionalBindings ?? [])
+      .find(binding => binding.is_active)
+    selectedFunctionalTypeKey.value = activeBinding?.functional_type_key ?? selectedFunctionalTypeKey.value
   }
   catch {
     toast.error('No se pudo cargar el flujo.')
@@ -203,27 +254,54 @@ async function onDeleteStageConfirm(reason: string) {
   }
 }
 
-async function bindFunctionalType(key: string) {
-  if (!definition.value)
+async function bindFunctionalType() {
+  if (!definition.value || !selectedFunctionalTypeKey.value)
     return
 
-  bindingSavingKey.value = key
+  bindingSaving.value = true
 
   try {
-    await workflowApi.upsertBinding(definition.value.id, key, true)
-    toast.success('Tipo funcional asociado.')
+    await workflowApi.upsertBinding(definition.value.id, selectedFunctionalTypeKey.value, true)
+    toast.success('Este flujo quedó asociado a un solo tipo funcional.')
     await loadDefinition()
   }
-  catch {
-    toast.error('No se pudo asociar el tipo funcional.')
+  catch (error: unknown) {
+    const err = error as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    toast.error(first ?? err.data?.message ?? 'No se pudo asociar el tipo funcional.')
   }
   finally {
-    bindingSavingKey.value = null
+    bindingSaving.value = false
   }
 }
 
-function isTypeBoundToThis(key: string) {
-  return bindingsForDefinition.value.some(b => b.functional_type_key === key)
+function functionalTypeOptionLabel(type: WorkflowFunctionalTypeOption) {
+  const sla = type.sla_business_days == null ? 'sin SLA' : `${type.sla_business_days} días hábiles`
+
+  return `${type.label} · ${sla}`
+}
+
+async function importStages() {
+  if (!definition.value || !importSourceId.value)
+    return
+
+  importingStages.value = true
+
+  try {
+    const result = await workflowApi.importStages(definition.value.id, Number(importSourceId.value))
+    definition.value = result.data
+    importDialogOpen.value = false
+    importSourceId.value = ''
+    toast.success(result.message)
+  }
+  catch (error: unknown) {
+    const err = error as { data?: { message?: string, errors?: Record<string, string[]> } }
+    const first = err.data?.errors ? Object.values(err.data.errors)[0]?.[0] : null
+    toast.error(first ?? err.data?.message ?? 'No se pudieron importar las etapas.')
+  }
+  finally {
+    importingStages.value = false
+  }
 }
 
 const functionalTypesParametrizationPath = computed(() => {
@@ -353,14 +431,52 @@ watch(deleteStageDialogOpen, (open) => {
           </CardContent>
         </Card>
 
-        <div class="flex items-center justify-between">
+        <Alert v-if="slaMode === 'unbound'">
+          <Icon name="lucide:timer" class="size-4" />
+          <AlertTitle>Falta el tipo funcional</AlertTitle>
+          <AlertDescription>
+            Asocie un solo tipo funcional para tomar su SLA. Hasta entonces las etapas no pueden consumir días.
+          </AlertDescription>
+        </Alert>
+
+        <Alert v-else-if="slaMode === 'none'">
+          <Icon name="lucide:timer" class="size-4" />
+          <AlertTitle>Este tipo no tiene SLA</AlertTitle>
+          <AlertDescription>
+            «{{ boundFunctionalType?.label }}» no define días hábiles. Las etapas de este flujo quedan sin SLA.
+          </AlertDescription>
+        </Alert>
+
+        <Alert v-else :variant="(slaRemaining ?? 0) < 0 ? 'destructive' : 'default'">
+          <Icon name="lucide:timer" class="size-4" />
+          <AlertTitle>
+            SLA de {{ boundFunctionalType?.label }}: {{ slaBudget }} días hábiles
+          </AlertTitle>
+          <AlertDescription>
+            Las etapas consumen {{ slaConsumed }} días.
+            <template v-if="(slaRemaining ?? 0) < 0">
+              Superan el tipo por {{ Math.abs(slaRemaining ?? 0) }}. Ajuste el SLA de cada etapa.
+            </template>
+            <template v-else>
+              Quedan {{ slaRemaining }} días por repartir.
+            </template>
+          </AlertDescription>
+        </Alert>
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <p class="text-sm text-muted-foreground">
             {{ stages.length }} etapa(s) — el orden define las columnas del tablero
           </p>
-          <Button v-if="!isStructureLocked" size="sm" @click="openCreateStage">
-            <Icon name="lucide:plus" class="mr-1 size-4" />
-            Nueva etapa
-          </Button>
+          <div v-if="!isStructureLocked" class="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" @click="importDialogOpen = true">
+              <Icon name="lucide:copy" class="mr-1 size-4" />
+              Importar etapas
+            </Button>
+            <Button size="sm" @click="openCreateStage">
+              <Icon name="lucide:plus" class="mr-1 size-4" />
+              Nueva etapa
+            </Button>
+          </div>
         </div>
 
         <div class="grid gap-3">
@@ -427,9 +543,9 @@ watch(deleteStageDialogOpen, (open) => {
         <Card>
           <CardHeader class="gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div class="space-y-1">
-              <CardTitle>Asociar a tipos funcionales</CardTitle>
+              <CardTitle>Tipo funcional de este flujo</CardTitle>
               <CardDescription>
-                Cada tipo funcional de ventanilla puede tener un flujo activo. Al radicar, se usa el flujo asociado.
+                Un flujo corresponde a un solo tipo. El SLA de las etapas se reparte dentro de los días hábiles de ese tipo. Si el tipo ya está en otro flujo, al guardarlo pasa a este.
               </CardDescription>
             </div>
             <PermissionGate
@@ -468,34 +584,46 @@ watch(deleteStageDialogOpen, (open) => {
                 </template>
               </PermissionGate>
             </div>
-            <div v-else class="divide-y">
-            <div
-              v-for="ft in functionalTypes"
-              :key="ft.key"
-              class="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
-            >
-              <div>
-                <p class="font-medium">
-                  {{ ft.label }}
-                </p>
-                <p class="text-xs text-muted-foreground">
-                  {{ ft.key }}
+            <div v-else class="grid max-w-xl gap-4">
+              <Alert v-if="bindingsForDefinition.length > 1" variant="destructive">
+                <AlertTitle>Este flujo tiene varios tipos</AlertTitle>
+                <AlertDescription>
+                  Elija uno y guarde. Los demás quedan sin este flujo.
+                </AlertDescription>
+              </Alert>
+              <div class="grid gap-2">
+                <Label>Tipo funcional</Label>
+                <Select v-model="selectedFunctionalTypeKey">
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccione un tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem
+                      v-for="ft in functionalTypes"
+                      :key="ft.key"
+                      :value="ft.key"
+                    >
+                      {{ functionalTypeOptionLabel(ft) }}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p v-if="boundFunctionalType" class="text-xs text-muted-foreground">
+                  Asociado ahora: {{ boundFunctionalType.label }}
+                  <template v-if="boundFunctionalType.sla_business_days != null">
+                    · {{ boundFunctionalType.sla_business_days }} días hábiles
+                  </template>
+                  <template v-else>
+                    · sin SLA
+                  </template>
                 </p>
               </div>
-              <div class="flex items-center gap-2">
-                <Badge v-if="isTypeBoundToThis(ft.key)" variant="default">
-                  Asociado a este flujo
-                </Badge>
-                <Button
-                  size="sm"
-                  :variant="isTypeBoundToThis(ft.key) ? 'outline' : 'default'"
-                  :disabled="bindingSavingKey === ft.key"
-                  @click="bindFunctionalType(ft.key)"
-                >
-                  {{ isTypeBoundToThis(ft.key) ? 'Reconfirmar' : 'Asociar aquí' }}
-                </Button>
-              </div>
-            </div>
+              <Button
+                class="w-fit"
+                :disabled="bindingSaving || !selectedFunctionalTypeKey"
+                @click="bindFunctionalType"
+              >
+                {{ bindingSaving ? 'Guardando…' : 'Guardar tipo funcional' }}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -512,8 +640,59 @@ watch(deleteStageDialogOpen, (open) => {
       :users="users"
       :org-units="orgUnits"
       :positions="positions"
+      :sla-mode="slaMode"
+      :functional-type-label="boundFunctionalType?.label ?? null"
+      :sla-budget="slaBudget"
+      :max-sla-days="maxSlaDays"
+      :consumed-by-other-stages="consumedByOtherStages"
       @saved="loadDefinition"
     />
+
+    <Dialog v-model:open="importDialogOpen">
+      <DialogContent class="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Importar etapas</DialogTitle>
+          <DialogDescription>
+            Copia las etapas de otro flujo. Si este ya tiene etapas sin tareas, se reemplazan. Después ajuste el SLA para que no supere los días del tipo funcional.
+          </DialogDescription>
+        </DialogHeader>
+        <div class="grid gap-3 py-2">
+          <Alert v-if="slaMode === 'unbound'">
+            <AlertDescription>
+              Primero asocie el tipo funcional. Así el SLA importado se puede adaptar a sus días.
+            </AlertDescription>
+          </Alert>
+          <div class="grid gap-2">
+            <Label>Flujo de origen</Label>
+            <Select v-model="importSourceId" :disabled="slaMode === 'unbound'">
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccione un flujo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="item in importCandidates"
+                  :key="item.id"
+                  :value="String(item.id)"
+                >
+                  {{ item.name }} · {{ item.stages?.length ?? 0 }} etapas
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" @click="importDialogOpen = false">
+            Cancelar
+          </Button>
+          <Button
+            :disabled="importingStages || slaMode === 'unbound' || !importSourceId"
+            @click="importStages"
+          >
+            {{ importingStages ? 'Importando…' : 'Importar y editar' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <ConfirmWithReasonDialog
       v-model:open="deleteStageDialogOpen"
