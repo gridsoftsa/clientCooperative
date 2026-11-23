@@ -19,6 +19,12 @@ const props = defineProps<{
   users: Array<{ id: number, name: string, email?: string | null }>
   orgUnits: OrgUnitRow[]
   positions: OrgPositionRow[]
+  /** unbound: sin tipo; none: el tipo no tiene SLA; limited: tope en días del tipo. */
+  slaMode?: 'unbound' | 'none' | 'limited'
+  functionalTypeLabel?: string | null
+  slaBudget?: number | null
+  maxSlaDays?: number | null
+  consumedByOtherStages?: number
 }>()
 
 const emit = defineEmits<{
@@ -90,6 +96,28 @@ watch(() => form.assignee_type, (type) => {
     form.assignee_org_unit_id = null
   if (type !== 'position')
     form.assignee_position_id = null
+})
+
+const slaMode = computed(() => props.slaMode ?? 'unbound')
+const slaInputDisabled = computed(() => props.locked || slaMode.value !== 'limited')
+const slaHelper = computed(() => {
+  if (slaMode.value === 'unbound') {
+    return 'Asocie un tipo funcional en la pestaña Tipos funcionales. El SLA de la etapa sale de los días de ese tipo.'
+  }
+
+  if (slaMode.value === 'none') {
+    return `«${props.functionalTypeLabel ?? 'Este tipo'}» no tiene SLA. Esta etapa no consume días.`
+  }
+
+  const budget = props.slaBudget ?? 0
+  const others = props.consumedByOtherStages ?? 0
+  const max = props.maxSlaDays ?? 0
+
+  if (max < 1) {
+    return `«${props.functionalTypeLabel ?? 'El tipo'}» tiene ${budget} días y las demás etapas ya los consumen. Deje el SLA vacío o reduzca otras etapas.`
+  }
+
+  return `«${props.functionalTypeLabel ?? 'El tipo'}» tiene ${budget} días hábiles. Las demás etapas consumen ${others}. Esta etapa puede usar hasta ${max}.`
 })
 
 const userOptions = computed(() =>
@@ -167,6 +195,22 @@ async function save() {
   }
   if (form.assignee_type === 'position' && !form.assignee_position_id) {
     toast.error('Seleccione el cargo responsable.')
+    return
+  }
+
+  const sla = typeof form.sla_business_days === 'number' && form.sla_business_days >= 1
+    ? form.sla_business_days
+    : null
+
+  if (slaMode.value === 'limited' && sla != null && sla > (props.maxSlaDays ?? 0)) {
+    toast.error(`Esta etapa puede usar hasta ${props.maxSlaDays ?? 0} días del SLA del tipo funcional.`)
+    return
+  }
+
+  if (slaMode.value !== 'limited' && sla != null) {
+    toast.error(slaMode.value === 'none'
+      ? 'Este tipo funcional no tiene SLA. Deje el campo vacío.'
+      : 'Asocie un tipo funcional antes de indicar días de SLA.')
     return
   }
 
@@ -337,16 +381,19 @@ async function save() {
         </div>
 
         <div class="grid gap-2">
-          <Label for="stage-sla">SLA (días hábiles por etapa)</Label>
+          <Label for="stage-sla">SLA (días hábiles de esta etapa)</Label>
           <Input
             id="stage-sla"
             v-model.number="form.sla_business_days"
             type="number"
             min="1"
-            max="365"
-            placeholder="Opcional"
-            :disabled="locked"
+            :max="slaMode === 'limited' ? (maxSlaDays ?? 1) : undefined"
+            placeholder="Vacío si esta etapa no consume días"
+            :disabled="slaInputDisabled"
           />
+          <p class="text-xs text-muted-foreground">
+            {{ slaHelper }}
+          </p>
         </div>
 
         <div class="rounded-lg border p-3 space-y-3">

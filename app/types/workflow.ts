@@ -82,6 +82,8 @@ export interface WorkflowStage {
 export interface WorkflowFunctionalTypeOption {
   key: string
   label: string
+  sla_business_days?: number | null
+  requires_response_default?: boolean
 }
 
 export interface WorkflowStagePayload {

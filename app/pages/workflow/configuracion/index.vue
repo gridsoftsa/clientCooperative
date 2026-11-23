@@ -43,9 +43,16 @@ function stageCount(def: WorkflowDefinition) {
   return def.stages?.length ?? 0
 }
 
-function bindingCount(def: WorkflowDefinition) {
-  const bindings = def.functional_bindings ?? def.functionalBindings ?? []
-  return bindings.filter(b => b.is_active).length
+function bindingLabel(def: WorkflowDefinition) {
+  const bindings = (def.functional_bindings ?? def.functionalBindings ?? []).filter(binding => binding.is_active)
+
+  if (bindings.length === 0)
+    return 'Sin tipo funcional'
+
+  if (bindings.length === 1)
+    return bindings[0]?.functional_type_key ?? '1 tipo funcional'
+
+  return `${bindings.length} tipos (debe quedar uno)`
 }
 
 const uncoveredTypes = computed(() => coverage.value.filter(row => !row.has_active_binding))
@@ -209,7 +216,7 @@ onMounted(() => {
         <CardContent>
           <div class="flex flex-wrap gap-4 text-sm text-muted-foreground">
             <span>{{ stageCount(def) }} etapas</span>
-            <span>{{ bindingCount(def) }} tipos funcionales</span>
+            <span>{{ bindingLabel(def) }}</span>
             <span v-if="def.instances_count">{{ def.instances_count }} procesos</span>
           </div>
           <div class="mt-4" @click.stop>

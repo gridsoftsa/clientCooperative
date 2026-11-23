@@ -150,6 +150,18 @@ export function useWorkflowApi() {
     return res.data
   }
 
+  async function importStages(definitionId: number, sourceWorkflowDefinitionId: number) {
+    const res = await api<{ data: WorkflowDefinition, message: string }>(
+      `/workflow/definitions/${definitionId}/import-stages`,
+      {
+        method: 'POST',
+        body: { source_workflow_definition_id: sourceWorkflowDefinitionId },
+      },
+    )
+
+    return res
+  }
+
   async function upsertBinding(workflowDefinitionId: number, functionalTypeKey: string, isActive = true) {
     const res = await api<{ data: { id: number, functional_type_key: string, is_active: boolean }, message: string }>(
       '/workflow/functional-bindings',
@@ -425,6 +437,7 @@ export function useWorkflowApi() {
     createDefinition,
     updateDefinition,
     createStage,
+    importStages,
     updateStage,
     deleteStage,
     upsertBinding,
