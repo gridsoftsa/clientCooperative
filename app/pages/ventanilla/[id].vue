@@ -288,23 +288,56 @@ function closureResultLabel(result: string | null | undefined): string {
   return result ? (labels[result] ?? result) : '—'
 }
 
-function eventTypeLabel(type: string): string {
-  const labels: Record<string, string> = {
-    registered: 'Radicación',
-    assigned: 'Asignación',
-    started: 'Inicio de gestión',
-    responded: 'Respuesta',
-    closed: 'Cierre',
-    voided: 'Anulación',
-    intake_classified: 'Clasificación desde bandeja',
-    traffic_light_changed: 'Cambio de semáforo',
-    sla_alert_notified: 'Notificación SLA',
-    sender_notified: 'Correo al interesado',
-    files_attached: 'Archivos adjuntos',
+const responseFiles = computed(() =>
+  (filing.value?.files ?? []).filter(file => file.is_response_document),
+)
+
+function traceMetadata(metadata: Record<string, unknown> | null) {
+  if (!metadata || !Array.isArray(metadata.files)) {
+    return null
   }
 
-  return labels[type] ?? type
+  const files = metadata.files.flatMap((item) => {
+    if (!item || typeof item !== 'object') {
+      return []
+    }
+
+    const file = item as Record<string, unknown>
+    if (typeof file.id !== 'number') {
+      return []
+    }
+
+    return [{
+      id: file.id,
+      title: typeof file.title === 'string' ? file.title : 'Documento',
+      original_name: typeof file.original_name === 'string' ? file.original_name : 'documento',
+      mime_type: typeof file.mime_type === 'string' ? file.mime_type : null,
+      source: typeof file.source === 'string' ? file.source : 'assignee',
+      filing_id: typeof file.filing_id === 'number' ? file.filing_id : undefined,
+    }]
+  })
+
+  if (files.length === 0) {
+    return null
+  }
+
+  return {
+    filing_id: typeof metadata.filing_id === 'number' ? metadata.filing_id : undefined,
+    files,
+  }
 }
+
+const traceEvents = computed(() => (filing.value?.events ?? []).map(event => ({
+  id: event.id,
+  event_type: event.event_type,
+  description: event.description,
+  created_at: event.created_at,
+  created_by: event.created_by ?? null,
+  status_change: event.from_status || event.to_status
+    ? `${event.from_status ? statusLabel(event.from_status) : '—'} → ${event.to_status ? statusLabel(event.to_status) : '—'}`
+    : null,
+  metadata: traceMetadata(event.metadata),
+})))
 
 function alertRecipientRoleLabel(role: string): string {
   const labels: Record<string, string> = {
@@ -502,6 +535,14 @@ async function refreshSla() {
 
 function fileCanPreview(file: Pick<VentanillaFilingFileRow, 'original_name' | 'title' | 'mime_type'>): boolean {
   return canPreviewDocumentInline(file.original_name || file.title, file.mime_type ?? '')
+}
+
+function viewResponseFile(fileId: number) {
+  const file = filing.value?.files?.find(item => item.id === fileId)
+
+  if (file) {
+    void viewFile(file)
+  }
 }
 
 async function viewFile(file: VentanillaFilingFileRow) {
@@ -708,6 +749,8 @@ async function viewSticker() {
                 v-if="filing.response_text"
                 :response-text="filing.response_text"
                 :closed-at="filing.closed_at"
+                :files="responseFiles"
+                @view-file="viewResponseFile"
               />
               <dl class="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
             <div class="sm:col-span-2">
@@ -1112,6 +1155,9 @@ async function viewSticker() {
                       <Badge v-if="file.is_primary" variant="secondary" class="ml-2">
                         Principal
                       </Badge>
+                      <Badge v-else-if="file.is_response_document" variant="secondary" class="ml-2">
+                        Respuesta
+                      </Badge>
                     </p>
                     <p class="text-muted-foreground text-xs">
                       {{ file.original_name }}
@@ -1276,31 +1322,11 @@ async function viewSticker() {
               <CardTitle>Trazabilidad</CardTitle>
             </CardHeader>
             <CardContent>
-              <ul v-if="filing.events?.length" class="max-h-[min(70vh,32rem)] space-y-4 overflow-y-auto pr-1">
-            <li
-              v-for="event in filing.events"
-              :key="event.id"
-              class="border-l pl-4 text-sm"
-            >
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="font-medium">{{ eventTypeLabel(event.event_type) }}</span>
-                <span class="text-muted-foreground text-xs">{{ formatDate(event.created_at) }}</span>
-              </div>
-              <p v-if="event.description" class="mt-1">
-                {{ event.description }}
-              </p>
-              <p class="text-muted-foreground text-xs">
-                {{ event.created_by?.name ?? 'Sistema' }}
-                <template v-if="event.from_status || event.to_status">
-                  · {{ event.from_status ? statusLabel(event.from_status) : '—' }}
-                  → {{ event.to_status ? statusLabel(event.to_status) : '—' }}
-                </template>
-              </p>
-            </li>
-          </ul>
-              <p v-else class="text-muted-foreground text-sm">
-                Sin eventos registrados.
-              </p>
+              <WorkflowTaskHistoryTimeline
+                :events="traceEvents"
+                :filing-id="filing.id"
+                title="Historial del radicado"
+              />
             </CardContent>
           </Card>
 

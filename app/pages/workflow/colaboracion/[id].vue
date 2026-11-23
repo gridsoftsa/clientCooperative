@@ -59,6 +59,17 @@ const canAct = computed(() =>
 )
 const changeAlreadyRequested = computed(() => Boolean(collaboration.value?.reassignment_requested_at))
 const inviterName = computed(() => collaboration.value?.invited_by?.name ?? 'quien solicitó la colaboración')
+const filingRequester = computed(() => {
+  const filing = collaboration.value?.filing
+  const name = filing?.sender_name?.trim() ?? ''
+  const identifier = filing?.sender_identifier?.trim() ?? ''
+
+  if (name && identifier) {
+    return `${name} · ${identifier}`
+  }
+
+  return name || identifier || null
+})
 
 async function load() {
   loading.value = true
@@ -242,6 +253,9 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
           <span v-if="collaboration?.filing?.subject"> · {{ collaboration.filing.subject }}</span>
           <span v-if="collaboration?.task?.stage"> · {{ collaboration.task.stage.name }}</span>
         </p>
+        <p v-if="filingRequester" class="text-sm">
+          Solicitante del radicado: {{ filingRequester }}
+        </p>
       </div>
     </div>
 
@@ -301,7 +315,7 @@ async function viewContributionFile(file: { id: number, mime_type?: string | nul
           </AlertDescription>
         </Alert>
         <p class="text-sm text-muted-foreground">
-          Solicitado por {{ collaboration.invited_by?.name ?? '—' }}
+          Aporte pedido por {{ collaboration.invited_by?.name ?? '—' }}
           <span v-if="collaboration.org_unit"> · {{ collaboration.org_unit.name }}</span>
           · Pendiente de su aporte
           · {{ requiresDocument ? 'Requiere documento' : 'Documento opcional' }}

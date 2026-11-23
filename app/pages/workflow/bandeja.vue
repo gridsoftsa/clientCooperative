@@ -257,6 +257,10 @@ onMounted(async () => {
               {{ row.filing?.subject ?? '—' }}
               <span v-if="row.task?.stage?.name"> · {{ row.task.stage.name }}</span>
             </p>
+            <p v-if="row.filing?.sender_name" class="text-sm">
+              Solicitante del radicado: {{ row.filing.sender_name }}
+              <span v-if="row.filing.sender_identifier"> · {{ row.filing.sender_identifier }}</span>
+            </p>
           </div>
           <Button size="sm" type="button" @click="navigateTo(`/workflow/colaboracion/${row.id}`)">
             {{ row.requires_document === false ? 'Registrar aporte' : 'Adjuntar aporte' }}

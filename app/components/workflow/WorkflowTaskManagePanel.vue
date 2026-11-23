@@ -35,6 +35,7 @@ const returnStageId = ref<string>('')
 const reassignUserId = ref<number | null>(null)
 const saving = ref(false)
 const attachmentsPanelRef = ref<InstanceType<typeof WorkflowTaskFilingAttachmentsPanel> | null>(null)
+const hasPendingFilingFiles = ref(false)
 const metadataFieldsRef = ref<{
   findFirstMissingRequiredField?: () => { fieldCode: string, fieldIndex: number, message: string } | null
   focusMissingField?: (fieldCode: string, fieldIndex: number) => void
@@ -232,6 +233,12 @@ async function runCommentAction() {
 
 async function attachPendingFilesIfNeeded(): Promise<boolean> {
   if (!attachmentsPanelRef.value) {
+    if (hasPendingFilingFiles.value) {
+      toast.error('El documento seleccionado no se envió. Vuelva a adjuntarlo antes de cerrar.')
+
+      return false
+    }
+
     return true
   }
 
@@ -560,6 +567,7 @@ async function saveFilingMetadata(): Promise<void> {
           :requires-response="filingRequiresResponse"
           :stage-name="context.open_task?.stage?.name"
           :initial-copy-emails="context.filing.response_copy_emails ?? []"
+          :pending-documents="hasPendingFilingFiles"
           :before-submit="attachPendingFilesIfNeeded"
           @closed="onFilingClosed"
         />
@@ -585,7 +593,11 @@ async function saveFilingMetadata(): Promise<void> {
         ref="attachmentsPanelRef"
         :filing-id="context.filing.id"
         :disabled="saving"
+        :hint="canCloseFilingFromWorkflow
+          ? 'Se envían al registrar la respuesta o el cierre. Quedan en el radicado, en el historial y en la respuesta.'
+          : 'Se adjuntarán al radicado al avanzar la etapa.'"
         @attached="refreshContext"
+        @pending-change="hasPendingFilingFiles = $event"
       />
 
       <p v-if="showMoreActionsTab" class="text-xs text-muted-foreground">

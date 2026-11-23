@@ -12,10 +12,12 @@ import { extractApiErrorMessage } from '~/utils/workflow-task-ui'
 const props = defineProps<{
   filingId: number
   disabled?: boolean
+  hint?: string
 }>()
 
 const emit = defineEmits<{
   attached: []
+  pendingChange: [pending: boolean]
 }>()
 
 const ventanillaApi = useVentanillaApi()
@@ -42,6 +44,14 @@ function resetRows() {
 }
 
 function validatePendingRows(): string | null {
+  const startedWithoutFile = fileRows.value.some(row =>
+    !row.file && (row.title.trim() !== '' || row.folioStart.trim() !== '' || row.folioEnd.trim() !== ''),
+  )
+
+  if (startedWithoutFile) {
+    return 'Hay un documento iniciado sin archivo. Selecciónelo de nuevo antes de continuar.'
+  }
+
   const rowsWithFiles = fileRows.value.filter(row => row.file)
 
   for (const [index, row] of rowsWithFiles.entries()) {
@@ -128,6 +138,10 @@ defineExpose({
 watch(() => props.filingId, () => {
   resetRows()
 })
+
+watch(fileRows, () => {
+  emit('pendingChange', fileRows.value.some(row => row.file !== null))
+}, { deep: true })
 </script>
 
 <template>
@@ -138,7 +152,7 @@ watch(() => props.filingId, () => {
           Documentos del radicado (opcional)
         </p>
         <p class="text-muted-foreground text-xs">
-          Agregue uno o varios archivos; se adjuntarán al radicado al avanzar la etapa.
+          {{ hint || 'Agregue uno o varios archivos; se adjuntarán al radicado al confirmar la acción de la etapa.' }}
         </p>
       </div>
       <Button

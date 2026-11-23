@@ -7,6 +7,7 @@ const props = defineProps<{
   requiresResponse: boolean
   stageName?: string | null
   initialCopyEmails?: string[]
+  pendingDocuments?: boolean
   beforeSubmit?: () => Promise<boolean>
 }>()
 
@@ -99,6 +100,9 @@ async function submit(): Promise<void> {
         <template v-if="requiresResponse">
           Registre la respuesta al remitente; al confirmar se cierra el radicado y el flujo.
         </template>
+        <span v-if="pendingDocuments" class="mt-1 block text-foreground">
+          El documento seleccionado se adjunta antes de cerrar y queda en la respuesta.
+        </span>
         <template v-else>
           Confirme el cierre del radicado; el flujo se completa automáticamente.
         </template>

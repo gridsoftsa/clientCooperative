@@ -4,13 +4,31 @@ import type { WorkflowFilingContext } from '~/types/workflow'
 import { canPreviewDocumentInline } from '~/utils/document-preview'
 import DocumentInlinePreviewDialog from '~/components/radicacion/DocumentInlinePreviewDialog.vue'
 
-type WorkflowHistoryEvent = WorkflowFilingContext['events'][number]
-type WorkflowHistoryFile = NonNullable<NonNullable<WorkflowHistoryEvent['metadata']>['files']>[number]
+type WorkflowHistoryFile = NonNullable<NonNullable<WorkflowFilingContext['events'][number]['metadata']>['files']>[number]
 
-const props = defineProps<{
+interface WorkflowHistoryEvent {
+  id: number
+  event_type: string
+  description: string | null
+  created_at: string | null
+  created_by?: { id?: number, name: string } | null
+  stage?: { key?: string, name: string } | null
+  status_change?: string | null
+  metadata?: {
+    source?: string
+    collaboration_id?: number
+    filing_id?: number
+    files?: WorkflowHistoryFile[]
+  } | null
+}
+
+const props = withDefaults(defineProps<{
   events: WorkflowHistoryEvent[]
   filingId?: number | null
-}>()
+  title?: string
+}>(), {
+  title: 'Línea de tiempo del proceso',
+})
 
 const workflowApi = useWorkflowApi()
 const ventanillaApi = useVentanillaApi()
@@ -140,6 +158,83 @@ const EVENT_PRESENTATION: Record<string, EventPresentation> = {
     badgeClass: 'border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-200',
     accentClass: 'border-l-cyan-500',
   },
+  registered: {
+    label: 'Radicación',
+    icon: 'i-lucide-file-plus-2',
+    nodeClass: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/60 dark:text-violet-300',
+    badgeClass: 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-200',
+    accentClass: 'border-l-violet-500',
+  },
+  assigned: {
+    label: 'Asignación',
+    icon: 'i-lucide-user-check',
+    nodeClass: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900 dark:bg-blue-950/60 dark:text-blue-300',
+    badgeClass: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/50 dark:text-blue-200',
+    accentClass: 'border-l-blue-500',
+  },
+  started: {
+    label: 'Inicio de gestión',
+    icon: 'i-lucide-play-circle',
+    nodeClass: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/60 dark:text-sky-300',
+    badgeClass: 'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900 dark:bg-sky-950/50 dark:text-sky-200',
+    accentClass: 'border-l-sky-500',
+  },
+  responded: {
+    label: 'Respuesta',
+    icon: 'i-lucide-reply',
+    nodeClass: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-300',
+    badgeClass: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200',
+    accentClass: 'border-l-emerald-500',
+  },
+  closed: {
+    label: 'Cierre',
+    icon: 'i-lucide-circle-check-big',
+    nodeClass: 'border-green-200 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/60 dark:text-green-300',
+    badgeClass: 'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-200',
+    accentClass: 'border-l-green-500',
+  },
+  voided: {
+    label: 'Anulación',
+    icon: 'i-lucide-circle-x',
+    nodeClass: 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300',
+    badgeClass: 'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/50 dark:text-red-200',
+    accentClass: 'border-l-red-500',
+  },
+  intake_classified: {
+    label: 'Clasificación desde bandeja',
+    icon: 'i-lucide-inbox',
+    nodeClass: 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-300',
+    badgeClass: 'border-indigo-200 bg-indigo-50 text-indigo-800 dark:border-indigo-900 dark:bg-indigo-950/50 dark:text-indigo-200',
+    accentClass: 'border-l-indigo-500',
+  },
+  traffic_light_changed: {
+    label: 'Cambio de semáforo',
+    icon: 'i-lucide-traffic-cone',
+    nodeClass: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/60 dark:text-amber-300',
+    badgeClass: 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
+    accentClass: 'border-l-amber-500',
+  },
+  sla_alert_notified: {
+    label: 'Notificación SLA',
+    icon: 'i-lucide-bell-ring',
+    nodeClass: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900 dark:bg-orange-950/60 dark:text-orange-300',
+    badgeClass: 'border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-900 dark:bg-orange-950/50 dark:text-orange-200',
+    accentClass: 'border-l-orange-500',
+  },
+  metadata_updated: {
+    label: 'Metadatos',
+    icon: 'i-lucide-tags',
+    nodeClass: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300',
+    badgeClass: 'border-slate-200 bg-slate-50 text-slate-800 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-200',
+    accentClass: 'border-l-slate-500',
+  },
+  response_copy_emails_updated: {
+    label: 'Copias de la respuesta',
+    icon: 'i-lucide-mails',
+    nodeClass: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-cyan-950/60 dark:text-cyan-300',
+    badgeClass: 'border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/50 dark:text-cyan-200',
+    accentClass: 'border-l-cyan-500',
+  },
 }
 
 const DEFAULT_PRESENTATION: EventPresentation = {
@@ -257,7 +352,7 @@ function showLess() {
     <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-gradient-to-r from-muted/50 to-background px-4 py-3 shadow-sm">
       <div>
         <p class="text-sm font-medium">
-          Línea de tiempo del proceso
+          {{ title }}
         </p>
         <p class="text-muted-foreground text-xs">
           Mostrando {{ visibleEvents.length }} de {{ orderedEvents.length }} evento(s), del más reciente al más antiguo.
@@ -362,6 +457,13 @@ function showLess() {
               >
                 <Icon name="i-lucide-git-branch" class="size-3" />
                 {{ event.stage.name }}
+              </span>
+              <span
+                v-if="event.status_change"
+                class="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-2 py-0.5 text-muted-foreground"
+              >
+                <Icon name="i-lucide-arrow-right" class="size-3" />
+                {{ event.status_change }}
               </span>
             </div>
 

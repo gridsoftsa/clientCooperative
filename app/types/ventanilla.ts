@@ -359,6 +359,7 @@ export interface VentanillaFilingSummary {
 export interface VentanillaFilingFileRow {
   id: number
   is_primary: boolean
+  is_response_document?: boolean
   title: string
   original_name: string
   mime_type: string | null

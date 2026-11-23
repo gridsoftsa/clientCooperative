@@ -238,6 +238,9 @@ function openFilingDetail() {
               <Badge v-if="file.is_primary" variant="secondary" class="ml-2">
                 Principal
               </Badge>
+              <Badge v-else-if="file.is_response_document" variant="secondary" class="ml-2">
+                Respuesta
+              </Badge>
             </p>
             <p class="text-muted-foreground text-xs">
               {{ file.original_name }}

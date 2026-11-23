@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import type { WorkflowTaskCollaboratorRow } from '~/types/workflow'
+import type { WorkflowFilingContextSummary, WorkflowTaskCollaboratorRow } from '~/types/workflow'
 import { extractApiErrorMessage } from '~/utils/workflow-task-ui'
 
 definePageMeta({
@@ -84,6 +84,17 @@ function scheduleLoad() {
     page.value = 1
     void load()
   }, 400)
+}
+
+function filingRequester(filing: WorkflowFilingContextSummary | null | undefined): string | null {
+  const name = filing?.sender_name?.trim() ?? ''
+  const identifier = filing?.sender_identifier?.trim() ?? ''
+
+  if (name && identifier) {
+    return `${name} · ${identifier}`
+  }
+
+  return name || identifier || null
 }
 
 function statusLabel(status: WorkflowTaskCollaboratorRow['status']): string {
@@ -203,8 +214,11 @@ onUnmounted(() => {
             {{ row.filing?.subject ?? '—' }}
             <span v-if="row.task?.stage?.name"> · {{ row.task.stage.name }}</span>
           </p>
-          <p v-if="row.invited_by" class="mt-2 text-xs text-muted-foreground">
-            Solicitado por {{ row.invited_by.name }}
+          <p v-if="filingRequester(row.filing)" class="mt-2 text-sm">
+            Solicitante del radicado: {{ filingRequester(row.filing) }}
+          </p>
+          <p v-if="row.invited_by" class="mt-1 text-xs text-muted-foreground">
+            Aporte pedido por {{ row.invited_by.name }}
           </p>
           <p v-if="row.request_note" class="mt-2 line-clamp-3 text-sm">
             {{ row.request_note }}

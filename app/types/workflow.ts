@@ -257,6 +257,7 @@ export interface WorkflowCollaboratorsSummary {
 export interface WorkflowFilingContextFile {
   id: number
   is_primary: boolean
+  is_response_document?: boolean
   title: string
   folio_start: number | null
   folio_end: number | null

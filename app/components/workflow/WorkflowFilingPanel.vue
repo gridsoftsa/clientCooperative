@@ -92,27 +92,6 @@ async function openTaskActions() {
   })
 }
 
-function eventLabel(type: string) {
-  const labels: Record<string, string> = {
-    instance_started: 'Inicio del proceso',
-    task_created: 'Tarea creada',
-    advanced: 'Avance de etapa',
-    returned: 'Devolución',
-    reassigned: 'Reasignación',
-    comment: 'Comentario',
-    collaboration_responded: 'Aporte de colaborador',
-    collaboration_reassigned: 'Colaboración reasignada',
-    collaboration_reassignment_requested: 'Cambio de colaborador solicitado',
-    files_attached: 'Documentos adjuntos',
-    completed: 'Proceso cerrado',
-    cancelled: 'Proceso cancelado',
-    escalated: 'Escalamiento SLA etapa',
-    sender_notified: 'Correo al interesado',
-  }
-
-  return labels[type] ?? type
-}
-
 watch(() => props.filingId, () => load(), { immediate: true })
 
 defineExpose({ reload: load })
@@ -394,28 +373,11 @@ defineExpose({ reload: load })
           />
         </div>
 
-        <div v-if="context.events.length" class="space-y-2">
-          <p class="text-sm font-medium">
-            Historial
-          </p>
-          <div class="max-h-48 space-y-2 overflow-y-auto">
-            <div
-              v-for="event in context.events.slice(0, 8)"
-              :key="event.id"
-              class="rounded border px-2 py-1.5 text-xs"
-            >
-              <div class="flex justify-between gap-2">
-                <span class="font-medium">{{ eventLabel(event.event_type) }}</span>
-                <span class="text-muted-foreground shrink-0">
-                  {{ event.created_at ? new Date(event.created_at).toLocaleDateString('es-CO') : '' }}
-                </span>
-              </div>
-              <p v-if="event.description" class="text-muted-foreground">
-                {{ event.description }}
-              </p>
-            </div>
-          </div>
-        </div>
+        <WorkflowTaskHistoryTimeline
+          :events="context.events"
+          :filing-id="filingId"
+          title="Historial del workflow"
+        />
       </template>
     </CardContent>
   </Card>
