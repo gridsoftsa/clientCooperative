@@ -71,6 +71,9 @@ export interface VentanillaResponsibleUserRow {
   id: number
   name: string
   email?: string | null
+  staff_name?: string | null
+  position_name?: string | null
+  user_name?: string | null
 }
 
 export interface VentanillaSearchableMetadataFieldRow {

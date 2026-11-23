@@ -28,9 +28,39 @@ const saving = ref(false)
 const responsibleUserOptions = computed(() =>
   responsibleUsers.value.map(user => ({
     value: user.id,
-    label: user.email ? `${user.name} · ${user.email}` : user.name,
+    label: responsibleUserOptionLabel(user),
   })),
 )
+
+function responsibleUserOptionLabel(user: { name: string, email?: string | null, staff_name?: string | null, position_name?: string | null, user_name?: string | null }): string {
+  const person = (user.staff_name ?? '').trim()
+  const position = (user.position_name ?? '').trim()
+  const account = (user.user_name ?? '').trim()
+  const mail = (user.email ?? '').trim()
+  const same = (left: string, right: string) => left.localeCompare(right, 'es', { sensitivity: 'accent' }) === 0
+  const distinctPerson = person !== '' && !same(person, account) && !same(person, mail) ? person : ''
+
+  if (distinctPerson !== '' && position !== '')
+    return `${distinctPerson} · ${position}`
+
+  if (distinctPerson !== '' && account !== '')
+    return `${distinctPerson} · ${account}`
+
+  if (position !== '' && account !== '')
+    return `${position} · ${account}`
+
+  if (distinctPerson !== '' || position !== '' || account !== '')
+    return distinctPerson || position || account
+
+  const fallback = (user.name ?? '').trim()
+  if (fallback !== '' && mail !== '' && same(fallback, mail))
+    return fallback
+
+  if (fallback !== '' && mail !== '' && fallback.includes(mail))
+    return fallback.replace(` · ${mail}`, '').trim() || fallback
+
+  return fallback || mail || 'Usuario'
+}
 
 watch(
   () => [props.filingId, props.orgUnitId, props.initialAssignedUserId] as const,
