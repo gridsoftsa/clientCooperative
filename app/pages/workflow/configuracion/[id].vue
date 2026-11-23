@@ -5,7 +5,6 @@ import {
   labelForWorkflowStageType,
   labelForWorkflowVentanillaRole,
 } from '~/constants/workflow'
-import type { OrgPositionRow, OrgUnitRow } from '~/composables/useOrgStructureApi'
 import type { WorkflowDefinition, WorkflowFunctionalTypeOption, WorkflowStage } from '~/types/workflow'
 
 definePageMeta({
@@ -17,7 +16,6 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const workflowApi = useWorkflowApi()
-const orgApi = useOrgStructureApi()
 const deleteWithReason = useApiDeleteWithReason()
 
 const deleteStageDialogOpen = ref(false)
@@ -30,9 +28,6 @@ const savingGeneral = ref(false)
 const definition = ref<WorkflowDefinition | null>(null)
 const activeTab = ref('stages')
 
-const users = ref<Array<{ id: number, name: string }>>([])
-const orgUnits = ref<OrgUnitRow[]>([])
-const positions = ref<OrgPositionRow[]>([])
 const functionalTypes = ref<WorkflowFunctionalTypeOption[]>([])
 const otherDefinitions = ref<WorkflowDefinition[]>([])
 const bindingSaving = ref(false)
@@ -40,9 +35,6 @@ const selectedFunctionalTypeKey = ref<string | null>(null)
 const importDialogOpen = ref(false)
 const importSourceId = ref<string>('')
 const importingStages = ref(false)
-
-const stageDialogOpen = ref(false)
-const editingStage = ref<WorkflowStage | null>(null)
 
 const generalForm = reactive({
   name: '',
@@ -76,13 +68,6 @@ const stages = computed(() => {
   return [...list].sort((a, b) => a.sort_order - b.sort_order)
 })
 
-const nextSortOrder = computed(() => {
-  if (stages.value.length === 0)
-    return 1
-
-  return Math.max(...stages.value.map(s => s.sort_order)) + 1
-})
-
 const bindingsForDefinition = computed(() => {
   const bindings = definition.value?.functional_bindings ?? definition.value?.functionalBindings ?? []
   return bindings.filter(b => b.is_active)
@@ -112,19 +97,6 @@ const slaMode = computed<'unbound' | 'none' | 'limited'>(() => {
   return slaBudget.value == null ? 'none' : 'limited'
 })
 
-const consumedByOtherStages = computed(() => {
-  const current = editingStage.value?.sla_business_days ?? 0
-
-  return Math.max(0, slaConsumed.value - current)
-})
-
-const maxSlaDays = computed(() => {
-  if (slaMode.value !== 'limited' || slaBudget.value == null)
-    return null
-
-  return Math.max(0, slaBudget.value - consumedByOtherStages.value)
-})
-
 const importCandidates = computed(() =>
   otherDefinitions.value.filter(item => item.id !== definitionId.value && (item.stages?.length ?? 0) > 0),
 )
@@ -141,18 +113,12 @@ function assigneeDetail(stage: WorkflowStage) {
 }
 
 async function loadCatalogs() {
-  const [types, units, posList, userList, definitions] = await Promise.all([
+  const [types, definitions] = await Promise.all([
     workflowApi.fetchFunctionalTypes(),
-    orgApi.fetchUnits({ activeOnly: true }),
-    orgApi.fetchPositions({ activeOnly: true }),
-    workflowApi.fetchAssignableUsers(),
     workflowApi.fetchDefinitions(),
   ])
 
   functionalTypes.value = types
-  orgUnits.value = units
-  positions.value = posList
-  users.value = userList
   otherDefinitions.value = definitions
 }
 
@@ -212,13 +178,11 @@ async function saveGeneral() {
 }
 
 function openCreateStage() {
-  editingStage.value = null
-  stageDialogOpen.value = true
+  void navigateTo(`/workflow/configuracion/etapas/${definitionId.value}/nueva`)
 }
 
 function openEditStage(stage: WorkflowStage) {
-  editingStage.value = stage
-  stageDialogOpen.value = true
+  void navigateTo(`/workflow/configuracion/etapas/${definitionId.value}/${stage.id}`)
 }
 
 function openDeleteStageDialog(stage: WorkflowStage) {
@@ -332,9 +296,10 @@ onMounted(async () => {
 })
 
 onActivated(async () => {
-  if (!loading.value) {
-    await loadCatalogs()
-  }
+  if (loading.value)
+    return
+
+  await Promise.all([loadCatalogs(), loadDefinition()])
 })
 
 watch(deleteStageDialogOpen, (open) => {
@@ -640,24 +605,6 @@ watch(deleteStageDialogOpen, (open) => {
       </TabsContent>
 
     </Tabs>
-
-    <WorkflowStageFormDialog
-      v-if="definition"
-      v-model:open="stageDialogOpen"
-      :definition-id="definition.id"
-      :stage="editingStage"
-      :next-sort-order="nextSortOrder"
-      :locked="isStructureLocked"
-      :users="users"
-      :org-units="orgUnits"
-      :positions="positions"
-      :sla-mode="slaMode"
-      :functional-type-label="boundFunctionalType?.label ?? null"
-      :sla-budget="slaBudget"
-      :max-sla-days="maxSlaDays"
-      :consumed-by-other-stages="consumedByOtherStages"
-      @saved="loadDefinition"
-    />
 
     <Dialog v-model:open="importDialogOpen">
       <DialogContent class="sm:max-w-lg">

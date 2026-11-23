@@ -40,6 +40,8 @@ const SEGMENT_LABELS: Record<string, string> = {
   'enviadas': 'Enviadas',
   'colaboracion': 'Mis colaboraciones',
   'workflow': 'Workflow',
+  'configuracion': 'Configuración',
+  'etapas': 'Etapas',
   'nueva': 'Nueva',
   'nuevo': 'Nuevo',
   'comunicados': 'Comunicados',
