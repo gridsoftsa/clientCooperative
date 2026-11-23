@@ -102,7 +102,7 @@ onMounted(() => {
             Editar Backup
           </h2>
           <p class="text-sm text-muted-foreground leading-relaxed">
-            Ajuste vigencia, motivo y estado. Los cambios se reflejan en el comprobante PDF al guardar.
+            Ajuste vigencia, motivo y estado. El Backup no se elimina: desactívelo para cortar el encargo y devolver el trabajo al titular. Los cambios se reflejan en el comprobante PDF al guardar.
           </p>
         </div>
         <div class="flex flex-wrap gap-2 shrink-0">
@@ -161,7 +161,7 @@ onMounted(() => {
                   :model-value="form.is_active"
                   gender="masculine"
                   input-id="del_act_ms"
-                  helper-text="Indica si este Backup permanece vigente."
+                  helper-text="Desactivar corta el encargo y conserva el registro. No use eliminación."
                   @update:model-value="(v: boolean) => { form.is_active = v }"
                 />
               </div>

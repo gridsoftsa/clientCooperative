@@ -26,6 +26,7 @@ const orgApi = useOrgStructureApi()
 const rows = ref<DelegationRow[]>([])
 const loading = ref(true)
 const openingReceiptId = ref<number | null>(null)
+const deactivatingId = ref<number | null>(null)
 const pagination = ref({
   current_page: 1,
   last_page: 1,
@@ -84,20 +85,32 @@ function changePerPage(size: number) {
   void load()
 }
 
-async function removeRow(id: number) {
-  if (!hasAnyPermission(['suplencias_delegaciones_eliminar', 'estructura_org_editar'])) {
+async function deactivateRow(id: number) {
+  if (!hasAnyPermission(['suplencias_delegaciones_editar', 'estructura_org_editar'])) {
     toast.error('Sin permiso')
     return
   }
-  if (!confirm('¿Eliminar este Backup? (queda en historial)')) {
+  if (deactivatingId.value != null) {
     return
   }
+  if (!confirm('¿Desactivar este Backup? El registro se conserva. Se corta el encargo y el trabajo pendiente vuelve al titular si sigue en el Backup.')) {
+    return
+  }
+  deactivatingId.value = id
   try {
-    await $api(`/organizational-structure/org-delegations/${id}`, { method: 'DELETE' })
-    toast.success('Backup eliminado')
+    await $api(`/organizational-structure/org-delegations/${id}`, {
+      method: 'PUT',
+      body: { is_active: false },
+    })
+    toast.success('Backup desactivado. El registro permanece en el listado.')
     await load()
-  } catch (e: any) {
-    toast.error(e?.data?.message || 'Error')
+  }
+  catch (e: unknown) {
+    const err = e as { data?: { message?: string } }
+    toast.error(err?.data?.message || 'No se pudo desactivar')
+  }
+  finally {
+    deactivatingId.value = null
   }
 }
 
@@ -131,7 +144,7 @@ onMounted(() => {
         <CardHeader>
           <CardTitle>Listado de Backup</CardTitle>
           <CardDescription class="leading-relaxed">
-            Encargos temporales por vacaciones, incapacidad u otras ausencias (titular y Backup con vigencia).
+            Encargos temporales por vacaciones, incapacidad u otras ausencias. Si hay un error, desactive el registro: no se elimina, se conserva el historial y se revierten encargos y trabajo asignado.
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-4">
@@ -204,14 +217,21 @@ onMounted(() => {
                           Editar
                         </Button>
                       </PermissionGate>
-                      <PermissionGate :any-permission="['estructura_org_editar', 'suplencias_delegaciones_eliminar']">
+                      <PermissionGate :any-permission="['estructura_org_editar', 'suplencias_delegaciones_editar']">
                         <Button
+                          v-if="d.is_active"
                           variant="destructive"
                           size="sm"
                           class="h-8 gap-1.5 px-2 text-xs"
-                          @click="removeRow(d.id)"
+                          :disabled="deactivatingId === d.id"
+                          @click="deactivateRow(d.id)"
                         >
-                          Eliminar
+                          <Icon
+                            :name="deactivatingId === d.id ? 'i-lucide-loader-2' : 'i-lucide-ban'"
+                            class="h-3.5 w-3.5"
+                            :class="deactivatingId === d.id ? 'animate-spin' : ''"
+                          />
+                          Desactivar
                         </Button>
                       </PermissionGate>
                     </div>
