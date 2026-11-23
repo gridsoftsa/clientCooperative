@@ -66,15 +66,18 @@ const collaboratorsTotal = computed(() => props.context?.collaborators?.total ??
 const collaboratorsCompleted = computed(() =>
   collaboratorsTotal.value > 0 && collaboratorsPending.value === 0,
 )
+const stageAllowsCollaborators = computed(() =>
+  props.context?.open_task?.stage?.allows_collaborators === true,
+)
 const showCollaboratorsTab = computed(() =>
   canManage.value
   && (
-    props.context?.open_task?.stage?.ventanilla_role === 'management'
+    stageAllowsCollaborators.value
     || collaboratorsTotal.value > 0
   ),
 )
 const canInviteCollaborators = computed(() =>
-  props.context?.open_task?.stage?.ventanilla_role === 'management'
+  stageAllowsCollaborators.value
   && props.context?.collaborators?.can_manage === true,
 )
 const myPendingCollaborationId = computed(() => props.context?.collaborators?.my_pending_collaboration_id ?? null)
@@ -116,14 +119,22 @@ const isManagementStage = computed(() =>
   && props.context?.open_task?.stage?.ventanilla_role === 'management',
 )
 const showFilingMetadataCapture = computed(() =>
-  isManagementStage.value && Boolean(props.context?.filing?.id),
+  isManagementStage.value
+  && props.context?.open_task?.stage?.captures_metadata === true
+  && Boolean(props.context?.filing?.id),
 )
 const needsFilingMetadata = computed(() =>
   showFilingMetadataCapture.value
   && props.context?.filing_metadata_complete === false
   && filingMetadataFieldCount.value > 0,
 )
-const filingMetadataSchema = computed(() => props.context?.filing?.archival_metadata_schema ?? null)
+const stageMetadata = computed(() => props.context?.stage_metadata ?? null)
+const filingMetadataSchema = computed(() => {
+  if (stageMetadata.value?.source === 'stage' || stageMetadata.value?.source === 'filing')
+    return stageMetadata.value.schema ?? null
+
+  return props.context?.filing?.archival_metadata_schema ?? null
+})
 const filingMetadataFieldCount = computed(() =>
   (filingMetadataSchema.value?.fields ?? []).filter(field => field.is_active !== false).length,
 )
@@ -152,8 +163,11 @@ const showPrimaryStageAction = computed(() =>
   showAdvanceButton.value || showFilingAssignment.value || canCloseFilingFromWorkflow.value,
 )
 
-watch(() => props.context?.filing?.id, () => {
-  metadataValues.value = { ...(props.context?.filing?.metadata_values ?? {}) }
+watch(() => [props.context?.open_task?.id, props.context?.stage_metadata?.source, props.context?.filing?.id] as const, () => {
+  const stageValues = props.context?.stage_metadata?.values
+  metadataValues.value = {
+    ...(stageValues ?? props.context?.filing?.metadata_values ?? {}),
+  }
   metadataSubmitAttempted.value = false
 }, { immediate: true })
 
@@ -336,7 +350,12 @@ async function saveFilingMetadata(): Promise<void> {
 
   savingMetadata.value = true
   try {
-    await ventanillaApi.updateFilingMetadata(filingId, metadataValues.value)
+    if (stageMetadata.value?.source === 'stage' && props.context?.open_task?.id) {
+      await workflowApi.updateTaskMetadata(props.context.open_task.id, metadataValues.value)
+    }
+    else {
+      await ventanillaApi.updateFilingMetadata(filingId, metadataValues.value)
+    }
     toast.success('Metadatos guardados.')
     metadataSubmitAttempted.value = false
     refreshContext()
@@ -646,6 +665,9 @@ async function saveFilingMetadata(): Promise<void> {
           <p class="text-sm text-muted-foreground">
             <template v-if="needsFilingMetadata">
               Completar estos datos es obligatorio para avanzar la etapa.
+            </template>
+            <template v-else-if="stageMetadata?.source === 'stage' && filingMetadataSchema">
+              Metadatos propios de esta etapa: {{ filingMetadataSchema.name }}.
             </template>
             <template v-else-if="filingMetadataFieldCount > 0">
               Datos archivísticos del tipo documental del radicado.

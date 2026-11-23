@@ -74,6 +74,10 @@ export interface WorkflowStage {
   allows_reassign: boolean
   is_terminal: boolean
   ventanilla_role?: string | null
+  captures_metadata?: boolean
+  allows_collaborators?: boolean
+  archival_metadata_schema_id?: number | null
+  metadata_schema?: { id: number, name: string, version_number?: number } | null
   assignee_user?: { id: number, name: string } | null
   assignee_org_unit?: { id: number, name: string, code?: string } | null
   assignee_position?: { id: number, name: string, code?: string } | null
@@ -99,6 +103,9 @@ export interface WorkflowStagePayload {
   allows_reassign?: boolean
   is_terminal?: boolean
   ventanilla_role?: string | null
+  captures_metadata?: boolean
+  allows_collaborators?: boolean
+  archival_metadata_schema_id?: number | null
 }
 
 export interface WorkflowBindingCoverageRow {
@@ -180,6 +187,9 @@ export interface WorkflowFilingContext {
       key: string
       name: string
       ventanilla_role?: string | null
+      captures_metadata?: boolean
+      allows_collaborators?: boolean
+      archival_metadata_schema_id?: number | null
       allows_advance: boolean
       allows_return: boolean
       allows_reassign: boolean
@@ -213,6 +223,11 @@ export interface WorkflowFilingContext {
   is_active: boolean
   advance_guidance?: string | null
   filing_metadata_complete?: boolean
+  stage_metadata?: {
+    source: 'stage' | 'filing'
+    schema: WorkflowFilingContextSummary['archival_metadata_schema']
+    values: Record<string, unknown>
+  } | null
   warnings?: WorkflowContextWarning[]
   task_escalation?: WorkflowTaskEscalationSummary | null
   archival_file?: WorkflowArchivalFileContext | null

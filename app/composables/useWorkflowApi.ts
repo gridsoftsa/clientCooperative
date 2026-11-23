@@ -144,6 +144,21 @@ export function useWorkflowApi() {
     return await api<{ message: string }>(`/workflow/stages/${stageId}`, { method: 'DELETE' })
   }
 
+  async function fetchMetadataSchemas() {
+    const res = await api<{ data: Array<{ id: number, name: string, version_number: number }> }>('/workflow/meta/metadata-schemas')
+
+    return res.data
+  }
+
+  async function updateTaskMetadata(taskId: number, metadataValues: Record<string, unknown>) {
+    const res = await api<{ data: { id: number, metadata_values: Record<string, unknown> | null }, message: string }>(
+      `/workflow/tasks/${taskId}/metadata`,
+      { method: 'PATCH', body: { metadata_values: metadataValues } },
+    )
+
+    return res.data
+  }
+
   async function fetchBindingsCoverage(): Promise<WorkflowBindingCoverageRow[]> {
     const res = await api<{ data: WorkflowBindingCoverageRow[] }>('/workflow/bindings-coverage')
 
@@ -427,6 +442,8 @@ export function useWorkflowApi() {
     createStage,
     updateStage,
     deleteStage,
+    fetchMetadataSchemas,
+    updateTaskMetadata,
     upsertBinding,
     fetchBindingsCoverage,
     fetchTaskCollaborators,

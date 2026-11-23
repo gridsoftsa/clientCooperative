@@ -45,7 +45,13 @@ const form = reactive({
   allows_reassign: true,
   is_terminal: false,
   ventanilla_role: 'none' as string,
+  captures_metadata: true,
+  allows_collaborators: true,
+  metadata_schema_choice: 'filing' as string,
 })
+
+const metadataSchemas = ref<Array<{ id: number, name: string, version_number: number }>>([])
+const isManagementRole = computed(() => form.ventanilla_role === 'management')
 
 watch(() => props.open, (isOpen) => {
   if (!isOpen)
@@ -65,6 +71,11 @@ watch(() => props.open, (isOpen) => {
     form.allows_reassign = props.stage.allows_reassign
     form.is_terminal = props.stage.is_terminal
     form.ventanilla_role = props.stage.ventanilla_role ?? 'none'
+    form.captures_metadata = props.stage.captures_metadata ?? props.stage.ventanilla_role === 'management'
+    form.allows_collaborators = props.stage.allows_collaborators ?? props.stage.ventanilla_role === 'management'
+    form.metadata_schema_choice = props.stage.archival_metadata_schema_id
+      ? String(props.stage.archival_metadata_schema_id)
+      : 'filing'
   }
   else {
     form.name = ''
@@ -80,6 +91,19 @@ watch(() => props.open, (isOpen) => {
     form.allows_reassign = true
     form.is_terminal = false
     form.ventanilla_role = 'none'
+    form.captures_metadata = true
+    form.allows_collaborators = true
+    form.metadata_schema_choice = 'filing'
+  }
+
+  if (metadataSchemas.value.length === 0) {
+    workflowApi.fetchMetadataSchemas()
+      .then(rows => {
+        metadataSchemas.value = rows
+      })
+      .catch(() => {
+        metadataSchemas.value = []
+      })
   }
 })
 
@@ -131,6 +155,13 @@ function buildPayload(): WorkflowStagePayload {
       ? form.sla_business_days
       : null,
     ventanilla_role: form.ventanilla_role === 'none' ? null : form.ventanilla_role,
+    captures_metadata: form.ventanilla_role === 'management' && form.captures_metadata,
+    allows_collaborators: form.ventanilla_role === 'management' && form.allows_collaborators,
+    archival_metadata_schema_id: form.ventanilla_role === 'management'
+      && form.captures_metadata
+      && form.metadata_schema_choice !== 'filing'
+      ? Number(form.metadata_schema_choice)
+      : null,
     assignee_user_id: null,
     assignee_org_unit_id: null,
     assignee_position_id: null,
@@ -257,6 +288,9 @@ async function save() {
 
         <div class="grid gap-2">
           <Label>Responsable</Label>
+          <p v-if="isManagementRole" class="text-xs text-muted-foreground">
+            Este responsable aplica únicamente a esta etapa de gestión.
+          </p>
           <Select v-model="form.assignee_type" :disabled="locked">
             <SelectTrigger>
               <SelectValue />
@@ -333,7 +367,48 @@ async function save() {
           </Select>
           <p class="text-xs text-muted-foreground">
             Vincula esta etapa con acciones del radicado (asignar, iniciar gestión, cerrar).
+            Puede haber varias etapas de gestión. Asignación y cierre siguen siendo una sola etapa por flujo.
           </p>
+        </div>
+
+        <div v-if="isManagementRole" class="rounded-lg border p-3 space-y-3">
+          <p class="text-sm font-medium">
+            Parámetros de esta etapa de gestión
+          </p>
+          <p class="text-xs text-muted-foreground">
+            El responsable, los metadatos y los colaboradores se configuran solo para esta etapa.
+          </p>
+          <label class="flex items-center gap-2 text-sm">
+            <Checkbox v-model="form.captures_metadata" :disabled="locked" />
+            Capturar metadatos en esta etapa
+          </label>
+          <div v-if="form.captures_metadata" class="grid gap-2">
+            <Label>Esquema de metadatos</Label>
+            <Select v-model="form.metadata_schema_choice" :disabled="locked">
+              <SelectTrigger>
+                <SelectValue placeholder="Esquema del radicado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="filing">
+                  Esquema del radicado
+                </SelectItem>
+                <SelectItem
+                  v-for="schema in metadataSchemas"
+                  :key="schema.id"
+                  :value="String(schema.id)"
+                >
+                  {{ schema.name }} · v{{ schema.version_number }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <p class="text-xs text-muted-foreground">
+              «Esquema del radicado» usa el tipo documental o el tipo funcional. Un esquema propio guarda los valores solo en esta etapa.
+            </p>
+          </div>
+          <label class="flex items-center gap-2 text-sm">
+            <Checkbox v-model="form.allows_collaborators" :disabled="locked" />
+            Permitir colaboradores en esta etapa
+          </label>
         </div>
 
         <div class="grid gap-2">

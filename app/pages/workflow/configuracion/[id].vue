@@ -387,6 +387,10 @@ watch(deleteStageDialogOpen, (open) => {
                   <span v-if="stage.ventanilla_role">
                     {{ labelForWorkflowVentanillaRole(stage.ventanilla_role) }}
                   </span>
+                  <span v-if="stage.captures_metadata">
+                    Metadatos{{ stage.metadata_schema?.name ? `: ${stage.metadata_schema.name}` : '' }}
+                  </span>
+                  <span v-if="stage.allows_collaborators">Colaboradores</span>
                 </div>
                 <div class="flex flex-wrap gap-2">
                   <Badge v-if="stage.allows_advance" variant="outline" class="text-xs">

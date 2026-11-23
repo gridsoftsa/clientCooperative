@@ -113,8 +113,15 @@ async function loadCollaborators() {
 
   try {
     const result = await workflowApi.fetchTaskCollaborators(props.taskId)
-    collaborators.value = result.data
-    summary.value = result.meta
+    const rows = result.data.filter(row => row.workflow_task_id === props.taskId)
+    collaborators.value = rows
+    const pending = rows.filter(row => row.status === 'pending').length
+    summary.value = {
+      total: rows.length,
+      pending,
+      all_responded: pending === 0,
+      can_manage: result.meta.can_manage,
+    }
   }
   catch (error) {
     toast.error(extractApiErrorMessage(error))
