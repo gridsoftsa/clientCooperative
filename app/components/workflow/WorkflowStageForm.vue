@@ -372,6 +372,9 @@ async function save() {
             <p v-if="isManagementRole" class="text-xs text-muted-foreground">
               Este responsable aplica únicamente a esta etapa de gestión.
             </p>
+            <p v-else-if="form.assignee_type === 'producer_org_unit_manager'" class="text-xs text-muted-foreground">
+              La tarea va al jefe del área productora del radicado (quien origina), no al del área destinataria.
+            </p>
             <Select v-model="form.assignee_type" :disabled="locked">
               <SelectTrigger>
                 <SelectValue />

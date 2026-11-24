@@ -12,6 +12,7 @@ export const WORKFLOW_VENTANILLA_ROLE_OPTIONS = [
 
 export const WORKFLOW_ASSIGNEE_TYPE_OPTIONS = [
   { value: 'org_unit_manager', label: 'Jefe del área responsable del radicado' },
+  { value: 'producer_org_unit_manager', label: 'Jefe del área productora (quien origina)' },
   { value: 'filing_assigned_user', label: 'Usuario asignado al radicado' },
   { value: 'specific_user', label: 'Usuario específico' },
   { value: 'org_unit', label: 'Jefe de un área fija' },
