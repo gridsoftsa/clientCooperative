@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import type { WorkflowFilingContext, WorkflowTaskCard } from '~/types/workflow'
-import { extractApiErrorMessage, isOpenWorkflowTaskStatus } from '~/utils/workflow-task-ui'
+import { extractApiErrorMessage, isOpenWorkflowTaskStatus, workflowTaskAllowsActions } from '~/utils/workflow-task-ui'
 
 definePageMeta({
   layout: 'default',
@@ -12,6 +12,7 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const workflowApi = useWorkflowApi()
+const { user: authUser } = useAuth()
 const { ensureLoaded, labelFor } = useVentanillaFunctionalTypeLabels()
 
 const taskId = computed(() => Number(route.params.id))
@@ -73,6 +74,11 @@ const pageTitle = computed(() => {
   }
 
   const stage = task.value.stage?.name ?? context.value?.open_task?.stage?.name
+  const followUp = !workflowTaskAllowsActions(task.value, authUser.value?.id)
+
+  if (followUp) {
+    return stage ? `Seguimiento · ${stage}` : 'Seguimiento del trámite'
+  }
 
   return stage ? `Gestionar · ${stage}` : 'Gestionar tarea'
 })
@@ -105,8 +111,12 @@ async function loadContext() {
   context.value = await workflowApi.fetchFilingContext(filingId)
 }
 
-async function load() {
-  loading.value = true
+async function load(options: { silent?: boolean } = {}) {
+  const silent = options.silent === true && task.value !== null
+
+  if (!silent) {
+    loading.value = true
+  }
 
   try {
     task.value = await workflowApi.fetchTask(taskId.value)
@@ -134,14 +144,20 @@ async function load() {
     }
   }
   catch (error) {
-    task.value = null
-    context.value = null
-    toast.error(extractApiErrorMessage(error))
+    if (!silent) {
+      task.value = null
+      context.value = null
+      toast.error(extractApiErrorMessage(error))
+    }
   }
   finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
   }
 }
+
+useLivePageRefresh(() => load({ silent: true }))
 
 function goBack() {
   void navigateTo(backUrl.value)

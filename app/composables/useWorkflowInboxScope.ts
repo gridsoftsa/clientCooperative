@@ -1,4 +1,4 @@
-export type WorkflowInboxScope = 'mine' | 'area' | 'all'
+export type WorkflowInboxScope = 'mine' | 'following' | 'area' | 'all'
 
 export function useWorkflowInboxScope() {
   const { hasPermission } = usePermissions()
@@ -7,10 +7,6 @@ export function useWorkflowInboxScope() {
   const canViewAllTasks = computed(() => hasPermission('workflow_ver_todas'))
 
   function resolveDefaultScope(): WorkflowInboxScope {
-    if (canViewAllTasks.value) {
-      return 'all'
-    }
-
     return 'mine'
   }
 

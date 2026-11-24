@@ -24,6 +24,8 @@ export interface WorkflowTaskCard {
   instance: { id: number, status: string } | null
   subject: WorkflowSubjectSummary | null
   workflow: { id: number, key: string, name: string } | null
+  is_assignee?: boolean
+  can_act?: boolean
 }
 
 export interface WorkflowBoardColumn {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { WorkflowBoardColumn, WorkflowTaskCard } from '~/types/workflow'
+import { workflowTaskAllowsActions } from '~/utils/workflow-task-ui'
 
 const props = defineProps<{
   columns: WorkflowBoardColumn[]
@@ -15,6 +16,11 @@ const emit = defineEmits<{
 }>()
 
 const { ensureLoaded, labelFor } = useVentanillaFunctionalTypeLabels()
+const { user: authUser } = useAuth()
+
+function canActOnTask(task: WorkflowTaskCard) {
+  return Boolean(props.canManage) && workflowTaskAllowsActions(task, authUser.value?.id)
+}
 
 const focusedStageId = ref<number | 'all'>('all')
 
@@ -212,7 +218,7 @@ function functionalTypeLabel(task: WorkflowTaskCard) {
 
               <div class="mt-3 flex gap-2">
                 <Button
-                  v-if="canManage"
+                  v-if="canActOnTask(task)"
                   size="sm"
                   class="h-8 min-w-0 flex-1"
                   @click="emit('manage', task)"
@@ -228,7 +234,7 @@ function functionalTypeLabel(task: WorkflowTaskCard) {
                   @click="emit('openTask', task)"
                 >
                   <Icon name="i-lucide-external-link" class="mr-1 size-4 shrink-0" />
-                  Ventanilla
+                  {{ canActOnTask(task) ? 'Ventanilla' : 'Seguimiento' }}
                 </Button>
               </div>
             </div>

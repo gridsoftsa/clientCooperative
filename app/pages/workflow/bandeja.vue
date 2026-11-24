@@ -3,6 +3,7 @@ import { toast } from 'vue-sonner'
 import type { WorkflowBoardFlow, WorkflowTaskCard, WorkflowTaskCollaboratorRow } from '~/types/workflow'
 import WorkflowTypeFlowCards from '~/components/workflow/WorkflowTypeFlowCards.vue'
 import { DEFAULT_LIST_PAGE_SIZE } from '~/constants/list-pagination'
+import { workflowTaskAllowsActions } from '~/utils/workflow-task-ui'
 
 definePageMeta({
   layout: 'default',
@@ -27,7 +28,12 @@ const definitionId = ref<string>(ALL_DEFINITIONS)
 const filterVentanillaFilingId = ref<number | null>(null)
 
 const canManage = computed(() => hasPermission('workflow_gestionar'))
+const { user: authUser } = useAuth()
 const { ensureLoaded, labelFor } = useVentanillaFunctionalTypeLabels()
+
+function canActOnTask(task: WorkflowTaskCard) {
+  return canManage.value && workflowTaskAllowsActions(task, authUser.value?.id)
+}
 
 function parseVentanillaFilingIdFromRoute(): number | null {
   const raw = route.query.ventanilla_filing_id
@@ -64,7 +70,7 @@ function clearVentanillaFilingFilter(): void {
   router.replace({ query: nextQuery })
 }
 
-async function loadTypeFlows() {
+async function loadTypeFlows(options: { silent?: boolean } = {}) {
   try {
     const board = await workflowApi.fetchBoard({
       scope: scope.value,
@@ -73,7 +79,9 @@ async function loadTypeFlows() {
     typeFlows.value = board.flows ?? []
   }
   catch {
-    typeFlows.value = []
+    if (!options.silent) {
+      typeFlows.value = []
+    }
   }
 }
 
@@ -92,8 +100,12 @@ async function loadPendingCollaborations() {
   }
 }
 
-async function loadTasks(page = 1) {
-  loading.value = true
+async function loadTasks(page = 1, options: { silent?: boolean } = {}) {
+  const silent = options.silent === true
+
+  if (!silent) {
+    loading.value = true
+  }
 
   try {
     const query: Record<string, string | number> = {
@@ -116,12 +128,26 @@ async function loadTasks(page = 1) {
     meta.value = result.meta
   }
   catch {
-    toast.error('No se pudo cargar la bandeja.')
+    if (!silent) {
+      toast.error('No se pudo cargar la bandeja.')
+    }
   }
   finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
   }
 }
+
+async function refreshLive(): Promise<void> {
+  await Promise.all([
+    loadTasks(meta.value.current_page, { silent: true }),
+    loadTypeFlows({ silent: true }),
+    loadPendingCollaborations(),
+  ])
+}
+
+useLivePageRefresh(refreshLive)
 
 function changeWorkflowPerPage(size: number) {
   meta.value.per_page = size
@@ -283,6 +309,15 @@ onMounted(async () => {
               Mis tareas
             </Button>
             <Button
+              type="button"
+              size="sm"
+              :variant="scope === 'following' ? 'default' : 'ghost'"
+              class="h-8"
+              @click="scope = 'following'"
+            >
+              En seguimiento
+            </Button>
+            <Button
               v-if="canViewTeam"
               type="button"
               size="sm"
@@ -341,9 +376,15 @@ onMounted(async () => {
           <p>No hay tareas con estos filtros.</p>
           <p v-if="scope === 'mine'" class="text-xs">
             Solo se listan tareas donde usted es el responsable. Las de etapa «Asignar responsable» van al jefe del área.
+            Tras aprobar, el trámite pasa a
+            <button type="button" class="text-primary underline-offset-4 hover:underline" @click="scope = 'following'">En seguimiento</button>
+            (solo lectura).
             <template v-if="canViewTeam">
               Pruebe <button type="button" class="text-primary underline-offset-4 hover:underline" @click="scope = 'area'">Mi equipo</button>.
             </template>
+          </p>
+          <p v-else-if="scope === 'following'" class="text-xs">
+            Trámites en los que ya actuó y ahora están en otra etapa. Puede ver el avance, no gestionar.
           </p>
         </div>
 
@@ -375,7 +416,7 @@ onMounted(async () => {
             </div>
             <div class="flex shrink-0 gap-2">
               <Button
-                v-if="canManage"
+                v-if="canActOnTask(task)"
                 size="sm"
                 variant="default"
                 @click="openManage(task)"
@@ -390,7 +431,7 @@ onMounted(async () => {
                 @click="openFiling(task)"
               >
                 <Icon name="i-lucide-external-link" class="mr-1 size-4" />
-                Ventanilla
+                {{ canActOnTask(task) ? 'Ventanilla' : 'Seguimiento' }}
               </Button>
             </div>
           </div>

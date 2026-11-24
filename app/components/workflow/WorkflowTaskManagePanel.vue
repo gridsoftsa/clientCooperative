@@ -8,7 +8,7 @@ import WorkflowTaskFilingAttachmentsPanel from '~/components/workflow/WorkflowTa
 import WorkflowTaskFilingSummaryPanel from '~/components/workflow/WorkflowTaskFilingSummaryPanel.vue'
 import WorkflowTaskHistoryTimeline from '~/components/workflow/WorkflowTaskHistoryTimeline.vue'
 import type { WorkflowFilingContext, WorkflowTaskCard } from '~/types/workflow'
-import { extractApiErrorMessage, isOpenWorkflowTaskStatus } from '~/utils/workflow-task-ui'
+import { extractApiErrorMessage, isOpenWorkflowTaskStatus, workflowTaskAllowsActions } from '~/utils/workflow-task-ui'
 
 const props = defineProps<{
   task: WorkflowTaskCard
@@ -25,6 +25,7 @@ const emit = defineEmits<{
 }>()
 
 const { hasPermission } = usePermissions()
+const { user: authUser } = useAuth()
 const workflowApi = useWorkflowApi()
 const ventanillaApi = useVentanillaApi()
 
@@ -45,15 +46,25 @@ const metadataValues = ref<Record<string, unknown>>({})
 const savingMetadata = ref(false)
 const metadataSubmitAttempted = ref(false)
 
+const isAssignee = computed(() => {
+  const openTask = props.context?.open_task
+  if (openTask?.assignee?.id != null && authUser.value?.id != null)
+    return openTask.assignee.id === authUser.value.id
+
+  return workflowTaskAllowsActions(props.task, authUser.value?.id)
+})
 const showArchivalTab = computed(() =>
-  Boolean(props.context?.archival_file && props.context?.open_task),
+  isAssignee.value
+  && Boolean(props.context?.archival_file && props.context?.open_task),
 )
 const canAttachFilingFiles = computed(() =>
-  props.context?.is_active !== false
+  isAssignee.value
+  && props.context?.is_active !== false
   && props.context?.open_task
   && (hasPermission('ventanilla_gestionar') || hasPermission('workflow_gestionar')),
 )
 const canManage = computed(() => hasPermission('workflow_gestionar'))
+const canActAsAssignee = computed(() => canManage.value && isAssignee.value)
 const canReassign = computed(() => hasPermission('workflow_reasignar'))
 const reassignUserOptions = computed(() =>
   props.users.map(user => ({
@@ -72,26 +83,29 @@ const stageAllowsCollaborators = computed(() =>
   props.context?.open_task?.stage?.allows_collaborators === true,
 )
 const showCollaboratorsTab = computed(() =>
-  canManage.value
+  (canActAsAssignee.value || collaboratorsTotal.value > 0)
   && (
     stageAllowsCollaborators.value
     || collaboratorsTotal.value > 0
   ),
 )
 const canInviteCollaborators = computed(() =>
-  stageAllowsCollaborators.value
+  canActAsAssignee.value
+  && stageAllowsCollaborators.value
   && props.context?.collaborators?.can_manage === true,
 )
 const myPendingCollaborationId = computed(() => props.context?.collaborators?.my_pending_collaboration_id ?? null)
 const showFilingAssignment = computed(() =>
-  canAssignFiling.value
+  isAssignee.value
+  && canAssignFiling.value
   && props.context?.is_active !== false
   && props.context?.open_task?.stage?.ventanilla_role === 'assignment'
   && props.context?.filing?.status === 'registered'
   && Boolean(props.context?.filing?.id),
 )
 const canCloseFilingFromWorkflow = computed(() =>
-  hasPermission('ventanilla_gestionar')
+  isAssignee.value
+  && hasPermission('ventanilla_gestionar')
   && props.context?.is_active !== false
   && props.context?.open_task?.stage?.ventanilla_role === 'response_close'
   && Boolean(props.context?.filing?.id)
@@ -121,7 +135,8 @@ const isManagementStage = computed(() =>
   && props.context?.open_task?.stage?.ventanilla_role === 'management',
 )
 const showFilingMetadataCapture = computed(() =>
-  isManagementStage.value
+  isAssignee.value
+  && isManagementStage.value
   && props.context?.open_task?.stage?.captures_metadata === true
   && Boolean(props.context?.filing?.id),
 )
@@ -152,7 +167,7 @@ const authorizationDecisionOptions = [
   { value: 'denied', label: 'Denegado' },
 ]
 const showAdvanceButton = computed(() =>
-  canManage.value
+  canActAsAssignee.value
   && stageRules.value?.allows_advance
   && canAdvanceTask.value
   && !advanceGuidance.value
@@ -160,21 +175,21 @@ const showAdvanceButton = computed(() =>
   && !requiresAuthorizationDecision.value,
 )
 const showAuthorizationDecision = computed(() =>
-  canManage.value
+  canActAsAssignee.value
   && canAdvanceTask.value
   && !advanceGuidance.value
   && requiresAuthorizationDecision.value,
 )
 const showReturnAction = computed(() =>
-  canManage.value
+  canActAsAssignee.value
   && Boolean(stageRules.value?.allows_return)
   && returnableStages.value.length > 0,
 )
 const showReassignAction = computed(() =>
-  canReassign.value && Boolean(stageRules.value?.allows_reassign),
+  canActAsAssignee.value && canReassign.value && Boolean(stageRules.value?.allows_reassign),
 )
 const showMoreActionsTab = computed(() =>
-  showReturnAction.value || showReassignAction.value || canManage.value,
+  showReturnAction.value || showReassignAction.value || canActAsAssignee.value,
 )
 const showPrimaryStageAction = computed(() =>
   showAdvanceButton.value
@@ -451,6 +466,17 @@ async function saveFilingMetadata(): Promise<void> {
         </p>
       </div>
 
+      <Alert
+        v-if="canManage && !isAssignee && viewedTaskIsCurrentOpen"
+        class="border-dashed"
+      >
+        <Icon name="i-lucide-eye" class="size-4" />
+        <AlertTitle>Solo seguimiento</AlertTitle>
+        <AlertDescription>
+          Ya no es el responsable de esta etapa. Puede ver el avance del trámite, pero no gestionar ni avanzar.
+        </AlertDescription>
+      </Alert>
+
       <div v-if="actionWarnings.length" class="space-y-2">
         <Alert
           v-for="warning in actionWarnings"
@@ -713,7 +739,7 @@ async function saveFilingMetadata(): Promise<void> {
         </Button>
       </div>
 
-      <div v-if="canManage" class="space-y-2.5 rounded-lg border bg-muted/20 p-4">
+      <div v-if="canActAsAssignee" class="space-y-2.5 rounded-lg border bg-muted/20 p-4">
         <Label>Comentario al historial</Label>
         <Textarea v-model="comment" rows="3" placeholder="Agregar comentario al historial" />
         <Button variant="secondary" class="h-10 w-full" :disabled="saving || !comment.trim()" @click="runCommentAction">

@@ -59,25 +59,36 @@ const displayStageName = computed(() => {
 
 const stageSpotlightActive = computed(() => context.value?.is_active === true)
 
-async function load() {
+async function load(options: { silent?: boolean } = {}) {
   if (!canView.value) {
     return
   }
 
-  loading.value = true
-  loadError.value = null
+  const silent = options.silent === true && context.value !== null
+
+  if (!silent) {
+    loading.value = true
+    loadError.value = null
+  }
 
   try {
     context.value = await workflowApi.fetchFilingContext(props.filingId)
+    loadError.value = null
   }
   catch {
-    context.value = null
-    loadError.value = 'No se pudo cargar el estado del workflow.'
+    if (!silent) {
+      context.value = null
+      loadError.value = 'No se pudo cargar el estado del workflow.'
+    }
   }
   finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
   }
 }
+
+useLivePageRefresh(() => load({ silent: true }))
 
 async function openTaskActions() {
   await load()

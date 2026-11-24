@@ -44,8 +44,12 @@ const visibleColumns = computed(() => {
     })
 })
 
-async function loadBoard() {
-  loading.value = true
+async function loadBoard(options: { silent?: boolean } = {}) {
+  const silent = options.silent === true
+
+  if (!silent) {
+    loading.value = true
+  }
 
   try {
     board.value = await workflowApi.fetchBoard({
@@ -62,12 +66,18 @@ async function loadBoard() {
     }
   }
   catch {
-    toast.error('No se pudo cargar el tablero de tareas.')
+    if (!silent) {
+      toast.error('No se pudo cargar el tablero de tareas.')
+    }
   }
   finally {
-    loading.value = false
+    if (!silent) {
+      loading.value = false
+    }
   }
 }
+
+useLivePageRefresh(() => loadBoard({ silent: true }))
 
 function openTask(task: WorkflowTaskCard) {
   if (task.subject?.id)
@@ -99,7 +109,7 @@ onMounted(async () => {
           Workflow y tareas
         </h1>
         <p class="text-sm text-muted-foreground">
-          Tipos a la izquierda, recorrido del flujo a la derecha.
+          En Mis tareas solo aparecen las que le toca gestionar. Tras aprobar, el trámite pasa a En seguimiento (solo lectura).
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
@@ -129,6 +139,9 @@ onMounted(async () => {
             <TabsList class="flex h-auto w-full flex-wrap justify-start">
               <TabsTrigger value="mine">
                 Mis tareas
+              </TabsTrigger>
+              <TabsTrigger value="following">
+                En seguimiento
               </TabsTrigger>
               <TabsTrigger v-if="canViewTeam" value="area">
                 Mi equipo
