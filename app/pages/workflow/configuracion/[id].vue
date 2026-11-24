@@ -583,6 +583,13 @@ watch(deleteStageDialogOpen, (open) => {
                   <Badge v-if="stage.allows_reassign" variant="outline" class="text-xs">
                     Reasignar
                   </Badge>
+                  <Badge
+                    v-if="stage.requires_authorization_decision || stage.assignee_type === 'producer_org_unit_manager'"
+                    variant="outline"
+                    class="text-xs"
+                  >
+                    Aprobado / Denegado
+                  </Badge>
                 </div>
               </div>
               <div v-if="!isStructureLocked" class="flex gap-2">

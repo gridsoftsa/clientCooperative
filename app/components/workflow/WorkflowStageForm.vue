@@ -50,6 +50,7 @@ const form = reactive({
   allows_return: false,
   allows_reassign: true,
   is_terminal: false,
+  requires_authorization_decision: false,
   ventanilla_role: 'none' as string,
   captures_metadata: true,
   allows_collaborators: true,
@@ -73,6 +74,8 @@ function hydrateForm(): void {
     form.allows_return = props.stage.allows_return
     form.allows_reassign = props.stage.allows_reassign
     form.is_terminal = props.stage.is_terminal
+    form.requires_authorization_decision = props.stage.requires_authorization_decision
+      ?? props.stage.assignee_type === 'producer_org_unit_manager'
     form.ventanilla_role = props.stage.ventanilla_role ?? 'none'
     form.captures_metadata = props.stage.captures_metadata ?? props.stage.ventanilla_role === 'management'
     form.allows_collaborators = props.stage.allows_collaborators ?? props.stage.ventanilla_role === 'management'
@@ -95,6 +98,7 @@ function hydrateForm(): void {
   form.allows_return = false
   form.allows_reassign = true
   form.is_terminal = false
+  form.requires_authorization_decision = false
   form.ventanilla_role = 'none'
   form.captures_metadata = true
   form.allows_collaborators = true
@@ -122,6 +126,8 @@ watch(() => form.assignee_type, (type) => {
     form.assignee_org_unit_id = null
   if (type !== 'position')
     form.assignee_position_id = null
+  if (type === 'producer_org_unit_manager')
+    form.requires_authorization_decision = true
 })
 
 const slaMode = computed(() => props.slaMode ?? 'unbound')
@@ -179,6 +185,8 @@ function buildPayload(): WorkflowStagePayload {
     allows_return: form.allows_return,
     allows_reassign: form.allows_reassign,
     is_terminal: form.is_terminal,
+    requires_authorization_decision: form.requires_authorization_decision
+      || form.assignee_type === 'producer_org_unit_manager',
     sla_business_days: typeof form.sla_business_days === 'number'
       && Number.isFinite(form.sla_business_days)
       && form.sla_business_days >= 1
@@ -520,7 +528,18 @@ async function save() {
                 <Checkbox v-model="form.is_terminal" :disabled="locked" />
                 Etapa de cierre
               </label>
+              <label class="flex items-center gap-2 text-sm">
+                <Checkbox
+                  v-model="form.requires_authorization_decision"
+                  :disabled="locked || form.assignee_type === 'producer_org_unit_manager'"
+                />
+                Autorización: Aprobado o Denegado
+              </label>
             </div>
+            <p class="text-xs text-muted-foreground">
+              Si está activo, el responsable debe elegir Aprobado (sigue a la siguiente etapa) o Denegado (cierra el trámite).
+              Con «Jefe del área productora» esta decisión es obligatoria.
+            </p>
           </div>
         </TabsContent>
       </Tabs>

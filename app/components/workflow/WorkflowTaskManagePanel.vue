@@ -30,6 +30,7 @@ const ventanillaApi = useVentanillaApi()
 
 const activeTab = ref('actions')
 const note = ref('')
+const authorizationDecision = ref<'approved' | 'denied' | null>(null)
 const comment = ref('')
 const returnStageId = ref<string>('')
 const reassignUserId = ref<number | null>(null)
@@ -142,12 +143,27 @@ const filingMetadataFieldCount = computed(() =>
 const actionWarnings = computed(() =>
   (props.context?.warnings ?? []).filter(warning => warning.code !== 'filing_metadata_incomplete'),
 )
+const requiresAuthorizationDecision = computed(() =>
+  stageRules.value?.requires_authorization_decision === true
+  || stageRules.value?.assignee_type === 'producer_org_unit_manager',
+)
+const authorizationDecisionOptions = [
+  { value: 'approved', label: 'Aprobado' },
+  { value: 'denied', label: 'Denegado' },
+]
 const showAdvanceButton = computed(() =>
   canManage.value
   && stageRules.value?.allows_advance
   && canAdvanceTask.value
   && !advanceGuidance.value
-  && !needsFilingMetadata.value,
+  && !needsFilingMetadata.value
+  && !requiresAuthorizationDecision.value,
+)
+const showAuthorizationDecision = computed(() =>
+  canManage.value
+  && canAdvanceTask.value
+  && !advanceGuidance.value
+  && requiresAuthorizationDecision.value,
 )
 const showReturnAction = computed(() =>
   canManage.value
@@ -161,7 +177,10 @@ const showMoreActionsTab = computed(() =>
   showReturnAction.value || showReassignAction.value || canManage.value,
 )
 const showPrimaryStageAction = computed(() =>
-  showAdvanceButton.value || showFilingAssignment.value || canCloseFilingFromWorkflow.value,
+  showAdvanceButton.value
+  || showAuthorizationDecision.value
+  || showFilingAssignment.value
+  || canCloseFilingFromWorkflow.value,
 )
 
 watch(() => [props.context?.open_task?.id, props.context?.stage_metadata?.source, props.context?.filing?.id] as const, () => {
@@ -174,6 +193,7 @@ watch(() => [props.context?.open_task?.id, props.context?.stage_metadata?.source
 
 watch(() => props.task.id, () => {
   note.value = ''
+  authorizationDecision.value = null
   comment.value = ''
   returnStageId.value = ''
   reassignUserId.value = null
@@ -288,12 +308,17 @@ async function advance() {
       }
     }
 
-    await workflowApi.advanceTask(props.task.id, note.value || undefined)
+    await workflowApi.advanceTask(props.task.id, note.value || undefined, authorizationDecision.value ?? undefined)
 
+    const denied = authorizationDecision.value === 'denied'
     toast.success(
-      hadPendingFiles
-        ? 'Documentos adjuntados y etapa avanzada correctamente.'
-        : 'Tarea avanzada.',
+      denied
+        ? 'Autorización denegada. El trámite quedó cerrado.'
+        : hadPendingFiles
+          ? 'Documentos adjuntados y etapa avanzada correctamente.'
+          : requiresAuthorizationDecision.value
+            ? 'Autorización aprobada. El trámite continúa.'
+            : 'Tarea avanzada.',
     )
 
     if (props.closeOnWorkflowAction) {
@@ -545,6 +570,9 @@ async function saveFilingMetadata(): Promise<void> {
             <template v-else-if="canCloseFilingFromWorkflow">
               Cierre el radicado aquí. Si necesita documentos, adjúntelos debajo: se envían al confirmar.
             </template>
+            <template v-else-if="showAuthorizationDecision">
+              Elija Aprobado para continuar o Denegado para cerrar el trámite.
+            </template>
             <template v-else>
               Esta es la acción principal. Devolver, reasignar o comentar están en Más acciones.
             </template>
@@ -572,7 +600,37 @@ async function saveFilingMetadata(): Promise<void> {
           @closed="onFilingClosed"
         />
 
-        <template v-if="showAdvanceButton">
+        <template v-if="showAuthorizationDecision">
+          <div class="grid gap-2.5">
+            <Label>Decisión *</Label>
+            <ArchivalSingleMultiselect
+              v-model="authorizationDecision"
+              :can-clear="false"
+              :options="authorizationDecisionOptions"
+              placeholder="Seleccione Aprobado o Denegado"
+              no-options-text="Sin opciones"
+              no-results-text="Sin coincidencias"
+            />
+          </div>
+          <div class="grid gap-2.5">
+            <Label>Nota {{ authorizationDecision === 'denied' ? '*' : '(opcional)' }}</Label>
+            <Textarea
+              v-model="note"
+              rows="2"
+              :placeholder="authorizationDecision === 'denied' ? 'Indique el motivo de la denegación' : 'Motivo o comentario'"
+            />
+          </div>
+          <Button
+            class="h-12 w-full text-base"
+            size="lg"
+            :disabled="saving || collaboratorsPending > 0 || !authorizationDecision || (authorizationDecision === 'denied' && note.trim().length < 3)"
+            @click="advance"
+          >
+            {{ saving ? 'Procesando…' : (authorizationDecision === 'denied' ? 'Denegar y cerrar' : 'Aprobar y continuar') }}
+          </Button>
+        </template>
+
+        <template v-else-if="showAdvanceButton">
           <div class="grid gap-2.5">
             <Label>Nota al avanzar (opcional)</Label>
             <Textarea v-model="note" rows="2" placeholder="Motivo o comentario de la acción" />

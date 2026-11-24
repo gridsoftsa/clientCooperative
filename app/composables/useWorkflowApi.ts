@@ -34,10 +34,20 @@ export function useWorkflowApi() {
     return res.data
   }
 
-  async function advanceTask(id: number, note?: string) {
+  async function advanceTask(
+    id: number,
+    note?: string,
+    authorizationDecision?: 'approved' | 'denied',
+  ) {
+    const body: { note?: string, authorization_decision?: 'approved' | 'denied' } = {}
+    if (note)
+      body.note = note
+    if (authorizationDecision)
+      body.authorization_decision = authorizationDecision
+
     const res = await api<{ data: WorkflowTaskCard, message: string }>(`/workflow/tasks/${id}/advance`, {
       method: 'POST',
-      body: note ? { note } : {},
+      body,
     })
 
     return res

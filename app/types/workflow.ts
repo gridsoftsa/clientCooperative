@@ -73,6 +73,7 @@ export interface WorkflowStage {
   allows_return: boolean
   allows_reassign: boolean
   is_terminal: boolean
+  requires_authorization_decision?: boolean
   ventanilla_role?: string | null
   captures_metadata?: boolean
   allows_collaborators?: boolean
@@ -104,6 +105,7 @@ export interface WorkflowStagePayload {
   allows_return?: boolean
   allows_reassign?: boolean
   is_terminal?: boolean
+  requires_authorization_decision?: boolean
   ventanilla_role?: string | null
   captures_metadata?: boolean
   allows_collaborators?: boolean
@@ -196,6 +198,8 @@ export interface WorkflowFilingContext {
       allows_return: boolean
       allows_reassign: boolean
       is_terminal: boolean
+      requires_authorization_decision?: boolean
+      assignee_type?: string
     } | null
     assignee: { id: number, name: string } | null
   } | null
