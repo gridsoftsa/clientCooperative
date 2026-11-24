@@ -111,12 +111,8 @@ async function loadContext() {
   context.value = await workflowApi.fetchFilingContext(filingId)
 }
 
-async function load(options: { silent?: boolean } = {}) {
-  const silent = options.silent === true && task.value !== null
-
-  if (!silent) {
-    loading.value = true
-  }
+async function load() {
+  loading.value = true
 
   try {
     task.value = await workflowApi.fetchTask(taskId.value)
@@ -144,20 +140,14 @@ async function load(options: { silent?: boolean } = {}) {
     }
   }
   catch (error) {
-    if (!silent) {
-      task.value = null
-      context.value = null
-      toast.error(extractApiErrorMessage(error))
-    }
+    task.value = null
+    context.value = null
+    toast.error(extractApiErrorMessage(error))
   }
   finally {
-    if (!silent) {
-      loading.value = false
-    }
+    loading.value = false
   }
 }
-
-useLivePageRefresh(() => load({ silent: true }))
 
 function goBack() {
   void navigateTo(backUrl.value)

@@ -45,6 +45,8 @@ const metadataFieldsRef = ref<{
 const metadataValues = ref<Record<string, unknown>>({})
 const savingMetadata = ref(false)
 const metadataSubmitAttempted = ref(false)
+const metadataDirty = ref(false)
+let hydratingMetadata = false
 
 const isAssignee = computed(() => {
   const openTask = props.context?.open_task
@@ -199,12 +201,26 @@ const showPrimaryStageAction = computed(() =>
 )
 
 watch(() => [props.context?.open_task?.id, props.context?.stage_metadata?.source, props.context?.filing?.id] as const, () => {
+  if (metadataDirty.value) {
+    return
+  }
+
+  hydratingMetadata = true
   const stageValues = props.context?.stage_metadata?.values
   metadataValues.value = {
     ...(stageValues ?? props.context?.filing?.metadata_values ?? {}),
   }
   metadataSubmitAttempted.value = false
+  queueMicrotask(() => {
+    hydratingMetadata = false
+  })
 }, { immediate: true })
+
+watch(metadataValues, () => {
+  if (!hydratingMetadata) {
+    metadataDirty.value = true
+  }
+}, { deep: true })
 
 watch(() => props.task.id, () => {
   note.value = ''
@@ -405,6 +421,7 @@ async function saveFilingMetadata(): Promise<void> {
     }
     toast.success('Metadatos guardados.')
     metadataSubmitAttempted.value = false
+    metadataDirty.value = false
     refreshContext()
   }
   catch (error) {

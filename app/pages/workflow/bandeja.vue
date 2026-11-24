@@ -70,7 +70,7 @@ function clearVentanillaFilingFilter(): void {
   router.replace({ query: nextQuery })
 }
 
-async function loadTypeFlows(options: { silent?: boolean } = {}) {
+async function loadTypeFlows() {
   try {
     const board = await workflowApi.fetchBoard({
       scope: scope.value,
@@ -79,9 +79,7 @@ async function loadTypeFlows(options: { silent?: boolean } = {}) {
     typeFlows.value = board.flows ?? []
   }
   catch {
-    if (!options.silent) {
-      typeFlows.value = []
-    }
+    typeFlows.value = []
   }
 }
 
@@ -100,12 +98,8 @@ async function loadPendingCollaborations() {
   }
 }
 
-async function loadTasks(page = 1, options: { silent?: boolean } = {}) {
-  const silent = options.silent === true
-
-  if (!silent) {
-    loading.value = true
-  }
+async function loadTasks(page = 1) {
+  loading.value = true
 
   try {
     const query: Record<string, string | number> = {
@@ -128,26 +122,12 @@ async function loadTasks(page = 1, options: { silent?: boolean } = {}) {
     meta.value = result.meta
   }
   catch {
-    if (!silent) {
-      toast.error('No se pudo cargar la bandeja.')
-    }
+    toast.error('No se pudo cargar la bandeja.')
   }
   finally {
-    if (!silent) {
-      loading.value = false
-    }
+    loading.value = false
   }
 }
-
-async function refreshLive(): Promise<void> {
-  await Promise.all([
-    loadTasks(meta.value.current_page, { silent: true }),
-    loadTypeFlows({ silent: true }),
-    loadPendingCollaborations(),
-  ])
-}
-
-useLivePageRefresh(refreshLive)
 
 function changeWorkflowPerPage(size: number) {
   meta.value.per_page = size

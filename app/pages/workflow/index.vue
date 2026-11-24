@@ -44,12 +44,8 @@ const visibleColumns = computed(() => {
     })
 })
 
-async function loadBoard(options: { silent?: boolean } = {}) {
-  const silent = options.silent === true
-
-  if (!silent) {
-    loading.value = true
-  }
+async function loadBoard() {
+  loading.value = true
 
   try {
     board.value = await workflowApi.fetchBoard({
@@ -66,18 +62,12 @@ async function loadBoard(options: { silent?: boolean } = {}) {
     }
   }
   catch {
-    if (!silent) {
-      toast.error('No se pudo cargar el tablero de tareas.')
-    }
+    toast.error('No se pudo cargar el tablero de tareas.')
   }
   finally {
-    if (!silent) {
-      loading.value = false
-    }
+    loading.value = false
   }
 }
-
-useLivePageRefresh(() => loadBoard({ silent: true }))
 
 function openTask(task: WorkflowTaskCard) {
   if (task.subject?.id)
