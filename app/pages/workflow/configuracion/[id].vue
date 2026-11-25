@@ -1,10 +1,5 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
-import {
-  labelForWorkflowAssigneeType,
-  labelForWorkflowStageType,
-  labelForWorkflowVentanillaRole,
-} from '~/constants/workflow'
 import type { WorkflowDefinition, WorkflowFunctionalTypeOption, WorkflowStage } from '~/types/workflow'
 
 definePageMeta({
@@ -100,17 +95,6 @@ const slaMode = computed<'unbound' | 'none' | 'limited'>(() => {
 const importCandidates = computed(() =>
   otherDefinitions.value.filter(item => item.id !== definitionId.value && (item.stages?.length ?? 0) > 0),
 )
-
-function assigneeDetail(stage: WorkflowStage) {
-  if (stage.assignee_user)
-    return stage.assignee_user.name
-  if (stage.assignee_org_unit)
-    return stage.assignee_org_unit.name
-  if (stage.assignee_position)
-    return stage.assignee_position.name
-
-  return labelForWorkflowAssigneeType(stage.assignee_type)
-}
 
 async function loadCatalogs() {
   const [types, definitions] = await Promise.all([
@@ -490,12 +474,6 @@ watch(deleteStageDialogOpen, (open) => {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent class="p-4">
-            <WorkflowDefinitionPreview :stages="stages" :example="stages.length === 0" />
-          </CardContent>
-        </Card>
-
         <Alert v-if="slaMode === 'unbound'">
           <Icon name="lucide:timer" class="size-4" />
           <AlertTitle>Falta el tipo funcional</AlertTitle>
@@ -544,71 +522,17 @@ watch(deleteStageDialogOpen, (open) => {
           </div>
         </div>
 
-        <div class="grid gap-3">
-          <Card v-for="stage in stages" :key="stage.id">
-            <CardContent class="flex flex-wrap items-start justify-between gap-4 p-4">
-              <div class="space-y-2">
-                <div class="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" class="font-mono">
-                    {{ stage.sort_order }}
-                  </Badge>
-                  <span class="font-medium">{{ stage.name }}</span>
-                  <code class="text-xs text-muted-foreground">{{ stage.key }}</code>
-                  <Badge v-if="stage.is_terminal" variant="secondary">
-                    Cierre
-                  </Badge>
-                </div>
-                <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                  <span>{{ labelForWorkflowStageType(stage.stage_type) }}</span>
-                  <span>{{ labelForWorkflowAssigneeType(stage.assignee_type) }}</span>
-                  <span v-if="assigneeDetail(stage) !== labelForWorkflowAssigneeType(stage.assignee_type)">
-                    → {{ assigneeDetail(stage) }}
-                  </span>
-                  <span v-if="stage.sla_business_days">{{ stage.sla_business_days }} días SLA</span>
-                  <span v-if="stage.ventanilla_role">
-                    {{ labelForWorkflowVentanillaRole(stage.ventanilla_role) }}
-                  </span>
-                  <span v-if="stage.captures_metadata">
-                    Metadatos{{ stage.metadata_schema?.name ? `: ${stage.metadata_schema.name}` : '' }}
-                  </span>
-                  <span v-if="stage.allows_collaborators">Colaboradores</span>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  <Badge v-if="stage.allows_advance" variant="outline" class="text-xs">
-                    Avanzar
-                  </Badge>
-                  <Badge v-if="stage.allows_return" variant="outline" class="text-xs">
-                    Devolver
-                  </Badge>
-                  <Badge v-if="stage.allows_reassign" variant="outline" class="text-xs">
-                    Reasignar
-                  </Badge>
-                  <Badge
-                    v-if="stage.requires_authorization_decision || stage.assignee_type === 'producer_org_unit_manager'"
-                    variant="outline"
-                    class="text-xs"
-                  >
-                    Aprobado / Denegado
-                  </Badge>
-                </div>
-              </div>
-              <div v-if="!isStructureLocked" class="flex gap-2">
-                <Button variant="outline" size="sm" @click="openEditStage(stage)">
-                  Editar
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  class="text-destructive"
-                  :disabled="stages.length <= 1"
-                  @click="openDeleteStageDialog(stage)"
-                >
-                  Eliminar
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardContent class="p-4">
+            <WorkflowDefinitionPreview
+              :stages="stages"
+              :example="stages.length === 0"
+              :can-manage="!isStructureLocked"
+              @edit="openEditStage"
+              @remove="openDeleteStageDialog"
+            />
+          </CardContent>
+        </Card>
       </TabsContent>
 
     </Tabs>
