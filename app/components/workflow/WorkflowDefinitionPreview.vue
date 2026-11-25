@@ -106,20 +106,30 @@ const isExample = computed(() => props.example || props.stages.length === 0)
         </template>
         <template v-else>
           Un radicado entra por la primera etapa y avanza hacia la derecha hasta el cierre.
+          <span v-if="steps.length > 4">
+            Hay {{ steps.length }} etapas: recorra el recuadro en horizontal y en vertical.
+          </span>
         </template>
       </p>
     </div>
 
+    <div
+      :class="compact
+        ? steps.length > 8 ? 'max-h-28 overflow-y-auto overscroll-contain pr-1' : ''
+        : 'max-h-[min(36rem,70vh)] overflow-auto overscroll-contain sm:-mx-1 sm:px-1 sm:pb-2'"
+    >
     <ol
       class="flex min-w-0"
       :class="compact
         ? 'flex-wrap items-center gap-1.5'
-        : 'flex-col gap-3 sm:flex-row sm:items-stretch sm:gap-2'"
+        : 'flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch sm:gap-2'"
     >
       <template v-for="(step, index) in steps" :key="`${step.name}-${index}`">
         <li
           class="min-w-0"
-          :class="compact ? 'flex items-center gap-1.5' : 'flex flex-1 flex-col sm:min-w-[9rem]'"
+          :class="compact
+            ? 'flex items-center gap-1.5'
+            : 'flex flex-col sm:w-56 sm:shrink-0'"
         >
           <div
             v-if="compact"
@@ -185,5 +195,6 @@ const isExample = computed(() => props.example || props.stages.length === 0)
         </li>
       </template>
     </ol>
+    </div>
   </div>
 </template>

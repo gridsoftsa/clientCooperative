@@ -107,9 +107,15 @@ function hydrateForm(): void {
   form.metadata_schema_choice = 'filing'
 }
 
-watch(() => [props.stage?.id, props.nextSortOrder] as const, () => {
+watch(() => props.stage?.id, () => {
   hydrateForm()
 }, { immediate: true })
+
+watch(() => props.nextSortOrder, (order) => {
+  if (!props.stage) {
+    form.sort_order = order
+  }
+})
 
 onMounted(() => {
   workflowApi.fetchMetadataSchemas()
@@ -217,6 +223,21 @@ function buildPayload(): WorkflowStagePayload {
   return payload
 }
 
+function slaInputValue(): string {
+  return form.sla_business_days == null ? '' : String(form.sla_business_days)
+}
+
+function setSlaBusinessDays(raw: string | number): void {
+  if (raw === '' || raw === null || raw === undefined) {
+    form.sla_business_days = null
+
+    return
+  }
+
+  const parsed = typeof raw === 'number' ? raw : Number(raw)
+  form.sla_business_days = Number.isFinite(parsed) ? parsed : null
+}
+
 function failValidation(tab: StageConfigTab, message: string): boolean {
   activeTab.value = tab
   toast.error(message)
@@ -316,7 +337,7 @@ async function save() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" class="grid gap-5">
+        <TabsContent value="general" force-mount class="grid gap-5 data-[state=inactive]:hidden">
           <div v-if="!isEdit" class="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
             La <span class="font-medium text-foreground">clave técnica</span> se asignará al crear
             (ej.
@@ -363,12 +384,13 @@ async function save() {
             <Label for="stage-sla">SLA (días hábiles de esta etapa)</Label>
             <Input
               id="stage-sla"
-              v-model.number="form.sla_business_days"
               type="number"
               min="1"
               :max="slaMode === 'limited' ? (maxSlaDays ?? 1) : undefined"
+              :model-value="slaInputValue()"
               placeholder="Vacío si esta etapa no consume días"
               :disabled="slaInputDisabled"
+              @update:model-value="setSlaBusinessDays"
             />
             <p class="text-xs text-muted-foreground">
               {{ slaHelper }}
@@ -376,7 +398,7 @@ async function save() {
           </div>
         </TabsContent>
 
-        <TabsContent value="assignee" class="grid gap-5">
+        <TabsContent value="assignee" force-mount class="grid gap-5 data-[state=inactive]:hidden">
           <div class="grid gap-2">
             <div class="flex items-center gap-1.5">
               <Label>Responsable</Label>
@@ -486,7 +508,7 @@ async function save() {
           </div>
         </TabsContent>
 
-        <TabsContent value="ventanilla" class="grid gap-5">
+        <TabsContent value="ventanilla" force-mount class="grid gap-5 data-[state=inactive]:hidden">
           <div class="grid gap-2">
             <Label>Integración con ventanilla</Label>
             <Select v-model="form.ventanilla_role" :disabled="locked">
@@ -550,7 +572,7 @@ async function save() {
           </div>
         </TabsContent>
 
-        <TabsContent value="transition">
+        <TabsContent value="transition" force-mount class="data-[state=inactive]:hidden">
           <div class="space-y-3 rounded-lg border p-4">
             <p class="text-sm font-medium">
               Reglas de transición
