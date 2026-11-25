@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { toast } from 'vue-sonner'
 import {
+  helpForWorkflowAssigneeType,
   WORKFLOW_ASSIGNEE_TYPE_OPTIONS,
   WORKFLOW_STAGE_TYPE_OPTIONS,
   WORKFLOW_VENTANILLA_ROLE_OPTIONS,
@@ -59,6 +60,7 @@ const form = reactive({
 
 const metadataSchemas = ref<Array<{ id: number, name: string, version_number: number }>>([])
 const isManagementRole = computed(() => form.ventanilla_role === 'management')
+const selectedAssigneeHelp = computed(() => helpForWorkflowAssigneeType(form.assignee_type))
 
 function hydrateForm(): void {
   if (props.stage) {
@@ -376,12 +378,44 @@ async function save() {
 
         <TabsContent value="assignee" class="grid gap-5">
           <div class="grid gap-2">
-            <Label>Responsable</Label>
+            <div class="flex items-center gap-1.5">
+              <Label>Responsable</Label>
+              <Popover>
+                <PopoverTrigger as-child>
+                  <button
+                    type="button"
+                    class="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label="Qué hace cada tipo de responsable"
+                  >
+                    <Icon name="i-lucide-info" class="size-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent class="w-80 space-y-3 p-3" align="start">
+                  <p class="text-sm font-medium">
+                    Cómo afecta cada responsable
+                  </p>
+                  <ul class="space-y-2.5">
+                    <li
+                      v-for="opt in WORKFLOW_ASSIGNEE_TYPE_OPTIONS"
+                      :key="opt.value"
+                      class="text-xs leading-snug"
+                    >
+                      <p class="font-medium text-foreground">
+                        {{ opt.label }}
+                      </p>
+                      <p class="text-muted-foreground">
+                        {{ opt.hint }}
+                      </p>
+                      <p class="mt-0.5 text-muted-foreground">
+                        Ej.: {{ opt.example }}
+                      </p>
+                    </li>
+                  </ul>
+                </PopoverContent>
+              </Popover>
+            </div>
             <p v-if="isManagementRole" class="text-xs text-muted-foreground">
               Este responsable aplica únicamente a esta etapa de gestión.
-            </p>
-            <p v-else-if="form.assignee_type === 'producer_org_unit_manager'" class="text-xs text-muted-foreground">
-              La tarea va al jefe del área productora del radicado (quien origina), no al del área destinataria.
             </p>
             <Select v-model="form.assignee_type" :disabled="locked">
               <SelectTrigger>
@@ -397,6 +431,16 @@ async function save() {
                 </SelectItem>
               </SelectContent>
             </Select>
+            <div
+              v-if="selectedAssigneeHelp"
+              class="flex gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
+            >
+              <Icon name="i-lucide-info" class="mt-0.5 size-3.5 shrink-0" />
+              <div class="space-y-0.5">
+                <p>{{ selectedAssigneeHelp.hint }}</p>
+                <p>Ej.: {{ selectedAssigneeHelp.example }}</p>
+              </div>
+            </div>
           </div>
 
           <div v-if="form.assignee_type === 'specific_user'" class="grid gap-2">
