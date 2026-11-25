@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import {
-  labelForWorkflowAssigneeType,
-  labelForWorkflowVentanillaRole,
-} from '~/constants/workflow'
+import { labelForWorkflowAssigneeType } from '~/constants/workflow'
 import type { WorkflowStage } from '~/types/workflow'
 
 export interface WorkflowPreviewStep {
   name: string
-  summary: string
   actor: string
   sla?: string | null
   isTerminal?: boolean
@@ -15,6 +11,8 @@ export interface WorkflowPreviewStep {
   canReturn?: boolean
   canReassign?: boolean
   requiresAuth?: boolean
+  ventanillaRole?: 'assignment' | 'management' | 'response_close' | null
+  ventanillaLabel?: string | null
   stageKey?: string | null
   stage?: WorkflowStage | null
 }
@@ -22,26 +20,29 @@ export interface WorkflowPreviewStep {
 const EXAMPLE_STEPS: WorkflowPreviewStep[] = [
   {
     name: 'Recibir y asignar',
-    summary: 'Ventanilla registra el radicado y lo envía al área responsable.',
     actor: 'Oficina de ventanilla',
     sla: '1 día hábil',
+    ventanillaRole: 'assignment',
+    ventanillaLabel: 'Asignación',
     canAdvance: true,
     canReturn: false,
   },
   {
     name: 'Gestionar',
-    summary: 'El responsable atiende el caso, puede pedir datos o devolver la etapa anterior.',
     actor: 'Jefe o usuario del área',
     sla: '5 días hábiles',
+    ventanillaRole: 'management',
+    ventanillaLabel: 'Gestión',
     canAdvance: true,
     canReturn: true,
   },
   {
     name: 'Responder y cerrar',
-    summary: 'Se emite la respuesta y el radicado queda cerrado. Esta es la última etapa.',
     actor: 'Responsable de cierre',
     sla: '2 días hábiles',
     isTerminal: true,
+    ventanillaRole: 'response_close',
+    ventanillaLabel: 'Cierre / respuesta',
     canAdvance: false,
     canReturn: true,
   },
@@ -83,15 +84,22 @@ const steps = computed<WorkflowPreviewStep[]>(() => {
         ? `${stage.sla_business_days} día${stage.sla_business_days === 1 ? '' : 's'} hábil${stage.sla_business_days === 1 ? '' : 'es'}`
         : null
 
-      const role = labelForWorkflowVentanillaRole(stage.ventanilla_role)
-      const summaryParts = [
-        role !== 'Sin integración' ? role.split(' (')[0] : null,
-        stage.is_terminal ? 'Etapa de cierre del radicado.' : null,
-      ].filter(Boolean)
+      const ventanillaRole = stage.ventanilla_role === 'assignment'
+        || stage.ventanilla_role === 'management'
+        || stage.ventanilla_role === 'response_close'
+        ? stage.ventanilla_role
+        : null
+
+      const ventanillaLabel = ventanillaRole === 'assignment'
+        ? 'Asignación'
+        : ventanillaRole === 'management'
+          ? 'Gestión'
+          : ventanillaRole === 'response_close'
+            ? 'Cierre / respuesta'
+            : null
 
       return {
         name: stage.name,
-        summary: summaryParts.join(' · '),
         actor,
         sla,
         isTerminal: stage.is_terminal,
@@ -100,6 +108,8 @@ const steps = computed<WorkflowPreviewStep[]>(() => {
         canReassign: stage.allows_reassign,
         requiresAuth: stage.requires_authorization_decision
           || stage.assignee_type === 'producer_org_unit_manager',
+        ventanillaRole,
+        ventanillaLabel,
         stageKey: stage.key,
         stage,
       }
@@ -108,6 +118,22 @@ const steps = computed<WorkflowPreviewStep[]>(() => {
 
 const showActions = computed(() => props.canManage && !isExample.value)
 const canDeleteStage = computed(() => props.stages.length > 1)
+
+function ventanillaBadgeClass(role: WorkflowPreviewStep['ventanillaRole']): string {
+  if (role === 'management') {
+    return 'bg-primary text-primary-foreground border-transparent'
+  }
+
+  if (role === 'response_close') {
+    return 'bg-secondary text-secondary-foreground'
+  }
+
+  if (role === 'assignment') {
+    return 'border-primary/40 bg-primary/10 text-primary'
+  }
+
+  return ''
+}
 </script>
 
 <template>
@@ -150,14 +176,14 @@ const canDeleteStage = computed(() => props.stages.length > 1)
 
     <ol
       v-else
-      class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
+      class="flex flex-col flex-wrap items-stretch gap-y-3 sm:flex-row sm:items-center"
     >
       <li
         v-for="(step, index) in steps"
         :key="`${step.stageKey ?? step.name}-${index}`"
-        class="min-w-0"
+        class="flex min-w-0 items-center gap-1.5 sm:w-auto"
       >
-        <div class="flex h-full min-w-0 flex-col gap-3 rounded-lg border bg-card p-3">
+        <div class="flex h-full w-full min-w-0 flex-col gap-3 rounded-lg border bg-card p-3 sm:w-64">
           <div class="flex items-start gap-2">
             <span class="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {{ index + 1 }}
@@ -174,15 +200,20 @@ const canDeleteStage = computed(() => props.stages.length > 1)
               </code>
             </div>
           </div>
-          <p v-if="step.summary" class="text-xs leading-relaxed text-muted-foreground">
-            {{ step.summary }}
-          </p>
+          <div class="flex flex-wrap gap-1">
+            <Badge
+              v-if="step.ventanillaLabel"
+              :class="['text-xs font-medium', ventanillaBadgeClass(step.ventanillaRole)]"
+            >
+              {{ step.ventanillaLabel }}
+            </Badge>
+            <Badge v-else-if="step.isTerminal" variant="secondary" class="text-xs font-medium">
+              Cierre
+            </Badge>
+          </div>
           <div class="mt-auto flex flex-wrap gap-1">
             <Badge v-if="step.sla" variant="outline" class="text-[10px]">
               SLA {{ step.sla }}
-            </Badge>
-            <Badge v-if="step.isTerminal" variant="secondary" class="text-[10px]">
-              Cierre
             </Badge>
             <Badge v-if="step.canAdvance" variant="outline" class="text-[10px]">
               Avanzar
@@ -217,6 +248,14 @@ const canDeleteStage = computed(() => props.stages.length > 1)
             </Button>
           </div>
         </div>
+        <span
+          v-if="index < steps.length - 1"
+          class="flex shrink-0 items-center text-muted-foreground"
+          aria-hidden="true"
+        >
+          <Icon name="i-lucide-arrow-right" class="hidden size-4 sm:block" />
+          <Icon name="i-lucide-arrow-down" class="size-4 sm:hidden" />
+        </span>
       </li>
     </ol>
   </div>
