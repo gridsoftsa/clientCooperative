@@ -14,10 +14,21 @@ definePageMeta({
 
 const router = useRouter()
 const metaApi = useArchivalMetadataApi()
+const deleteWithReason = useApiDeleteWithReason()
 const { hasPermission } = usePermissions()
 
 const rows = ref<ArchivalMetadataSchemaRow[]>([])
 const loading = ref(true)
+const deleting = ref(false)
+const deleteDialogOpen = ref(false)
+const schemaPendingDelete = ref<ArchivalMetadataSchemaRow | null>(null)
+
+function apiErrorMessage(error: unknown, fallback: string): string {
+  const data = (error as { data?: { message?: string, errors?: Record<string, string[]> } })?.data
+  const first = data?.errors ? Object.values(data.errors)[0]?.[0] : undefined
+
+  return first || data?.message || fallback
+}
 
 async function reload() {
   loading.value = true
@@ -38,6 +49,31 @@ function statusLabel(v: string) {
 
 function levelLabel(v: string) {
   return ARCHIVAL_METADATA_APPLICATION_LEVEL_LABELS[v] ?? v
+}
+
+function askDelete(row: ArchivalMetadataSchemaRow) {
+  schemaPendingDelete.value = row
+  deleteDialogOpen.value = true
+}
+
+async function onDeleteConfirm(reason: string) {
+  const row = schemaPendingDelete.value
+  if (!row) {
+    return
+  }
+
+  deleting.value = true
+  try {
+    await deleteWithReason(`/archival/metadata-schemas/${row.id}`, reason)
+    toast.success('Esquema eliminado.')
+    deleteDialogOpen.value = false
+    schemaPendingDelete.value = null
+    await reload()
+  } catch (error: unknown) {
+    toast.error(apiErrorMessage(error, 'No se pudo eliminar el esquema.'))
+  } finally {
+    deleting.value = false
+  }
 }
 
 function scopeLabel(row: ArchivalMetadataSchemaRow): string {
@@ -70,21 +106,13 @@ function scopeLabel(row: ArchivalMetadataSchemaRow): string {
             Esquemas de metadatos
           </h2>
           <p class="text-muted-foreground max-w-2xl leading-relaxed">
-            Defina campos capturables por tipo documental, subserie, serie, tipo de expediente o tipo funcional.
-            Solo puede haber un esquema activo por ámbito; al versionar se crea un borrador nuevo.
+            Consulta de los esquemas ya definidos. Los campos se crean en la tabla de retención, al dar de alta el tipo documental de cada serie.
           </p>
         </div>
         <div class="flex gap-2">
           <Button variant="outline" @click="router.push('/settings/archival')">
             <Icon name="i-lucide-arrow-left" class="mr-2 h-4 w-4" />
             Volver
-          </Button>
-          <Button
-            v-if="hasPermission('trd_metadatos_editar')"
-            @click="router.push('/settings/archival/metadata/schemas/create')"
-          >
-            <Icon name="i-lucide-plus" class="mr-2 h-4 w-4" />
-            Nuevo esquema
           </Button>
         </div>
       </div>
@@ -153,9 +181,20 @@ function scopeLabel(row: ArchivalMetadataSchemaRow): string {
                     {{ row.fields_count ?? '—' }}
                   </td>
                   <td class="py-2 text-right">
-                    <Button variant="ghost" size="sm" @click.stop="router.push(`/settings/archival/metadata/schemas/${row.id}`)">
-                      Abrir
-                    </Button>
+                    <div class="flex justify-end gap-1">
+                      <Button variant="ghost" size="sm" @click.stop="router.push(`/settings/archival/metadata/schemas/${row.id}`)">
+                        Abrir
+                      </Button>
+                      <Button
+                        v-if="hasPermission('trd_metadatos_editar')"
+                        variant="ghost"
+                        size="sm"
+                        class="text-destructive"
+                        @click.stop="askDelete(row)"
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -164,5 +203,15 @@ function scopeLabel(row: ArchivalMetadataSchemaRow): string {
         </CardContent>
       </Card>
     </div>
+
+    <ConfirmWithReasonDialog
+      v-model:open="deleteDialogOpen"
+      title="Eliminar esquema de metadatos"
+      :description="schemaPendingDelete ? `Se eliminará «${schemaPendingDelete.name}» (v${schemaPendingDelete.version_number}). No es posible si el esquema ya está asignado a un flujo, un expediente o documentos con metadatos.` : undefined"
+      reason-label="Motivo de la eliminación"
+      confirm-text="Eliminar esquema"
+      :loading="deleting"
+      @confirm="onDeleteConfirm"
+    />
   </SettingsLayout>
 </template>

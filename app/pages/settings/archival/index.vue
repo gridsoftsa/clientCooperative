@@ -131,12 +131,12 @@ const router = useRouter()
               Metadatos configurables
             </CardTitle>
             <CardDescription class="leading-relaxed">
-              Esquemas y campos por tipo documental, subserie, serie o tipo de expediente; captura en radicación.
+              Consulta de esquemas. Los campos se definen al crear el tipo documental en la tabla de retención.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button variant="secondary" @click.stop="router.push('/settings/archival/metadata/schemas')">
-              Configurar esquemas
+              Ver esquemas
             </Button>
           </CardContent>
         </Card>

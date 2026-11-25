@@ -20,12 +20,22 @@ definePageMeta({
 const route = useRoute()
 const router = useRouter()
 const metaApi = useArchivalMetadataApi()
+const deleteWithReason = useApiDeleteWithReason()
 const { hasPermission } = usePermissions()
 
 const schemaId = computed(() => Number(route.params.id))
 const schema = ref<ArchivalMetadataSchemaRow | null>(null)
 const loading = ref(true)
 const saving = ref(false)
+const deleting = ref(false)
+const deleteDialogOpen = ref(false)
+
+function apiErrorMessage(error: unknown, fallback: string): string {
+  const data = (error as { data?: { message?: string, errors?: Record<string, string[]> } })?.data
+  const first = data?.errors ? Object.values(data.errors)[0]?.[0] : undefined
+
+  return first || data?.message || fallback
+}
 
 const metaForm = ref({ name: '', description: '' })
 const showFieldForm = ref(false)
@@ -46,8 +56,7 @@ const fieldForm = ref({
   options: [] as Array<{ value: string, label: string }>,
 })
 
-const isDraft = computed(() => schema.value?.status === 'draft')
-const canEdit = computed(() => isDraft.value && hasPermission('trd_metadatos_editar'))
+const canEdit = computed(() => false)
 
 const existingFieldCodes = computed(() => (schema.value?.fields ?? []).map(field => field.code))
 
@@ -114,29 +123,21 @@ async function saveMeta() {
   }
 }
 
-async function activate() {
+async function onDeleteConfirm(reason: string) {
   if (!schema.value) {
     return
   }
-  try {
-    const res = await metaApi.activateSchema(schema.value.id)
-    schema.value = res.data
-    toast.success(res.message ?? 'Esquema activado.')
-  } catch {
-    toast.error('No se pudo activar. Verifique campos activos.')
-  }
-}
 
-async function duplicate() {
-  if (!schema.value) {
-    return
-  }
+  deleting.value = true
   try {
-    const res = await metaApi.duplicateSchema(schema.value.id)
-    toast.success(res.message ?? 'Nueva versión creada.')
-    await router.push(`/settings/archival/metadata/schemas/${res.data.id}`)
-  } catch {
-    toast.error('No se pudo versionar.')
+    await deleteWithReason(`/archival/metadata-schemas/${schema.value.id}`, reason)
+    toast.success('Esquema eliminado.')
+    deleteDialogOpen.value = false
+    await router.push('/settings/archival/metadata/schemas')
+  } catch (error: unknown) {
+    toast.error(apiErrorMessage(error, 'No se pudo eliminar el esquema.'))
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -231,18 +232,12 @@ function addSelectOption() {
             Listado
           </Button>
           <Button
-            v-if="canEdit"
-            variant="default"
-            @click="activate"
+            v-if="hasPermission('trd_metadatos_editar')"
+            variant="outline"
+            class="text-destructive"
+            @click="deleteDialogOpen = true"
           >
-            Activar
-          </Button>
-          <Button
-            v-if="schema.status === 'active' && hasPermission('trd_metadatos_editar')"
-            variant="secondary"
-            @click="duplicate"
-          >
-            Nueva versión
+            Eliminar
           </Button>
         </div>
       </div>
@@ -396,5 +391,15 @@ function addSelectOption() {
         </CardContent>
       </Card>
     </div>
+
+    <ConfirmWithReasonDialog
+      v-model:open="deleteDialogOpen"
+      title="Eliminar esquema de metadatos"
+      :description="schema ? `Se eliminará «${schema.name}» (v${schema.version_number}). No es posible si el esquema ya está asignado a un flujo, un expediente o documentos con metadatos.` : undefined"
+      reason-label="Motivo de la eliminación"
+      confirm-text="Eliminar esquema"
+      :loading="deleting"
+      @confirm="onDeleteConfirm"
+    />
   </SettingsLayout>
 </template>
