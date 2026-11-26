@@ -345,6 +345,12 @@ export interface VentanillaFilingSummary {
   filed_at: string
   requires_response: boolean
   response_text?: string | null
+  response_files?: Array<{
+    id: number
+    title: string
+    original_name: string
+    mime_type?: string | null
+  }>
   closed_at?: string | null
   response_deadline_at: string | null
   sla_business_days: number | null

@@ -176,12 +176,12 @@ function ventanillaBadgeClass(role: WorkflowPreviewStep['ventanillaRole']): stri
 
     <ol
       v-else
-      class="flex flex-col flex-wrap items-stretch gap-y-3 sm:flex-row sm:items-center"
+      class="flex flex-col flex-wrap items-stretch gap-y-3 sm:flex-row"
     >
       <li
         v-for="(step, index) in steps"
         :key="`${step.stageKey ?? step.name}-${index}`"
-        class="flex min-w-0 items-center gap-1.5 sm:w-auto"
+        class="flex min-w-0 items-stretch gap-1.5 sm:w-auto"
       >
         <div class="flex h-full w-full min-w-0 flex-col gap-3 rounded-lg border bg-card p-3 sm:w-64">
           <div class="flex items-start gap-2">
@@ -189,18 +189,18 @@ function ventanillaBadgeClass(role: WorkflowPreviewStep['ventanillaRole']): stri
               {{ index + 1 }}
             </span>
             <div class="min-w-0 flex-1 space-y-0.5">
-              <p class="font-medium leading-snug">
+              <p class="line-clamp-2 min-h-11 font-medium leading-snug">
                 {{ step.name }}
               </p>
-              <p class="text-xs text-muted-foreground">
+              <p class="line-clamp-2 min-h-9 text-xs text-muted-foreground">
                 {{ step.actor }}
               </p>
-              <code v-if="step.stageKey" class="block truncate text-[10px] text-muted-foreground">
+              <code class="block h-4 truncate text-[10px] text-muted-foreground">
                 {{ step.stageKey }}
               </code>
             </div>
           </div>
-          <div class="flex flex-wrap gap-1">
+          <div class="flex min-h-6 flex-wrap gap-1">
             <Badge
               v-if="step.ventanillaLabel"
               :class="['text-xs font-medium', ventanillaBadgeClass(step.ventanillaRole)]"
@@ -211,7 +211,7 @@ function ventanillaBadgeClass(role: WorkflowPreviewStep['ventanillaRole']): stri
               Cierre
             </Badge>
           </div>
-          <div class="mt-auto flex flex-wrap gap-1">
+          <div class="mt-auto flex min-h-12 flex-wrap content-start gap-1">
             <Badge v-if="step.sla" variant="outline" class="text-[10px]">
               SLA {{ step.sla }}
             </Badge>
@@ -250,7 +250,7 @@ function ventanillaBadgeClass(role: WorkflowPreviewStep['ventanillaRole']): stri
         </div>
         <span
           v-if="index < steps.length - 1"
-          class="flex shrink-0 items-center text-muted-foreground"
+          class="flex shrink-0 items-center self-center text-muted-foreground"
           aria-hidden="true"
         >
           <Icon name="i-lucide-arrow-right" class="hidden size-4 sm:block" />

@@ -32,6 +32,14 @@ const route = useRoute()
 const ventanillaApi = useVentanillaApi()
 const { $api } = useNuxtApp()
 const { hasPermission } = usePermissions()
+const {
+  open: inlinePreviewOpen,
+  title: inlinePreviewTitle,
+  previewUrl: inlinePreviewUrl,
+  previewKind: inlinePreviewKind,
+  presentBlob,
+} = useInlineFilePreview()
+const openingResponseFileId = ref<number | null>(null)
 
 const filings = ref<VentanillaFilingSummary[]>([])
 const catalog = ref<VentanillaCatalogData | null>(null)
@@ -329,6 +337,28 @@ function hasOfficialResponse(row: VentanillaFilingSummary): boolean {
 function openResponseDialog(row: VentanillaFilingSummary): void {
   responseDialogFiling.value = row
   responseDialogOpen.value = true
+}
+
+async function viewResponseFile(fileId: number): Promise<void> {
+  const filing = responseDialogFiling.value
+  const file = filing?.response_files?.find(item => item.id === fileId)
+
+  if (!filing || !file || !hasPermission('ventanilla_archivos_ver')) {
+    return
+  }
+
+  openingResponseFileId.value = fileId
+
+  try {
+    const blob = await ventanillaApi.fetchFilingFileBlob(filing.id, file.id)
+    presentBlob(blob, file.original_name || file.title || 'documento', file.mime_type)
+  }
+  catch {
+    errorMessage.value = 'No se pudo abrir el documento de la respuesta.'
+  }
+  finally {
+    openingResponseFileId.value = null
+  }
 }
 
 function formatListDate(value?: string | null): string {
@@ -828,6 +858,8 @@ function formatListTime(value?: string | null): string {
           v-if="responseDialogFiling?.response_text"
           :response-text="responseDialogFiling.response_text"
           :closed-at="responseDialogFiling.closed_at"
+          :files="responseDialogFiling.response_files"
+          @view-file="viewResponseFile"
         />
         <DialogFooter>
           <Button variant="outline" @click="responseDialogOpen = false">
@@ -842,5 +874,11 @@ function formatListTime(value?: string | null): string {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <DocumentInlinePreviewDialog
+      v-model:open="inlinePreviewOpen"
+      :title="inlinePreviewTitle"
+      :preview-url="inlinePreviewUrl"
+      :preview-kind="inlinePreviewKind"
+    />
   </div>
 </template>
