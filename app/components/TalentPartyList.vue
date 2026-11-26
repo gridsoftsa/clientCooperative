@@ -690,7 +690,7 @@ onMounted(() => {
 
         <DialogFooter v-if="canManage" class="mt-auto shrink-0 border-t bg-background px-6 py-4 sm:justify-between">
           <p class="mr-auto max-w-xl text-xs leading-relaxed text-muted-foreground">
-            Al guardar o sincronizar se crean carpetas faltantes y se actualiza el nombre si el catálogo cambió (mismo id). Las vacías que ya no correspondan se quitan; las que tienen documentos se conservan. No se mueve el expediente a otra TRD ni se cambia la retención de documentos ya cargados.
+            Al guardar o sincronizar se crea el archivo de quienes aún no lo tienen (asociados cargados antes de esta configuración) y se actualiza el nombre si el catálogo cambió. Las carpetas vacías que ya no correspondan se quitan; las que tienen documentos se conservan. No se mueve el expediente a otra TRD ni se cambia la retención de documentos ya cargados.
           </p>
           <div class="flex flex-wrap items-center justify-end gap-2">
             <Button
