@@ -91,6 +91,17 @@ function functionalTypeLabel(task: WorkflowTaskCard) {
     task.subject?.functional_type_label,
   )
 }
+
+function filingRequester(task: WorkflowTaskCard) {
+  const name = task.subject?.sender_name?.trim() ?? ''
+  const identifier = task.subject?.sender_identifier?.trim() ?? ''
+
+  if (name && identifier) {
+    return `${name} · ${identifier}`
+  }
+
+  return name || identifier || ''
+}
 </script>
 
 <template>
@@ -186,6 +197,13 @@ function functionalTypeLabel(task: WorkflowTaskCard) {
 
               <p class="mt-1 line-clamp-2 text-sm font-medium leading-5">
                 {{ taskTitle(task) }}
+              </p>
+              <p v-if="filingRequester(task)" class="mt-1 line-clamp-2 text-xs text-foreground">
+                Solicitante: {{ filingRequester(task) }}
+              </p>
+              <p v-if="task.subject?.filed_by?.name" class="mt-0.5 truncate text-xs text-muted-foreground">
+                Radicó: {{ task.subject.filed_by.name }}
+                <span v-if="task.subject.producer_org_unit?.name"> · {{ task.subject.producer_org_unit.name }}</span>
               </p>
 
               <div class="mt-2 flex min-w-0 flex-wrap gap-1">

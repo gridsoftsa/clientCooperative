@@ -388,8 +388,16 @@ onMounted(async () => {
               <p class="truncate text-sm text-muted-foreground">
                 {{ task.subject?.subject ?? '—' }}
               </p>
+              <p v-if="task.subject?.sender_name" class="truncate text-sm">
+                Solicitante: {{ task.subject.sender_name }}
+                <span v-if="task.subject.sender_identifier"> · {{ task.subject.sender_identifier }}</span>
+              </p>
+              <p v-if="task.subject?.filed_by?.name" class="truncate text-xs text-muted-foreground">
+                Radicó: {{ task.subject.filed_by.name }}
+                <span v-if="task.subject.producer_org_unit?.name"> · {{ task.subject.producer_org_unit.name }}</span>
+              </p>
               <p class="text-xs text-muted-foreground">
-                {{ task.assignee?.name ?? 'Sin responsable' }}
+                Responsable: {{ task.assignee?.name ?? 'Sin responsable' }}
                 <span v-if="task.due_at"> · vence {{ new Date(task.due_at).toLocaleDateString('es-CO') }}</span>
                 <span v-if="task.days_overdue" class="text-destructive"> · {{ task.days_overdue }}d vencido</span>
               </p>

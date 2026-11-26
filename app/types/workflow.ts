@@ -10,6 +10,11 @@ export interface WorkflowSubjectSummary {
   functional_type_label?: string | null
   status: string
   traffic_light_status: WorkflowTrafficLight | null
+  sender_name?: string | null
+  sender_identifier?: string | null
+  filed_at?: string | null
+  filed_by?: { id: number, name: string } | null
+  producer_org_unit?: { id: number, name: string } | null
 }
 
 export interface WorkflowTaskCard {
